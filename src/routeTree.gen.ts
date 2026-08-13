@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as PropertiesIndexRouteImport } from './routes/properties.index'
+import { Route as PropertiesSlugIndexRouteImport } from './routes/properties.$slug.index'
+import { Route as PropertiesSlugRoomsRoomIdRouteImport } from './routes/properties.$slug.rooms.$roomId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,35 +30,70 @@ const PropertiesIndexRoute = PropertiesIndexRouteImport.update({
   path: '/properties/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PropertiesSlugIndexRoute = PropertiesSlugIndexRouteImport.update({
+  id: '/properties/$slug/',
+  path: '/properties/$slug/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PropertiesSlugRoomsRoomIdRoute =
+  PropertiesSlugRoomsRoomIdRouteImport.update({
+    id: '/properties/$slug/rooms/$roomId',
+    path: '/properties/$slug/rooms/$roomId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/properties/': typeof PropertiesIndexRoute
+  '/properties/$slug/': typeof PropertiesSlugIndexRoute
+  '/properties/$slug/rooms/$roomId': typeof PropertiesSlugRoomsRoomIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/properties': typeof PropertiesIndexRoute
+  '/properties/$slug': typeof PropertiesSlugIndexRoute
+  '/properties/$slug/rooms/$roomId': typeof PropertiesSlugRoomsRoomIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/properties/': typeof PropertiesIndexRoute
+  '/properties/$slug/': typeof PropertiesSlugIndexRoute
+  '/properties/$slug/rooms/$roomId': typeof PropertiesSlugRoomsRoomIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/properties/'
+  fullPaths:
+    | '/'
+    | '/about'
+    | '/properties/'
+    | '/properties/$slug/'
+    | '/properties/$slug/rooms/$roomId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/properties'
-  id: '__root__' | '/' | '/about' | '/properties/'
+  to:
+    | '/'
+    | '/about'
+    | '/properties'
+    | '/properties/$slug'
+    | '/properties/$slug/rooms/$roomId'
+  id:
+    | '__root__'
+    | '/'
+    | '/about'
+    | '/properties/'
+    | '/properties/$slug/'
+    | '/properties/$slug/rooms/$roomId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   PropertiesIndexRoute: typeof PropertiesIndexRoute
+  PropertiesSlugIndexRoute: typeof PropertiesSlugIndexRoute
+  PropertiesSlugRoomsRoomIdRoute: typeof PropertiesSlugRoomsRoomIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +119,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PropertiesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/properties/$slug/': {
+      id: '/properties/$slug/'
+      path: '/properties/$slug'
+      fullPath: '/properties/$slug/'
+      preLoaderRoute: typeof PropertiesSlugIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/properties/$slug/rooms/$roomId': {
+      id: '/properties/$slug/rooms/$roomId'
+      path: '/properties/$slug/rooms/$roomId'
+      fullPath: '/properties/$slug/rooms/$roomId'
+      preLoaderRoute: typeof PropertiesSlugRoomsRoomIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +140,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   PropertiesIndexRoute: PropertiesIndexRoute,
+  PropertiesSlugIndexRoute: PropertiesSlugIndexRoute,
+  PropertiesSlugRoomsRoomIdRoute: PropertiesSlugRoomsRoomIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
