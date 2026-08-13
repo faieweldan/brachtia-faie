@@ -11,7 +11,12 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
+import { Route as ApplyRouteImport } from './routes/apply'
+import { Route as BookViewingRouteImport } from './routes/book-viewing'
+import { Route as ContactRouteImport } from './routes/contact'
 import { Route as PropertiesIndexRouteImport } from './routes/properties.index'
+import { Route as PropertiesSlugIndexRouteImport } from './routes/properties.$slug.index'
+import { Route as PropertiesSlugRoomsRoomIdRouteImport } from './routes/properties.$slug.rooms.$roomId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -23,40 +28,111 @@ const AboutRoute = AboutRouteImport.update({
   path: '/about',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApplyRoute = ApplyRouteImport.update({
+  id: '/apply',
+  path: '/apply',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BookViewingRoute = BookViewingRouteImport.update({
+  id: '/book-viewing',
+  path: '/book-viewing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContactRoute = ContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PropertiesIndexRoute = PropertiesIndexRouteImport.update({
   id: '/properties/',
   path: '/properties/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PropertiesSlugIndexRoute = PropertiesSlugIndexRouteImport.update({
+  id: '/properties/$slug/',
+  path: '/properties/$slug/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PropertiesSlugRoomsRoomIdRoute =
+  PropertiesSlugRoomsRoomIdRouteImport.update({
+    id: '/properties/$slug/rooms/$roomId',
+    path: '/properties/$slug/rooms/$roomId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/apply': typeof ApplyRoute
+  '/book-viewing': typeof BookViewingRoute
+  '/contact': typeof ContactRoute
   '/properties/': typeof PropertiesIndexRoute
+  '/properties/$slug/': typeof PropertiesSlugIndexRoute
+  '/properties/$slug/rooms/$roomId': typeof PropertiesSlugRoomsRoomIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/apply': typeof ApplyRoute
+  '/book-viewing': typeof BookViewingRoute
+  '/contact': typeof ContactRoute
   '/properties': typeof PropertiesIndexRoute
+  '/properties/$slug': typeof PropertiesSlugIndexRoute
+  '/properties/$slug/rooms/$roomId': typeof PropertiesSlugRoomsRoomIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/apply': typeof ApplyRoute
+  '/book-viewing': typeof BookViewingRoute
+  '/contact': typeof ContactRoute
   '/properties/': typeof PropertiesIndexRoute
+  '/properties/$slug/': typeof PropertiesSlugIndexRoute
+  '/properties/$slug/rooms/$roomId': typeof PropertiesSlugRoomsRoomIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/properties/'
+  fullPaths:
+    | '/'
+    | '/about'
+    | '/apply'
+    | '/book-viewing'
+    | '/contact'
+    | '/properties/'
+    | '/properties/$slug/'
+    | '/properties/$slug/rooms/$roomId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/properties'
-  id: '__root__' | '/' | '/about' | '/properties/'
+  to:
+    | '/'
+    | '/about'
+    | '/apply'
+    | '/book-viewing'
+    | '/contact'
+    | '/properties'
+    | '/properties/$slug'
+    | '/properties/$slug/rooms/$roomId'
+  id:
+    | '__root__'
+    | '/'
+    | '/about'
+    | '/apply'
+    | '/book-viewing'
+    | '/contact'
+    | '/properties/'
+    | '/properties/$slug/'
+    | '/properties/$slug/rooms/$roomId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
+  ApplyRoute: typeof ApplyRoute
+  BookViewingRoute: typeof BookViewingRoute
+  ContactRoute: typeof ContactRoute
   PropertiesIndexRoute: typeof PropertiesIndexRoute
+  PropertiesSlugIndexRoute: typeof PropertiesSlugIndexRoute
+  PropertiesSlugRoomsRoomIdRoute: typeof PropertiesSlugRoomsRoomIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -75,11 +151,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/apply': {
+      id: '/apply'
+      path: '/apply'
+      fullPath: '/apply'
+      preLoaderRoute: typeof ApplyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/book-viewing': {
+      id: '/book-viewing'
+      path: '/book-viewing'
+      fullPath: '/book-viewing'
+      preLoaderRoute: typeof BookViewingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contact': {
+      id: '/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof ContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/properties/': {
       id: '/properties/'
       path: '/properties'
       fullPath: '/properties/'
       preLoaderRoute: typeof PropertiesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/properties/$slug/': {
+      id: '/properties/$slug/'
+      path: '/properties/$slug'
+      fullPath: '/properties/$slug/'
+      preLoaderRoute: typeof PropertiesSlugIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/properties/$slug/rooms/$roomId': {
+      id: '/properties/$slug/rooms/$roomId'
+      path: '/properties/$slug/rooms/$roomId'
+      fullPath: '/properties/$slug/rooms/$roomId'
+      preLoaderRoute: typeof PropertiesSlugRoomsRoomIdRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -88,7 +199,12 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
+  ApplyRoute: ApplyRoute,
+  BookViewingRoute: BookViewingRoute,
+  ContactRoute: ContactRoute,
   PropertiesIndexRoute: PropertiesIndexRoute,
+  PropertiesSlugIndexRoute: PropertiesSlugIndexRoute,
+  PropertiesSlugRoomsRoomIdRoute: PropertiesSlugRoomsRoomIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
