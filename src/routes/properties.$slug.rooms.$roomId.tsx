@@ -13,8 +13,6 @@ import {
 } from "@/data/properties";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import Header from "@/components/site/Header";
-import Footer from "@/components/site/Footer";
 import RoomCard, { statusLabel } from "@/components/site/RoomCard";
 
 export const Route = createFileRoute("/properties/$slug/rooms/$roomId")({
@@ -60,9 +58,7 @@ function RoomPage() {
   const message = `Hi Brachtia Homes, I'm interested in ${room.roomLabel} (${room.roomName}) at ${room.unitLabel}, ${property.name}.`;
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <Header />
-      <main className="flex-1">
+    <>
         <section className="mx-auto max-w-6xl px-4 pt-6 sm:px-6">
           <nav className="text-sm text-muted-foreground">
             <Link to="/properties" className="hover:text-brand">
@@ -233,8 +229,6 @@ function RoomPage() {
             </div>
           </section>
         )}
-      </main>
-      <Footer />
-    </div>
+    </>
   );
 }

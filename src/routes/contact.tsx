@@ -6,8 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import Header from "@/components/site/Header";
-import Footer from "@/components/site/Footer";
 
 const title = "Contact Brachtia Homes | Cyberjaya Student Housing Team";
 const description =
@@ -27,9 +25,7 @@ export const Route = createFileRoute("/contact")({
 
 function ContactPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <Header />
-      <main className="flex-1">
+    <>
         <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
           <h1 className="font-display text-3xl font-semibold text-brand-deep sm:text-4xl">
             Contact us
@@ -112,8 +108,6 @@ function ContactPage() {
             </div>
           </div>
         </section>
-      </main>
-      <Footer />
-    </div>
+    </>
   );
 }

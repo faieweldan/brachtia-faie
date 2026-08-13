@@ -7,8 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import Header from "@/components/site/Header";
-import Footer from "@/components/site/Footer";
 
 const title = "Apply for a Room | Brachtia Homes Cyberjaya";
 const description =
@@ -44,9 +42,7 @@ function ApplyPage() {
   const roomOptions = rooms.filter((r) => r.propertySlug === propertySlug && r.status !== "occupied");
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <Header />
-      <main className="flex-1">
+    <>
         <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
           <span className="inline-flex items-center gap-2 rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-brand-deep">
             <FileCheck2 className="size-3.5" /> Takes about 3 minutes
@@ -175,8 +171,6 @@ function ApplyPage() {
             </aside>
           </div>
         </section>
-      </main>
-      <Footer />
-    </div>
+    </>
   );
 }

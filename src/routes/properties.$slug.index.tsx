@@ -10,8 +10,6 @@ import {
 } from "@/data/properties";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import Header from "@/components/site/Header";
-import Footer from "@/components/site/Footer";
 import CtaBand from "@/components/site/CtaBand";
 import RoomCard from "@/components/site/RoomCard";
 
@@ -47,9 +45,7 @@ function PropertyPage() {
   const tables = property.pricing[activeTerm];
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <Header />
-      <main className="flex-1">
+    <>
         <section className="mx-auto max-w-6xl px-4 pt-6 sm:px-6">
           <nav className="text-sm text-muted-foreground">
             <Link to="/properties" className="hover:text-brand">
@@ -299,8 +295,6 @@ function PropertyPage() {
             message={`Hi Brachtia Homes, I'd like to book a viewing at ${property.name}.`}
           />
         </div>
-      </main>
-      <Footer />
-    </div>
+    </>
   );
 }
