@@ -22,9 +22,9 @@ const steps = [
 ];
 
 export const Route = createFileRoute("/apply")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    property: typeof search.property === "string" ? search.property : undefined,
-    room: typeof search.room === "string" ? search.room : undefined,
+  validateSearch: (search: Record<string, unknown>): { property?: string; room?: string } => ({
+    ...(typeof search["property"] === "string" ? { property: search["property"] } : {}),
+    ...(typeof search["room"] === "string" ? { room: search["room"] } : {}),
   }),
   head: () => ({
     meta: [
@@ -39,7 +39,7 @@ export const Route = createFileRoute("/apply")({
 
 function ApplyPage() {
   const search = Route.useSearch();
-  const [propertySlug, setPropertySlug] = useState(search.property ?? properties[0].slug);
+  const [propertySlug, setPropertySlug] = useState(search.property ?? properties[0]?.slug ?? "");
   const [roomId, setRoomId] = useState(search.room ?? "");
   const roomOptions = rooms.filter((r) => r.propertySlug === propertySlug && r.status !== "occupied");
 

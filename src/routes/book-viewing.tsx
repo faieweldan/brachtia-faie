@@ -15,9 +15,8 @@ const description =
   "Schedule a viewing of our Cyberjaya student residences. Pick a date, tell us what you need and our student team will confirm within 24 hours.";
 
 export const Route = createFileRoute("/book-viewing")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    property: typeof search.property === "string" ? search.property : undefined,
-  }),
+  validateSearch: (search: Record<string, unknown>): { property?: string } =>
+    typeof search["property"] === "string" ? { property: search["property"] } : {},
   head: () => ({
     meta: [
       { title },
@@ -31,7 +30,7 @@ export const Route = createFileRoute("/book-viewing")({
 
 function BookViewingPage() {
   const { property } = Route.useSearch();
-  const [selected, setSelected] = useState(property ?? properties[0].slug);
+  const [selected, setSelected] = useState(property ?? properties[0]?.slug ?? "");
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

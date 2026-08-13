@@ -11,6 +11,9 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
+import { Route as ApplyRouteImport } from './routes/apply'
+import { Route as BookViewingRouteImport } from './routes/book-viewing'
+import { Route as ContactRouteImport } from './routes/contact'
 import { Route as PropertiesIndexRouteImport } from './routes/properties.index'
 import { Route as PropertiesSlugIndexRouteImport } from './routes/properties.$slug.index'
 import { Route as PropertiesSlugRoomsRoomIdRouteImport } from './routes/properties.$slug.rooms.$roomId'
@@ -23,6 +26,21 @@ const IndexRoute = IndexRouteImport.update({
 const AboutRoute = AboutRouteImport.update({
   id: '/about',
   path: '/about',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApplyRoute = ApplyRouteImport.update({
+  id: '/apply',
+  path: '/apply',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BookViewingRoute = BookViewingRouteImport.update({
+  id: '/book-viewing',
+  path: '/book-viewing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContactRoute = ContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PropertiesIndexRoute = PropertiesIndexRouteImport.update({
@@ -45,6 +63,9 @@ const PropertiesSlugRoomsRoomIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/apply': typeof ApplyRoute
+  '/book-viewing': typeof BookViewingRoute
+  '/contact': typeof ContactRoute
   '/properties/': typeof PropertiesIndexRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
   '/properties/$slug/rooms/$roomId': typeof PropertiesSlugRoomsRoomIdRoute
@@ -52,6 +73,9 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/apply': typeof ApplyRoute
+  '/book-viewing': typeof BookViewingRoute
+  '/contact': typeof ContactRoute
   '/properties': typeof PropertiesIndexRoute
   '/properties/$slug': typeof PropertiesSlugIndexRoute
   '/properties/$slug/rooms/$roomId': typeof PropertiesSlugRoomsRoomIdRoute
@@ -60,6 +84,9 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/apply': typeof ApplyRoute
+  '/book-viewing': typeof BookViewingRoute
+  '/contact': typeof ContactRoute
   '/properties/': typeof PropertiesIndexRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
   '/properties/$slug/rooms/$roomId': typeof PropertiesSlugRoomsRoomIdRoute
@@ -69,6 +96,9 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/about'
+    | '/apply'
+    | '/book-viewing'
+    | '/contact'
     | '/properties/'
     | '/properties/$slug/'
     | '/properties/$slug/rooms/$roomId'
@@ -76,6 +106,9 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/about'
+    | '/apply'
+    | '/book-viewing'
+    | '/contact'
     | '/properties'
     | '/properties/$slug'
     | '/properties/$slug/rooms/$roomId'
@@ -83,6 +116,9 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/about'
+    | '/apply'
+    | '/book-viewing'
+    | '/contact'
     | '/properties/'
     | '/properties/$slug/'
     | '/properties/$slug/rooms/$roomId'
@@ -91,6 +127,9 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
+  ApplyRoute: typeof ApplyRoute
+  BookViewingRoute: typeof BookViewingRoute
+  ContactRoute: typeof ContactRoute
   PropertiesIndexRoute: typeof PropertiesIndexRoute
   PropertiesSlugIndexRoute: typeof PropertiesSlugIndexRoute
   PropertiesSlugRoomsRoomIdRoute: typeof PropertiesSlugRoomsRoomIdRoute
@@ -110,6 +149,27 @@ declare module '@tanstack/react-router' {
       path: '/about'
       fullPath: '/about'
       preLoaderRoute: typeof AboutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/apply': {
+      id: '/apply'
+      path: '/apply'
+      fullPath: '/apply'
+      preLoaderRoute: typeof ApplyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/book-viewing': {
+      id: '/book-viewing'
+      path: '/book-viewing'
+      fullPath: '/book-viewing'
+      preLoaderRoute: typeof BookViewingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contact': {
+      id: '/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof ContactRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/properties/': {
@@ -139,6 +199,9 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
+  ApplyRoute: ApplyRoute,
+  BookViewingRoute: BookViewingRoute,
+  ContactRoute: ContactRoute,
   PropertiesIndexRoute: PropertiesIndexRoute,
   PropertiesSlugIndexRoute: PropertiesSlugIndexRoute,
   PropertiesSlugRoomsRoomIdRoute: PropertiesSlugRoomsRoomIdRoute,
