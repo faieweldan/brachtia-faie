@@ -164,8 +164,8 @@ function PropertyPage() {
                 footnote={property.apartmentFootnote}
                 iconMode="facility"
               />
-              <LocationSection property={property} />
             </div>
+
 
 
             <div id="rooms">
