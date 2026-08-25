@@ -342,9 +342,12 @@ function PropertyPage() {
             </div>
 
             {rooms.length > 0 && (
+              <div id="stay-calculator">
               <StayCalculator
                 property={property}
                 rooms={rooms}
+                selectedRoomId={selectedRoomId ?? undefined}
+                onRoomChange={setSelectedRoomId}
                 actions={(state) => (
                   <EnquireDialog
                     property={property}
