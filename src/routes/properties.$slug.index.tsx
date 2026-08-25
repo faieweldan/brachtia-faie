@@ -1,6 +1,14 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
-import { Check, MapPin, MessageCircle, X } from "lucide-react";
+import { Check, LayoutGrid, MapPin, MessageCircle, X } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+
 import {
   availableCount,
   formatRM,
@@ -58,18 +66,18 @@ function PropertyPage() {
           <span className="text-foreground">{property.name}</span>
         </nav>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-[2fr_1fr]">
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:gap-3">
           <div className="overflow-hidden rounded-3xl">
             <img
               src={property.heroImage}
               alt={property.name}
               width={1600}
-              height={1000}
-              className="h-64 w-full object-cover sm:h-[26rem]"
+              height={1200}
+              className="h-64 w-full object-cover sm:h-[30rem]"
             />
           </div>
-          <div className="hidden grid-rows-3 gap-3 sm:grid sm:h-[26rem]">
-            {gallery.slice(0, 3).map((g) => (
+          <div className="relative hidden grid-cols-2 grid-rows-2 gap-2 sm:grid sm:h-[30rem] lg:gap-3">
+            {gallery.slice(0, 4).map((g) => (
               <div key={g.caption} className="overflow-hidden rounded-3xl">
                 <img
                   src={g.src}
@@ -81,8 +89,40 @@ function PropertyPage() {
                 />
               </div>
             ))}
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="absolute bottom-4 right-4 gap-2 rounded-full bg-card shadow-lift hover:bg-card"
+                >
+                  <LayoutGrid className="size-4" /> Show all photos
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>{property.name} — photos</DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {gallery.map((g) => (
+                    <figure key={g.caption} className="overflow-hidden rounded-2xl">
+                      <img
+                        src={g.src}
+                        alt={`${property.name} — ${g.caption}`}
+                        loading="lazy"
+                        className="h-56 w-full object-cover"
+                      />
+                      <figcaption className="px-1 py-2 text-xs text-muted-foreground">
+                        {g.caption}
+                      </figcaption>
+                    </figure>
+                  ))}
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
+
       </section>
 
       <section className="mx-auto mt-8 max-w-6xl px-4 sm:px-6">
