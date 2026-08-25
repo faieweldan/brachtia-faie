@@ -186,7 +186,7 @@ function Home() {
 
         <div className="relative mx-auto max-w-6xl px-4 sm:px-6">
           <div className="mx-auto max-w-2xl text-center">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand">Why students stay</p>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand">WHY STUDENTS CHOOSE US</p>
             <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-brand-deep sm:text-4xl">
               Everything you need to settle in.
             </h2>
