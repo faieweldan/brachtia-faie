@@ -177,7 +177,7 @@ function Home() {
         <div className="max-w-2xl">
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand">How it works</p>
           <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-brand-deep sm:text-4xl">
-            Find your room in 3 simple steps.
+            Book your room in 3 simple steps.
           </h2>
           <p className="mt-3 text-base text-muted-foreground">
             Tell us what you're looking for. We'll check availability, find a suitable option and
