@@ -526,8 +526,28 @@ export function getProperty(slug: string) {
 }
 
 export function getRoomTypes(slug: string) {
-  return roomTypes.filter((r) => r.propertySlug === slug);
+  return roomTypes.filter((r) => r.propertySlug === slug && r.publicVisible);
 }
+
+export type RoomFilterState = {
+  unit: string;
+  bath: string;
+  view: string;
+};
+
+export function filterRoomTypes(rooms: RoomType[], f: RoomFilterState) {
+  return rooms.filter((r) => {
+    if (f.unit !== "all" && r.unitType !== f.unit) return false;
+    if (f.bath !== "all" && r.bathroom !== f.bath) return false;
+    if (f.view === "view" && !r.hasView) return false;
+    return true;
+  });
+}
+
+export function unitTypesFor(slug: string) {
+  return Array.from(new Set(getRoomTypes(slug).map((r) => r.unitType)));
+}
+
 
 export function getRoomType(slug: string, typeId: string) {
   return roomTypes.find((r) => r.propertySlug === slug && r.id === typeId);
