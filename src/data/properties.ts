@@ -283,6 +283,7 @@ export const properties: Property[] = [
 export const roomTypes: RoomType[] = [
   {
     id: "arc-master-ensuite",
+    tag: "Room A",
     propertySlug: "the-arc-cyberjaya",
     name: "Master Room with En-suite",
     unitType: "3 Rooms, 2 Baths",
@@ -298,6 +299,7 @@ export const roomTypes: RoomType[] = [
   },
   {
     id: "arc-room-with-view",
+    tag: "Room B",
     propertySlug: "the-arc-cyberjaya",
     name: "Room with View",
     unitType: "3 Rooms, 2 Baths",
@@ -315,6 +317,7 @@ export const roomTypes: RoomType[] = [
   },
   {
     id: "arc-yard-facing",
+    tag: "Room C",
     propertySlug: "the-arc-cyberjaya",
     name: "Yard-facing Room",
     unitType: "3 Rooms, 2 Baths",
@@ -331,6 +334,7 @@ export const roomTypes: RoomType[] = [
   },
   {
     id: "arc-quad-view",
+    tag: "Room D",
     propertySlug: "the-arc-cyberjaya",
     name: "Room with View — 4 Bedroom Unit",
     unitType: "4 Rooms, 2 Common Baths",
@@ -346,6 +350,7 @@ export const roomTypes: RoomType[] = [
   },
   {
     id: "arc-quad-yard",
+    tag: "Room E",
     propertySlug: "the-arc-cyberjaya",
     name: "Yard-facing Room — 4 Bedroom Unit",
     unitType: "4 Rooms, 2 Common Baths",
@@ -361,6 +366,7 @@ export const roomTypes: RoomType[] = [
   },
   {
     id: "solstice-one-bedroom",
+    tag: "Room A",
     propertySlug: "solstice-residence-cyberjaya",
     name: "Private 1-Bedroom Apartment",
     unitType: "1 Bedroom Apartment with attached bath",
