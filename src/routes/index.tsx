@@ -6,7 +6,7 @@ import {
   MailCheck,
   MapPin,
   ShieldCheck,
-  Sparkles,
+  
   Sofa,
   Wallet,
   Headphones,
