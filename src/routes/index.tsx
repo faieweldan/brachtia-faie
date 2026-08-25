@@ -48,7 +48,7 @@ const perks = [
     text: "Single or twin-sharing rooms, with short and long-term stays.",
   },
   {
-    icon: Smartphone,
+    icon: BadgePercent,
     title: "Transparent Pricing",
     text: "Know your rent, deposits and fees upfront, with no unexpected surprises.",
   },
