@@ -83,9 +83,6 @@ function Home() {
       <section className="px-4 pb-14 pt-14 sm:px-6 sm:pb-20 sm:pt-20">
         <div className="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-2 lg:gap-14">
           <div>
-            <span className="inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand-soft px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-brand">
-              <MapPin className="size-3.5" /> Cyberjaya, Malaysia
-            </span>
             <h1 className="mt-6 text-4xl font-extrabold leading-[1.05] tracking-tight text-brand-deep sm:text-6xl">
               Student living,
               <br />
