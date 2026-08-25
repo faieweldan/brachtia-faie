@@ -163,105 +163,37 @@ function RoomTypePage() {
           </div>
 
           <aside className="lg:sticky lg:top-24 lg:self-start">
-            <div className="rounded-3xl border border-border/70 bg-card p-5 shadow-card">
-              {availableTerms.length > 1 && (
-                <SegmentedToggle
-                  value={activeTerm}
-                  onChange={setTerm}
-                  options={availableTerms.map((t) => ({
-                    value: t,
-                    label: t === "long" ? "12-month stay" : "Short-term",
-                  }))}
-                />
-              )}
-              {room.occupancies.length > 1 && (
-                <SegmentedToggle
-                  className="mt-2"
-                  size="sm"
-                  value={occupancy}
-                  onChange={setOccupancy}
-                  options={room.occupancies.map((o) => ({
-                    value: o,
-                    label: o === "single" ? "Single occupancy" : "Twin sharing",
-                    disabled: room.rent[activeTerm][o] == null,
-                  }))}
-                />
-              )}
-
-              <div className="mt-5">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Monthly rent {occupancy === "twin" ? "per person" : ""}
-                </p>
-                <p className="font-display text-3xl font-semibold text-brand-deep">
-                  {rent ? formatRM(rent) : "On request"}
-                  {rent && <span className="text-base font-normal text-muted-foreground">/mo</span>}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">{property.paymentCycle}</p>
-              </div>
-
-              {breakdown && (
-                <div className="mt-5 rounded-2xl bg-brand-tint p-4">
-                  <p className="text-sm font-semibold text-brand-deep">Upfront costs & deposits</p>
-                  <table className="mt-3 w-full text-sm">
-                    <tbody>
-                      {breakdown.lines.map((l) => (
-                        <tr key={l.label} className="align-top">
-                          <td className="py-1.5 pr-3 text-muted-foreground">
-                            {l.label}
-                            {l.kind === "refundable" && (
-                              <span className="ml-1 text-[10px] uppercase tracking-wide text-brand">
-                                refundable
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-1.5 text-right font-medium text-foreground">
-                            {formatRM(l.amount)}
-                          </td>
-                        </tr>
-                      ))}
-                      <tr className="border-t border-border">
-                        <td className="pt-2.5 font-semibold text-brand-deep">Total payable</td>
-                        <td className="pt-2.5 text-right font-display text-lg font-semibold text-brand-deep">
-                          {formatRM(breakdown.total)}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    Booking fee {company.bookingFee} secures the room and is offset against your
-                    first payment. Deposits are refundable at the end of tenancy, less any damages.
+            <StayCalculator
+              property={property}
+              room={room}
+              actions={(s) => (
+                <>
+                  <EnquireDialog
+                    property={property}
+                    room={room}
+                    term={s.term}
+                    occupancy={s.occupancy}
+                    moveIn={s.moveIn}
+                    moveOut={s.moveOut}
+                    trigger={
+                      <Button size="lg" className="h-13 w-full rounded-full text-base">
+                        Enquire now
+                      </Button>
+                    }
+                  />
+                  <Button asChild size="lg" variant="outline" className="w-full rounded-full">
+                    <a href={whatsappUrl(message)} target="_blank" rel="noreferrer">
+                      <MessageCircle className="size-4" /> WhatsApp us
+                    </a>
+                  </Button>
+                  <p className="pt-1 text-center text-xs text-muted-foreground">
+                    Admin confirms your unit after reviewing preferences.
                   </p>
-                </div>
+                </>
               )}
-
-              <div className="mt-5 space-y-2">
-                <EnquireDialog
-                  property={property}
-                  room={room}
-                  term={activeTerm}
-                  occupancy={occupancy}
-                  trigger={
-                    <Button size="lg" className="w-full">
-                      Enquire now
-                    </Button>
-                  }
-                />
-                <Button asChild size="lg" variant="outline" className="w-full">
-                  <a href={whatsappUrl(message)} target="_blank" rel="noreferrer">
-                    <MessageCircle className="size-4" /> WhatsApp us
-                  </a>
-                </Button>
-                <Button asChild size="lg" variant="ghost" className="w-full">
-                  <Link to="/book-viewing" search={{ property: property.slug }}>
-                    Book a viewing
-                  </Link>
-                </Button>
-              </div>
-              <p className="mt-3 text-center text-xs text-muted-foreground">
-                Admin confirms the exact unit with you after reviewing your preferences.
-              </p>
-            </div>
+            />
           </aside>
+
         </div>
       </section>
 
