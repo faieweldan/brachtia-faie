@@ -25,15 +25,17 @@ function drawLogo(doc: any, x: number, y: number, size: number) {
   doc.lines([[22 * s, -26 * s], [8 * s, 9 * s]], px(4), py(40));
   doc.lines([[-22 * s, -26 * s], [-12 * s, 14 * s]], px(60), py(40));
   doc.setLineWidth(size * 0.032);
-  for (const [rx, ry] of [
+  const squares: [number, number][] = [
     [26, 34],
     [34, 34],
     [26, 42],
     [34, 42],
-  ]) {
+  ];
+  for (const [rx, ry] of squares) {
     doc.rect(px(rx), py(ry), 5 * s, 5 * s);
   }
 }
+
 
 export type QuoteInput = {
   property: Property;
