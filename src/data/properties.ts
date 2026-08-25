@@ -37,16 +37,25 @@ export type PricingTable = {
   rows: PricingRow[];
 };
 
+export type BathroomType = "ensuite" | "shared";
+
 export type RoomType = {
   id: string;
   propertySlug: string;
   /** Operational tag used by admin, e.g. "Room A" */
   tag: string;
+  /** Admin room_code, e.g. "A" */
+  roomCode: string;
   name: string;
   unitType: string;
   description: string;
 
+  sizeSqft?: number;
   sizeLabel?: string;
+  bathroom: BathroomType;
+  hasView: boolean;
+  viewType?: string;
+  publicVisible: boolean;
   image: string;
   gallery: string[];
   features: string[];
@@ -57,6 +66,7 @@ export type RoomType = {
   status: RoomStatus;
   spotsLeft?: number;
 };
+
 
 export type PlaceNearby = {
   name: string;
