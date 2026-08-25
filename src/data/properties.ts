@@ -208,36 +208,37 @@ export const properties: Property[] = [
     pricing: {
       long: [
         {
-          unitType: "3 Rooms, 2 Baths",
+          unitType: "3-Bedroom Apartment",
           blocks: "Block A, B, C & D",
           rows: [
-            { roomType: "Room A", note: "Master room with en-suite bath", single: 1050, twin: 550 },
-            { roomType: "Room B", note: 'With view (10" x 10.5")', single: 850, twin: 450 },
-            { roomType: "Room C", note: 'Facing yard (10" x 9")', single: 750, twin: 400 },
+            { roomType: "Room A", note: "Ensuite, with view · 105 sq ft", single: 1050, twin: 550 },
+            { roomType: "Room B", note: "Standard, with view · 105 sq ft", single: 850, twin: 450 },
+            { roomType: "Room C", note: "Standard small, internal facing · 90 sq ft", single: 750, twin: 400 },
           ],
         },
         {
-          unitType: "4 Rooms, 2 Common Baths",
+          unitType: "4-Bedroom Apartment",
           blocks: "Block A & B",
           rows: [
-            { roomType: "Room A", note: "With view", single: 800, twin: 450 },
-            { roomType: "Room B", note: "With view", single: 800, twin: 450 },
-            { roomType: "Room C", note: "Facing yard", single: 700, twin: 400 },
-            { roomType: "Room D", note: "With view", single: 800, twin: 450 },
+            { roomType: "Room A", note: "Standard, with view · 105 sq ft", single: 800, twin: 450 },
+            { roomType: "Room B", note: "Standard, with view · 105 sq ft", single: 800, twin: 450 },
+            { roomType: "Room C", note: "Standard small, internal facing · 90 sq ft", single: 700, twin: 400 },
+            { roomType: "Room D", note: "Standard small, with view · 90 sq ft", single: 800, twin: 450 },
           ],
         },
       ],
       short: [
         {
-          unitType: "3 Rooms, 2 Baths",
-          blocks: "Block A, B, C & D",
+          unitType: "3-Bedroom Apartment",
+          blocks: "Block A, B, C & D · short-term available in 3-bedroom units only",
           rows: [
-            { roomType: "Room A", note: "Master room with en-suite bath", single: 1200, twin: 650 },
-            { roomType: "Room B", note: 'With view (10" x 10.5")', single: 950, twin: 550 },
-            { roomType: "Room C", note: 'Facing yard (10" x 9")', single: 850, twin: 500 },
+            { roomType: "Room A", note: "Ensuite, with view · 105 sq ft", single: 1200, twin: 650 },
+            { roomType: "Room B", note: "Standard, with view · 105 sq ft", single: 950, twin: 550 },
+            { roomType: "Room C", note: "Standard small, internal facing · 90 sq ft", single: 850, twin: 500 },
           ],
         },
       ],
+
     },
     wazeUrl: "https://waze.com/ul?q=The%20Arc%20Cyberjaya",
   },
