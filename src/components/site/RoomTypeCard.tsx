@@ -111,13 +111,6 @@ export default function RoomTypeCard({
             </p>
           </div>
           <div className="flex items-center gap-4">
-            <Link
-              to="/properties/$slug/rooms/$typeId"
-              params={detail}
-              className="text-sm font-medium text-brand-deep underline-offset-4 hover:underline"
-            >
-              Details
-            </Link>
             <EnquireDialog
               property={property}
               room={room}
