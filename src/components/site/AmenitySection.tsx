@@ -28,7 +28,7 @@ export default function AmenitySection({
   const visibleItems = shouldCollapse && !isOpen ? items.slice(0, collapseThreshold) : items;
 
   return (
-    <div className="border-b border-border pb-8 last:border-b-0 last:pb-0">
+    <div className="border-b border-border pb-5 last:border-b-0 last:pb-0">
       <button
         type="button"
         onClick={() => shouldCollapse && setIsOpen((v) => !v)}
@@ -43,7 +43,7 @@ export default function AmenitySection({
         )}
       </button>
 
-      <ul className="mt-6 grid gap-x-10 gap-y-4 sm:grid-cols-2">
+      <ul className="mt-4 grid gap-x-10 gap-y-3 sm:grid-cols-2">
         {visibleItems.map((item) => {
           const Icon = iconMode === "facility" ? facilityIcon(item) : Check;
           return (
@@ -65,8 +65,8 @@ export default function AmenitySection({
         </button>
       )}
 
-      {note && <p className="mt-5 text-sm text-muted-foreground">{note}</p>}
-      {footnote && <p className="mt-2 text-sm text-muted-foreground">*{footnote}</p>}
+      {note && <p className="mt-3 text-sm text-muted-foreground">{note}</p>}
+      {footnote && <p className="mt-1 text-sm text-muted-foreground">*{footnote}</p>}
     </div>
   );
 }
