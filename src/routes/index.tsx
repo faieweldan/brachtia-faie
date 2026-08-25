@@ -40,12 +40,12 @@ export const Route = createFileRoute("/")({
 });
 
 const perks = [
-  { icon: Wallet, title: "Clear pricing", text: "Know your rent, deposits and fees upfront." },
-  { icon: ShieldCheck, title: "Safe & secure", text: "Secure access and managed student residences." },
-  { icon: Sofa, title: "Move-in ready", text: "Furnished rooms with the essentials covered." },
-  { icon: Headphones, title: "24/7 support", text: "Help when you need it, throughout your stay." },
-  { icon: MapPin, title: "Close to campus", text: "Conveniently located for student life in Cyberjaya." },
-  { icon: SlidersHorizontal, title: "Flexible options", text: "Single, twin-sharing and flexible stay options." },
+  { icon: Wallet, title: "Clear pricing", text: "No hidden fees" },
+  { icon: ShieldCheck, title: "Safe & secure", text: "Secure access" },
+  { icon: Sofa, title: "Move-in ready", text: "Fully furnished" },
+  { icon: Headphones, title: "24/7 support", text: "Always here" },
+  { icon: MapPin, title: "Close to campus", text: "Cyberjaya locations" },
+  { icon: SlidersHorizontal, title: "Flexible options", text: "Single or twin" },
 ];
 
 const steps = [
