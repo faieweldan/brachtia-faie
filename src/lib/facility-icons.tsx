@@ -1,0 +1,49 @@
+import {
+  Bike,
+  Bus,
+  Camera,
+  Car,
+  Coffee,
+  Dumbbell,
+  Home,
+  KeyRound,
+  type LucideIcon,
+  Moon,
+  Refrigerator,
+  ShieldCheck,
+  ShoppingBasket,
+  Scissors,
+  Snowflake,
+  Sparkles,
+  Trees,
+  Utensils,
+  WashingMachine,
+  Waves,
+  Wifi,
+} from "lucide-react";
+
+const RULES: { match: RegExp; icon: LucideIcon }[] = [
+  { match: /pool|swim/i, icon: Waves },
+  { match: /gym|fitness|squash|court|sport/i, icon: Dumbbell },
+  { match: /cafe|coffee/i, icon: Coffee },
+  { match: /barber|salon/i, icon: Scissors },
+  { match: /mart|shop|convenience|grocer/i, icon: ShoppingBasket },
+  { match: /laundry|washer|washing/i, icon: WashingMachine },
+  { match: /vending|water|snack/i, icon: Refrigerator },
+  { match: /prayer|surau/i, icon: Moon },
+  { match: /security|guard/i, icon: ShieldCheck },
+  { match: /access card|entry|lift access/i, icon: KeyRound },
+  { match: /cctv|camera|monitor/i, icon: Camera },
+  { match: /wi-?fi|internet/i, icon: Wifi },
+  { match: /clean|housekeep/i, icon: Sparkles },
+  { match: /kitchen|dining|cook/i, icon: Utensils },
+  { match: /air-?con|aircond|cooling/i, icon: Snowflake },
+  { match: /park|carpark/i, icon: Car },
+  { match: /bicycle|bike/i, icon: Bike },
+  { match: /shuttle|bus|mrt|transport/i, icon: Bus },
+  { match: /garden|park|outdoor|landscape/i, icon: Trees },
+];
+
+export function facilityIcon(label: string): LucideIcon {
+  return RULES.find((r) => r.match.test(label))?.icon ?? Home;
+}
