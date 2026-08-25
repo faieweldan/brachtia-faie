@@ -73,7 +73,9 @@ export type Property = {
   utilitiesNote: string;
   insideApartment: string[];
   apartmentFootnote?: string;
-  nearby: string[];
+  coords: { lat: number; lng: number };
+  nearbyUniversities: PlaceNearby[];
+  pointsOfInterest: PlaceNearby[];
   terms: string[];
   contractTerms: ContractTerm[];
   paymentCycle: string;
@@ -82,16 +84,22 @@ export type Property = {
   wazeUrl: string;
 };
 
-const nearbyCyberjaya = [
-  "7–15 min walk to KFC, McDonald's, convenience shops & pharmacy",
-  "Tamarind Square & D'Pulze Mall in Cyberjaya",
-  "IOI City Mall & Alamanda in Putrajaya",
-  "24-hour clinic and hospital nearby",
-  "2 recreation parks and Splash Mania water theme park",
-  "3 min walk to bus stop (MRT feeder bus & free university shuttle)",
-  "Rapid on Demand mini van around Cyberjaya & to Putrajaya Sentral",
-  "2 MRT Cyberjaya stations & KL Transit (ERL) at Putrajaya",
+const universitiesCyberjaya: PlaceNearby[] = [
+  { name: "Multimedia University (MMU)", distance: "0.9 km", walk: "12 min", bike: "4 min", transit: "5 min" },
+  { name: "Heriot-Watt University Malaysia", distance: "2.1 km", walk: "26 min", bike: "8 min", transit: "9 min" },
+  { name: "University of Cyberjaya", distance: "2.6 km", walk: "32 min", bike: "10 min", transit: "11 min" },
+  { name: "Limkokwing University", distance: "3.4 km", walk: "42 min", bike: "13 min", transit: "14 min" },
 ];
+
+const poiCyberjaya: PlaceNearby[] = [
+  { name: "D'Pulze Shopping Centre", distance: "1.2 km", walk: "15 min", bike: "5 min", transit: "6 min" },
+  { name: "Tamarind Square", distance: "1.6 km", walk: "20 min", bike: "6 min", transit: "7 min" },
+  { name: "MRT Cyberjaya City Centre", distance: "2.0 km", walk: "25 min", bike: "8 min", transit: "8 min" },
+  { name: "24-hour clinic & hospital", distance: "1.4 km", walk: "18 min", bike: "6 min", transit: "6 min" },
+  { name: "Convenience shops & pharmacy", distance: "0.6 km", walk: "8 min", bike: "3 min", transit: "4 min" },
+  { name: "Cyberjaya Recreation Park", distance: "1.8 km", walk: "22 min", bike: "7 min", transit: "8 min" },
+];
+
 
 export const properties: Property[] = [
   {
