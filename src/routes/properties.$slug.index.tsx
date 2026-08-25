@@ -1,6 +1,8 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
 import { Check, LayoutGrid, MapPin, MessageCircle, X } from "lucide-react";
+import { facilityIcon } from "@/lib/facility-icons";
+
 import {
   Dialog,
   DialogContent,
@@ -147,17 +149,19 @@ function PropertyPage() {
               <h2 className="text-2xl font-bold text-brand-deep">
                 Facilities & amenities
               </h2>
-              <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-                {property.facilities.map((f) => (
-                  <li
-                    key={f}
-                    className="flex items-start gap-2 rounded-2xl bg-brand-tint px-3 py-2.5 text-sm text-brand-deep"
-                  >
-                    <Check className="mt-0.5 size-4 shrink-0 text-brand" /> {f}
-                  </li>
-                ))}
+              <ul className="mt-6 grid gap-x-10 gap-y-5 sm:grid-cols-2">
+                {property.facilities.map((f) => {
+                  const Icon = facilityIcon(f);
+                  return (
+                    <li key={f} className="flex items-start gap-4">
+                      <Icon className="mt-0.5 size-6 shrink-0 stroke-[1.5] text-brand-deep" />
+                      <span className="text-[15px] leading-snug text-foreground">{f}</span>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
+
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="rounded-3xl border border-border/70 bg-card p-5 shadow-card">
