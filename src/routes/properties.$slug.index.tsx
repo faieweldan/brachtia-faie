@@ -1,6 +1,8 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
 import { LayoutGrid, MapPin, MessageCircle } from "lucide-react";
+import { fallback, zodValidator } from "@tanstack/zod-adapter";
+import { z } from "zod";
 
 import {
   Dialog,
@@ -11,11 +13,12 @@ import {
 } from "@/components/ui/dialog";
 
 import {
-  availableCount,
+  filterRoomTypes,
   formatRM,
   getProperty,
   getRoomTypes,
   priceFrom,
+  unitTypesFor,
   whatsappUrl,
   type ContractTerm,
 } from "@/data/properties";
@@ -24,11 +27,19 @@ import AmenitySection from "@/components/site/AmenitySection";
 import LocationSection from "@/components/site/LocationSection";
 import CtaBand from "@/components/site/CtaBand";
 import EnquireDialog from "@/components/site/EnquireDialog";
+import RoomFilters from "@/components/site/RoomFilters";
 import RoomTypeCard from "@/components/site/RoomTypeCard";
 import SegmentedToggle from "@/components/site/SegmentedToggle";
 import StayCalculator from "@/components/site/StayCalculator";
 
+const searchSchema = z.object({
+  unit: fallback(z.string(), "all").default("all"),
+  bath: fallback(z.string(), "all").default("all"),
+  view: fallback(z.string(), "all").default("all"),
+});
+
 export const Route = createFileRoute("/properties/$slug/")({
+  validateSearch: zodValidator(searchSchema),
   loader: ({ params }) => {
     const property = getProperty(params.slug);
     if (!property) throw notFound();
@@ -50,6 +61,7 @@ export const Route = createFileRoute("/properties/$slug/")({
   },
   component: PropertyPage,
 });
+
 
 function PropertyPage() {
   const { property } = Route.useLoaderData();
