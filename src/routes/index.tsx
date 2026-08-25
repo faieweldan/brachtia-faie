@@ -145,7 +145,7 @@ function Home() {
       <section className="bg-brand-tint py-16 sm:py-20">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="flex items-center gap-2">
-            <Sparkles className="size-4 text-brand" />
+            
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand">Why students stay</p>
           </div>
           <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-brand-deep sm:text-4xl">
