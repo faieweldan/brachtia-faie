@@ -182,3 +182,28 @@
     letter-spacing: -0.025em;
   }
 }
+
+@layer utilities {
+  @keyframes marquee-x {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  .animate-marquee {
+    animation: marquee-x 26s linear infinite;
+  }
+
+  .marquee-mask {
+    mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-marquee {
+      animation: none;
+    }
+  }
+}
