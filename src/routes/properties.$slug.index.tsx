@@ -287,23 +287,8 @@ function PropertyPage() {
               </div>
             </div>
 
-
-            <div className="rounded-3xl border border-border/70 bg-card p-5 shadow-card">
-              <h3 className="text-lg font-bold text-brand-deep">What's nearby</h3>
-              <ul className="mt-3 space-y-2">
-                {property.nearby.map((n) => (
-                  <li key={n} className="flex items-start gap-2 text-sm text-muted-foreground">
-                    <MapPin className="mt-0.5 size-4 shrink-0 text-brand" /> {n}
-                  </li>
-                ))}
-              </ul>
-              <Button asChild variant="outline" className="mt-4 w-full">
-                <a href={property.wazeUrl} target="_blank" rel="noreferrer">
-                  Open in Waze
-                </a>
-              </Button>
-            </div>
           </aside>
+
         </div>
       </section>
 
