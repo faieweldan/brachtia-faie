@@ -193,12 +193,12 @@ function Home() {
         />
 
         <div className="relative mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="max-w-2xl">
+          <div>
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-soft">How it works</p>
-            <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-background sm:text-5xl">
+            <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-background sm:text-5xl whitespace-nowrap">
               Book your room in 3 simple steps.
             </h2>
-            <p className="mt-3 text-base text-background/70">
+            <p className="mt-3 max-w-2xl text-base text-background/70">
               Tell us what you're looking for. We'll check availability and guide you through the rest.
             </p>
           </div>
