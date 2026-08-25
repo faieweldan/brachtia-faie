@@ -40,12 +40,12 @@ export const Route = createFileRoute("/")({
 });
 
 const perks = [
-  { icon: Wallet, title: "Clear pricing", text: "Know your rent, deposits and fees upfront." },
-  { icon: ShieldCheck, title: "Safe & secure", text: "Secure access and managed student residences." },
-  { icon: Sofa, title: "Move-in ready", text: "Furnished rooms with the essentials covered." },
-  { icon: Headphones, title: "24/7 support", text: "Help when you need it, throughout your stay." },
-  { icon: MapPin, title: "Close to campus", text: "Conveniently located for student life in Cyberjaya." },
-  { icon: SlidersHorizontal, title: "Flexible options", text: "Single, twin-sharing and flexible stay options." },
+  { icon: Wallet, title: "Clear pricing", text: "No hidden fees" },
+  { icon: ShieldCheck, title: "Safe & secure", text: "Secure access" },
+  { icon: Sofa, title: "Move-in ready", text: "Fully furnished" },
+  { icon: Headphones, title: "24/7 support", text: "Always here" },
+  { icon: MapPin, title: "Close to campus", text: "Cyberjaya locations" },
+  { icon: SlidersHorizontal, title: "Flexible options", text: "Single or twin" },
 ];
 
 const steps = [
@@ -142,23 +142,30 @@ function Home() {
       </section>
 
       {/* Why students stay */}
-      <section className="bg-brand-tint py-16 sm:py-20">
+      <section className="bg-brand-tint py-10 sm:py-12">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="flex items-center gap-2">
-            
+          <div className="text-center">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand">Why students stay</p>
+            <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-brand-deep sm:text-3xl">
+              Everything sorted. Nothing complicated.
+            </h2>
           </div>
-          <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-brand-deep sm:text-4xl">
-            Everything sorted. Nothing complicated.
-          </h2>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+
+          <div className="mt-6 flex snap-x gap-3 overflow-x-auto pb-2">
             {perks.map((p) => (
-              <div key={p.title} className="rounded-3xl border border-border/70 bg-card p-6 shadow-card">
-                <span className="flex size-11 items-center justify-center rounded-2xl bg-brand-soft">
-                  <p.icon className="size-5 text-brand" />
-                </span>
-                <h3 className="mt-4 font-bold text-brand-deep">{p.title}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">{p.text}</p>
+              <div
+                key={p.title}
+                className="min-w-[220px] flex-1 snap-start rounded-2xl bg-card p-4 shadow-sm"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-soft">
+                    <p.icon className="size-4 text-brand" />
+                  </span>
+                  <div>
+                    <h3 className="whitespace-nowrap text-[15px] font-bold tracking-wide text-brand-deep">{p.title}</h3>
+                    <p className="mt-0.5 whitespace-nowrap text-sm tracking-wide text-muted-foreground">{p.text}</p>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
