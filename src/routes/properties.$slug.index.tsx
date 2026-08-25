@@ -155,13 +155,13 @@ function PropertyPage() {
                 title="Included in Your Stay"
                 items={property.includedInStay}
                 note={property.utilitiesNote}
-                iconMode="check"
+                iconMode="facility"
               />
               <AmenitySection
                 title="Inside Your Apartment"
                 items={property.insideApartment}
                 footnote={property.apartmentFootnote}
-                iconMode="check"
+                iconMode="facility"
               />
             </div>
 
