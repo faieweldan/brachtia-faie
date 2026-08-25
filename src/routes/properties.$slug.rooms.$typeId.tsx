@@ -128,7 +128,7 @@ function RoomTypePage() {
                 )}
               </div>
 
-              <h2 className="mt-8 font-display text-xl font-semibold text-brand-deep">
+              <h2 className="mt-8 text-xl font-bold text-brand-deep">
                 What's in this room
               </h2>
               <ul className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -139,7 +139,7 @@ function RoomTypePage() {
                 ))}
               </ul>
 
-              <h2 className="mt-8 font-display text-xl font-semibold text-brand-deep">
+              <h2 className="mt-8 text-xl font-bold text-brand-deep">
                 Good to know
               </h2>
               <ul className="mt-3 space-y-2">
@@ -189,7 +189,7 @@ function RoomTypePage() {
 
       {others.length > 0 && (
         <section className="mx-auto mt-16 max-w-6xl px-4 pb-16 sm:px-6">
-          <h2 className="font-display text-2xl font-semibold text-brand-deep">
+          <h2 className="text-2xl font-extrabold tracking-tight text-brand-deep">
             Other room options at {property.name}
           </h2>
           <div className="mt-5 space-y-4">
