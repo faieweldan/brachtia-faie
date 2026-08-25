@@ -185,19 +185,51 @@ function PropertyPage() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-2xl font-bold text-brand-deep">Room options</h2>
                 <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-brand-deep">
-                  {availableCount(property.slug)} room types available
+                  {visibleRooms.length} of {rooms.length} room types
                 </span>
               </div>
               <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
                 Choose the room type that suits you — enquire with your preferences and our team
                 will confirm the exact unit and availability with you.
               </p>
+
+              {rooms.length > 1 && (
+                <div className="mt-5">
+                  <RoomFilters
+                    unitTypes={unitTypesFor(property.slug)}
+                    value={filters}
+                    onChange={(next) =>
+                      navigate({ search: (prev) => ({ ...prev, ...next }), replace: true })
+                    }
+                  />
+                </div>
+              )}
+
               <div className="mt-5 space-y-4">
-                {rooms.map((room) => (
+                {visibleRooms.map((room) => (
                   <RoomTypeCard key={room.id} property={property} room={room} />
                 ))}
               </div>
+
+              {visibleRooms.length === 0 && (
+                <div className="mt-5 rounded-3xl border border-dashed border-border bg-card p-8 text-center">
+                  <p className="font-medium text-brand-deep">No rooms match these filters.</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Try widening your search — or enquire and we'll suggest the closest option.
+                  </p>
+                  <Button
+                    variant="outline"
+                    className="mt-4"
+                    onClick={() =>
+                      navigate({ search: { unit: "all", bath: "all", view: "all" }, replace: true })
+                    }
+                  >
+                    Clear filters
+                  </Button>
+                </div>
+              )}
             </div>
+
 
             <div>
               <h2 className="text-2xl font-bold text-brand-deep">
