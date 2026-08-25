@@ -37,16 +37,25 @@ export type PricingTable = {
   rows: PricingRow[];
 };
 
+export type BathroomType = "ensuite" | "shared";
+
 export type RoomType = {
   id: string;
   propertySlug: string;
   /** Operational tag used by admin, e.g. "Room A" */
   tag: string;
+  /** Admin room_code, e.g. "A" */
+  roomCode: string;
   name: string;
   unitType: string;
   description: string;
 
+  sizeSqft?: number;
   sizeLabel?: string;
+  bathroom: BathroomType;
+  hasView: boolean;
+  viewType?: string;
+  publicVisible: boolean;
   image: string;
   gallery: string[];
   features: string[];
@@ -57,6 +66,7 @@ export type RoomType = {
   status: RoomStatus;
   spotsLeft?: number;
 };
+
 
 export type PlaceNearby = {
   name: string;
@@ -198,36 +208,37 @@ export const properties: Property[] = [
     pricing: {
       long: [
         {
-          unitType: "3 Rooms, 2 Baths",
+          unitType: "3-Bedroom Apartment",
           blocks: "Block A, B, C & D",
           rows: [
-            { roomType: "Room A", note: "Master room with en-suite bath", single: 1050, twin: 550 },
-            { roomType: "Room B", note: 'With view (10" x 10.5")', single: 850, twin: 450 },
-            { roomType: "Room C", note: 'Facing yard (10" x 9")', single: 750, twin: 400 },
+            { roomType: "Room A", note: "Ensuite, with view · 105 sq ft", single: 1050, twin: 550 },
+            { roomType: "Room B", note: "Standard, with view · 105 sq ft", single: 850, twin: 450 },
+            { roomType: "Room C", note: "Standard small, internal facing · 90 sq ft", single: 750, twin: 400 },
           ],
         },
         {
-          unitType: "4 Rooms, 2 Common Baths",
+          unitType: "4-Bedroom Apartment",
           blocks: "Block A & B",
           rows: [
-            { roomType: "Room A", note: "With view", single: 800, twin: 450 },
-            { roomType: "Room B", note: "With view", single: 800, twin: 450 },
-            { roomType: "Room C", note: "Facing yard", single: 700, twin: 400 },
-            { roomType: "Room D", note: "With view", single: 800, twin: 450 },
+            { roomType: "Room A", note: "Standard, with view · 105 sq ft", single: 800, twin: 450 },
+            { roomType: "Room B", note: "Standard, with view · 105 sq ft", single: 800, twin: 450 },
+            { roomType: "Room C", note: "Standard small, internal facing · 90 sq ft", single: 700, twin: 400 },
+            { roomType: "Room D", note: "Standard small, with view · 90 sq ft", single: 800, twin: 450 },
           ],
         },
       ],
       short: [
         {
-          unitType: "3 Rooms, 2 Baths",
-          blocks: "Block A, B, C & D",
+          unitType: "3-Bedroom Apartment",
+          blocks: "Block A, B, C & D · short-term available in 3-bedroom units only",
           rows: [
-            { roomType: "Room A", note: "Master room with en-suite bath", single: 1200, twin: 650 },
-            { roomType: "Room B", note: 'With view (10" x 10.5")', single: 950, twin: 550 },
-            { roomType: "Room C", note: 'Facing yard (10" x 9")', single: 850, twin: 500 },
+            { roomType: "Room A", note: "Ensuite, with view · 105 sq ft", single: 1200, twin: 650 },
+            { roomType: "Room B", note: "Standard, with view · 105 sq ft", single: 950, twin: 550 },
+            { roomType: "Room C", note: "Standard small, internal facing · 90 sq ft", single: 850, twin: 500 },
           ],
         },
       ],
+
     },
     wazeUrl: "https://waze.com/ul?q=The%20Arc%20Cyberjaya",
   },
@@ -325,33 +336,46 @@ export const properties: Property[] = [
 
 export const roomTypes: RoomType[] = [
   {
-    id: "arc-master-ensuite",
+    id: "arc-3br-a",
     tag: "Room A",
+    roomCode: "A",
     propertySlug: "the-arc-cyberjaya",
-    name: "Master Room with En-suite",
-    unitType: "3 Rooms, 2 Baths",
+    name: "Room A – Ensuite (with View)",
+    unitType: "3-Bedroom Apartment",
     description:
-      "The largest room in the unit, with its own private en-suite bathroom, queen or single bed, wardrobe and study desk. Ideal if you want privacy without leaving the shared-unit community.",
+      "The largest room in the unit with its own private ensuite bathroom, wardrobe and study desk, plus an exterior view. Ideal if you want privacy without leaving the shared-unit community.",
+    sizeSqft: 105,
+    sizeLabel: "105 sq ft",
+    bathroom: "ensuite",
+    hasView: true,
+    viewType: "Exterior",
+    publicVisible: true,
     image: roomSingle,
-    gallery: [roomSingle, livingDining, kitchen],
-    features: ["Private en-suite bathroom", "Air-conditioned", "Study desk & wardrobe", "Shared living, dining & kitchen"],
+    gallery: [roomSingle, livingDining, kitchen, arcPool],
+    features: ["Private ensuite bathroom", "Air-conditioned", "Study desk & wardrobe", "Shared living, dining & kitchen"],
     occupancies: ["single", "twin"],
     rent: { long: { single: 1050, twin: 550 }, short: { single: 1200, twin: 650 } },
     availableFrom: "2026-09-01",
     status: "available",
   },
   {
-    id: "arc-room-with-view",
+    id: "arc-3br-b",
     tag: "Room B",
+    roomCode: "B",
     propertySlug: "the-arc-cyberjaya",
-    name: "Room with View",
-    unitType: "3 Rooms, 2 Baths",
+    name: "Room B – Standard (with View)",
+    unitType: "3-Bedroom Apartment",
     description:
-      "A bright medium room overlooking Cyberjaya, sharing two bathrooms with the rest of the unit. Available as single occupancy or twin sharing for the best value.",
-    sizeLabel: "10' x 10.5'",
+      "A bright standard room with an exterior view, sharing two bathrooms with the rest of the unit. Available as single occupancy or twin sharing for the best value.",
+    sizeSqft: 105,
+    sizeLabel: "105 sq ft",
+    bathroom: "shared",
+    hasView: true,
+    viewType: "Exterior",
+    publicVisible: true,
     image: roomTwin,
-    gallery: [roomTwin, livingDining, kitchen],
-    features: ["City view", "Air-conditioned", "Study desk & wardrobe", "Shared bathrooms"],
+    gallery: [roomTwin, livingDining, kitchen, arcPool],
+    features: ["Exterior view", "Air-conditioned", "Study desk & wardrobe", "Shared bathroom"],
     occupancies: ["single", "twin"],
     rent: { long: { single: 850, twin: 450 }, short: { single: 950, twin: 550 } },
     availableFrom: "2026-08-15",
@@ -359,46 +383,89 @@ export const roomTypes: RoomType[] = [
     spotsLeft: 2,
   },
   {
-    id: "arc-yard-facing",
+    id: "arc-3br-c",
     tag: "Room C",
+    roomCode: "C",
     propertySlug: "the-arc-cyberjaya",
-    name: "Yard-facing Room",
-    unitType: "3 Rooms, 2 Baths",
+    name: "Room C – Standard Small",
+    unitType: "3-Bedroom Apartment",
     description:
-      "A quiet, well-priced room facing the yard — a favourite with students who study late. Shares two bathrooms with the rest of the unit.",
-    sizeLabel: "10' x 9'",
+      "A quiet, well-priced internal-facing room — a favourite with students who study late. Shares two bathrooms with the rest of the unit.",
+    sizeSqft: 90,
+    sizeLabel: "90 sq ft",
+    bathroom: "shared",
+    hasView: false,
+    viewType: "Internal facing",
+    publicVisible: true,
     image: roomSingle,
     gallery: [roomSingle, livingDining, kitchen],
-    features: ["Quiet yard-facing", "Air-conditioned", "Study desk & wardrobe", "Shared bathrooms"],
+    features: ["Quiet internal facing", "Air-conditioned", "Study desk & wardrobe", "Shared bathroom"],
     occupancies: ["single", "twin"],
     rent: { long: { single: 750, twin: 400 }, short: { single: 850, twin: 500 } },
     availableFrom: "2026-10-01",
     status: "available",
   },
   {
-    id: "arc-quad-view",
-    tag: "Room D",
+    id: "arc-4br-a",
+    tag: "Room A",
+    roomCode: "A",
     propertySlug: "the-arc-cyberjaya",
-    name: "Room with View — 4 Bedroom Unit",
-    unitType: "4 Rooms, 2 Common Baths",
+    name: "Room A – Standard (with View)",
+    unitType: "4-Bedroom Apartment",
     description:
-      "A room with a view in our larger four-bedroom units, sharing two common bathrooms and a big living and dining area with three other students.",
+      "A standard room with an exterior view in our larger four-bedroom units, sharing two common bathrooms and a big living and dining area with three other students.",
+    sizeSqft: 105,
+    sizeLabel: "105 sq ft",
+    bathroom: "shared",
+    hasView: true,
+    viewType: "Exterior",
+    publicVisible: true,
     image: roomSingle,
     gallery: [roomSingle, kitchen, livingDining],
-    features: ["City view", "Air-conditioned", "Study desk & wardrobe", "Two common bathrooms"],
+    features: ["Exterior view", "Air-conditioned", "Study desk & wardrobe", "Two common bathrooms"],
     occupancies: ["single", "twin"],
     rent: { long: { single: 800, twin: 450 }, short: { single: null, twin: null } },
     availableFrom: "2026-09-01",
     status: "available",
   },
   {
-    id: "arc-quad-yard",
-    tag: "Room E",
+    id: "arc-4br-b",
+    tag: "Room B",
+    roomCode: "B",
     propertySlug: "the-arc-cyberjaya",
-    name: "Yard-facing Room — 4 Bedroom Unit",
-    unitType: "4 Rooms, 2 Common Baths",
+    name: "Room B – Standard (with View)",
+    unitType: "4-Bedroom Apartment",
     description:
-      "The most affordable room at The Arc — quiet, yard-facing and fully furnished, in a four-bedroom shared unit.",
+      "A standard room with an exterior view and its own layout, sharing two common bathrooms with three other students in a four-bedroom unit.",
+    sizeSqft: 105,
+    sizeLabel: "105 sq ft",
+    bathroom: "shared",
+    hasView: true,
+    viewType: "Exterior",
+    publicVisible: true,
+    image: roomTwin,
+    gallery: [roomTwin, kitchen, livingDining],
+    features: ["Exterior view", "Air-conditioned", "Study desk & wardrobe", "Two common bathrooms"],
+    occupancies: ["single", "twin"],
+    rent: { long: { single: 800, twin: 450 }, short: { single: null, twin: null } },
+    availableFrom: "2026-09-01",
+    status: "available",
+  },
+  {
+    id: "arc-4br-c",
+    tag: "Room C",
+    roomCode: "C",
+    propertySlug: "the-arc-cyberjaya",
+    name: "Room C – Standard Small",
+    unitType: "4-Bedroom Apartment",
+    description:
+      "The most affordable room at The Arc — quiet, internal-facing and fully furnished, in a four-bedroom shared unit.",
+    sizeSqft: 90,
+    sizeLabel: "90 sq ft",
+    bathroom: "shared",
+    hasView: false,
+    viewType: "Internal facing",
+    publicVisible: true,
     image: roomTwin,
     gallery: [roomTwin, kitchen, livingDining],
     features: ["Best value", "Air-conditioned", "Study desk & wardrobe", "Two common bathrooms"],
@@ -408,15 +475,43 @@ export const roomTypes: RoomType[] = [
     status: "available",
   },
   {
+    id: "arc-4br-d",
+    tag: "Room D",
+    roomCode: "D",
+    propertySlug: "the-arc-cyberjaya",
+    name: "Room D – Standard Small (with View)",
+    unitType: "4-Bedroom Apartment",
+    description:
+      "A compact room with an exterior view in a four-bedroom unit — well priced, fully furnished and sharing two common bathrooms.",
+    sizeSqft: 90,
+    sizeLabel: "90 sq ft",
+    bathroom: "shared",
+    hasView: true,
+    viewType: "Exterior",
+    publicVisible: true,
+    image: roomSingle,
+    gallery: [roomSingle, livingDining, kitchen],
+    features: ["Exterior view", "Air-conditioned", "Study desk & wardrobe", "Two common bathrooms"],
+    occupancies: ["single", "twin"],
+    rent: { long: { single: 800, twin: 450 }, short: { single: null, twin: null } },
+    availableFrom: "2026-10-01",
+    status: "available",
+  },
+  {
     id: "solstice-one-bedroom",
     tag: "Room A",
+    roomCode: "A",
     propertySlug: "solstice-residence-cyberjaya",
     name: "Private 1-Bedroom Apartment",
     unitType: "1 Bedroom Apartment with attached bath",
     description:
       "Your own front door: a fully furnished one-bedroom apartment with attached bathroom, kitchenette, living area and queen bed — complete privacy with 24/7 student support.",
+    bathroom: "ensuite",
+    hasView: true,
+    viewType: "Exterior",
+    publicVisible: true,
     image: solsticeStudio,
-    gallery: [solsticeStudio, livingDining, kitchen],
+    gallery: [solsticeStudio, livingDining, kitchen, solsticeExterior],
     features: ["Entire apartment to yourself", "Attached bathroom", "Kitchenette", "Queen bed & study nook"],
     occupancies: ["single"],
     rent: { long: { single: 1400, twin: null }, short: { single: null, twin: null } },
@@ -425,13 +520,34 @@ export const roomTypes: RoomType[] = [
   },
 ];
 
+
 export function getProperty(slug: string) {
   return properties.find((p) => p.slug === slug);
 }
 
 export function getRoomTypes(slug: string) {
-  return roomTypes.filter((r) => r.propertySlug === slug);
+  return roomTypes.filter((r) => r.propertySlug === slug && r.publicVisible);
 }
+
+export type RoomFilterState = {
+  unit: string;
+  bath: string;
+  view: string;
+};
+
+export function filterRoomTypes(rooms: RoomType[], f: Partial<RoomFilterState>) {
+  return rooms.filter((r) => {
+    if (f.unit && f.unit !== "all" && r.unitType !== f.unit) return false;
+    if (f.bath && f.bath !== "all" && r.bathroom !== f.bath) return false;
+    if (f.view === "view" && !r.hasView) return false;
+    return true;
+  });
+}
+
+export function unitTypesFor(slug: string) {
+  return Array.from(new Set(getRoomTypes(slug).map((r) => r.unitType)));
+}
+
 
 export function getRoomType(slug: string, typeId: string) {
   return roomTypes.find((r) => r.propertySlug === slug && r.id === typeId);
