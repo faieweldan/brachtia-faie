@@ -1,11 +1,11 @@
 import { Link } from "@tanstack/react-router";
-import { MessageCircle, Phone } from "lucide-react";
+import { Clock, MessageCircle, Phone } from "lucide-react";
 import { company, whatsappUrl } from "@/data/properties";
 import { Button } from "@/components/ui/button";
 
 export default function CtaBand({
   title = "Ready to find your room?",
-  description = "Book a viewing, apply online, or message us on WhatsApp — our student team replies fast.",
+  description = "Book a viewing or message us on WhatsApp — our student team replies fast.",
   message = "Hi Brachtia Homes, I'd like to enquire about student accommodation in Cyberjaya.",
 }: {
   title?: string;
@@ -13,29 +13,65 @@ export default function CtaBand({
   message?: string;
 }) {
   return (
-    <section className="bg-brand py-14 text-primary-foreground sm:py-16">
-      <div className="mx-auto flex max-w-6xl flex-col items-start gap-6 px-4 sm:px-6 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold sm:text-3xl">{title}</h2>
-          <p className="mt-2 max-w-xl text-sm text-primary-foreground/80">{description}</p>
-          <p className="mt-3 inline-flex items-center gap-2 text-sm text-primary-foreground/80">
-            <Phone className="size-4" /> {company.phones.join(" · ")}
-          </p>
-        </div>
-        <div className="flex w-full flex-wrap gap-3 md:w-auto">
-          <Button asChild size="lg" variant="secondary" className="flex-1 md:flex-none">
-            <Link to="/book-viewing">Book a Viewing</Link>
-          </Button>
-          <Button
-            asChild
-            size="lg"
-            variant="outline"
-            className="flex-1 border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground md:flex-none"
-          >
-            <a href={whatsappUrl(message)} target="_blank" rel="noreferrer">
-              <MessageCircle className="size-4" /> WhatsApp
-            </a>
-          </Button>
+    <section className="bg-brand-tint px-4 py-14 sm:px-6 sm:py-20">
+      <div className="mx-auto max-w-6xl">
+        <div className="relative overflow-hidden rounded-[2.5rem] bg-brand-deep px-6 py-10 text-primary-foreground shadow-lift sm:px-12 sm:py-14">
+          {/* soft depth */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -right-24 -top-24 size-80 rounded-full bg-brand-soft/15 blur-3xl"
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -bottom-32 -left-20 size-80 rounded-full bg-brand/40 blur-3xl"
+          />
+
+          <div className="relative grid gap-10 md:grid-cols-[1.4fr_1fr] md:items-center">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-primary-foreground/60">
+                Next step
+              </p>
+              <h2 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">
+                {title}
+              </h2>
+              <p className="mt-3 max-w-lg text-base text-primary-foreground/75">{description}</p>
+
+              <div className="mt-6 flex flex-wrap gap-2">
+                {company.phones.map((phone) => (
+                  <a
+                    key={phone}
+                    href={`tel:${phone.replace(/[^+\d]/g, "")}`}
+                    className="inline-flex items-center gap-2 rounded-full border border-primary-foreground/20 bg-primary-foreground/5 px-3.5 py-2 text-xs font-semibold text-primary-foreground/85 transition-colors hover:bg-primary-foreground/12"
+                  >
+                    <Phone className="size-3.5" /> {phone}
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <Button
+                asChild
+                size="lg"
+                className="h-13 w-full rounded-full bg-primary-foreground text-base font-bold text-brand-deep hover:bg-primary-foreground/90"
+              >
+                <Link to="/book-viewing">Book a Viewing</Link>
+              </Button>
+              <Button
+                asChild
+                size="lg"
+                variant="outline"
+                className="h-13 w-full rounded-full border-2 border-primary-foreground/35 bg-transparent text-base font-bold text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+              >
+                <a href={whatsappUrl(message)} target="_blank" rel="noreferrer">
+                  <MessageCircle className="size-4" /> WhatsApp
+                </a>
+              </Button>
+              <p className="inline-flex items-center justify-center gap-2 text-xs text-primary-foreground/65">
+                <Clock className="size-3.5" /> Replies within 24 hours
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </section>
