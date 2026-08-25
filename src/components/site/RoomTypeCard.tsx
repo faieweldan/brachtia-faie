@@ -1,4 +1,3 @@
-import { Link } from "@tanstack/react-router";
 import { Bath, Check, Eye, Ruler } from "lucide-react";
 import {
   formatRM,
@@ -28,7 +27,7 @@ export default function RoomTypeCard({
   onSelect?: (room: RoomType) => void;
 }) {
   const from = lowestRent(room);
-  const detail = { slug: property.slug, typeId: room.id };
+  
   const showStatus = room.status !== "available";
 
   const meta = [
@@ -63,13 +62,7 @@ export default function RoomTypeCard({
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <h3 className="text-lg font-bold leading-snug text-brand-deep sm:text-xl lg:text-2xl">
-                <Link
-                  to="/properties/$slug/rooms/$typeId"
-                  params={detail}
-                  className="hover:underline"
-                >
-                  {room.name}
-                </Link>
+                {room.name}
               </h3>
               <p className="mt-1 text-sm text-muted-foreground">{room.unitType}</p>
             </div>
@@ -117,13 +110,6 @@ export default function RoomTypeCard({
             </p>
           </div>
           <div className="flex items-center gap-4">
-            <Link
-              to="/properties/$slug/rooms/$typeId"
-              params={detail}
-              className="text-sm font-medium text-brand-deep underline-offset-4 hover:underline"
-            >
-              Details
-            </Link>
             <EnquireDialog
               property={property}
               room={room}

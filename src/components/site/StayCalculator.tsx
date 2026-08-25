@@ -195,15 +195,11 @@ export default function StayCalculator({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {options.map((r) => {
-                  const from = lowestRent(r);
-                  return (
-                    <SelectItem key={r.id} value={r.id}>
-                      {r.unitType.replace(" Apartment", "")} · {r.name}
-                      {from ? ` — from ${formatRM(from)}/mo` : ""}
-                    </SelectItem>
-                  );
-                })}
+                {options.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>
+                    {r.unitType.replace(" Apartment", "")} · {r.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -259,43 +255,31 @@ export default function StayCalculator({
           </label>
         </div>
 
-        <div className="mt-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Optional add-ons
-          </p>
-          <div className="mt-2 grid gap-2">
-            {ADD_ONS.map((a) => {
-              const on = addOns.includes(a.id);
-              return (
-                <button
-                  key={a.id}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() => toggleAddOn(a.id)}
-                  className={`flex items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors ${
-                    on
-                      ? "border-brand bg-brand-tint"
-                      : "border-border/70 bg-card hover:border-brand/40"
-                  }`}
-                >
-                  <span
-                    className={`flex size-5 shrink-0 items-center justify-center rounded-md border ${
-                      on ? "border-brand bg-brand text-primary-foreground" : "border-border"
-                    }`}
-                  >
-                    {on && <Check className="size-3.5" />}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold text-foreground">{a.label}</span>
-                    <span className="block text-[11px] text-muted-foreground">{a.note}</span>
-                  </span>
-                  <span className="whitespace-nowrap text-sm font-bold tabular-nums text-brand-deep">
-                    {formatRM(a.price)}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Add-ons
+          </span>
+          {ADD_ONS.map((a) => {
+            const on = addOns.includes(a.id);
+            return (
+              <button
+                key={a.id}
+                type="button"
+                aria-pressed={on}
+                title={a.note}
+                onClick={() => toggleAddOn(a.id)}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  on
+                    ? "border-brand bg-brand-tint text-brand-deep"
+                    : "border-border/70 text-muted-foreground hover:border-brand/40"
+                }`}
+              >
+                {on && <Check className="size-3.5 text-brand" />}
+                {a.label} · {formatRM(a.price)}
+                {a.recurring ? "/mo" : ""}
+              </button>
+            );
+          })}
         </div>
 
 

@@ -146,7 +146,7 @@ function PropertyPage() {
       </section>
 
       <section className="mx-auto mt-8 max-w-[88rem] px-4 sm:px-6">
-        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_23rem] xl:grid-cols-[minmax(0,1fr)_25rem]">
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_27rem] xl:grid-cols-[minmax(0,1fr)_31rem]">
           <div className="space-y-12">
             <div>
               <h1 className="text-3xl font-bold text-brand-deep sm:text-4xl">
