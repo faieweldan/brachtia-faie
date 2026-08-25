@@ -155,15 +155,15 @@ function Home() {
             {perks.map((p) => (
               <div
                 key={p.title}
-                className="min-w-[200px] flex-1 snap-start rounded-2xl bg-card p-4 shadow-sm"
+                className="min-w-[220px] flex-1 snap-start rounded-2xl bg-card p-4 shadow-sm"
               >
                 <div className="flex items-center gap-3">
                   <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-soft">
                     <p.icon className="size-4 text-brand" />
                   </span>
                   <div>
-                    <h3 className="whitespace-nowrap text-sm font-bold text-brand-deep">{p.title}</h3>
-                    <p className="mt-0.5 whitespace-nowrap text-xs text-muted-foreground">{p.text}</p>
+                    <h3 className="whitespace-nowrap text-[15px] font-bold tracking-wide text-brand-deep">{p.title}</h3>
+                    <p className="mt-0.5 whitespace-nowrap text-[13px] text-muted-foreground">{p.text}</p>
                   </div>
                 </div>
               </div>
