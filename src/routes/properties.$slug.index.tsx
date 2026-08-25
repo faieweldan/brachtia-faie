@@ -68,7 +68,7 @@ function PropertyPage() {
               className="h-64 w-full object-cover sm:h-[26rem]"
             />
           </div>
-          <div className="hidden grid-rows-3 gap-3 sm:grid">
+          <div className="hidden grid-rows-3 gap-3 sm:grid sm:h-[26rem]">
             {gallery.slice(0, 3).map((g) => (
               <div key={g.caption} className="overflow-hidden rounded-3xl">
                 <img
