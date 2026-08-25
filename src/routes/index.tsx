@@ -17,7 +17,8 @@ import { Button } from "@/components/ui/button";
 import PropertyCard from "@/components/site/PropertyCard";
 import Reviews from "@/components/site/Reviews";
 import CtaBand from "@/components/site/CtaBand";
-import { properties, reviewsRating, whatsappUrl } from "@/data/properties";
+import { properties, whatsappUrl } from "@/data/properties";
+import { reviewSummary } from "@/data/reviews";
 
 const title = "Student Accommodation in Cyberjaya | Brachtia Homes";
 const description =
@@ -103,7 +104,7 @@ function Home() {
                 <div>
                   <Stars />
                   <p className="mt-0.5 text-[10px] font-bold text-foreground">
-                    {reviewsRating} Google rating
+                    {reviewSummary.average} Google rating
                   </p>
                 </div>
               </div>
