@@ -28,21 +28,27 @@ export default function EnquireDialog({
   room,
   term = "long",
   occupancy = "single",
+  moveIn,
+  moveOut,
   trigger,
 }: {
   property: Property;
   room?: RoomType;
   term?: ContractTerm;
   occupancy?: Occupancy;
+  moveIn?: string;
+  moveOut?: string;
   trigger: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const rent = room ? room.rent[term][occupancy] : null;
 
   const message = room
-    ? `Hi Brachtia Homes, I'd like to enquire about the ${room.name} (${
-        occupancy === "single" ? "single occupancy" : "twin sharing"
-      }, ${term === "long" ? "12-month" : "short-term"}) at ${property.name}.`
+    ? `Hi Brachtia Homes, I'd like to enquire about ${room.tag} — ${room.name} (${
+        occupancy === "single" ? "single" : "twin sharing"
+      }, ${term === "long" ? "12-month" : "short-term"}) at ${property.name}${
+        moveIn && moveOut ? `, ${moveIn} to ${moveOut}` : ""
+      }.`
     : `Hi Brachtia Homes, I'd like to enquire about ${property.name}.`;
 
   return (
@@ -50,10 +56,9 @@ export default function EnquireDialog({
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="font-display text-xl text-brand-deep">Enquire now</DialogTitle>
+          <DialogTitle className="text-xl font-extrabold text-brand-deep">Enquire now</DialogTitle>
           <DialogDescription>
-            Tell us what you're after and our team will reach out by email or WhatsApp with
-            availability and next steps.
+            We reply by email or WhatsApp with availability and next steps.
           </DialogDescription>
         </DialogHeader>
 
@@ -67,7 +72,12 @@ export default function EnquireDialog({
               className="size-16 shrink-0 rounded-xl object-cover"
             />
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-brand-deep">{room.name}</p>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-brand px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-foreground">
+                  {room.tag}
+                </span>
+                <p className="truncate text-sm font-bold text-brand-deep">{room.name}</p>
+              </div>
               <p className="truncate text-xs text-muted-foreground">{property.name}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 {rent ? `${formatRM(rent)}/month · ` : ""}
@@ -76,6 +86,7 @@ export default function EnquireDialog({
             </div>
           </div>
         )}
+
 
         <form
           className="space-y-4"
