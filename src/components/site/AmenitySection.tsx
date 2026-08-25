@@ -12,6 +12,8 @@ interface AmenitySectionProps {
   collapseThreshold?: number;
 }
 
+const DEFAULT_VISIBLE = 6;
+
 export default function AmenitySection({
   title,
   items,
