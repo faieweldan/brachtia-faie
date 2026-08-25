@@ -178,30 +178,35 @@ function Home() {
       </section>
 
       {/* Why students stay */}
-      <section className="bg-brand-tint py-10 sm:py-12">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="text-center">
+      <section className="relative overflow-hidden py-16 sm:py-20">
+        {/* soft peach wash behind headline */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute left-1/2 top-0 h-64 w-[120%] -translate-x-1/2 bg-[radial-gradient(50%_100%_at_50%_0%,color-mix(in_oklab,var(--brand-soft)_55%,transparent),transparent_100%)]"
+        />
+
+        <div className="relative mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="mx-auto max-w-2xl text-center">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand">Why students stay</p>
-            <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-brand-deep sm:text-3xl">
-              Everything sorted. Nothing complicated.
+            <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-brand-deep sm:text-4xl">
+              Everything you need to settle in.
             </h2>
+            <p className="mt-3 text-base text-muted-foreground">
+              From finding your room to feeling at home.
+            </p>
           </div>
 
-          <div className="mt-6 flex snap-x gap-3 overflow-x-auto pb-2">
+          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {perks.map((p) => (
               <div
                 key={p.title}
-                className="min-w-[220px] flex-1 snap-start rounded-2xl bg-card p-4 shadow-sm"
+                className="group rounded-3xl border border-border/60 bg-brand-tint/40 p-6 transition-all duration-300 hover:-translate-y-1 hover:border-brand/20 hover:bg-brand-tint/70 hover:shadow-card"
               >
-                <div className="flex items-center gap-3">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-soft">
-                    <p.icon className="size-4 text-brand" />
-                  </span>
-                  <div>
-                    <h3 className="whitespace-nowrap text-[15px] font-bold tracking-wide text-brand-deep">{p.title}</h3>
-                    <p className="mt-0.5 whitespace-nowrap text-sm tracking-wide text-muted-foreground">{p.text}</p>
-                  </div>
-                </div>
+                <span className="flex size-12 items-center justify-center rounded-full bg-brand-soft transition-transform duration-300 group-hover:scale-105">
+                  <p.icon className="size-5 text-brand" />
+                </span>
+                <h3 className="mt-5 text-lg font-bold tracking-tight text-brand-deep">{p.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{p.text}</p>
               </div>
             ))}
           </div>
