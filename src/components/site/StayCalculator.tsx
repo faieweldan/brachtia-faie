@@ -127,7 +127,7 @@ export default function StayCalculator({
       ...extras.map((a) => ({
         label: a.recurring ? `${a.label} (first month)` : a.label,
         amount: a.price,
-        kind: "fee" as const,
+        kind: "onetime" as const,
       })),
     ];
     const monthlyExtra = extras
