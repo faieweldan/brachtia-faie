@@ -1,7 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
-import { Check, LayoutGrid, MapPin, MessageCircle, X } from "lucide-react";
-import { facilityIcon } from "@/lib/facility-icons";
+import { LayoutGrid, MapPin, MessageCircle } from "lucide-react";
 
 import {
   Dialog,
@@ -21,6 +20,7 @@ import {
   type ContractTerm,
 } from "@/data/properties";
 import { Button } from "@/components/ui/button";
+import AmenitySection from "@/components/site/AmenitySection";
 import CtaBand from "@/components/site/CtaBand";
 import EnquireDialog from "@/components/site/EnquireDialog";
 import RoomTypeCard from "@/components/site/RoomTypeCard";
