@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { CalendarDays } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 import {
   addMonths,
   company,
@@ -19,6 +19,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import SegmentedToggle from "./SegmentedToggle";
 
 export type StayState = {
@@ -39,11 +44,15 @@ export default function StayCalculator({
   property,
   room,
   rooms,
+  selectedRoomId,
+  onRoomChange,
   actions,
 }: {
   property: Property;
   room?: RoomType;
   rooms?: RoomType[];
+  selectedRoomId?: string;
+  onRoomChange?: (id: string) => void;
   actions?: (state: StayState) => ReactNode;
 }) {
   const options = rooms && rooms.length > 0 ? rooms : room ? [room] : [];
@@ -51,24 +60,31 @@ export default function StayCalculator({
     room ??
     [...options].sort((a, b) => (lowestRent(a) ?? Infinity) - (lowestRent(b) ?? Infinity))[0]!;
 
-  const [selectedId, setSelectedId] = useState(initial.id);
-  const selected = options.find((r) => r.id === selectedId) ?? initial;
+  const [internalId, setInternalId] = useState(initial.id);
+  const currentId = selectedRoomId ?? internalId;
+  const selected = options.find((r) => r.id === currentId) ?? initial;
   const showSelector = !room && options.length > 1;
 
   const [occupancy, setOccupancy] = useState<Occupancy>(initial.occupancies[0] ?? "single");
   const [moveIn, setMoveIn] = useState(() => defaultMoveIn(initial));
   const [moveOut, setMoveOut] = useState(() => addMonths(defaultMoveIn(initial), 12));
 
-  function selectRoom(id: string) {
-    const next = options.find((r) => r.id === id);
-    if (!next) return;
-    setSelectedId(id);
-    if (!next.occupancies.includes(occupancy)) setOccupancy(next.occupancies[0] ?? "single");
-    const from = defaultMoveIn(next);
+  useEffect(() => {
+    if (!selected.occupancies.includes(occupancy)) {
+      setOccupancy(selected.occupancies[0] ?? "single");
+    }
+    const from = defaultMoveIn(selected);
     if (moveIn < from) {
       setMoveIn(from);
       setMoveOut(addMonths(from, 12));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected.id]);
+
+  function selectRoom(id: string) {
+    if (!options.some((r) => r.id === id)) return;
+    setInternalId(id);
+    onRoomChange?.(id);
   }
 
   const valid = moveOut > moveIn;
@@ -95,6 +111,7 @@ export default function StayCalculator({
   return (
     <div className="rounded-3xl bg-card p-5 shadow-card ring-1 ring-border/60">
       <p className="text-sm font-bold text-brand-deep">Your stay</p>
+
 
       {showSelector && (
         <div className="mt-3">
