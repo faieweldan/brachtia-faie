@@ -4,6 +4,7 @@ import {
   addMonths,
   company,
   formatRM,
+  lowestRent,
   stayQuote,
   termForRange,
   type ContractTerm,
@@ -11,6 +12,13 @@ import {
   type Property,
   type RoomType,
 } from "@/data/properties";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import SegmentedToggle from "./SegmentedToggle";
 
 export type StayState = {
@@ -19,6 +27,7 @@ export type StayState = {
   rent: number | null;
   moveIn: string;
   moveOut: string;
+  room: RoomType;
 };
 
 function defaultMoveIn(room: RoomType) {
@@ -29,38 +38,94 @@ function defaultMoveIn(room: RoomType) {
 export default function StayCalculator({
   property,
   room,
+  rooms,
   actions,
 }: {
   property: Property;
-  room: RoomType;
+  room?: RoomType;
+  rooms?: RoomType[];
   actions?: (state: StayState) => ReactNode;
 }) {
-  const [occupancy, setOccupancy] = useState<Occupancy>(room.occupancies[0] ?? "single");
-  const [moveIn, setMoveIn] = useState(() => defaultMoveIn(room));
-  const [moveOut, setMoveOut] = useState(() => addMonths(defaultMoveIn(room), 12));
+  const options = rooms && rooms.length > 0 ? rooms : room ? [room] : [];
+  const initial =
+    room ??
+    [...options].sort((a, b) => (lowestRent(a) ?? Infinity) - (lowestRent(b) ?? Infinity))[0]!;
+
+  const [selectedId, setSelectedId] = useState(initial.id);
+  const selected = options.find((r) => r.id === selectedId) ?? initial;
+  const showSelector = !room && options.length > 1;
+
+  const [occupancy, setOccupancy] = useState<Occupancy>(initial.occupancies[0] ?? "single");
+  const [moveIn, setMoveIn] = useState(() => defaultMoveIn(initial));
+  const [moveOut, setMoveOut] = useState(() => addMonths(defaultMoveIn(initial), 12));
+
+  function selectRoom(id: string) {
+    const next = options.find((r) => r.id === id);
+    if (!next) return;
+    setSelectedId(id);
+    if (!next.occupancies.includes(occupancy)) setOccupancy(next.occupancies[0] ?? "single");
+    const from = defaultMoveIn(next);
+    if (moveIn < from) {
+      setMoveIn(from);
+      setMoveOut(addMonths(from, 12));
+    }
+  }
 
   const valid = moveOut > moveIn;
   const term: ContractTerm = valid ? termForRange(moveIn, moveOut) : "long";
-  const rent = room.rent[term][occupancy] ?? room.rent[term === "long" ? "short" : "long"][occupancy];
-  const rateAvailable = room.rent[term][occupancy] != null;
+  const rent =
+    selected.rent[term][occupancy] ??
+    selected.rent[term === "long" ? "short" : "long"][occupancy];
+  const rateAvailable = selected.rent[term][occupancy] != null;
 
   const quote = useMemo(
     () => (valid && rateAvailable && rent ? stayQuote(property, rent, term, moveIn, moveOut) : null),
     [property, rent, term, moveIn, moveOut, valid, rateAvailable],
   );
 
-  const state: StayState = { occupancy, term, rent: rateAvailable ? rent : null, moveIn, moveOut };
+  const state: StayState = {
+    occupancy,
+    term,
+    rent: rateAvailable ? rent : null,
+    moveIn,
+    moveOut,
+    room: selected,
+  };
 
   return (
     <div className="rounded-3xl bg-card p-5 shadow-card ring-1 ring-border/60">
       <p className="text-sm font-bold text-brand-deep">Your stay</p>
 
-      {room.occupancies.length > 1 && (
+      {showSelector && (
+        <div className="mt-3">
+          <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Room type
+          </span>
+          <Select value={selectedId} onValueChange={selectRoom}>
+            <SelectTrigger className="mt-1 h-11 rounded-2xl bg-muted/70 text-sm font-semibold">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {options.map((r) => {
+                const from = lowestRent(r);
+                return (
+                  <SelectItem key={r.id} value={r.id}>
+                    {r.tag} — {r.name}
+                    {from ? ` · from ${formatRM(from)}/mo` : ""}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {selected.occupancies.length > 1 && (
         <SegmentedToggle
           className="mt-3"
           value={occupancy}
           onChange={setOccupancy}
-          options={room.occupancies.map((o) => ({
+          options={selected.occupancies.map((o) => ({
             value: o,
             label: o === "single" ? "Single" : "Twin sharing",
           }))}
@@ -75,7 +140,7 @@ export default function StayCalculator({
           <input
             type="date"
             value={moveIn}
-            min={room.availableFrom}
+            min={selected.availableFrom}
             onChange={(e) => setMoveIn(e.target.value)}
             className="w-full bg-transparent text-sm font-bold text-foreground outline-none"
           />
