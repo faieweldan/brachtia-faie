@@ -4,6 +4,7 @@ import {
   addMonths,
   company,
   formatRM,
+  lowestRent,
   stayQuote,
   termForRange,
   type ContractTerm,
@@ -11,6 +12,13 @@ import {
   type Property,
   type RoomType,
 } from "@/data/properties";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import SegmentedToggle from "./SegmentedToggle";
 
 export type StayState = {
@@ -19,6 +27,7 @@ export type StayState = {
   rent: number | null;
   moveIn: string;
   moveOut: string;
+  room: RoomType;
 };
 
 function defaultMoveIn(room: RoomType) {
@@ -29,15 +38,38 @@ function defaultMoveIn(room: RoomType) {
 export default function StayCalculator({
   property,
   room,
+  rooms,
   actions,
 }: {
   property: Property;
-  room: RoomType;
+  room?: RoomType;
+  rooms?: RoomType[];
   actions?: (state: StayState) => ReactNode;
 }) {
-  const [occupancy, setOccupancy] = useState<Occupancy>(room.occupancies[0] ?? "single");
-  const [moveIn, setMoveIn] = useState(() => defaultMoveIn(room));
-  const [moveOut, setMoveOut] = useState(() => addMonths(defaultMoveIn(room), 12));
+  const options = rooms && rooms.length > 0 ? rooms : room ? [room] : [];
+  const initial =
+    room ??
+    [...options].sort((a, b) => (lowestRent(a) ?? Infinity) - (lowestRent(b) ?? Infinity))[0]!;
+
+  const [selectedId, setSelectedId] = useState(initial.id);
+  const selected = options.find((r) => r.id === selectedId) ?? initial;
+  const showSelector = !room && options.length > 1;
+
+  const [occupancy, setOccupancy] = useState<Occupancy>(initial.occupancies[0] ?? "single");
+  const [moveIn, setMoveIn] = useState(() => defaultMoveIn(initial));
+  const [moveOut, setMoveOut] = useState(() => addMonths(defaultMoveIn(initial), 12));
+
+  function selectRoom(id: string) {
+    const next = options.find((r) => r.id === id);
+    if (!next) return;
+    setSelectedId(id);
+    if (!next.occupancies.includes(occupancy)) setOccupancy(next.occupancies[0] ?? "single");
+    const from = defaultMoveIn(next);
+    if (moveIn < from) {
+      setMoveIn(from);
+      setMoveOut(addMonths(from, 12));
+    }
+  }
 
   const valid = moveOut > moveIn;
   const term: ContractTerm = valid ? termForRange(moveIn, moveOut) : "long";
