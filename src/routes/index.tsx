@@ -163,7 +163,7 @@ function Home() {
                   </span>
                   <div>
                     <h3 className="whitespace-nowrap text-[15px] font-bold tracking-wide text-brand-deep">{p.title}</h3>
-                    <p className="mt-0.5 whitespace-nowrap text-[13px] text-muted-foreground">{p.text}</p>
+                    <p className="mt-0.5 whitespace-nowrap text-sm tracking-wide text-muted-foreground">{p.text}</p>
                   </div>
                 </div>
               </div>
