@@ -163,7 +163,9 @@ function PropertyPage() {
                 footnote={property.apartmentFootnote}
                 iconMode="facility"
               />
+              <LocationSection property={property} />
             </div>
+
 
             <div id="rooms">
               <div className="flex flex-wrap items-center justify-between gap-3">
