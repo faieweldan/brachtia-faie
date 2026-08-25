@@ -205,15 +205,15 @@ export default function StayCalculator({
           </div>
         )}
 
-        {selected.occupancies.length === 1 && selected.occupancies[0] === "single" &&
-          selected.unitType.toLowerCase().includes("4-bedroom") && (
-            <p className="mt-2.5 flex items-start gap-2 px-1 text-xs leading-relaxed text-muted-foreground">
-              <Info className="mt-0.5 size-3.5 shrink-0 text-brand" />
-              <span>
-                4-Bedroom apartments are single occupancy only — twin sharing isn't offered here.
-              </span>
-            </p>
-          )}
+        {selected.unitType.toLowerCase().includes("4-bedroom") && (
+          <p className="mt-2.5 flex items-start gap-2 px-1 text-xs leading-relaxed text-muted-foreground">
+            <Info className="mt-0.5 size-3.5 shrink-0 text-brand" />
+            <span>
+              4-Bedroom apartments are available on 12-month stays only — short-term isn't offered
+              here.
+            </span>
+          </p>
+        )}
 
 
         {selected.occupancies.length > 1 && (
