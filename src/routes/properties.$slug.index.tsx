@@ -339,7 +339,7 @@ function PropertyPage() {
                     moveOut={state.moveOut}
                     trigger={
                       <Button size="lg" className="w-full">
-                        Enquire with these dates
+                        Reserve with these dates
                       </Button>
                     }
                   />
