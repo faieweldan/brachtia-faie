@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { Clock, MessageCircle, Phone } from "lucide-react";
-import { company, whatsappUrl } from "@/data/properties";
+import { Clock, MessageCircle } from "lucide-react";
+import { whatsappUrl } from "@/data/properties";
 import { Button } from "@/components/ui/button";
 
 export default function CtaBand({
