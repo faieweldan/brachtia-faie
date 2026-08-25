@@ -16,7 +16,7 @@ export default function CtaBand({
     <section className="bg-brand py-14 text-primary-foreground sm:py-16">
       <div className="mx-auto flex max-w-6xl flex-col items-start gap-6 px-4 sm:px-6 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="font-display text-2xl font-semibold sm:text-3xl">{title}</h2>
+          <h2 className="text-2xl font-bold sm:text-3xl">{title}</h2>
           <p className="mt-2 max-w-xl text-sm text-primary-foreground/80">{description}</p>
           <p className="mt-3 inline-flex items-center gap-2 text-sm text-primary-foreground/80">
             <Phone className="size-4" /> {company.phones.join(" · ")}

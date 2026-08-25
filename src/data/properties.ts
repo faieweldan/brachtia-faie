@@ -40,9 +40,12 @@ export type PricingTable = {
 export type RoomType = {
   id: string;
   propertySlug: string;
+  /** Operational tag used by admin, e.g. "Room A" */
+  tag: string;
   name: string;
   unitType: string;
   description: string;
+
   sizeLabel?: string;
   image: string;
   gallery: string[];
@@ -280,6 +283,7 @@ export const properties: Property[] = [
 export const roomTypes: RoomType[] = [
   {
     id: "arc-master-ensuite",
+    tag: "Room A",
     propertySlug: "the-arc-cyberjaya",
     name: "Master Room with En-suite",
     unitType: "3 Rooms, 2 Baths",
@@ -295,6 +299,7 @@ export const roomTypes: RoomType[] = [
   },
   {
     id: "arc-room-with-view",
+    tag: "Room B",
     propertySlug: "the-arc-cyberjaya",
     name: "Room with View",
     unitType: "3 Rooms, 2 Baths",
@@ -312,6 +317,7 @@ export const roomTypes: RoomType[] = [
   },
   {
     id: "arc-yard-facing",
+    tag: "Room C",
     propertySlug: "the-arc-cyberjaya",
     name: "Yard-facing Room",
     unitType: "3 Rooms, 2 Baths",
@@ -328,6 +334,7 @@ export const roomTypes: RoomType[] = [
   },
   {
     id: "arc-quad-view",
+    tag: "Room D",
     propertySlug: "the-arc-cyberjaya",
     name: "Room with View — 4 Bedroom Unit",
     unitType: "4 Rooms, 2 Common Baths",
@@ -343,6 +350,7 @@ export const roomTypes: RoomType[] = [
   },
   {
     id: "arc-quad-yard",
+    tag: "Room E",
     propertySlug: "the-arc-cyberjaya",
     name: "Yard-facing Room — 4 Bedroom Unit",
     unitType: "4 Rooms, 2 Common Baths",
@@ -358,6 +366,7 @@ export const roomTypes: RoomType[] = [
   },
   {
     id: "solstice-one-bedroom",
+    tag: "Room A",
     propertySlug: "solstice-residence-cyberjaya",
     name: "Private 1-Bedroom Apartment",
     unitType: "1 Bedroom Apartment with attached bath",
@@ -452,7 +461,167 @@ function formatMonths(m: number) {
   return m === 0.5 ? "½ month" : `${m} month${m > 1 ? "s" : ""}`;
 }
 
+/* ---------------- Stay calculator (daily pro-rata) ---------------- */
+
+export type StaySegment = {
+  label: string;
+  days: number;
+  daysInMonth: number;
+  amount: number;
+  full: boolean;
+};
+
+function parseISO(iso: string) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1));
+}
+
+function toISO(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
+
+function round2(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
+export function addMonths(iso: string, months: number) {
+  const d = parseISO(iso);
+  const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, 1));
+  const dim = new Date(
+    Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  target.setUTCDate(Math.min(d.getUTCDate(), dim));
+  return toISO(target);
+}
+
+/** Nights + 1, i.e. move-out date is the last day of the stay. */
+export function stayDays(fromISO: string, toISOStr: string) {
+  const a = parseISO(fromISO).getTime();
+  const b = parseISO(toISOStr).getTime();
+  return Math.floor((b - a) / 86400000) + 1;
+}
+
+export function termForRange(fromISO: string, toISOStr: string): ContractTerm {
+  return stayDays(fromISO, toISOStr) >= 182 ? "long" : "short";
+}
+
+/** Splits a date range into calendar months and pro-rates partial ones daily. */
+export function staySchedule(fromISO: string, toISOStr: string, rent: number): StaySegment[] {
+  const start = parseISO(fromISO);
+  const end = parseISO(toISOStr);
+  if (end.getTime() < start.getTime()) return [];
+
+  const segments: StaySegment[] = [];
+  let cursor = start;
+  let guard = 0;
+
+  while (cursor.getTime() <= end.getTime() && guard < 60) {
+    guard += 1;
+    const y = cursor.getUTCFullYear();
+    const m = cursor.getUTCMonth();
+    const dim = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    const monthEnd = new Date(Date.UTC(y, m, dim));
+    const segEnd = monthEnd.getTime() < end.getTime() ? monthEnd : end;
+    const days = Math.floor((segEnd.getTime() - cursor.getTime()) / 86400000) + 1;
+    const full = days === dim;
+    segments.push({
+      label: cursor.toLocaleDateString("en-MY", { month: "long", year: "numeric", timeZone: "UTC" }),
+      days,
+      daysInMonth: dim,
+      amount: full ? rent : round2((rent / dim) * days),
+      full,
+    });
+    cursor = new Date(Date.UTC(y, m + 1, 1));
+  }
+
+  return segments;
+}
+
+export type StayQuote = {
+  term: ContractTerm;
+  rent: number;
+  days: number;
+  months: number;
+  schedule: StaySegment[];
+  firstPayment: CostLine[];
+  totalUpfront: number;
+  totalStay: number;
+  monthlyAfter: number;
+};
+
+/** Full quote: pro-rated rent schedule + deposits/fees due before move-in. */
+export function stayQuote(
+  property: Property,
+  rent: number,
+  term: ContractTerm,
+  fromISO: string,
+  toISOStr: string,
+): StayQuote | null {
+  const days = stayDays(fromISO, toISOStr);
+  if (!rent || days < 1) return null;
+
+  const schedule = staySchedule(fromISO, toISOStr, rent);
+  const cfg = property.feeConfig[term];
+  const first = schedule[0];
+  const lines: CostLine[] = [];
+
+  if (first) {
+    lines.push({
+      label: first.full
+        ? `First month rent (${first.label})`
+        : `First month rent — pro-rated ${first.days}/${first.daysInMonth} days`,
+      amount: first.amount,
+      kind: "advance",
+    });
+  }
+  const extraAdvance = Math.max(0, cfg.advanceMonths - 1);
+  if (extraAdvance > 0) {
+    lines.push({
+      label: `Advance rental (${formatMonths(extraAdvance)})`,
+      amount: round2(rent * extraAdvance),
+      kind: "advance",
+    });
+  }
+  if (cfg.utilitiesMonths > 0) {
+    lines.push({
+      label: `Utilities deposit (${formatMonths(cfg.utilitiesMonths)})`,
+      amount: round2(rent * cfg.utilitiesMonths),
+      kind: "refundable",
+    });
+  }
+  lines.push({
+    label: `Security deposit (${formatMonths(cfg.securityMonths)})`,
+    amount: round2(rent * cfg.securityMonths),
+    kind: "refundable",
+  });
+  lines.push({ label: "Access card deposit", amount: cfg.accessCardDeposit, kind: "refundable" });
+  if (cfg.accessCardCharge > 0) {
+    lines.push({ label: "Access card charges", amount: cfg.accessCardCharge, kind: "onetime" });
+  }
+  lines.push({
+    label: term === "long" ? "Admin + agreement charges" : "Admin charges",
+    amount: cfg.adminFee,
+    kind: "onetime",
+  });
+
+  const totalUpfront = round2(lines.reduce((s, l) => s + l.amount, 0));
+  const totalStay = round2(schedule.reduce((s, seg) => s + seg.amount, 0));
+
+  return {
+    term,
+    rent,
+    days,
+    months: round2(days / 30.44),
+    schedule,
+    firstPayment: lines,
+    totalUpfront,
+    totalStay,
+    monthlyAfter: rent,
+  };
+}
+
 export function formatRM(amount: number) {
+
   return `RM ${amount.toLocaleString("en-MY", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
 

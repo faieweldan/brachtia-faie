@@ -21,7 +21,7 @@ export default function Header() {
         <Link to="/" className="flex items-center gap-2.5" onClick={() => setOpen(false)}>
           <Logo className="h-9 w-9 text-brand" />
           <span className="leading-tight">
-            <span className="block font-display text-base font-semibold tracking-tight text-brand-deep">
+            <span className="block text-base font-bold tracking-tight text-brand-deep">
               Brachtia Homes
             </span>
             <span className="block text-[10px] uppercase tracking-[0.22em] text-muted-foreground">

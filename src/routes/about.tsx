@@ -53,8 +53,8 @@ function AboutPage() {
     <>
       <section className="border-b border-border bg-secondary/50">
         <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand">Our story</p>
-          <h1 className="mt-2 font-display text-4xl font-semibold tracking-tight text-brand-deep">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand">Our story</p>
+          <h1 className="mt-2 text-4xl font-bold tracking-tight text-brand-deep">
             Property management & global student services
           </h1>
           <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
@@ -83,7 +83,7 @@ function AboutPage() {
             { value: "80+", label: "Properties managed" },
           ].map((s) => (
             <div key={s.label} className="rounded-3xl border border-border/70 bg-card p-5 text-center shadow-card">
-              <p className="font-display text-2xl font-semibold text-brand">{s.value}</p>
+              <p className="text-2xl font-bold text-brand">{s.value}</p>
               <p className="mt-1 text-xs text-muted-foreground">{s.label}</p>
             </div>
           ))}
@@ -97,7 +97,7 @@ function AboutPage() {
 
       <section className="bg-secondary/50 py-14">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <h2 className="font-display text-3xl font-semibold tracking-tight text-brand-deep">Our services</h2>
+          <h2 className="text-3xl font-bold tracking-tight text-brand-deep">Our services</h2>
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             {services.map((s) => (
               <div key={s.title} className="rounded-3xl border border-border/70 bg-card p-6 shadow-card">
@@ -111,11 +111,11 @@ function AboutPage() {
       </section>
 
       <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
-        <h2 className="font-display text-3xl font-semibold tracking-tight text-brand-deep">Meet our team</h2>
+        <h2 className="text-3xl font-bold tracking-tight text-brand-deep">Meet our team</h2>
         <div className="mt-8 grid gap-4 sm:grid-cols-3">
           {team.map((m) => (
             <div key={m.name} className="rounded-3xl border border-border/70 bg-card p-6 text-center shadow-card">
-              <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-brand-soft font-display text-lg font-semibold text-brand-deep">
+              <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-brand-soft text-lg font-bold text-brand-deep">
                 {m.name.split(" ").slice(0, 2).map((n) => n[0]).join("")}
               </div>
               <p className="mt-3 font-semibold text-foreground">{m.name}</p>

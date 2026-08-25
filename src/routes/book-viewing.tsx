@@ -36,7 +36,7 @@ function BookViewingPage() {
           <span className="inline-flex items-center gap-2 rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-brand-deep">
             <CalendarCheck className="size-3.5" /> Free, no obligation
           </span>
-          <h1 className="mt-4 font-display text-3xl font-semibold text-brand-deep sm:text-4xl">
+          <h1 className="mt-4 text-3xl font-bold text-brand-deep sm:text-4xl">
             Book a viewing
           </h1>
           <p className="mt-3 text-muted-foreground">

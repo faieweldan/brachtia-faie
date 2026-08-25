@@ -56,10 +56,13 @@ export default function RoomTypeCard({
             >
               {statusLabel(room)}
             </span>
+            <span className="rounded-full bg-brand px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-primary-foreground">
+              {room.tag}
+            </span>
             <span className="text-xs text-muted-foreground">{room.unitType}</span>
           </div>
 
-          <h3 className="mt-2 font-display text-lg font-semibold text-brand-deep">
+          <h3 className="mt-2 text-lg font-bold text-brand-deep">
             <Link
               to="/properties/$slug/rooms/$typeId"
               params={{ slug: property.slug, typeId: room.id }}
@@ -94,7 +97,7 @@ export default function RoomTypeCard({
 
         <div className="shrink-0 sm:text-right">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">From</p>
-          <p className="font-display text-2xl font-semibold text-brand-deep">
+          <p className="text-2xl font-bold text-brand-deep">
             {formatRM(from)}
             <span className="text-sm font-normal text-muted-foreground">/mo</span>
           </p>

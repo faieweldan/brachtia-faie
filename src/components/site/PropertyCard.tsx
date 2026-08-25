@@ -26,7 +26,7 @@ export default function PropertyCard({ property }: { property: Property }) {
         </Badge>
       </div>
       <div className="flex flex-1 flex-col p-5">
-        <h3 className="font-display text-xl font-semibold text-brand-deep">{property.name}</h3>
+        <h3 className="text-xl font-bold text-brand-deep">{property.name}</h3>
         <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
           <MapPin className="size-3.5" /> {property.location}
         </p>
@@ -41,7 +41,7 @@ export default function PropertyCard({ property }: { property: Property }) {
         <div className="mt-5 flex items-end justify-between border-t border-border pt-4">
           <div>
             <p className="text-xs text-muted-foreground">From</p>
-            <p className="font-display text-2xl font-semibold text-brand">
+            <p className="text-2xl font-bold text-brand">
               {formatRM(priceFrom(property.slug))}
               <span className="text-sm font-normal text-muted-foreground">/month</span>
             </p>

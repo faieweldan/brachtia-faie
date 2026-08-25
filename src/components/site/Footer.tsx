@@ -10,7 +10,7 @@ export default function Footer() {
         <div className="md:col-span-2">
           <div className="flex items-center gap-2.5">
             <Logo className="h-9 w-9 text-primary-foreground" />
-            <span className="font-display text-lg font-semibold">Brachtia Homes</span>
+            <span className="text-lg font-bold">Brachtia Homes</span>
           </div>
           <p className="mt-4 max-w-sm text-sm text-primary-foreground/70">
             Off-campus student accommodation and property management in Cyberjaya since 2009.
@@ -22,7 +22,7 @@ export default function Footer() {
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wider">Explore</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider">Explore</h3>
           <ul className="mt-4 space-y-2.5 text-sm text-primary-foreground/70">
             <li><Link to="/properties" className="hover:text-primary-foreground">Properties</Link></li>
             <li><Link to="/about" className="hover:text-primary-foreground">About us</Link></li>
@@ -33,7 +33,7 @@ export default function Footer() {
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wider">Get in touch</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider">Get in touch</h3>
           <ul className="mt-4 space-y-2.5 text-sm text-primary-foreground/70">
             {company.phones.map((p) => (
               <li key={p} className="flex items-center gap-2">

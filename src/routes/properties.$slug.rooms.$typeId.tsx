@@ -2,22 +2,16 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
 import { CalendarDays, Check, MessageCircle, Ruler } from "lucide-react";
 import {
-  costBreakdown,
   formatDate,
-  formatRM,
-  company,
   getProperty,
   getRoomType,
   getRoomTypes,
-  termsFor,
   whatsappUrl,
-  type ContractTerm,
-  type Occupancy,
 } from "@/data/properties";
 import { Button } from "@/components/ui/button";
 import EnquireDialog from "@/components/site/EnquireDialog";
 import RoomTypeCard, { statusLabel } from "@/components/site/RoomTypeCard";
-import SegmentedToggle from "@/components/site/SegmentedToggle";
+import StayCalculator, { type StayState } from "@/components/site/StayCalculator";
 
 export const Route = createFileRoute("/properties/$slug/rooms/$typeId")({
   loader: ({ params }) => {
@@ -48,14 +42,7 @@ export const Route = createFileRoute("/properties/$slug/rooms/$typeId")({
 
 function RoomTypePage() {
   const { property, room } = Route.useLoaderData();
-  const availableTerms = termsFor(room, property);
-  const [term, setTerm] = useState<ContractTerm>(availableTerms[0] ?? "long");
-  const [occupancy, setOccupancy] = useState<Occupancy>(room.occupancies[0] ?? "single");
   const [photo, setPhoto] = useState(room.gallery[0] ?? room.image);
-
-  const activeTerm = availableTerms.includes(term) ? term : (availableTerms[0] ?? "long");
-  const rent = room.rent[activeTerm][occupancy];
-  const breakdown = rent ? costBreakdown(property, rent, activeTerm) : null;
 
   const others = getRoomTypes(property.slug).filter((r) => r.id !== room.id);
   const message = `Hi Brachtia Homes, I'm interested in the ${room.name} at ${property.name}.`;
@@ -118,7 +105,10 @@ function RoomTypePage() {
               >
                 {statusLabel(room)}
               </span>
-              <h1 className="mt-3 font-display text-3xl font-semibold text-brand-deep sm:text-4xl">
+              <span className="ml-2 rounded-full bg-brand px-3 py-1 text-xs font-bold uppercase tracking-wide text-primary-foreground">
+                {room.tag}
+              </span>
+              <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-brand-deep sm:text-4xl">
                 {room.name}
               </h1>
               <p className="mt-2 text-sm text-muted-foreground">
@@ -138,7 +128,7 @@ function RoomTypePage() {
                 )}
               </div>
 
-              <h2 className="mt-8 font-display text-xl font-semibold text-brand-deep">
+              <h2 className="mt-8 text-xl font-bold text-brand-deep">
                 What's in this room
               </h2>
               <ul className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -149,7 +139,7 @@ function RoomTypePage() {
                 ))}
               </ul>
 
-              <h2 className="mt-8 font-display text-xl font-semibold text-brand-deep">
+              <h2 className="mt-8 text-xl font-bold text-brand-deep">
                 Good to know
               </h2>
               <ul className="mt-3 space-y-2">
@@ -163,111 +153,43 @@ function RoomTypePage() {
           </div>
 
           <aside className="lg:sticky lg:top-24 lg:self-start">
-            <div className="rounded-3xl border border-border/70 bg-card p-5 shadow-card">
-              {availableTerms.length > 1 && (
-                <SegmentedToggle
-                  value={activeTerm}
-                  onChange={setTerm}
-                  options={availableTerms.map((t) => ({
-                    value: t,
-                    label: t === "long" ? "12-month stay" : "Short-term",
-                  }))}
-                />
-              )}
-              {room.occupancies.length > 1 && (
-                <SegmentedToggle
-                  className="mt-2"
-                  size="sm"
-                  value={occupancy}
-                  onChange={setOccupancy}
-                  options={room.occupancies.map((o) => ({
-                    value: o,
-                    label: o === "single" ? "Single occupancy" : "Twin sharing",
-                    disabled: room.rent[activeTerm][o] == null,
-                  }))}
-                />
-              )}
-
-              <div className="mt-5">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Monthly rent {occupancy === "twin" ? "per person" : ""}
-                </p>
-                <p className="font-display text-3xl font-semibold text-brand-deep">
-                  {rent ? formatRM(rent) : "On request"}
-                  {rent && <span className="text-base font-normal text-muted-foreground">/mo</span>}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">{property.paymentCycle}</p>
-              </div>
-
-              {breakdown && (
-                <div className="mt-5 rounded-2xl bg-brand-tint p-4">
-                  <p className="text-sm font-semibold text-brand-deep">Upfront costs & deposits</p>
-                  <table className="mt-3 w-full text-sm">
-                    <tbody>
-                      {breakdown.lines.map((l) => (
-                        <tr key={l.label} className="align-top">
-                          <td className="py-1.5 pr-3 text-muted-foreground">
-                            {l.label}
-                            {l.kind === "refundable" && (
-                              <span className="ml-1 text-[10px] uppercase tracking-wide text-brand">
-                                refundable
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-1.5 text-right font-medium text-foreground">
-                            {formatRM(l.amount)}
-                          </td>
-                        </tr>
-                      ))}
-                      <tr className="border-t border-border">
-                        <td className="pt-2.5 font-semibold text-brand-deep">Total payable</td>
-                        <td className="pt-2.5 text-right font-display text-lg font-semibold text-brand-deep">
-                          {formatRM(breakdown.total)}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    Booking fee {company.bookingFee} secures the room and is offset against your
-                    first payment. Deposits are refundable at the end of tenancy, less any damages.
+            <StayCalculator
+              property={property}
+              room={room}
+              actions={(s: StayState) => (
+                <>
+                  <EnquireDialog
+                    property={property}
+                    room={room}
+                    term={s.term}
+                    occupancy={s.occupancy}
+                    moveIn={s.moveIn}
+                    moveOut={s.moveOut}
+                    trigger={
+                      <Button size="lg" className="h-13 w-full rounded-full text-base">
+                        Enquire now
+                      </Button>
+                    }
+                  />
+                  <Button asChild size="lg" variant="outline" className="w-full rounded-full">
+                    <a href={whatsappUrl(message)} target="_blank" rel="noreferrer">
+                      <MessageCircle className="size-4" /> WhatsApp us
+                    </a>
+                  </Button>
+                  <p className="pt-1 text-center text-xs text-muted-foreground">
+                    Admin confirms your unit after reviewing preferences.
                   </p>
-                </div>
+                </>
               )}
-
-              <div className="mt-5 space-y-2">
-                <EnquireDialog
-                  property={property}
-                  room={room}
-                  term={activeTerm}
-                  occupancy={occupancy}
-                  trigger={
-                    <Button size="lg" className="w-full">
-                      Enquire now
-                    </Button>
-                  }
-                />
-                <Button asChild size="lg" variant="outline" className="w-full">
-                  <a href={whatsappUrl(message)} target="_blank" rel="noreferrer">
-                    <MessageCircle className="size-4" /> WhatsApp us
-                  </a>
-                </Button>
-                <Button asChild size="lg" variant="ghost" className="w-full">
-                  <Link to="/book-viewing" search={{ property: property.slug }}>
-                    Book a viewing
-                  </Link>
-                </Button>
-              </div>
-              <p className="mt-3 text-center text-xs text-muted-foreground">
-                Admin confirms the exact unit with you after reviewing your preferences.
-              </p>
-            </div>
+            />
           </aside>
+
         </div>
       </section>
 
       {others.length > 0 && (
         <section className="mx-auto mt-16 max-w-6xl px-4 pb-16 sm:px-6">
-          <h2 className="font-display text-2xl font-semibold text-brand-deep">
+          <h2 className="text-2xl font-extrabold tracking-tight text-brand-deep">
             Other room options at {property.name}
           </h2>
           <div className="mt-5 space-y-4">
@@ -281,20 +203,21 @@ function RoomTypePage() {
       <div className="sticky bottom-0 z-40 border-t border-border bg-card/95 p-3 backdrop-blur lg:hidden">
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">
-            <p className="truncate text-xs text-muted-foreground">{room.name}</p>
-            <p className="font-display text-lg font-semibold text-brand-deep">
-              {rent ? `${formatRM(rent)}/mo` : "On request"}
-            </p>
+            <p className="text-xs text-muted-foreground">{room.tag}</p>
+            <p className="truncate text-sm font-bold text-brand-deep">{room.name}</p>
           </div>
           <EnquireDialog
             property={property}
             room={room}
-            term={activeTerm}
-            occupancy={occupancy}
-            trigger={<Button size="lg">Enquire now</Button>}
+            trigger={
+              <Button size="lg" className="rounded-full">
+                Enquire now
+              </Button>
+            }
           />
         </div>
       </div>
+
     </>
   );
 }
