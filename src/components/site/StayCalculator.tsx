@@ -165,7 +165,7 @@ export default function StayCalculator({
                   ))}
                   <tr className="border-t border-border">
                     <td className="pt-2 font-bold text-brand-deep">Total to pay now</td>
-                    <td className="pt-2 text-right text-lg font-extrabold text-brand">
+                    <td className="whitespace-nowrap pt-2 text-right text-lg font-extrabold text-brand">
                       {formatRM(quote.totalUpfront)}
                     </td>
                   </tr>
