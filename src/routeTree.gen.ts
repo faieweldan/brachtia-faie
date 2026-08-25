@@ -17,6 +17,7 @@ import { Route as ContactRouteImport } from './routes/contact'
 import { Route as PropertiesIndexRouteImport } from './routes/properties.index'
 import { Route as PropertiesSlugIndexRouteImport } from './routes/properties.$slug.index'
 import { Route as PropertiesSlugRoomsRoomIdRouteImport } from './routes/properties.$slug.rooms.$roomId'
+import { Route as PropertiesSlugRoomsTypeIdRouteImport } from './routes/properties.$slug.rooms.$typeId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -59,6 +60,12 @@ const PropertiesSlugRoomsRoomIdRoute =
     path: '/properties/$slug/rooms/$roomId',
     getParentRoute: () => rootRouteImport,
   } as any)
+const PropertiesSlugRoomsTypeIdRoute =
+  PropertiesSlugRoomsTypeIdRouteImport.update({
+    id: '/properties/$slug/rooms/$typeId',
+    path: '/properties/$slug/rooms/$typeId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -69,6 +76,7 @@ export interface FileRoutesByFullPath {
   '/properties/': typeof PropertiesIndexRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
   '/properties/$slug/rooms/$roomId': typeof PropertiesSlugRoomsRoomIdRoute
+  '/properties/$slug/rooms/$typeId': typeof PropertiesSlugRoomsTypeIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -79,6 +87,7 @@ export interface FileRoutesByTo {
   '/properties': typeof PropertiesIndexRoute
   '/properties/$slug': typeof PropertiesSlugIndexRoute
   '/properties/$slug/rooms/$roomId': typeof PropertiesSlugRoomsRoomIdRoute
+  '/properties/$slug/rooms/$typeId': typeof PropertiesSlugRoomsTypeIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -90,6 +99,7 @@ export interface FileRoutesById {
   '/properties/': typeof PropertiesIndexRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
   '/properties/$slug/rooms/$roomId': typeof PropertiesSlugRoomsRoomIdRoute
+  '/properties/$slug/rooms/$typeId': typeof PropertiesSlugRoomsTypeIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -102,6 +112,7 @@ export interface FileRouteTypes {
     | '/properties/'
     | '/properties/$slug/'
     | '/properties/$slug/rooms/$roomId'
+    | '/properties/$slug/rooms/$typeId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -112,6 +123,7 @@ export interface FileRouteTypes {
     | '/properties'
     | '/properties/$slug'
     | '/properties/$slug/rooms/$roomId'
+    | '/properties/$slug/rooms/$typeId'
   id:
     | '__root__'
     | '/'
@@ -122,6 +134,7 @@ export interface FileRouteTypes {
     | '/properties/'
     | '/properties/$slug/'
     | '/properties/$slug/rooms/$roomId'
+    | '/properties/$slug/rooms/$typeId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -133,6 +146,7 @@ export interface RootRouteChildren {
   PropertiesIndexRoute: typeof PropertiesIndexRoute
   PropertiesSlugIndexRoute: typeof PropertiesSlugIndexRoute
   PropertiesSlugRoomsRoomIdRoute: typeof PropertiesSlugRoomsRoomIdRoute
+  PropertiesSlugRoomsTypeIdRoute: typeof PropertiesSlugRoomsTypeIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -193,6 +207,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PropertiesSlugRoomsRoomIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/properties/$slug/rooms/$typeId': {
+      id: '/properties/$slug/rooms/$typeId'
+      path: '/properties/$slug/rooms/$typeId'
+      fullPath: '/properties/$slug/rooms/$typeId'
+      preLoaderRoute: typeof PropertiesSlugRoomsTypeIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -205,6 +226,7 @@ const rootRouteChildren: RootRouteChildren = {
   PropertiesIndexRoute: PropertiesIndexRoute,
   PropertiesSlugIndexRoute: PropertiesSlugIndexRoute,
   PropertiesSlugRoomsRoomIdRoute: PropertiesSlugRoomsRoomIdRoute,
+  PropertiesSlugRoomsTypeIdRoute: PropertiesSlugRoomsTypeIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
