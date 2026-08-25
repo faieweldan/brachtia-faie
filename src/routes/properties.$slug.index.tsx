@@ -164,8 +164,8 @@ function PropertyPage() {
                 footnote={property.apartmentFootnote}
                 iconMode="facility"
               />
-              <LocationSection property={property} />
             </div>
+
 
 
             <div id="rooms">
@@ -254,7 +254,10 @@ function PropertyPage() {
                 )}
               </div>
             </div>
+
+            <LocationSection property={property} />
           </div>
+
 
           <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
             <div className="rounded-3xl border border-border/70 bg-card p-5 shadow-card">
