@@ -280,7 +280,7 @@ export const properties: Property[] = [
       "Washing Machine",
     ],
     apartmentFootnote: "Where available.",
-    coords: { lat: 2.9213, lng: 101.6559 },
+    coords: { lat: 2.9285, lng: 101.6432 },
     nearbyUniversities: universitiesCyberjaya,
     pointsOfInterest: poiCyberjaya,
     terms: [

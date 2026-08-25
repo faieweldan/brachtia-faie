@@ -21,6 +21,7 @@ import {
 } from "@/data/properties";
 import { Button } from "@/components/ui/button";
 import AmenitySection from "@/components/site/AmenitySection";
+import LocationSection from "@/components/site/LocationSection";
 import CtaBand from "@/components/site/CtaBand";
 import EnquireDialog from "@/components/site/EnquireDialog";
 import RoomTypeCard from "@/components/site/RoomTypeCard";
