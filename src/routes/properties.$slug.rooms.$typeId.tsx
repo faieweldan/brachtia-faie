@@ -203,20 +203,21 @@ function RoomTypePage() {
       <div className="sticky bottom-0 z-40 border-t border-border bg-card/95 p-3 backdrop-blur lg:hidden">
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">
-            <p className="truncate text-xs text-muted-foreground">{room.name}</p>
-            <p className="font-display text-lg font-semibold text-brand-deep">
-              {rent ? `${formatRM(rent)}/mo` : "On request"}
-            </p>
+            <p className="text-xs text-muted-foreground">{room.tag}</p>
+            <p className="truncate text-sm font-bold text-brand-deep">{room.name}</p>
           </div>
           <EnquireDialog
             property={property}
             room={room}
-            term={activeTerm}
-            occupancy={occupancy}
-            trigger={<Button size="lg">Enquire now</Button>}
+            trigger={
+              <Button size="lg" className="rounded-full">
+                Enquire now
+              </Button>
+            }
           />
         </div>
       </div>
+
     </>
   );
 }
