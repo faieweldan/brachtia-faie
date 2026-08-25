@@ -321,38 +321,8 @@ function PropertyPage() {
 
 
           <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
-            <div className="rounded-3xl border border-border/70 bg-card p-5 shadow-card">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Rooms from</p>
-              <p className="text-3xl font-bold text-brand-deep">
-                {formatRM(priceFrom(property.slug))}
-                <span className="text-base font-normal text-muted-foreground">/mo</span>
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">{property.paymentCycle}</p>
-              <div className="mt-4 space-y-2">
-                <EnquireDialog
-                  property={property}
-                  trigger={
-                    <Button size="lg" className="w-full">
-                      Enquire now
-                    </Button>
-                  }
-                />
-                <Button asChild size="lg" variant="outline" className="w-full">
-                  <Link to="/book-viewing" search={{ property: property.slug }}>
-                    Book a viewing
-                  </Link>
-                </Button>
-                <Button asChild size="lg" variant="ghost" className="w-full">
-                  <a
-                    href={whatsappUrl(`Hi Brachtia Homes, I'm interested in ${property.name}.`)}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <MessageCircle className="size-4" /> WhatsApp
-                  </a>
-                </Button>
-              </div>
-            </div>
+
+
 
             {rooms.length > 0 && (
               <div id="stay-calculator">
