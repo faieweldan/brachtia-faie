@@ -137,7 +137,7 @@ function Home() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {perks.slice(0, 4).map((p) => (
-              <div key={p.title} className="rounded-xl border border-border bg-card p-5 shadow-sm">
+              <div key={p.title} className="rounded-3xl border border-border/70 bg-card p-5 shadow-card">
                 <p.icon className="size-6 text-brand" />
                 <h3 className="mt-3 font-semibold text-foreground">{p.title}</h3>
                 <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{p.text}</p>
@@ -181,7 +181,7 @@ function Home() {
         </h2>
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {perks.map((p) => (
-            <div key={p.title} className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <div key={p.title} className="rounded-3xl border border-border/70 bg-card p-5 shadow-card">
               <p.icon className="size-6 text-brand" />
               <h3 className="mt-3 font-semibold text-foreground">{p.title}</h3>
               <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{p.text}</p>

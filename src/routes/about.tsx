@@ -74,7 +74,7 @@ function AboutPage() {
           loading="lazy"
           width={1600}
           height={1000}
-          className="aspect-[4/3] w-full rounded-2xl object-cover shadow-sm"
+          className="aspect-[4/3] w-full rounded-2xl object-cover shadow-card"
         />
         <div className="grid grid-cols-3 gap-4">
           {[
@@ -82,7 +82,7 @@ function AboutPage() {
             { value: "15", label: "Years in business" },
             { value: "80+", label: "Properties managed" },
           ].map((s) => (
-            <div key={s.label} className="rounded-xl border border-border bg-card p-5 text-center shadow-sm">
+            <div key={s.label} className="rounded-3xl border border-border/70 bg-card p-5 text-center shadow-card">
               <p className="font-display text-2xl font-semibold text-brand">{s.value}</p>
               <p className="mt-1 text-xs text-muted-foreground">{s.label}</p>
             </div>
@@ -100,7 +100,7 @@ function AboutPage() {
           <h2 className="font-display text-3xl font-semibold tracking-tight text-brand-deep">Our services</h2>
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             {services.map((s) => (
-              <div key={s.title} className="rounded-xl border border-border bg-card p-6 shadow-sm">
+              <div key={s.title} className="rounded-3xl border border-border/70 bg-card p-6 shadow-card">
                 <s.icon className="size-6 text-brand" />
                 <h3 className="mt-3 font-semibold text-foreground">{s.title}</h3>
                 <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{s.text}</p>
@@ -114,7 +114,7 @@ function AboutPage() {
         <h2 className="font-display text-3xl font-semibold tracking-tight text-brand-deep">Meet our team</h2>
         <div className="mt-8 grid gap-4 sm:grid-cols-3">
           {team.map((m) => (
-            <div key={m.name} className="rounded-xl border border-border bg-card p-6 text-center shadow-sm">
+            <div key={m.name} className="rounded-3xl border border-border/70 bg-card p-6 text-center shadow-card">
               <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-brand-soft font-display text-lg font-semibold text-brand-deep">
                 {m.name.split(" ").slice(0, 2).map((n) => n[0]).join("")}
               </div>

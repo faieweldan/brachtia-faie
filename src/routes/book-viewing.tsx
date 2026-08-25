@@ -45,7 +45,7 @@ function BookViewingPage() {
           </p>
 
           <form
-            className="mt-8 space-y-5 rounded-2xl border border-border bg-card p-6"
+            className="mt-8 space-y-5 rounded-3xl border border-border/70 bg-card p-6"
             onSubmit={(e) => {
               e.preventDefault();
               toast.success("Viewing request sent", {
