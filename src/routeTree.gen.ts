@@ -16,7 +16,6 @@ import { Route as BookViewingRouteImport } from './routes/book-viewing'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as PropertiesIndexRouteImport } from './routes/properties.index'
 import { Route as PropertiesSlugIndexRouteImport } from './routes/properties.$slug.index'
-import { Route as PropertiesSlugRoomsRoomIdRouteImport } from './routes/properties.$slug.rooms.$roomId'
 import { Route as PropertiesSlugRoomsTypeIdRouteImport } from './routes/properties.$slug.rooms.$typeId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -54,12 +53,6 @@ const PropertiesSlugIndexRoute = PropertiesSlugIndexRouteImport.update({
   path: '/properties/$slug/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PropertiesSlugRoomsRoomIdRoute =
-  PropertiesSlugRoomsRoomIdRouteImport.update({
-    id: '/properties/$slug/rooms/$roomId',
-    path: '/properties/$slug/rooms/$roomId',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const PropertiesSlugRoomsTypeIdRoute =
   PropertiesSlugRoomsTypeIdRouteImport.update({
     id: '/properties/$slug/rooms/$typeId',
@@ -75,7 +68,6 @@ export interface FileRoutesByFullPath {
   '/contact': typeof ContactRoute
   '/properties/': typeof PropertiesIndexRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
-  '/properties/$slug/rooms/$roomId': typeof PropertiesSlugRoomsRoomIdRoute
   '/properties/$slug/rooms/$typeId': typeof PropertiesSlugRoomsTypeIdRoute
 }
 export interface FileRoutesByTo {
@@ -86,7 +78,6 @@ export interface FileRoutesByTo {
   '/contact': typeof ContactRoute
   '/properties': typeof PropertiesIndexRoute
   '/properties/$slug': typeof PropertiesSlugIndexRoute
-  '/properties/$slug/rooms/$roomId': typeof PropertiesSlugRoomsRoomIdRoute
   '/properties/$slug/rooms/$typeId': typeof PropertiesSlugRoomsTypeIdRoute
 }
 export interface FileRoutesById {
@@ -98,7 +89,6 @@ export interface FileRoutesById {
   '/contact': typeof ContactRoute
   '/properties/': typeof PropertiesIndexRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
-  '/properties/$slug/rooms/$roomId': typeof PropertiesSlugRoomsRoomIdRoute
   '/properties/$slug/rooms/$typeId': typeof PropertiesSlugRoomsTypeIdRoute
 }
 export interface FileRouteTypes {
@@ -111,7 +101,6 @@ export interface FileRouteTypes {
     | '/contact'
     | '/properties/'
     | '/properties/$slug/'
-    | '/properties/$slug/rooms/$roomId'
     | '/properties/$slug/rooms/$typeId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -122,7 +111,6 @@ export interface FileRouteTypes {
     | '/contact'
     | '/properties'
     | '/properties/$slug'
-    | '/properties/$slug/rooms/$roomId'
     | '/properties/$slug/rooms/$typeId'
   id:
     | '__root__'
@@ -133,7 +121,6 @@ export interface FileRouteTypes {
     | '/contact'
     | '/properties/'
     | '/properties/$slug/'
-    | '/properties/$slug/rooms/$roomId'
     | '/properties/$slug/rooms/$typeId'
   fileRoutesById: FileRoutesById
 }
@@ -145,7 +132,6 @@ export interface RootRouteChildren {
   ContactRoute: typeof ContactRoute
   PropertiesIndexRoute: typeof PropertiesIndexRoute
   PropertiesSlugIndexRoute: typeof PropertiesSlugIndexRoute
-  PropertiesSlugRoomsRoomIdRoute: typeof PropertiesSlugRoomsRoomIdRoute
   PropertiesSlugRoomsTypeIdRoute: typeof PropertiesSlugRoomsTypeIdRoute
 }
 
@@ -200,13 +186,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PropertiesSlugIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/properties/$slug/rooms/$roomId': {
-      id: '/properties/$slug/rooms/$roomId'
-      path: '/properties/$slug/rooms/$roomId'
-      fullPath: '/properties/$slug/rooms/$roomId'
-      preLoaderRoute: typeof PropertiesSlugRoomsRoomIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/properties/$slug/rooms/$typeId': {
       id: '/properties/$slug/rooms/$typeId'
       path: '/properties/$slug/rooms/$typeId'
@@ -225,7 +204,6 @@ const rootRouteChildren: RootRouteChildren = {
   ContactRoute: ContactRoute,
   PropertiesIndexRoute: PropertiesIndexRoute,
   PropertiesSlugIndexRoute: PropertiesSlugIndexRoute,
-  PropertiesSlugRoomsRoomIdRoute: PropertiesSlugRoomsRoomIdRoute,
   PropertiesSlugRoomsTypeIdRoute: PropertiesSlugRoomsTypeIdRoute,
 }
 export const routeTree = rootRouteImport
