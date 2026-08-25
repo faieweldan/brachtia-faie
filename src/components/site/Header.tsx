@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Menu, X, MessageCircle } from "lucide-react";
-import { company, whatsappUrl } from "@/data/properties";
+import { Menu, X, MessageCircle, ChevronDown } from "lucide-react";
+import { company, properties, whatsappUrl } from "@/data/properties";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import Logo from "./Logo";
 
-const nav = [
-  { to: "/", label: "Home" },
-  { to: "/properties", label: "Properties" },
-  { to: "/about", label: "About" },
-  { to: "/contact", label: "Contact" },
-] as const;
+const linkClass =
+  "text-sm font-medium text-foreground/75 transition-colors hover:text-brand";
 
 export default function Header() {
   const [open, setOpen] = useState(false);
@@ -31,17 +33,34 @@ export default function Header() {
         </Link>
 
         <nav className="hidden items-center gap-7 md:flex">
-          {nav.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className="text-sm font-medium text-foreground/75 transition-colors hover:text-brand"
-              activeProps={{ className: "text-brand" }}
-              activeOptions={{ exact: item.to === "/" }}
-            >
-              {item.label}
-            </Link>
-          ))}
+          <Link to="/" className={linkClass} activeProps={{ className: "text-brand" }} activeOptions={{ exact: true }}>
+            Home
+          </Link>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger className={`inline-flex items-center gap-1 outline-none ${linkClass}`}>
+              Residences <ChevronDown className="size-3.5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-64 rounded-2xl">
+              {properties.map((p) => (
+                <DropdownMenuItem key={p.slug} asChild className="rounded-xl">
+                  <Link to="/properties/$slug" params={{ slug: p.slug }}>
+                    <span>
+                      <span className="block text-sm font-semibold text-brand-deep">{p.name}</span>
+                      <span className="block text-xs text-muted-foreground">{p.location}</span>
+                    </span>
+                  </Link>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Link to="/about" className={linkClass} activeProps={{ className: "text-brand" }}>
+            About
+          </Link>
+          <Link to="/contact" className={linkClass} activeProps={{ className: "text-brand" }}>
+            Contact
+          </Link>
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
@@ -68,18 +87,50 @@ export default function Header() {
       {open && (
         <div className="border-t border-border bg-background md:hidden">
           <nav className="mx-auto flex max-w-6xl flex-col px-4 py-2 sm:px-6">
-            {nav.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                onClick={() => setOpen(false)}
-                className="border-b border-border/60 py-3 text-sm font-medium text-foreground/80"
-                activeProps={{ className: "text-brand" }}
-                activeOptions={{ exact: item.to === "/" }}
-              >
-                {item.label}
-              </Link>
-            ))}
+            <Link
+              to="/"
+              onClick={() => setOpen(false)}
+              className="border-b border-border/60 py-3 text-sm font-medium text-foreground/80"
+              activeProps={{ className: "text-brand" }}
+              activeOptions={{ exact: true }}
+            >
+              Home
+            </Link>
+
+            <div className="border-b border-border/60 py-3">
+              <p className="text-sm font-medium text-foreground/80">Residences</p>
+              <div className="mt-2 flex flex-col gap-2 pl-3">
+                {properties.map((p) => (
+                  <Link
+                    key={p.slug}
+                    to="/properties/$slug"
+                    params={{ slug: p.slug }}
+                    onClick={() => setOpen(false)}
+                    className="text-sm text-muted-foreground"
+                  >
+                    {p.name}
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            <Link
+              to="/about"
+              onClick={() => setOpen(false)}
+              className="border-b border-border/60 py-3 text-sm font-medium text-foreground/80"
+              activeProps={{ className: "text-brand" }}
+            >
+              About
+            </Link>
+            <Link
+              to="/contact"
+              onClick={() => setOpen(false)}
+              className="border-b border-border/60 py-3 text-sm font-medium text-foreground/80"
+              activeProps={{ className: "text-brand" }}
+            >
+              Contact
+            </Link>
+
             <div className="flex gap-2 py-3">
               <Button asChild variant="outline" className="flex-1" onClick={() => setOpen(false)}>
                 <Link to="/book-viewing">Book a Viewing</Link>
