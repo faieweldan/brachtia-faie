@@ -37,26 +37,22 @@ export type PricingTable = {
   rows: PricingRow[];
 };
 
-export type Room = {
+export type RoomType = {
   id: string;
   propertySlug: string;
-  unitId: string;
-  unitLabel: string;
+  name: string;
   unitType: string;
-  block: string;
-  floor: string;
-  gender: "Female" | "Male";
-  roomLabel: string;
-  roomName: string;
+  description: string;
   sizeLabel?: string;
-  occupancy: Occupancy;
-  rentLong: number;
-  rentShort?: number;
+  image: string;
+  gallery: string[];
+  features: string[];
+  occupancies: Occupancy[];
+  /** Monthly rent per person by contract term and occupancy */
+  rent: Record<ContractTerm, Record<Occupancy, number | null>>;
   availableFrom: string;
   status: RoomStatus;
-  bedsLeft?: number;
-  image: string;
-  highlights: string[];
+  spotsLeft?: number;
 };
 
 export type Property = {
@@ -281,280 +277,99 @@ export const properties: Property[] = [
   },
 ];
 
-export const rooms: Room[] = [
-  // The Arc — Unit A-12-3 (3 rooms, 2 baths, female)
+export const roomTypes: RoomType[] = [
   {
-    id: "arc-a1203-a",
+    id: "arc-master-ensuite",
     propertySlug: "the-arc-cyberjaya",
-    unitId: "arc-a-12-03",
-    unitLabel: "Unit A-12-03",
+    name: "Master Room with En-suite",
     unitType: "3 Rooms, 2 Baths",
-    block: "Block A",
-    floor: "Level 12",
-    gender: "Female",
-    roomLabel: "Room A",
-    roomName: "Master room with en-suite bath",
-    occupancy: "single",
-    rentLong: 1050,
-    rentShort: 1200,
+    description:
+      "The largest room in the unit, with its own private en-suite bathroom, queen or single bed, wardrobe and study desk. Ideal if you want privacy without leaving the shared-unit community.",
+    image: roomSingle,
+    gallery: [roomSingle, livingDining, kitchen],
+    features: ["Private en-suite bathroom", "Air-conditioned", "Study desk & wardrobe", "Shared living, dining & kitchen"],
+    occupancies: ["single", "twin"],
+    rent: { long: { single: 1050, twin: 550 }, short: { single: 1200, twin: 650 } },
     availableFrom: "2026-09-01",
     status: "available",
-    image: roomSingle,
-    highlights: ["En-suite bathroom", "Air-conditioned", "Study desk & wardrobe"],
   },
   {
-    id: "arc-a1203-b",
+    id: "arc-room-with-view",
     propertySlug: "the-arc-cyberjaya",
-    unitId: "arc-a-12-03",
-    unitLabel: "Unit A-12-03",
+    name: "Room with View",
     unitType: "3 Rooms, 2 Baths",
-    block: "Block A",
-    floor: "Level 12",
-    gender: "Female",
-    roomLabel: "Room B",
-    roomName: "Room with view",
-    sizeLabel: '10" x 10.5"',
-    occupancy: "twin",
-    rentLong: 450,
-    rentShort: 550,
+    description:
+      "A bright medium room overlooking Cyberjaya, sharing two bathrooms with the rest of the unit. Available as single occupancy or twin sharing for the best value.",
+    sizeLabel: "10' x 10.5'",
+    image: roomTwin,
+    gallery: [roomTwin, livingDining, kitchen],
+    features: ["City view", "Air-conditioned", "Study desk & wardrobe", "Shared bathrooms"],
+    occupancies: ["single", "twin"],
+    rent: { long: { single: 850, twin: 450 }, short: { single: 950, twin: 550 } },
     availableFrom: "2026-08-15",
     status: "limited",
-    bedsLeft: 1,
-    image: roomTwin,
-    highlights: ["Twin sharing", "City view", "Two study desks"],
+    spotsLeft: 2,
   },
   {
-    id: "arc-a1203-c",
+    id: "arc-yard-facing",
     propertySlug: "the-arc-cyberjaya",
-    unitId: "arc-a-12-03",
-    unitLabel: "Unit A-12-03",
+    name: "Yard-facing Room",
     unitType: "3 Rooms, 2 Baths",
-    block: "Block A",
-    floor: "Level 12",
-    gender: "Female",
-    roomLabel: "Room C",
-    roomName: "Room facing yard",
-    sizeLabel: '10" x 9"',
-    occupancy: "single",
-    rentLong: 750,
-    rentShort: 850,
+    description:
+      "A quiet, well-priced room facing the yard — a favourite with students who study late. Shares two bathrooms with the rest of the unit.",
+    sizeLabel: "10' x 9'",
+    image: roomSingle,
+    gallery: [roomSingle, livingDining, kitchen],
+    features: ["Quiet yard-facing", "Air-conditioned", "Study desk & wardrobe", "Shared bathrooms"],
+    occupancies: ["single", "twin"],
+    rent: { long: { single: 750, twin: 400 }, short: { single: 850, twin: 500 } },
     availableFrom: "2026-10-01",
     status: "available",
-    image: roomSingle,
-    highlights: ["Quiet yard-facing", "Air-conditioned", "Shared bathroom"],
-  },
-  // The Arc — Unit B-08-11 (4 rooms, 2 common baths, male)
-  {
-    id: "arc-b0811-a",
-    propertySlug: "the-arc-cyberjaya",
-    unitId: "arc-b-08-11",
-    unitLabel: "Unit B-08-11",
-    unitType: "4 Rooms, 2 Common Baths",
-    block: "Block B",
-    floor: "Level 8",
-    gender: "Male",
-    roomLabel: "Room A",
-    roomName: "Room with view",
-    occupancy: "single",
-    rentLong: 800,
-    availableFrom: "2026-09-01",
-    status: "available",
-    image: roomSingle,
-    highlights: ["With view", "Air-conditioned", "Shared common baths"],
   },
   {
-    id: "arc-b0811-b",
+    id: "arc-quad-view",
     propertySlug: "the-arc-cyberjaya",
-    unitId: "arc-b-08-11",
-    unitLabel: "Unit B-08-11",
+    name: "Room with View — 4 Bedroom Unit",
     unitType: "4 Rooms, 2 Common Baths",
-    block: "Block B",
-    floor: "Level 8",
-    gender: "Male",
-    roomLabel: "Room B",
-    roomName: "Room with view",
-    occupancy: "twin",
-    rentLong: 450,
+    description:
+      "A room with a view in our larger four-bedroom units, sharing two common bathrooms and a big living and dining area with three other students.",
+    image: roomSingle,
+    gallery: [roomSingle, kitchen, livingDining],
+    features: ["City view", "Air-conditioned", "Study desk & wardrobe", "Two common bathrooms"],
+    occupancies: ["single", "twin"],
+    rent: { long: { single: 800, twin: 450 }, short: { single: null, twin: null } },
     availableFrom: "2026-09-01",
     status: "available",
-    bedsLeft: 2,
+  },
+  {
+    id: "arc-quad-yard",
+    propertySlug: "the-arc-cyberjaya",
+    name: "Yard-facing Room — 4 Bedroom Unit",
+    unitType: "4 Rooms, 2 Common Baths",
+    description:
+      "The most affordable room at The Arc — quiet, yard-facing and fully furnished, in a four-bedroom shared unit.",
     image: roomTwin,
-    highlights: ["Twin sharing", "With view", "Best value at The Arc"],
-  },
-  {
-    id: "arc-b0811-c",
-    propertySlug: "the-arc-cyberjaya",
-    unitId: "arc-b-08-11",
-    unitLabel: "Unit B-08-11",
-    unitType: "4 Rooms, 2 Common Baths",
-    block: "Block B",
-    floor: "Level 8",
-    gender: "Male",
-    roomLabel: "Room C",
-    roomName: "Room facing yard",
-    occupancy: "single",
-    rentLong: 700,
+    gallery: [roomTwin, kitchen, livingDining],
+    features: ["Best value", "Air-conditioned", "Study desk & wardrobe", "Two common bathrooms"],
+    occupancies: ["single", "twin"],
+    rent: { long: { single: 700, twin: 400 }, short: { single: null, twin: null } },
     availableFrom: "2026-11-01",
     status: "available",
-    image: roomSingle,
-    highlights: ["Quiet yard-facing", "Air-conditioned", "Wardrobe & desk"],
   },
   {
-    id: "arc-b0811-d",
-    propertySlug: "the-arc-cyberjaya",
-    unitId: "arc-b-08-11",
-    unitLabel: "Unit B-08-11",
-    unitType: "4 Rooms, 2 Common Baths",
-    block: "Block B",
-    floor: "Level 8",
-    gender: "Male",
-    roomLabel: "Room D",
-    roomName: "Room with view",
-    occupancy: "single",
-    rentLong: 800,
-    availableFrom: "2026-07-01",
-    status: "occupied",
-    image: roomSingle,
-    highlights: ["With view", "Air-conditioned"],
-  },
-  // The Arc — Unit C-05-07 (3 rooms, 2 baths, female)
-  {
-    id: "arc-c0507-a",
-    propertySlug: "the-arc-cyberjaya",
-    unitId: "arc-c-05-07",
-    unitLabel: "Unit C-05-07",
-    unitType: "3 Rooms, 2 Baths",
-    block: "Block C",
-    floor: "Level 5",
-    gender: "Female",
-    roomLabel: "Room A",
-    roomName: "Master room with en-suite bath",
-    occupancy: "twin",
-    rentLong: 550,
-    rentShort: 650,
-    availableFrom: "2026-08-20",
-    status: "limited",
-    bedsLeft: 1,
-    image: roomTwin,
-    highlights: ["Twin sharing in master room", "En-suite bathroom", "Short-term available"],
-  },
-  {
-    id: "arc-c0507-b",
-    propertySlug: "the-arc-cyberjaya",
-    unitId: "arc-c-05-07",
-    unitLabel: "Unit C-05-07",
-    unitType: "3 Rooms, 2 Baths",
-    block: "Block C",
-    floor: "Level 5",
-    gender: "Female",
-    roomLabel: "Room B",
-    roomName: "Room with view",
-    sizeLabel: '10" x 10.5"',
-    occupancy: "single",
-    rentLong: 850,
-    rentShort: 950,
-    availableFrom: "2026-09-15",
-    status: "available",
-    image: roomSingle,
-    highlights: ["With view", "Short-term available", "Air-conditioned"],
-  },
-  {
-    id: "arc-c0507-c",
-    propertySlug: "the-arc-cyberjaya",
-    unitId: "arc-c-05-07",
-    unitLabel: "Unit C-05-07",
-    unitType: "3 Rooms, 2 Baths",
-    block: "Block C",
-    floor: "Level 5",
-    gender: "Female",
-    roomLabel: "Room C",
-    roomName: "Room facing yard",
-    sizeLabel: '10" x 9"',
-    occupancy: "twin",
-    rentLong: 400,
-    rentShort: 500,
+    id: "solstice-one-bedroom",
+    propertySlug: "solstice-residence-cyberjaya",
+    name: "Private 1-Bedroom Apartment",
+    unitType: "1 Bedroom Apartment with attached bath",
+    description:
+      "Your own front door: a fully furnished one-bedroom apartment with attached bathroom, kitchenette, living area and queen bed — complete privacy with 24/7 student support.",
+    image: solsticeStudio,
+    gallery: [solsticeStudio, livingDining, kitchen],
+    features: ["Entire apartment to yourself", "Attached bathroom", "Kitchenette", "Queen bed & study nook"],
+    occupancies: ["single"],
+    rent: { long: { single: 1400, twin: null }, short: { single: null, twin: null } },
     availableFrom: "2026-09-01",
     status: "available",
-    bedsLeft: 2,
-    image: roomTwin,
-    highlights: ["Most affordable option", "Twin sharing", "Short-term available"],
-  },
-  // The Arc — Unit D-15-02 (3 rooms, 2 baths, male)
-  {
-    id: "arc-d1502-a",
-    propertySlug: "the-arc-cyberjaya",
-    unitId: "arc-d-15-02",
-    unitLabel: "Unit D-15-02",
-    unitType: "3 Rooms, 2 Baths",
-    block: "Block D",
-    floor: "Level 15",
-    gender: "Male",
-    roomLabel: "Room A",
-    roomName: "Master room with en-suite bath",
-    occupancy: "single",
-    rentLong: 1050,
-    rentShort: 1200,
-    availableFrom: "2026-08-01",
-    status: "available",
-    image: roomSingle,
-    highlights: ["High floor", "En-suite bathroom", "Short-term available"],
-  },
-  {
-    id: "arc-d1502-b",
-    propertySlug: "the-arc-cyberjaya",
-    unitId: "arc-d-15-02",
-    unitLabel: "Unit D-15-02",
-    unitType: "3 Rooms, 2 Baths",
-    block: "Block D",
-    floor: "Level 15",
-    gender: "Male",
-    roomLabel: "Room B",
-    roomName: "Room with view",
-    sizeLabel: '10" x 10.5"',
-    occupancy: "twin",
-    rentLong: 450,
-    rentShort: 550,
-    availableFrom: "2026-12-01",
-    status: "occupied",
-    image: roomTwin,
-    highlights: ["Twin sharing", "High floor view"],
-  },
-  // Solstice
-  {
-    id: "solstice-1103",
-    propertySlug: "solstice-residence-cyberjaya",
-    unitId: "sol-11-03",
-    unitLabel: "Unit 11-03",
-    unitType: "1 Bedroom Apartment",
-    block: "Tower A",
-    floor: "Level 11",
-    gender: "Female",
-    roomLabel: "Whole apartment",
-    roomName: "1 bedroom with attached bath",
-    occupancy: "single",
-    rentLong: 1400,
-    availableFrom: "2026-09-01",
-    status: "available",
-    image: solsticeStudio,
-    highlights: ["Private apartment", "Queen bed", "Attached bathroom"],
-  },
-  {
-    id: "solstice-0708",
-    propertySlug: "solstice-residence-cyberjaya",
-    unitId: "sol-07-08",
-    unitLabel: "Unit 07-08",
-    unitType: "1 Bedroom Apartment",
-    block: "Tower A",
-    floor: "Level 7",
-    gender: "Male",
-    roomLabel: "Whole apartment",
-    roomName: "1 bedroom with attached bath",
-    occupancy: "single",
-    rentLong: 1400,
-    availableFrom: "2026-10-15",
-    status: "available",
-    image: solsticeStudio,
-    highlights: ["Private apartment", "Queen bed", "Study nook"],
   },
 ];
 
@@ -562,21 +377,39 @@ export function getProperty(slug: string) {
   return properties.find((p) => p.slug === slug);
 }
 
-export function getRoomsForProperty(slug: string) {
-  return rooms.filter((r) => r.propertySlug === slug);
+export function getRoomTypes(slug: string) {
+  return roomTypes.filter((r) => r.propertySlug === slug);
 }
 
-export function getRoom(slug: string, roomId: string) {
-  return rooms.find((r) => r.propertySlug === slug && r.id === roomId);
+export function getRoomType(slug: string, typeId: string) {
+  return roomTypes.find((r) => r.propertySlug === slug && r.id === typeId);
+}
+
+export function rentFor(room: RoomType, term: ContractTerm, occupancy: Occupancy) {
+  return room.rent[term][occupancy];
+}
+
+export function termsFor(room: RoomType, property: Property): ContractTerm[] {
+  return property.contractTerms.filter((t) =>
+    room.occupancies.some((o) => room.rent[t][o] != null),
+  );
+}
+
+export function lowestRent(room: RoomType) {
+  const values = room.occupancies
+    .map((o) => room.rent.long[o])
+    .filter((v): v is number => v != null);
+  return values.length ? Math.min(...values) : 0;
 }
 
 export function priceFrom(slug: string) {
-  const list = getRoomsForProperty(slug).filter((r) => r.status !== "occupied");
-  return list.length ? Math.min(...list.map((r) => r.rentLong)) : 0;
+  const list = getRoomTypes(slug).filter((r) => r.status !== "occupied");
+  const values = list.map(lowestRent).filter((v) => v > 0);
+  return values.length ? Math.min(...values) : 0;
 }
 
 export function availableCount(slug: string) {
-  return getRoomsForProperty(slug).filter((r) => r.status !== "occupied").length;
+  return getRoomTypes(slug).filter((r) => r.status !== "occupied").length;
 }
 
 export type CostLine = { label: string; amount: number; kind: "advance" | "refundable" | "onetime" };
