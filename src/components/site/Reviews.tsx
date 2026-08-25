@@ -36,7 +36,7 @@ export default function Reviews() {
               What our students say
             </h2>
           </div>
-          <div className="flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-4 shadow-sm">
+          <div className="flex items-center gap-4 rounded-3xl border border-border/70 bg-card px-5 py-4 shadow-card">
             <GoogleG className="size-8" />
             <div>
               <div className="flex items-center gap-2">
@@ -54,7 +54,7 @@ export default function Reviews() {
           {reviews.map((r) => (
             <article
               key={r.id}
-              className="w-[85vw] shrink-0 snap-start rounded-xl border border-border bg-card p-5 shadow-sm sm:w-[340px]"
+              className="w-[85vw] shrink-0 snap-start rounded-3xl border border-border/70 bg-card p-5 shadow-card sm:w-[340px]"
             >
               <div className="flex items-center gap-3">
                 <div className="flex size-10 items-center justify-center rounded-full bg-brand-soft text-sm font-semibold text-brand-deep">

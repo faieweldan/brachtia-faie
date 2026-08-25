@@ -60,7 +60,7 @@ function ApplyPage() {
 
           <div className="mt-8 grid gap-8 lg:grid-cols-3">
             <form
-              className="space-y-5 rounded-2xl border border-border bg-card p-6 lg:col-span-2"
+              className="space-y-5 rounded-3xl border border-border/70 bg-card p-6 lg:col-span-2"
               onSubmit={(e) => {
                 e.preventDefault();
                 toast.success("Application received", {
@@ -158,7 +158,7 @@ function ApplyPage() {
               </div>
             </form>
 
-            <aside className="rounded-2xl border border-border bg-card p-6">
+            <aside className="rounded-3xl border border-border/70 bg-card p-6">
               <h2 className="font-display text-lg font-semibold text-brand-deep">How it works</h2>
               <ol className="mt-4 space-y-4">
                 {steps.map((s, i) => (

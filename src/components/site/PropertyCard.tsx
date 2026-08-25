@@ -10,7 +10,7 @@ export default function PropertyCard({ property }: { property: Property }) {
     <Link
       to="/properties/$slug"
       params={{ slug: property.slug }}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+      className="group flex flex-col overflow-hidden rounded-3xl border border-border/70 bg-card shadow-card transition-all hover:-translate-y-0.5 hover:shadow-lift"
     >
       <div className="relative aspect-[16/10] overflow-hidden">
         <img
@@ -22,7 +22,7 @@ export default function PropertyCard({ property }: { property: Property }) {
           className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
         <Badge className="absolute left-3 top-3 bg-card text-brand-deep hover:bg-card">
-          {available} room{available === 1 ? "" : "s"} available
+          {available} room type{available === 1 ? "" : "s"} available
         </Badge>
       </div>
       <div className="flex flex-1 flex-col p-5">
@@ -33,7 +33,7 @@ export default function PropertyCard({ property }: { property: Property }) {
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{property.summary}</p>
         <div className="mt-4 flex flex-wrap gap-1.5">
           {property.facilities.slice(0, 4).map((f) => (
-            <span key={f} className="rounded-full bg-secondary px-2.5 py-1 text-xs text-secondary-foreground">
+            <span key={f} className="rounded-full bg-brand-tint px-2.5 py-1 text-xs text-brand-deep">
               {f}
             </span>
           ))}
