@@ -366,6 +366,8 @@ function PropertyPage() {
               />
               </div>
             )}
+          </aside>
+
 
         </div>
       </section>
