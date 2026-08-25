@@ -38,10 +38,22 @@ export type StayState = {
   room: RoomType;
 };
 
+const ADD_ONS: { id: string; label: string; price: number; recurring: boolean; note: string }[] = [
+  { id: "carpark", label: "Car park", price: 150, recurring: true, note: "per month" },
+  {
+    id: "starter",
+    label: "Starter pack",
+    price: 150,
+    recurring: false,
+    note: "bed sheet + comforter set · one-time",
+  },
+];
+
 function defaultMoveIn(room: RoomType) {
   const today = new Date().toISOString().slice(0, 10);
   return room.availableFrom > today ? room.availableFrom : today;
 }
+
 
 export default function StayCalculator({
   property,
