@@ -9,7 +9,6 @@ import {
   MailCheck,
   Receipt,
   ShieldCheck,
-  Smartphone,
   Sofa,
   Users,
   Headphones,
