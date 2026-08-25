@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, CalendarDays, Ruler } from "lucide-react";
+import { ArrowRight, Bath, CalendarDays, Eye, Ruler } from "lucide-react";
 import {
   formatDate,
   formatRM,
@@ -9,6 +9,7 @@ import {
 } from "@/data/properties";
 import { Button } from "@/components/ui/button";
 import EnquireDialog from "./EnquireDialog";
+import RoomGallery from "./RoomGallery";
 
 export function statusLabel(room: RoomType) {
   if (room.status === "occupied") return "Waitlist";
@@ -24,25 +25,23 @@ export default function RoomTypeCard({
   room: RoomType;
 }) {
   const from = lowestRent(room);
+  const detail = { slug: property.slug, typeId: room.id };
+
+  const chips = [
+    room.sizeLabel && { icon: Ruler, label: room.sizeLabel },
+    { icon: Bath, label: room.bathroom === "ensuite" ? "Private ensuite" : "Shared bathroom" },
+    { icon: Eye, label: room.hasView ? "With view" : "Internal facing" },
+  ].filter(Boolean) as { icon: typeof Ruler; label: string }[];
 
   return (
-    <article className="group flex flex-col overflow-hidden rounded-3xl border border-border/70 bg-card shadow-card transition-shadow hover:shadow-lift sm:flex-row">
-      <Link
-        to="/properties/$slug/rooms/$typeId"
-        params={{ slug: property.slug, typeId: room.id }}
-        className="block w-full shrink-0 overflow-hidden sm:w-56"
-      >
-        <img
-          src={room.image}
-          alt={room.name}
-          loading="lazy"
-          width={800}
-          height={600}
-          className="h-44 w-full object-cover transition-transform duration-500 group-hover:scale-[1.03] sm:h-full"
-        />
-      </Link>
+    <article className="group grid overflow-hidden rounded-3xl border border-border/70 bg-card shadow-card transition-shadow hover:shadow-lift sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+      <RoomGallery
+        images={room.gallery.length ? room.gallery : [room.image]}
+        alt={`${room.name} at ${property.name}`}
+        className="h-56 w-full sm:h-full sm:min-h-[16rem]"
+      />
 
-      <div className="flex flex-1 flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <div className="flex flex-col gap-4 p-5 sm:p-6">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span
@@ -59,62 +58,62 @@ export default function RoomTypeCard({
             <span className="rounded-full bg-brand px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-primary-foreground">
               {room.tag}
             </span>
-            <span className="text-xs text-muted-foreground">{room.unitType}</span>
           </div>
 
-          <h3 className="mt-2 text-lg font-bold text-brand-deep">
+          <h3 className="mt-2 text-lg font-bold text-brand-deep sm:text-xl">
             <Link
               to="/properties/$slug/rooms/$typeId"
-              params={{ slug: property.slug, typeId: room.id }}
+              params={detail}
               className="hover:underline"
             >
               {room.name}
             </Link>
           </h3>
-
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5">
-              <CalendarDays className="size-4" /> From {formatDate(room.availableFrom)}
-            </span>
-            {room.sizeLabel && (
-              <span className="inline-flex items-center gap-1.5">
-                <Ruler className="size-4" /> {room.sizeLabel}
-              </span>
-            )}
-          </div>
+          <p className="text-sm text-muted-foreground">{room.unitType}</p>
 
           <div className="mt-3 flex flex-wrap gap-1.5">
-            {room.features.slice(0, 3).map((f) => (
+            {chips.map((c) => (
               <span
-                key={f}
-                className="rounded-full bg-brand-tint px-2.5 py-1 text-xs text-brand-deep"
+                key={c.label}
+                className="inline-flex items-center gap-1.5 rounded-full bg-brand-tint px-2.5 py-1 text-xs text-brand-deep"
               >
-                {f}
+                <c.icon className="size-3.5" /> {c.label}
               </span>
             ))}
           </div>
+
+          <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+            <CalendarDays className="size-4" /> Available from {formatDate(room.availableFrom)}
+          </p>
         </div>
 
-        <div className="shrink-0 sm:text-right">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">From</p>
-          <p className="text-2xl font-bold text-brand-deep">
-            {formatRM(from)}
-            <span className="text-sm font-normal text-muted-foreground">/mo</span>
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2 sm:justify-end">
+        <div className="mt-auto flex flex-wrap items-end justify-between gap-3 border-t border-border/70 pt-4">
+          <div>
+            <p className="text-2xl font-bold text-brand-deep">
+              {formatRM(from)}
+              <span className="text-sm font-normal text-muted-foreground">
+                /mo{room.occupancies.includes("twin") && from === room.rent.long.twin
+                  ? " per pax"
+                  : ""}
+              </span>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {room.rent.short.single || room.rent.short.twin
+                ? "12-month & short-term available"
+                : "12-month stays"}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link to="/properties/$slug/rooms/$typeId" params={detail}>
+                Details <ArrowRight className="size-4" />
+              </Link>
+            </Button>
             <EnquireDialog
               property={property}
               room={room}
               trigger={<Button size="sm">Enquire</Button>}
             />
-            <Button asChild size="sm" variant="outline">
-              <Link
-                to="/properties/$slug/rooms/$typeId"
-                params={{ slug: property.slug, typeId: room.id }}
-              >
-                Details <ArrowRight className="size-4" />
-              </Link>
-            </Button>
           </div>
         </div>
       </div>
