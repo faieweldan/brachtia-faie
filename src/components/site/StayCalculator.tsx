@@ -140,7 +140,7 @@ export default function StayCalculator({
           <input
             type="date"
             value={moveIn}
-            min={room.availableFrom}
+            min={selected.availableFrom}
             onChange={(e) => setMoveIn(e.target.value)}
             className="w-full bg-transparent text-sm font-bold text-foreground outline-none"
           />
