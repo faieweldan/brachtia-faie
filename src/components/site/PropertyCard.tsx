@@ -32,7 +32,7 @@ export default function PropertyCard({ property }: { property: Property }) {
         </p>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{property.summary}</p>
         <div className="mt-4 flex flex-wrap gap-1.5">
-          {property.facilities.slice(0, 4).map((f) => (
+          {property.buildingFacilities.slice(0, 4).map((f) => (
             <span key={f} className="rounded-full bg-brand-tint px-2.5 py-1 text-xs text-brand-deep">
               {f}
             </span>

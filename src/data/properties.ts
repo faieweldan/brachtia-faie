@@ -68,10 +68,12 @@ export type Property = {
   description: string[];
   heroImage: string;
   gallery: { src: string; caption: string }[];
-  facilities: string[];
+  buildingFacilities: string[];
+  includedInStay: string[];
+  utilitiesNote: string;
+  insideApartment: string[];
+  apartmentFootnote?: string;
   nearby: string[];
-  included: string[];
-  excluded: string[];
   terms: string[];
   contractTerms: ContractTerm[];
   paymentCycle: string;
@@ -113,28 +115,40 @@ export const properties: Property[] = [
       { src: kitchen, caption: "Fully equipped kitchen" },
       { src: arcExterior, caption: "The Arc, Cyberjaya" },
     ],
-    facilities: [
-      "Swimming pool",
+    buildingFacilities: [
+      "Swimming Pool",
       "Gym",
-      "Squash court",
-      "Arc Cafe",
-      "Mini mart & barber shop",
-      "Self-service laundry",
-      "Vending machines (water/snacks)",
-      "Prayer room",
-      "24/7 security guards",
-      "Access card entry to designated blocks & floors",
-      "CCTV monitoring of carpark, corridors, lifts & surroundings",
+      "Squash Court",
+      "Arc Café / Food Court",
+      "Mini Mart",
+      "Barber Shop",
+      "Self-Service Laundry",
+      "Vending Machines",
+      "Prayer Room",
+      "24/7 Security & Controlled Access",
+      "Car park",
     ],
+    includedInStay: [
+      "Free Wi-Fi",
+      "Monthly Cleaning of Common Areas & Bathrooms",
+      "24/7 Student & Warden Support",
+      "Maintenance Support",
+    ],
+    utilitiesNote: "Utilities: Water and electricity are billed separately based on usage.",
+    insideApartment: [
+      "Fully Furnished",
+      "Single-Size Bed",
+      "Study Desk & Chair",
+      "Wardrobe",
+      "Air Conditioning & Fan",
+      "Equipped Kitchen",
+      "Refrigerator",
+      "Dining Table & Chairs",
+      "Living Area with Sofa & Coffee Table",
+      "Washing Machine",
+    ],
+    apartmentFootnote: "Where available.",
     nearby: nearbyCyberjaya,
-    included: [
-      "Free Wi-Fi in all units",
-      "Monthly cleaning of bathrooms and common areas",
-      "Fully furnished unit & fully equipped kitchen",
-      "Technical support (response within 24–48 hours)",
-      "Student support & warden service 24/7",
-    ],
-    excluded: ["Water charges", "Electricity charges"],
     terms: [
       "Minimum tenancy of 12 months, or short-term below 6 months",
       "Rental payable bi-monthly",
@@ -218,28 +232,37 @@ export const properties: Property[] = [
       { src: kitchen, caption: "Kitchenette" },
       { src: solsticeExterior, caption: "Solstice Residence" },
     ],
-    facilities: [
-      "Swimming pool",
+    buildingFacilities: [
+      "Swimming Pool",
       "Gym",
-      "Cafe",
-      "Mini mart",
-      "Self-service laundry",
-      "Prayer room",
-      "24/7 security guards",
-      "Access card entry to designated blocks & floors",
-      "CCTV monitoring of carpark, corridors, lifts & surroundings",
+      "Café",
+      "Mini Mart",
+      "Self-Service Laundry",
+      "Prayer Room",
+      "24/7 Security & Controlled Access",
+      "Car park",
     ],
+    includedInStay: [
+      "Fully Furnished Apartment",
+      "Free Wi-Fi",
+      "24/7 Student Support",
+      "Maintenance Support",
+    ],
+    utilitiesNote: "Utilities: Water and electricity are billed separately based on usage.",
+    insideApartment: [
+      "Fully Furnished",
+      "Queen Bed",
+      "Study Desk & Chair",
+      "Wardrobe",
+      "Air Conditioning & Fan",
+      "Equipped Kitchen",
+      "Refrigerator",
+      "Dining Table & Chairs",
+      "Living Area with Sofa & Coffee Table",
+      "Washing Machine",
+    ],
+    apartmentFootnote: "Where available.",
     nearby: nearbyCyberjaya,
-    included: [
-      "Fully furnished apartment",
-      "Technical support",
-      "Student support 24/7",
-    ],
-    excluded: [
-      "Wi-Fi (RM105 per month)",
-      "Cleaning service (RM150 upon request)",
-      "Water, electricity & sewerage charges",
-    ],
     terms: [
       "Minimum tenancy of 12 months",
       "Rental payable monthly",

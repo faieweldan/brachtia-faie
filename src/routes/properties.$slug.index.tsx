@@ -1,7 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
-import { Check, LayoutGrid, MapPin, MessageCircle, X } from "lucide-react";
-import { facilityIcon } from "@/lib/facility-icons";
+import { LayoutGrid, MapPin, MessageCircle } from "lucide-react";
 
 import {
   Dialog,
@@ -21,6 +20,7 @@ import {
   type ContractTerm,
 } from "@/data/properties";
 import { Button } from "@/components/ui/button";
+import AmenitySection from "@/components/site/AmenitySection";
 import CtaBand from "@/components/site/CtaBand";
 import EnquireDialog from "@/components/site/EnquireDialog";
 import RoomTypeCard from "@/components/site/RoomTypeCard";
@@ -145,47 +145,24 @@ function PropertyPage() {
               ))}
             </div>
 
-            <div>
-              <h2 className="text-2xl font-bold text-brand-deep">
-                Facilities & amenities
-              </h2>
-              <ul className="mt-6 grid gap-x-10 gap-y-5 sm:grid-cols-2">
-                {property.facilities.map((f) => {
-                  const Icon = facilityIcon(f);
-                  return (
-                    <li key={f} className="flex items-start gap-4">
-                      <Icon className="mt-0.5 size-6 shrink-0 stroke-[1.5] text-brand-deep" />
-                      <span className="text-[15px] leading-snug text-foreground">{f}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-3xl border border-border/70 bg-card p-5 shadow-card">
-                <h3 className="text-lg font-bold text-brand-deep">
-                  What's included
-                </h3>
-                <ul className="mt-3 space-y-2">
-                  {property.included.map((i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                      <Check className="mt-0.5 size-4 shrink-0 text-brand" /> {i}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="rounded-3xl border border-border/70 bg-card p-5 shadow-card">
-                <h3 className="text-lg font-bold text-brand-deep">Not included</h3>
-                <ul className="mt-3 space-y-2">
-                  {property.excluded.map((i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                      <X className="mt-0.5 size-4 shrink-0 text-muted-foreground" /> {i}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            <div className="space-y-10">
+              <AmenitySection
+                title="Building Facilities & Amenities"
+                items={property.buildingFacilities}
+                iconMode="facility"
+              />
+              <AmenitySection
+                title="Included in Your Stay"
+                items={property.includedInStay}
+                note={property.utilitiesNote}
+                iconMode="check"
+              />
+              <AmenitySection
+                title="Inside Your Apartment"
+                items={property.insideApartment}
+                footnote={property.apartmentFootnote}
+                iconMode="check"
+              />
             </div>
 
             <div id="rooms">
