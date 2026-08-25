@@ -60,6 +60,7 @@ export default function RoomFilters({
     <div className="flex flex-wrap items-center gap-2">
       {groups.map((g) => {
         const current = value[g.key] ?? "all";
+        const label = g.options.find((o) => o.value === current)?.label ?? g.label;
         return (
           <Select
             key={g.key}
@@ -68,12 +69,13 @@ export default function RoomFilters({
           >
             <SelectTrigger
               aria-label={g.label}
-              className={`h-10 w-auto min-w-[9.5rem] rounded-full border-border/70 bg-card px-4 text-sm font-medium ${
+              className={`h-10 w-auto min-w-[9.5rem] gap-2 rounded-full border-border/70 bg-card px-4 text-sm font-medium ${
                 current !== "all" ? "border-brand text-brand-deep ring-1 ring-brand/30" : ""
               }`}
             >
-              <SelectValue />
+              <SelectValue>{label}</SelectValue>
             </SelectTrigger>
+
             <SelectContent>
               {g.options.map((o) => (
                 <SelectItem key={o.value} value={o.value}>
