@@ -39,7 +39,7 @@ export default function RoomTypeCard({
 
   return (
     <article
-      className={`group grid overflow-hidden rounded-[1.75rem] bg-card transition-shadow sm:grid-cols-[minmax(0,45%)_minmax(0,1fr)] ${
+      className={`group grid overflow-hidden rounded-[1.75rem] bg-card transition-shadow sm:grid-cols-[minmax(0,48%)_minmax(0,1fr)] lg:grid-cols-[minmax(0,52%)_minmax(0,1fr)] ${
         selected
           ? "shadow-lift ring-2 ring-brand"
           : "shadow-card ring-1 ring-border/60 hover:shadow-lift"
@@ -49,7 +49,7 @@ export default function RoomTypeCard({
         <RoomGallery
           images={room.gallery.length ? room.gallery : [room.image]}
           alt={`${room.name} at ${property.name}`}
-          className="h-60 w-full sm:h-full sm:min-h-[17rem]"
+          className="h-64 w-full sm:h-full sm:min-h-[20rem]"
         />
         {showStatus && (
           <span className="absolute left-4 top-4 rounded-full bg-card/95 px-3 py-1 text-xs font-semibold text-brand-deep shadow-sm">
@@ -58,11 +58,11 @@ export default function RoomTypeCard({
         )}
       </div>
 
-      <div className="flex flex-col gap-5 p-6 sm:p-7">
+      <div className="flex flex-col gap-5 p-6 sm:p-8">
         <div className="min-w-0">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <h3 className="text-lg font-bold leading-snug text-brand-deep sm:text-xl">
+              <h3 className="text-lg font-bold leading-snug text-brand-deep sm:text-xl lg:text-2xl">
                 <Link
                   to="/properties/$slug/rooms/$typeId"
                   params={detail}
