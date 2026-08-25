@@ -139,10 +139,15 @@ export default function EnquireDialog({
                 <option value="short">Short-term (under 6 months)</option>
               </select>
             </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="eq-movein">Preferred move-in date</Label>
-              <Input id="eq-movein" name="moveIn" type="date" />
+            <div className="space-y-2">
+              <Label htmlFor="eq-movein">Move-in date</Label>
+              <Input id="eq-movein" name="moveIn" type="date" defaultValue={moveIn} />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="eq-moveout">Move-out date</Label>
+              <Input id="eq-moveout" name="moveOut" type="date" defaultValue={moveOut} />
+            </div>
+
           </div>
           <div className="space-y-2">
             <Label htmlFor="eq-message">Message</Label>
