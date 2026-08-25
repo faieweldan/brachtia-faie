@@ -142,23 +142,26 @@ function Home() {
       </section>
 
       {/* Why students stay */}
-      <section className="bg-brand-tint py-16 sm:py-20">
+      <section className="bg-brand-tint py-10 sm:py-12">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="flex items-center gap-2">
-            
+          <div className="text-center">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand">Why students stay</p>
+            <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-brand-deep sm:text-3xl">
+              Everything sorted. Nothing complicated.
+            </h2>
           </div>
-          <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-brand-deep sm:text-4xl">
-            Everything sorted. Nothing complicated.
-          </h2>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+
+          <div className="mt-6 flex snap-x gap-3 overflow-x-auto pb-2 sm:grid sm:grid-cols-3 lg:grid-cols-6 lg:overflow-visible">
             {perks.map((p) => (
-              <div key={p.title} className="rounded-3xl border border-border/70 bg-card p-6 shadow-card">
-                <span className="flex size-11 items-center justify-center rounded-2xl bg-brand-soft">
-                  <p.icon className="size-5 text-brand" />
+              <div
+                key={p.title}
+                className="min-w-[140px] flex-1 snap-start rounded-2xl bg-card p-4 text-center shadow-sm sm:min-w-0"
+              >
+                <span className="mx-auto flex size-9 items-center justify-center rounded-full bg-brand-soft">
+                  <p.icon className="size-4 text-brand" />
                 </span>
-                <h3 className="mt-4 font-bold text-brand-deep">{p.title}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">{p.text}</p>
+                <h3 className="mt-3 text-sm font-bold text-brand-deep">{p.title}</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">{p.text}</p>
               </div>
             ))}
           </div>
