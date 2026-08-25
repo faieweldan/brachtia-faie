@@ -1,16 +1,18 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowRight,
+  BedDouble,
   CalendarCheck,
   ClipboardList,
+  GraduationCap,
+  HeartHandshake,
   MailCheck,
-  MapPin,
+  Receipt,
   ShieldCheck,
-  
+  Smartphone,
   Sofa,
-  Wallet,
+  Users,
   Headphones,
-  SlidersHorizontal,
 } from "lucide-react";
 import heroImage from "@/assets/hero-students.jpg";
 import parentsImage from "@/assets/parents-support.jpg";
