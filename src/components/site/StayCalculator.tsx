@@ -118,7 +118,7 @@ export default function StayCalculator({
           <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             Room type
           </span>
-          <Select value={selectedId} onValueChange={selectRoom}>
+          <Select value={currentId} onValueChange={selectRoom}>
             <SelectTrigger className="mt-1 h-11 rounded-2xl bg-muted/70 text-sm font-semibold">
               <SelectValue />
             </SelectTrigger>
@@ -127,8 +127,8 @@ export default function StayCalculator({
                 const from = lowestRent(r);
                 return (
                   <SelectItem key={r.id} value={r.id}>
-                    {r.tag} — {r.name}
-                    {from ? ` · from ${formatRM(from)}/mo` : ""}
+                    {r.unitType.replace(" Apartment", "")} · {r.name}
+                    {from ? ` — from ${formatRM(from)}/mo` : ""}
                   </SelectItem>
                 );
               })}
@@ -187,42 +187,10 @@ export default function StayCalculator({
       ) : (
         quote && (
           <>
-            <div className="mt-3 flex items-center gap-2 rounded-full bg-brand-soft px-3 py-1.5 text-xs font-bold text-brand-deep">
-              <CalendarDays className="size-3.5 text-brand" />
+            <p className="mt-2 text-xs text-muted-foreground">
               {quote.term === "long" ? "12-month rate" : "Short-term rate"} ·{" "}
               {formatRM(quote.rent)}/mo · {quote.days} days
-            </div>
-
-            <div className="mt-4">
-              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                Rent schedule
-              </p>
-              <table className="mt-2 w-full text-sm">
-                <tbody>
-                  {quote.schedule.map((s) => (
-                    <tr key={s.label}>
-                      <td className="py-1 pr-3 text-muted-foreground">
-                        {s.label}
-                        {!s.full && (
-                          <span className="ml-1 text-[10px] uppercase tracking-wide text-brand">
-                            {s.days}/{s.daysInMonth} days
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-1 text-right font-semibold text-foreground">
-                        {formatRM(s.amount)}
-                      </td>
-                    </tr>
-                  ))}
-                  <tr className="border-t border-border">
-                    <td className="pt-2 font-semibold text-brand-deep">Total rent for stay</td>
-                    <td className="pt-2 text-right font-bold text-brand-deep">
-                      {formatRM(quote.totalStay)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            </p>
 
             <div className="mt-4 rounded-2xl bg-brand-tint p-4">
               <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
@@ -258,9 +226,51 @@ export default function StayCalculator({
                 offset against your first payment.
               </p>
             </div>
+
+            <Collapsible className="mt-3 rounded-2xl bg-muted/60">
+              <CollapsibleTrigger className="group flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
+                <span className="text-sm font-semibold text-brand-deep">
+                  Monthly rent breakdown
+                </span>
+                <span className="flex items-center gap-2 text-sm font-bold text-brand-deep">
+                  {formatRM(quote.totalStay)}
+                  <ChevronDown className="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                </span>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <table className="w-full px-4 pb-3 text-sm">
+                  <tbody>
+                    {quote.schedule.map((s) => (
+                      <tr key={s.label}>
+                        <td className="py-1 pl-4 pr-3 text-muted-foreground">
+                          {s.label}
+                          {!s.full && (
+                            <span className="ml-1 text-[10px] uppercase tracking-wide text-brand">
+                              {s.days}/{s.daysInMonth} days
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-1 pr-4 text-right font-semibold text-foreground">
+                          {formatRM(s.amount)}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr>
+                      <td className="pb-3 pl-4 pr-3 pt-2 font-semibold text-brand-deep">
+                        Total rent for stay
+                      </td>
+                      <td className="pb-3 pr-4 pt-2 text-right font-bold text-brand-deep">
+                        {formatRM(quote.totalStay)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </CollapsibleContent>
+            </Collapsible>
           </>
         )
       )}
+
 
       {actions && <div className="mt-4 space-y-2">{actions(state)}</div>}
     </div>
