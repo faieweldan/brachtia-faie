@@ -1,6 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
-import { LayoutGrid, MapPin, MessageCircle } from "lucide-react";
+import { LayoutGrid, MapPin } from "lucide-react";
 import { fallback, zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
 
@@ -17,9 +17,7 @@ import {
   formatRM,
   getProperty,
   getRoomTypes,
-  priceFrom,
   unitTypesFor,
-  whatsappUrl,
   type ContractTerm,
 } from "@/data/properties";
 import { Button } from "@/components/ui/button";
