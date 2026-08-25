@@ -89,7 +89,7 @@ function PropertyPage() {
         <div className="grid gap-10 lg:grid-cols-[1.6fr_1fr]">
           <div className="space-y-12">
             <div>
-              <h1 className="font-display text-3xl font-semibold text-brand-deep sm:text-4xl">
+              <h1 className="text-3xl font-bold text-brand-deep sm:text-4xl">
                 {property.name}
               </h1>
               <p className="mt-2 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -104,7 +104,7 @@ function PropertyPage() {
             </div>
 
             <div>
-              <h2 className="font-display text-2xl font-semibold text-brand-deep">
+              <h2 className="text-2xl font-bold text-brand-deep">
                 Facilities & amenities
               </h2>
               <ul className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -121,7 +121,7 @@ function PropertyPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="rounded-3xl border border-border/70 bg-card p-5 shadow-card">
-                <h3 className="font-display text-lg font-semibold text-brand-deep">
+                <h3 className="text-lg font-bold text-brand-deep">
                   What's included
                 </h3>
                 <ul className="mt-3 space-y-2">
@@ -133,7 +133,7 @@ function PropertyPage() {
                 </ul>
               </div>
               <div className="rounded-3xl border border-border/70 bg-card p-5 shadow-card">
-                <h3 className="font-display text-lg font-semibold text-brand-deep">Not included</h3>
+                <h3 className="text-lg font-bold text-brand-deep">Not included</h3>
                 <ul className="mt-3 space-y-2">
                   {property.excluded.map((i) => (
                     <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
@@ -146,7 +146,7 @@ function PropertyPage() {
 
             <div id="rooms">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="font-display text-2xl font-semibold text-brand-deep">Room options</h2>
+                <h2 className="text-2xl font-bold text-brand-deep">Room options</h2>
                 <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-brand-deep">
                   {availableCount(property.slug)} room types available
                 </span>
@@ -163,7 +163,7 @@ function PropertyPage() {
             </div>
 
             <div>
-              <h2 className="font-display text-2xl font-semibold text-brand-deep">
+              <h2 className="text-2xl font-bold text-brand-deep">
                 Full price list
               </h2>
               {property.contractTerms.length > 1 && (
@@ -235,7 +235,7 @@ function PropertyPage() {
           <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
             <div className="rounded-3xl border border-border/70 bg-card p-5 shadow-card">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Rooms from</p>
-              <p className="font-display text-3xl font-semibold text-brand-deep">
+              <p className="text-3xl font-bold text-brand-deep">
                 {formatRM(priceFrom(property.slug))}
                 <span className="text-base font-normal text-muted-foreground">/mo</span>
               </p>
@@ -267,7 +267,7 @@ function PropertyPage() {
             </div>
 
             <div className="rounded-3xl border border-border/70 bg-card p-5 shadow-card">
-              <h3 className="font-display text-lg font-semibold text-brand-deep">Good to know</h3>
+              <h3 className="text-lg font-bold text-brand-deep">Good to know</h3>
               <ul className="mt-3 space-y-2">
                 {property.terms.map((t) => (
                   <li key={t} className="flex items-start gap-2 text-sm text-muted-foreground">
@@ -278,7 +278,7 @@ function PropertyPage() {
             </div>
 
             <div className="rounded-3xl border border-border/70 bg-card p-5 shadow-card">
-              <h3 className="font-display text-lg font-semibold text-brand-deep">What's nearby</h3>
+              <h3 className="text-lg font-bold text-brand-deep">What's nearby</h3>
               <ul className="mt-3 space-y-2">
                 {property.nearby.map((n) => (
                   <li key={n} className="flex items-start gap-2 text-sm text-muted-foreground">

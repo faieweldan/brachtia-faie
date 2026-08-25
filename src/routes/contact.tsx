@@ -27,7 +27,7 @@ function ContactPage() {
   return (
     <>
         <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
-          <h1 className="font-display text-3xl font-semibold text-brand-deep sm:text-4xl">
+          <h1 className="text-3xl font-bold text-brand-deep sm:text-4xl">
             Contact us
           </h1>
           <p className="mt-3 max-w-2xl text-muted-foreground">
@@ -67,7 +67,7 @@ function ContactPage() {
 
             <div className="space-y-4">
               <div className="rounded-3xl border border-border/70 bg-card p-6">
-                <h2 className="font-display text-lg font-semibold text-brand-deep">
+                <h2 className="text-lg font-bold text-brand-deep">
                   {company.legalName}
                 </h2>
                 <p className="text-xs text-muted-foreground">{company.registration}</p>
@@ -97,7 +97,7 @@ function ContactPage() {
                 </Button>
               </div>
               <div className="rounded-2xl bg-brand-soft p-6">
-                <h3 className="font-display text-lg font-semibold text-brand-deep">
+                <h3 className="text-lg font-bold text-brand-deep">
                   Already a resident?
                 </h3>
                 <p className="mt-2 text-sm text-brand-deep/80">

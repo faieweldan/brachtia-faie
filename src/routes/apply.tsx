@@ -49,7 +49,7 @@ function ApplyPage() {
           <span className="inline-flex items-center gap-2 rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-brand-deep">
             <FileCheck2 className="size-3.5" /> Takes about 3 minutes
           </span>
-          <h1 className="mt-4 font-display text-3xl font-semibold text-brand-deep sm:text-4xl">
+          <h1 className="mt-4 text-3xl font-bold text-brand-deep sm:text-4xl">
             Apply for a room
           </h1>
           <p className="mt-3 max-w-2xl text-muted-foreground">
@@ -159,11 +159,11 @@ function ApplyPage() {
             </form>
 
             <aside className="rounded-3xl border border-border/70 bg-card p-6">
-              <h2 className="font-display text-lg font-semibold text-brand-deep">How it works</h2>
+              <h2 className="text-lg font-bold text-brand-deep">How it works</h2>
               <ol className="mt-4 space-y-4">
                 {steps.map((s, i) => (
                   <li key={s} className="flex gap-3 text-sm text-muted-foreground">
-                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand-deep">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-bold text-brand-deep">
                       {i + 1}
                     </span>
                     {s}

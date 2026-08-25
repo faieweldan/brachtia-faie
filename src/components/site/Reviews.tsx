@@ -31,8 +31,8 @@ export default function Reviews() {
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-end">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand">Student reviews</p>
-            <h2 className="mt-2 font-display text-3xl font-semibold tracking-tight text-brand-deep sm:text-4xl">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand">Student reviews</p>
+            <h2 className="mt-2 text-3xl font-bold tracking-tight text-brand-deep sm:text-4xl">
               What our students say
             </h2>
           </div>
@@ -40,7 +40,7 @@ export default function Reviews() {
             <GoogleG className="size-8" />
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-2xl font-semibold text-foreground">{reviewSummary.average}</span>
+                <span className="text-2xl font-bold text-foreground">{reviewSummary.average}</span>
                 <Stars rating={reviewSummary.average} />
               </div>
               <p className="text-xs text-muted-foreground">
@@ -57,11 +57,11 @@ export default function Reviews() {
               className="w-[85vw] shrink-0 snap-start rounded-3xl border border-border/70 bg-card p-5 shadow-card sm:w-[340px]"
             >
               <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-full bg-brand-soft text-sm font-semibold text-brand-deep">
+                <div className="flex size-10 items-center justify-center rounded-full bg-brand-soft text-sm font-bold text-brand-deep">
                   {r.initials}
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-foreground">{r.name}</p>
+                  <p className="truncate text-sm font-bold text-foreground">{r.name}</p>
                   <p className="text-xs text-muted-foreground">{r.date}</p>
                 </div>
                 <GoogleG className="ml-auto size-4 shrink-0" />

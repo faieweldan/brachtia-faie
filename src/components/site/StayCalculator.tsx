@@ -77,7 +77,7 @@ export default function StayCalculator({
             value={moveIn}
             min={room.availableFrom}
             onChange={(e) => setMoveIn(e.target.value)}
-            className="w-full bg-transparent text-sm font-semibold text-foreground outline-none"
+            className="w-full bg-transparent text-sm font-bold text-foreground outline-none"
           />
         </label>
         <label className="rounded-2xl bg-muted/70 px-3 py-2">
@@ -89,7 +89,7 @@ export default function StayCalculator({
             value={moveOut}
             min={moveIn}
             onChange={(e) => setMoveOut(e.target.value)}
-            className="w-full bg-transparent text-sm font-semibold text-foreground outline-none"
+            className="w-full bg-transparent text-sm font-bold text-foreground outline-none"
           />
         </label>
       </div>
@@ -105,14 +105,14 @@ export default function StayCalculator({
       ) : (
         quote && (
           <>
-            <div className="mt-3 flex items-center gap-2 rounded-full bg-brand-soft px-3 py-1.5 text-xs font-semibold text-brand-deep">
+            <div className="mt-3 flex items-center gap-2 rounded-full bg-brand-soft px-3 py-1.5 text-xs font-bold text-brand-deep">
               <CalendarDays className="size-3.5 text-brand" />
               {quote.term === "long" ? "12-month rate" : "Short-term rate"} ·{" "}
               {formatRM(quote.rent)}/mo · {quote.days} days
             </div>
 
             <div className="mt-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                 Rent schedule
               </p>
               <table className="mt-2 w-full text-sm">
@@ -143,7 +143,7 @@ export default function StayCalculator({
             </div>
 
             <div className="mt-4 rounded-2xl bg-brand-tint p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                 Due before move-in
               </p>
               <table className="mt-2 w-full text-sm">
