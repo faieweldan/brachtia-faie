@@ -48,6 +48,12 @@ const RULES: { match: RegExp; icon: LucideIcon }[] = [
   { match: /bicycle|bike/i, icon: Bike },
   { match: /shuttle|bus|mrt|transport/i, icon: Bus },
   { match: /garden|park|outdoor|landscape/i, icon: Trees },
+  { match: /bed/i, icon: Bed },
+  { match: /desk|chair|study/i, icon: Armchair },
+  { match: /wardrobe|closet|clothes/i, icon: Shirt },
+  { match: /sofa|living|lounge|coffee/i, icon: Sofa },
+  { match: /support|warden|help/i, icon: HeartHandshake },
+  { match: /maintenance|repair|fix/i, icon: Wrench },
 ];
 
 export function facilityIcon(label: string): LucideIcon {
