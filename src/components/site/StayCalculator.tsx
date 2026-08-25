@@ -211,11 +211,14 @@ export default function StayCalculator({
 
         {selected.occupancies.length === 1 && selected.occupancies[0] === "single" &&
           selected.unitType.toLowerCase().includes("4-bedroom") && (
-            <p className="mt-3 rounded-2xl bg-brand-tint px-3 py-2 text-xs text-brand-deep ring-1 ring-brand-soft">
-              Twin sharing is not available for 4-Bedroom apartments — this room is priced as single
-              occupancy.
+            <p className="mt-2.5 flex items-start gap-2 px-1 text-xs leading-relaxed text-muted-foreground">
+              <Info className="mt-0.5 size-3.5 shrink-0 text-brand" />
+              <span>
+                4-Bedroom apartments are single occupancy only — twin sharing isn't offered here.
+              </span>
             </p>
           )}
+
 
         {selected.occupancies.length > 1 && (
           <SegmentedToggle
