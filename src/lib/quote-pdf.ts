@@ -125,7 +125,7 @@ export async function downloadStayQuote({
 
   autoTable(doc, {
     startY: y,
-    margin: { left: M, right: M },
+    margin: { left: M, right: M, bottom: 84 },
     theme: "plain",
     styles: { fontSize: 9.5, cellPadding: { top: 3, bottom: 3, left: 0, right: 0 } },
     columnStyles: {
@@ -146,7 +146,7 @@ export async function downloadStayQuote({
 
   autoTable(doc, {
     startY: y,
-    margin: { left: M, right: M },
+    margin: { left: M, right: M, bottom: 84 },
     theme: "grid",
     headStyles: { fillColor: PEACH, textColor: GREEN, fontStyle: "bold", fontSize: 9 },
     styles: { fontSize: 9.5, cellPadding: 6, lineColor: [230, 226, 220], lineWidth: 0.5 },
@@ -157,6 +157,7 @@ export async function downloadStayQuote({
       formatRM(l.amount),
     ]),
     foot: [["Total to pay now", formatRM(quote.totalUpfront)]],
+    showFoot: "lastPage",
     footStyles: {
       fillColor: PEACH,
       textColor: GREEN,
@@ -188,7 +189,7 @@ export async function downloadStayQuote({
 
   autoTable(doc, {
     startY: y + 8,
-    margin: { left: M, right: M },
+    margin: { left: M, right: M, bottom: 84 },
     theme: "grid",
     headStyles: { fillColor: PEACH, textColor: GREEN, fontStyle: "bold", fontSize: 9 },
     styles: { fontSize: 9, cellPadding: 5, lineColor: [230, 226, 220], lineWidth: 0.5 },
@@ -199,6 +200,7 @@ export async function downloadStayQuote({
       formatRM(s.amount),
     ]),
     foot: [["Total rent for stay", formatRM(quote.totalStay)]],
+    showFoot: "lastPage",
     footStyles: { fillColor: PEACH, textColor: GREEN, fontStyle: "bold", fontSize: 9.5 },
     didParseCell: (data: any) => {
       if (data.section === "foot" && data.column.index === 1) data.cell.styles.halign = "right";
