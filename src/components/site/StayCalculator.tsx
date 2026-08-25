@@ -259,6 +259,47 @@ export default function StayCalculator({
           </label>
         </div>
 
+        <div className="mt-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Optional add-ons
+          </p>
+          <div className="mt-2 grid gap-2">
+            {ADD_ONS.map((a) => {
+              const on = addOns.includes(a.id);
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => toggleAddOn(a.id)}
+                  className={`flex items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors ${
+                    on
+                      ? "border-brand bg-brand-tint"
+                      : "border-border/70 bg-card hover:border-brand/40"
+                  }`}
+                >
+                  <span
+                    className={`flex size-5 shrink-0 items-center justify-center rounded-md border ${
+                      on ? "border-brand bg-brand text-primary-foreground" : "border-border"
+                    }`}
+                  >
+                    {on && <Check className="size-3.5" />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-foreground">{a.label}</span>
+                    <span className="block text-[11px] text-muted-foreground">{a.note}</span>
+                  </span>
+                  <span className="whitespace-nowrap text-sm font-bold tabular-nums text-brand-deep">
+                    {formatRM(a.price)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+
+
         {!valid ? (
           <p className="mt-3 rounded-2xl bg-destructive/10 px-3 py-2 text-xs text-destructive">
             Move-out must be after move-in.
