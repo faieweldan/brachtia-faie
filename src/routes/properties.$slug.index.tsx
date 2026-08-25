@@ -1,6 +1,8 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
 import { Check, LayoutGrid, MapPin, MessageCircle, X } from "lucide-react";
+import { facilityIcon } from "@/lib/facility-icons";
+
 import {
   Dialog,
   DialogContent,
