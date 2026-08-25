@@ -473,7 +473,7 @@ export type StaySegment = {
 
 function parseISO(iso: string) {
   const [y, m, d] = iso.split("-").map(Number);
-  return new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1));
+  return new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1));
 }
 
 function toISO(d: Date) {
