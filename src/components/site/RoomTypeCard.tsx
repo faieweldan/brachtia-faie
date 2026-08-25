@@ -1,4 +1,3 @@
-import { Link } from "@tanstack/react-router";
 import { Bath, Check, Eye, Ruler } from "lucide-react";
 import {
   formatRM,
