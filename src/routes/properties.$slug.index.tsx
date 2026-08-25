@@ -146,7 +146,7 @@ function PropertyPage() {
               ))}
             </div>
 
-            <div className="space-y-10">
+            <div className="space-y-6">
               <AmenitySection
                 title="Building Facilities & Amenities"
                 items={property.buildingFacilities}
