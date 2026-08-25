@@ -266,16 +266,6 @@ function PropertyPage() {
               </div>
             </div>
 
-            <div className="rounded-3xl border border-border/70 bg-card p-5 shadow-card">
-              <h3 className="text-lg font-bold text-brand-deep">Good to know</h3>
-              <ul className="mt-3 space-y-2">
-                {property.terms.map((t) => (
-                  <li key={t} className="flex items-start gap-2 text-sm text-muted-foreground">
-                    <Sparkles className="mt-0.5 size-4 shrink-0 text-accent-warm" /> {t}
-                  </li>
-                ))}
-              </ul>
-            </div>
 
             <div className="rounded-3xl border border-border/70 bg-card p-5 shadow-card">
               <h3 className="text-lg font-bold text-brand-deep">What's nearby</h3>
