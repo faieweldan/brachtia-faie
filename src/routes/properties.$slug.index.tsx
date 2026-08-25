@@ -293,6 +293,27 @@ function PropertyPage() {
               </div>
             </div>
 
+            {rooms.length > 0 && (
+              <StayCalculator
+                property={property}
+                rooms={rooms}
+                actions={(state) => (
+                  <EnquireDialog
+                    property={property}
+                    room={state.room}
+                    term={state.term}
+                    occupancy={state.occupancy}
+                    moveIn={state.moveIn}
+                    moveOut={state.moveOut}
+                    trigger={
+                      <Button size="lg" className="w-full">
+                        Enquire with these dates
+                      </Button>
+                    }
+                  />
+                )}
+              />
+            )}
           </aside>
 
         </div>
