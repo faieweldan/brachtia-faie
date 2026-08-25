@@ -42,12 +42,46 @@ export const Route = createFileRoute("/")({
 });
 
 const perks = [
-  { icon: Wallet, title: "Clear pricing", text: "No hidden fees" },
-  { icon: ShieldCheck, title: "Safe & secure", text: "Secure access" },
-  { icon: Sofa, title: "Move-in ready", text: "Fully furnished" },
-  { icon: Headphones, title: "24/7 support", text: "Always here" },
-  { icon: MapPin, title: "Close to campus", text: "Cyberjaya locations" },
-  { icon: SlidersHorizontal, title: "Flexible options", text: "Single or twin" },
+  {
+    icon: Users,
+    title: "Flexible Living",
+    text: "Single or twin-sharing rooms, with short and long-term stays.",
+  },
+  {
+    icon: Smartphone,
+    title: "Fully Digital Journey",
+    text: "From enquiry and booking to documents and check-in, all handled online.",
+  },
+  {
+    icon: HeartHandshake,
+    title: "Personal Welcome",
+    text: "Personal check-ins, city briefings and local tours to help you settle in.",
+  },
+  {
+    icon: GraduationCap,
+    title: "Close to University",
+    text: "Conveniently located residences with easy access to campus.",
+  },
+  {
+    icon: Sofa,
+    title: "Move-In Ready",
+    text: "Fully furnished units with Wi-Fi and monthly cleaning included.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Safe & Secure",
+    text: "24/7 security and controlled access for greater peace of mind.",
+  },
+  {
+    icon: Receipt,
+    title: "Easy Utility Splitting",
+    text: "Digital utility bills that make sharing costs with housemates simple.",
+  },
+  {
+    icon: Headphones,
+    title: "24/7 Support",
+    text: "A dedicated team available whenever you need help during your stay.",
+  },
 ];
 
 const steps = [
