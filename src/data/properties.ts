@@ -58,6 +58,14 @@ export type RoomType = {
   spotsLeft?: number;
 };
 
+export type PlaceNearby = {
+  name: string;
+  distance: string;
+  walk: string;
+  bike: string;
+  transit: string;
+};
+
 export type Property = {
   id: string;
   slug: string;
@@ -156,7 +164,9 @@ export const properties: Property[] = [
       "Washing Machine",
     ],
     apartmentFootnote: "Where available.",
-    nearby: nearbyCyberjaya,
+    coords: { lat: 2.9213, lng: 101.6559 },
+    nearbyUniversities: universitiesCyberjaya,
+    pointsOfInterest: poiCyberjaya,
     terms: [
       "Minimum tenancy of 12 months, or short-term below 6 months",
       "Rental payable bi-monthly",
@@ -270,7 +280,9 @@ export const properties: Property[] = [
       "Washing Machine",
     ],
     apartmentFootnote: "Where available.",
-    nearby: nearbyCyberjaya,
+    coords: { lat: 2.9213, lng: 101.6559 },
+    nearbyUniversities: universitiesCyberjaya,
+    pointsOfInterest: poiCyberjaya,
     terms: [
       "Minimum tenancy of 12 months",
       "Rental payable monthly",
