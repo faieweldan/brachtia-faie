@@ -11,7 +11,7 @@ import {
   CookingPot,
   Dumbbell,
   Fan,
-  HeadphonesIcon,
+  Headphones,
   Home,
   KeyRound,
   Lamp,
@@ -54,7 +54,7 @@ const RULES: { match: RegExp; icon: LucideIcon }[] = [
   // Included in your stay
   { match: /wi-?fi|internet/i, icon: Wifi },
   { match: /clean|housekeep/i, icon: Sparkles },
-  { match: /support|warden|help|24\/7/i, icon: HeadphonesIcon },
+  { match: /support|warden|help|24\/7/i, icon: Headphones },
   { match: /maintenance|repair|fix/i, icon: Wrench },
 
   // Inside your apartment
