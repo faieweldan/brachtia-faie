@@ -1,28 +1,41 @@
-# Redesign "What's Included in Your Stay" section on property page
+# Restructure property amenities into 3 collapsible sections
 
-Replace the current two-card "What's included / Not included" layout below Facilities & Amenities with a single, clean "What's Included in Your Stay" section, matching the reference style: a minimal list with icons, included items plain and excluded items struck through.
+Replace the current "Facilities & amenities" and the two "What's included / Not included" cards on the property detail page with three clean, icon-led sections: Building Facilities & Amenities, Included in Your Stay, and Inside Your Apartment. Match the reference style (minimal two-column list with icons, plus a small dropdown arrow to expand long sections).
 
 ## Changes
 
-1. **Section title and structure**
-   - Remove the existing `sm:grid-cols-2` card pair in `src/routes/properties.$slug.index.tsx`.
-   - Add a new section titled **"What's Included in Your Stay"** directly under Facilities & amenities.
-   - Render one combined list from `property.included` and `property.excluded`.
+### 1. Data model update (`src/data/properties.ts`)
+- Replace the flat `facilities`, `included`, and `excluded` arrays on `Property` with three typed arrays:
+  - `buildingFacilities: string[]`
+  - `includedInStay: string[]`
+  - `insideApartment: string[]`
+- Update both properties (`The Arc` and `Solstice Residence`) with the exact copy provided by the user.
+- Add a short `utilitiesNote: string` field for the "Water and electricity are billed separately..." line under Included in Your Stay.
+- Add an optional `footnote?: string` field for the "*Where available." note under Inside Your Apartment.
 
-2. **Item styling**
-   - Each item shows a small icon on the left.
-   - **Included** items: normal text, icon in `text-brand`.
-   - **Not included** items: text with a strikethrough line, icon in `text-muted-foreground`.
-   - Layout: two-column grid on desktop (`sm:grid-cols-2`), single column on mobile.
-   - Use the existing semantic tokens (`text-foreground`, `text-muted-foreground`, `border`, `text-brand`) and keep the rounded, card-free list style from the reference.
+### 2. New reusable component (`src/components/site/AmenitySection.tsx`)
+- Accept `title`, `items`, optional `note`, optional `footnote`, and optional `defaultOpen` props.
+- Render the title with a small chevron icon on the right.
+- Render items in a two-column grid on desktop (`sm:grid-cols-2`) and single column on mobile.
+- Each item: a small icon on the left + label.
+- Use `Check` icon for "Included in Your Stay" and "Inside Your Apartment" items.
+- Use matching facility icons for "Building Facilities & Amenities" via `facilityIcon()`.
+- Add a collapsible wrapper: when items exceed a threshold (e.g. 6), show a "Show more" / "Show less" toggle with the chevron.
+- Use existing semantic tokens (`text-foreground`, `text-muted-foreground`, `border`, `text-brand`, `text-brand-deep`).
 
-3. **Icons**
-   - Use `Check` for included items and a slash/ban-style icon for excluded items (e.g. `X` or `Ban` from `lucide-react`).
-   - Remove the `Check` and `X` imports if they are no longer used elsewhere after this change.
+### 3. Property detail page (`src/routes/properties.$slug.index.tsx`)
+- Remove the old "Facilities & amenities" block and the two "What's included / Not included" cards.
+- Insert the three new `AmenitySection` instances in order:
+  1. Building Facilities & Amenities
+  2. Included in Your Stay
+  3. Inside Your Apartment
+- Remove now-unused imports (`Check`, `X`, `facilityIcon` if no longer used directly here).
 
-4. **Data**
-   - No data model changes; continue using `property.included` and `property.excluded`.
+### 4. Styling
+- Keep the card-free, clean list style from the reference image.
+- Use the current green brand palette and Plus Jakarta Sans typography.
+- Ensure adequate spacing between the three sections.
 
 ## Out of scope
-- No changes to the Facilities & amenities section above it.
-- No changes to room cards, pricing tables, sidebar, or CTA band.
+- No changes to room cards, pricing tables, sidebar, gallery, or CTA band.
+- No changes to other routes.
