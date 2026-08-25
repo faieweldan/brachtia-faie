@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { Clock, MessageCircle, Phone } from "lucide-react";
-import { company, whatsappUrl } from "@/data/properties";
+import { Clock, MessageCircle } from "lucide-react";
+import { whatsappUrl } from "@/data/properties";
 import { Button } from "@/components/ui/button";
 
 export default function CtaBand({
@@ -36,17 +36,6 @@ export default function CtaBand({
               </h2>
               <p className="mt-3 max-w-lg text-base text-primary-foreground/75">{description}</p>
 
-              <div className="mt-6 flex flex-wrap gap-2">
-                {company.phones.map((phone) => (
-                  <a
-                    key={phone}
-                    href={`tel:${phone.replace(/[^+\d]/g, "")}`}
-                    className="inline-flex items-center gap-2 rounded-full border border-primary-foreground/20 bg-primary-foreground/5 px-3.5 py-2 text-xs font-semibold text-primary-foreground/85 transition-colors hover:bg-primary-foreground/12"
-                  >
-                    <Phone className="size-3.5" /> {phone}
-                  </a>
-                ))}
-              </div>
             </div>
 
             <div className="flex flex-col gap-3">
