@@ -187,15 +187,10 @@ function PropertyPage() {
 
 
             <div id="rooms">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-2xl font-bold text-brand-deep">Room options</h2>
-                <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-brand-deep">
-                  {visibleRooms.length} of {rooms.length} room types
-                </span>
-              </div>
+              <h2 className="text-2xl font-bold text-brand-deep">Room options</h2>
               <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-                Choose the room type that suits you — enquire with your preferences and our team
-                will confirm the exact unit and availability with you.
+                Tick a room to price it instantly — enquire with your preferences and our team will
+                confirm the exact unit and availability with you.
               </p>
 
               {rooms.length > 1 && (
@@ -203,6 +198,10 @@ function PropertyPage() {
                   <RoomFilters
                     unitTypes={unitTypesFor(property.slug)}
                     value={filters}
+                    resultLabel={`${visibleRooms.length} of ${rooms.length} room types`}
+                    onClear={() =>
+                      navigate({ search: { unit: "all", bath: "all", view: "all" }, replace: true })
+                    }
                     onChange={(next) =>
                       navigate({ search: (prev) => ({ ...prev, ...next }), replace: true })
                     }
@@ -210,11 +209,23 @@ function PropertyPage() {
                 </div>
               )}
 
-              <div className="mt-5 space-y-4">
+              <div className="mt-6 space-y-5">
                 {visibleRooms.map((room) => (
-                  <RoomTypeCard key={room.id} property={property} room={room} />
+                  <RoomTypeCard
+                    key={room.id}
+                    property={property}
+                    room={room}
+                    selected={selectedRoomId === room.id}
+                    onSelect={(r) => {
+                      setSelectedRoomId(r.id);
+                      document
+                        .getElementById("stay-calculator")
+                        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }}
+                  />
                 ))}
               </div>
+
 
               {visibleRooms.length === 0 && (
                 <div className="mt-5 rounded-3xl border border-dashed border-border bg-card p-8 text-center">
