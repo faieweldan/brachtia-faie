@@ -272,23 +272,26 @@ export default function StayCalculator({
                 {formatRM(quote.rent)}/mo · {quote.days} days
               </p>
 
-              <div className="mt-4 rounded-2xl bg-brand-tint p-4 ring-1 ring-brand-soft">
-                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                  Due before move-in
-                </p>
-                <table className="mt-2 w-full text-sm">
+              <div className="mt-4 rounded-2xl border border-border/70 bg-card">
+                <div className="border-b border-border/70 px-4 py-2.5">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                    Due before move-in
+                  </p>
+                </div>
+
+                <table className="w-full px-4 text-sm">
                   <tbody>
                     {quote.firstPayment.map((l) => (
                       <tr key={l.label} className="align-top">
-                        <td className="py-1 pr-3 text-muted-foreground">
+                        <td className="py-1.5 pl-4 pr-3 text-muted-foreground">
                           {l.label}
                           {l.kind === "refundable" && (
-                            <span className="ml-1 text-[10px] uppercase tracking-wide text-brand">
+                            <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-brand">
                               refundable
                             </span>
                           )}
                         </td>
-                        <td className="py-1 text-right font-semibold tabular-nums text-foreground">
+                        <td className="py-1.5 pr-4 text-right font-medium tabular-nums text-foreground">
                           {formatRM(l.amount)}
                         </td>
                       </tr>
@@ -296,25 +299,27 @@ export default function StayCalculator({
                   </tbody>
                 </table>
 
-                <div className="mt-3 flex items-end justify-between gap-3 rounded-xl bg-card px-3 py-2.5 shadow-card">
-                  <span className="text-sm font-bold text-brand-deep">
-                    Your first-time payment
-                  </span>
+                <div className="mt-1.5 flex items-end justify-between gap-3 border-t border-border/70 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-bold text-brand-deep">Your first-time payment</p>
+                    <p className="text-xs text-muted-foreground">
+                      Then {formatRM(quote.monthlyAfter)}/month
+                    </p>
+                  </div>
                   <span className="whitespace-nowrap text-2xl font-extrabold tabular-nums text-brand">
                     {formatRM(quote.totalUpfront)}
                   </span>
                 </div>
-
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Then {formatRM(quote.monthlyAfter)}/month. No hidden fees.
-                </p>
-
-                <div className="mt-3 rounded-xl bg-card/70 px-3 py-2 text-xs text-brand-deep ring-1 ring-brand-soft">
-                  <span className="font-semibold">Pay to secure your room:</span> a booking fee of{" "}
-                  {company.bookingFee} is required to reserve your room once availability is
-                  confirmed — it is offset against your first payment.
-                </div>
               </div>
+
+              <p className="mt-2.5 flex gap-2 px-1 text-xs leading-relaxed text-muted-foreground">
+                <Info className="mt-0.5 size-3.5 shrink-0 text-brand" />
+                <span>
+                  A booking fee of {company.bookingFee} secures your room once availability is
+                  confirmed — offset against your first payment. No hidden fees.
+                </span>
+              </p>
+
 
               <Collapsible className="mt-3 rounded-2xl bg-muted/60">
                 <CollapsibleTrigger className="group flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
