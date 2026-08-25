@@ -20,11 +20,11 @@ export default function AmenitySection({
   note,
   footnote,
   iconMode = "check",
-  defaultOpen = true,
-  collapseThreshold = 6,
+  defaultOpen = false,
+  collapseThreshold = DEFAULT_VISIBLE,
 }: AmenitySectionProps) {
   const shouldCollapse = items.length > collapseThreshold;
-  const [isOpen, setIsOpen] = useState(defaultOpen || !shouldCollapse);
+  const [isOpen, setIsOpen] = useState(defaultOpen);
   const visibleItems = shouldCollapse && !isOpen ? items.slice(0, collapseThreshold) : items;
 
   return (
