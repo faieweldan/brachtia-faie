@@ -26,6 +26,7 @@ import CtaBand from "@/components/site/CtaBand";
 import EnquireDialog from "@/components/site/EnquireDialog";
 import RoomTypeCard from "@/components/site/RoomTypeCard";
 import SegmentedToggle from "@/components/site/SegmentedToggle";
+import StayCalculator from "@/components/site/StayCalculator";
 
 export const Route = createFileRoute("/properties/$slug/")({
   loader: ({ params }) => {
