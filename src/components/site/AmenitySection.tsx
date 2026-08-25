@@ -5,8 +5,8 @@ import { facilityIcon } from "@/lib/facility-icons";
 interface AmenitySectionProps {
   title: string;
   items: string[];
-  note?: string;
-  footnote?: string;
+  note?: string | undefined;
+  footnote?: string | undefined;
   iconMode?: "check" | "facility";
   defaultOpen?: boolean;
   collapseThreshold?: number;
