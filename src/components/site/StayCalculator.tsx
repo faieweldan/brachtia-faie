@@ -97,10 +97,37 @@ export default function StayCalculator({
     selected.rent[term === "long" ? "short" : "long"][occupancy];
   const rateAvailable = selected.rent[term][occupancy] != null;
 
-  const quote = useMemo(
+  const baseQuote = useMemo(
     () => (valid && rateAvailable && rent ? stayQuote(property, rent, term, moveIn, moveOut) : null),
     [property, rent, term, moveIn, moveOut, valid, rateAvailable],
   );
+
+  const [addOns, setAddOns] = useState<string[]>([]);
+  const toggleAddOn = (id: string) =>
+    setAddOns((prev) => (prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]));
+
+  const quote = useMemo(() => {
+    if (!baseQuote) return null;
+    if (addOns.length === 0) return baseQuote;
+    const extras = ADD_ONS.filter((a) => addOns.includes(a.id));
+    const lines = [
+      ...baseQuote.firstPayment,
+      ...extras.map((a) => ({
+        label: a.recurring ? `${a.label} (first month)` : a.label,
+        amount: a.price,
+        kind: "fee" as const,
+      })),
+    ];
+    const monthlyExtra = extras
+      .filter((a) => a.recurring)
+      .reduce((s, a) => s + a.price, 0);
+    return {
+      ...baseQuote,
+      firstPayment: lines,
+      totalUpfront: lines.reduce((s, l) => s + l.amount, 0),
+      monthlyAfter: baseQuote.monthlyAfter + monthlyExtra,
+    };
+  }, [baseQuote, addOns]);
 
   const state: StayState = {
     occupancy,
@@ -131,6 +158,7 @@ export default function StayCalculator({
       setDownloading(false);
     }
   }
+
 
   return (
     <div className="overflow-hidden rounded-3xl bg-card shadow-lift ring-1 ring-brand-soft">
