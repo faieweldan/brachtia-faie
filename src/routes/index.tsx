@@ -74,7 +74,7 @@ const perks = [
   {
     icon: Receipt,
     title: "Easy Utility Splitting",
-    text: "Digital utility bill calculator that make sharing costs with housemates simple.",
+    text: "Digital utility bill calculator that makes sharing costs with housemates simple.",
   },
   {
     icon: Headphones,
