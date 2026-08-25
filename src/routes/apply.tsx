@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { FileCheck2, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
-import { company, properties, rooms, whatsappUrl } from "@/data/properties";
+import { company, properties, roomTypes, whatsappUrl } from "@/data/properties";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,7 +39,9 @@ function ApplyPage() {
   const search = Route.useSearch();
   const [propertySlug, setPropertySlug] = useState(search.property ?? properties[0]?.slug ?? "");
   const [roomId, setRoomId] = useState(search.room ?? "");
-  const roomOptions = rooms.filter((r) => r.propertySlug === propertySlug && r.status !== "occupied");
+  const roomOptions = roomTypes.filter(
+    (r) => r.propertySlug === propertySlug && r.status !== "occupied",
+  );
 
   return (
     <>
@@ -104,7 +106,7 @@ function ApplyPage() {
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="room">Preferred room</Label>
+                  <Label htmlFor="room">Preferred room type</Label>
                   <select
                     id="room"
                     name="room"
@@ -115,7 +117,7 @@ function ApplyPage() {
                     <option value="">No preference</option>
                     {roomOptions.map((r) => (
                       <option key={r.id} value={r.id}>
-                        {r.unitLabel} · {r.roomLabel} ({r.occupancy === "single" ? "Single" : "Twin"})
+                        {r.name} · {r.unitType}
                       </option>
                     ))}
                   </select>

@@ -5,6 +5,7 @@ import {
   costBreakdown,
   formatDate,
   formatRM,
+  company,
   getProperty,
   getRoomType,
   getRoomTypes,
@@ -227,7 +228,7 @@ function RoomTypePage() {
                     </tbody>
                   </table>
                   <p className="mt-3 text-xs text-muted-foreground">
-                    Booking fee {company_bookingFee} secures the room and is offset against your
+                    Booking fee {company.bookingFee} secures the room and is offset against your
                     first payment. Deposits are refundable at the end of tenancy, less any damages.
                   </p>
                 </div>
