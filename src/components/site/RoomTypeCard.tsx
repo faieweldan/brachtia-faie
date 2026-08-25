@@ -63,13 +63,7 @@ export default function RoomTypeCard({
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <h3 className="text-lg font-bold leading-snug text-brand-deep sm:text-xl lg:text-2xl">
-                <Link
-                  to="/properties/$slug/rooms/$typeId"
-                  params={detail}
-                  className="hover:underline"
-                >
-                  {room.name}
-                </Link>
+                {room.name}
               </h3>
               <p className="mt-1 text-sm text-muted-foreground">{room.unitType}</p>
             </div>
