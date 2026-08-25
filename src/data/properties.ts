@@ -40,9 +40,12 @@ export type PricingTable = {
 export type RoomType = {
   id: string;
   propertySlug: string;
+  /** Operational tag used by admin, e.g. "Room A" */
+  tag: string;
   name: string;
   unitType: string;
   description: string;
+
   sizeLabel?: string;
   image: string;
   gallery: string[];
