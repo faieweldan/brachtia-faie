@@ -151,19 +151,19 @@ function Home() {
             </h2>
           </div>
 
-          <div className="mt-6 flex snap-x gap-3 overflow-x-auto pb-2 lg:grid lg:grid-cols-6 lg:overflow-visible">
+          <div className="mt-6 flex snap-x gap-3 overflow-x-auto pb-2">
             {perks.map((p) => (
               <div
                 key={p.title}
-                className="min-w-[172px] flex-1 snap-start rounded-2xl bg-card p-4 shadow-sm lg:min-w-0"
+                className="min-w-[200px] flex-1 snap-start rounded-2xl bg-card p-4 shadow-sm"
               >
                 <div className="flex items-center gap-3">
                   <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-soft">
                     <p.icon className="size-4 text-brand" />
                   </span>
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-bold leading-tight text-brand-deep">{p.title}</h3>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{p.text}</p>
+                  <div>
+                    <h3 className="whitespace-nowrap text-sm font-bold text-brand-deep">{p.title}</h3>
+                    <p className="mt-0.5 whitespace-nowrap text-xs text-muted-foreground">{p.text}</p>
                   </div>
                 </div>
               </div>
