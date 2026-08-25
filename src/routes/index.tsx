@@ -2,24 +2,26 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowRight,
   BadgeCheck,
-  Building2,
-  CalendarClock,
+  MapPin,
+  MessageCircle,
+  Search,
   ShieldCheck,
   Sparkles,
+  Star,
   Wifi,
   Users,
-  MessageCircle,
+  Wallet,
 } from "lucide-react";
-import heroImage from "@/assets/arc-exterior.jpg";
+import heroImage from "@/assets/room-single.jpg";
 import { Button } from "@/components/ui/button";
 import PropertyCard from "@/components/site/PropertyCard";
 import Reviews from "@/components/site/Reviews";
 import CtaBand from "@/components/site/CtaBand";
-import { properties, whatsappUrl } from "@/data/properties";
+import { properties, reviewsRating, whatsappUrl } from "@/data/properties";
 
-const title = "Brachtia Homes | Student Accommodation in Cyberjaya";
+const title = "Student Accommodation in Cyberjaya | Brachtia Homes";
 const description =
-  "Safe, fully furnished off-campus student accommodation in Cyberjaya. Single and twin-sharing rooms with free Wi-Fi, 24/7 warden support and transparent pricing.";
+  "Furnished student rooms in Cyberjaya. Clear pricing, no hidden fees, 24/7 support. Browse two residences and enquire in minutes.";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -34,164 +36,180 @@ export const Route = createFileRoute("/")({
 });
 
 const stats = [
-  { value: "2009", label: "Established" },
-  { value: "15+", label: "Years in business" },
+  { value: "Since 2009", label: "Managing student homes" },
   { value: "80+", label: "Properties managed" },
-  { value: "24/7", label: "Warden support" },
+  { value: "24/7", label: "Warden on call" },
+  { value: "0", label: "Hidden fees" },
 ];
 
 const perks = [
-  { icon: Building2, title: "Fully furnished units", text: "Move in with just your suitcase — beds, desks, wardrobes and a fully equipped kitchen." },
-  { icon: Wifi, title: "Free Wi-Fi at The Arc", text: "Included Wi-Fi and monthly cleaning of bathrooms and common areas." },
-  { icon: ShieldCheck, title: "Safety first", text: "24/7 guards, access card entry and CCTV. Gender-segregated, halal and non-smoking units." },
-  { icon: Users, title: "Student support 24/7", text: "Dedicated wardens for lock-outs, medical help and roommate matters." },
-  { icon: CalendarClock, title: "12-month or short-term", text: "Full academic year contracts or short stays below 6 months at The Arc." },
-  { icon: BadgeCheck, title: "No hidden fees", text: "Every deposit and one-time charge is listed before you commit." },
+  { icon: Wallet, title: "Every cost upfront", text: "Rent, deposits and fees shown before you enquire." },
+  { icon: ShieldCheck, title: "Safe by design", text: "CCTV, card access, gender-segregated units." },
+  { icon: Wifi, title: "Move in with a suitcase", text: "Furnished rooms, Wi-Fi and monthly cleaning." },
+  { icon: Users, title: "Real people, 24/7", text: "Wardens for lock-outs, repairs and emergencies." },
+  { icon: MapPin, title: "Minutes from campus", text: "3 min to the bus stop, MRT feeder and shuttle." },
+  { icon: BadgeCheck, title: "Flexible stays", text: "12-month or short-term, priced by the day." },
 ];
+
+const steps = [
+  { n: "1", title: "Pick a room", text: "Compare room types and see the exact total." },
+  { n: "2", title: "Enquire", text: "Send your dates and preferences in one form." },
+  { n: "3", title: "We confirm", text: "Our team replies on WhatsApp with your unit." },
+];
+
+function Stars() {
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Star key={i} className="size-3.5 fill-gold text-gold" />
+      ))}
+    </div>
+  );
+}
 
 function Home() {
   return (
     <>
-      <section className="relative isolate overflow-hidden">
-        <img
-          src={heroImage}
-          alt="Student accommodation building in Cyberjaya"
-          width={1600}
-          height={1000}
-          className="absolute inset-0 -z-10 size-full object-cover"
-        />
-        <div className="absolute inset-0 -z-10 bg-gradient-to-r from-brand-deep/95 via-brand-deep/80 to-brand-deep/40" />
-        <div className="mx-auto max-w-6xl px-4 py-24 sm:px-6 sm:py-32">
-          <div className="max-w-2xl text-primary-foreground">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary-foreground/70">
-              Where You Belong
-            </p>
-            <h1 className="mt-4 font-display text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
-              Off-campus student accommodation in Cyberjaya
-            </h1>
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-primary-foreground/85 sm:text-lg">
-              Fully furnished rooms, clear pricing and 24/7 student support — trusted by local
-              and international students since 2009.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Button asChild size="lg" variant="secondary">
-                <Link to="/properties">
-                  Browse properties <ArrowRight className="size-4" />
-                </Link>
-              </Button>
-              <Button
-                asChild
-                size="lg"
-                variant="outline"
-                className="border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
-              >
-                <a
-                  href={whatsappUrl("Hi Brachtia Homes, I'd like to know more about your student rooms in Cyberjaya.")}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <MessageCircle className="size-4" /> Chat on WhatsApp
-                </a>
-              </Button>
+      {/* Hero */}
+      <section className="px-4 pb-14 pt-12 sm:px-6 sm:pb-20 sm:pt-16">
+        <div className="mx-auto flex max-w-4xl flex-col items-center">
+          <span className="inline-flex items-center gap-2 rounded-full border border-brand/25 bg-brand-soft px-4 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-brand">
+            <MapPin className="size-3.5" /> Cyberjaya, Malaysia
+          </span>
+
+          <h1 className="mt-7 text-center text-4xl font-extrabold leading-[1.08] tracking-tight text-brand-deep sm:text-6xl">
+            Student living,
+            <br />
+            <span className="text-brand">where you belong.</span>
+          </h1>
+          <p className="mt-5 max-w-xl text-center text-base leading-relaxed text-muted-foreground sm:text-lg">
+            Furnished rooms near campus. Clear prices, no hidden fees.
+          </p>
+
+          {/* Image card */}
+          <div className="mt-10 w-full rounded-[2.5rem] bg-card p-2.5 shadow-lift sm:p-3">
+            <div className="relative aspect-[16/10] overflow-hidden rounded-[2rem] sm:aspect-[16/9]">
+              <img
+                src={heroImage}
+                alt="Furnished student room in Cyberjaya"
+                width={1600}
+                height={900}
+                className="size-full object-cover"
+              />
+              <div className="absolute left-4 top-4 flex items-center gap-2.5 rounded-2xl bg-card/95 px-3 py-2 shadow-card backdrop-blur">
+                <span className="flex size-8 items-center justify-center rounded-full bg-brand text-xs font-black text-primary-foreground">
+                  G
+                </span>
+                <div>
+                  <Stars />
+                  <p className="mt-0.5 text-[10px] font-bold text-foreground">
+                    {reviewsRating} Google rating
+                  </p>
+                </div>
+              </div>
+              <div className="absolute bottom-4 right-4 rounded-xl bg-brand-deep/50 px-3 py-2 backdrop-blur">
+                <p className="text-xs font-bold text-primary-foreground">
+                  {properties.length} residences available
+                </p>
+              </div>
             </div>
+          </div>
+
+          {/* Actions */}
+          <div className="mt-8 flex w-full flex-col items-center gap-3 sm:flex-row sm:justify-center">
+            <Button asChild size="lg" className="h-14 w-full rounded-full px-10 text-base sm:w-auto">
+              <Link to="/properties">
+                <Search className="size-5" /> Explore homes
+              </Link>
+            </Button>
+            <Button
+              asChild
+              size="lg"
+              variant="outline"
+              className="h-14 w-full rounded-full border-2 px-8 text-base sm:w-auto"
+            >
+              <a
+                href={whatsappUrl("Hi Brachtia Homes, I'm looking for a student room in Cyberjaya.")}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <MessageCircle className="size-5" /> WhatsApp us
+              </a>
+            </Button>
           </div>
         </div>
       </section>
 
-      <section className="border-b border-border bg-card">
+      {/* Trust strip */}
+      <section className="border-y border-border/70 bg-card">
         <div className="mx-auto grid max-w-6xl grid-cols-2 gap-6 px-4 py-8 sm:px-6 md:grid-cols-4">
           {stats.map((s) => (
             <div key={s.label} className="text-center">
-              <p className="font-display text-3xl font-semibold text-brand">{s.value}</p>
-              <p className="mt-1 text-xs uppercase tracking-wider text-muted-foreground">{s.label}</p>
+              <p className="text-2xl font-extrabold tracking-tight text-brand">{s.value}</p>
+              <p className="mt-1 text-xs font-medium text-muted-foreground">{s.label}</p>
             </div>
           ))}
         </div>
       </section>
 
+      {/* Properties */}
       <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
-        <div className="grid gap-10 md:grid-cols-2 md:items-center">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand">About us</p>
-            <h2 className="mt-2 font-display text-3xl font-semibold tracking-tight text-brand-deep sm:text-4xl">
-              A home away from home, managed properly
-            </h2>
-            <div className="mt-5 space-y-4 text-sm leading-relaxed text-muted-foreground sm:text-base">
-              <p>
-                At Brachtia Homes we take pride in offering top-notch property management services
-                tailored to the diverse needs of our clients. Specialising in both long-term and
-                short-term rentals, we cater to students — local and international — professionals
-                and travellers seeking a home away from home.
-              </p>
-              <p>
-                Alongside student hostel management we offer global student services: visa
-                documentation, arrival assistance, local ground transport and travel arrangements,
-                so students land in Malaysia with everything handled.
-              </p>
-            </div>
-            <Button asChild variant="outline" className="mt-6">
-              <Link to="/about">
-                More about Brachtia Homes <ArrowRight className="size-4" />
-              </Link>
-            </Button>
+        <div className="flex items-end justify-between gap-4">
+          <h2 className="text-3xl font-extrabold tracking-tight text-brand-deep sm:text-4xl">
+            Two homes in Cyberjaya
+          </h2>
+          <Link
+            to="/properties"
+            className="hidden shrink-0 items-center gap-1.5 text-sm font-bold text-brand sm:inline-flex"
+          >
+            View all <ArrowRight className="size-4" />
+          </Link>
+        </div>
+        <div className="mt-8 grid gap-6 md:grid-cols-2">
+          {properties.map((p) => (
+            <PropertyCard key={p.id} property={p} />
+          ))}
+        </div>
+      </section>
+
+      {/* Why */}
+      <section className="bg-brand-tint py-16 sm:py-20">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="flex items-center gap-2">
+            <Sparkles className="size-5 text-brand" />
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand">Why students stay</p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {perks.slice(0, 4).map((p) => (
-              <div key={p.title} className="rounded-3xl border border-border/70 bg-card p-5 shadow-card">
+          <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-brand-deep sm:text-4xl">
+            Sorted, safe, no surprises
+          </h2>
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {perks.map((p) => (
+              <div key={p.title} className="rounded-3xl bg-card p-5 shadow-card">
                 <p.icon className="size-6 text-brand" />
-                <h3 className="mt-3 font-semibold text-foreground">{p.title}</h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{p.text}</p>
+                <h3 className="mt-3 font-bold text-foreground">{p.title}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">{p.text}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="bg-secondary/50 py-16 sm:py-20">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand">Our residences</p>
-              <h2 className="mt-2 font-display text-3xl font-semibold tracking-tight text-brand-deep sm:text-4xl">
-                Choose your place in Cyberjaya
-              </h2>
-            </div>
-            <Link
-              to="/properties"
-              className="hidden shrink-0 items-center gap-1.5 text-sm font-medium text-brand sm:inline-flex"
-            >
-              View all <ArrowRight className="size-4" />
-            </Link>
-          </div>
-          <div className="mt-8 grid gap-6 md:grid-cols-2">
-            {properties.map((p) => (
-              <PropertyCard key={p.id} property={p} />
-            ))}
-          </div>
-        </div>
-      </section>
-
+      {/* How it works */}
       <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
-        <div className="flex items-center gap-2">
-          <Sparkles className="size-5 text-brand" />
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand">What's included</p>
-        </div>
-        <h2 className="mt-2 font-display text-3xl font-semibold tracking-tight text-brand-deep sm:text-4xl">
-          Everything a student needs, sorted
+        <h2 className="text-3xl font-extrabold tracking-tight text-brand-deep sm:text-4xl">
+          Three steps to your room
         </h2>
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {perks.map((p) => (
-            <div key={p.title} className="rounded-3xl border border-border/70 bg-card p-5 shadow-card">
-              <p.icon className="size-6 text-brand" />
-              <h3 className="mt-3 font-semibold text-foreground">{p.title}</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{p.text}</p>
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          {steps.map((s) => (
+            <div key={s.n} className="rounded-3xl bg-card p-6 shadow-card">
+              <span className="flex size-10 items-center justify-center rounded-full bg-brand text-base font-extrabold text-primary-foreground">
+                {s.n}
+              </span>
+              <h3 className="mt-4 text-lg font-bold text-brand-deep">{s.title}</h3>
+              <p className="mt-1 text-sm text-muted-foreground">{s.text}</p>
             </div>
           ))}
         </div>
-        <p className="mt-6 rounded-xl border border-brand/20 bg-brand-soft/50 p-4 text-sm text-brand-deep">
-          All our units are halal, non-smoking, gender-segregated (no unisex) and must be kept
-          clean at all times.
-        </p>
       </section>
 
       <Reviews />
