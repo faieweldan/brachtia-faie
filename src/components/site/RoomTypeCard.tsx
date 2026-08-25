@@ -1,7 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, Bath, CalendarDays, Eye, Ruler } from "lucide-react";
+import { Bath, Check, Eye, Ruler } from "lucide-react";
 import {
-  formatDate,
   formatRM,
   lowestRent,
   type Property,
@@ -20,99 +19,115 @@ export function statusLabel(room: RoomType) {
 export default function RoomTypeCard({
   property,
   room,
+  selected,
+  onSelect,
 }: {
   property: Property;
   room: RoomType;
+  selected?: boolean;
+  onSelect?: (room: RoomType) => void;
 }) {
   const from = lowestRent(room);
   const detail = { slug: property.slug, typeId: room.id };
+  const showStatus = room.status !== "available";
 
-  const chips = [
+  const meta = [
     room.sizeLabel && { icon: Ruler, label: room.sizeLabel },
     { icon: Bath, label: room.bathroom === "ensuite" ? "Private ensuite" : "Shared bathroom" },
     { icon: Eye, label: room.hasView ? "With view" : "Internal facing" },
   ].filter(Boolean) as { icon: typeof Ruler; label: string }[];
 
   return (
-    <article className="group grid overflow-hidden rounded-3xl border border-border/70 bg-card shadow-card transition-shadow hover:shadow-lift sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-      <RoomGallery
-        images={room.gallery.length ? room.gallery : [room.image]}
-        alt={`${room.name} at ${property.name}`}
-        className="h-56 w-full sm:h-full sm:min-h-[16rem]"
-      />
+    <article
+      className={`group grid overflow-hidden rounded-[1.75rem] bg-card transition-shadow sm:grid-cols-[minmax(0,45%)_minmax(0,1fr)] ${
+        selected
+          ? "shadow-lift ring-2 ring-brand"
+          : "shadow-card ring-1 ring-border/60 hover:shadow-lift"
+      }`}
+    >
+      <div className="relative">
+        <RoomGallery
+          images={room.gallery.length ? room.gallery : [room.image]}
+          alt={`${room.name} at ${property.name}`}
+          className="h-60 w-full sm:h-full sm:min-h-[17rem]"
+        />
+        {showStatus && (
+          <span className="absolute left-4 top-4 rounded-full bg-card/95 px-3 py-1 text-xs font-semibold text-brand-deep shadow-sm">
+            {statusLabel(room)}
+          </span>
+        )}
+      </div>
 
-      <div className="flex flex-col gap-4 p-5 sm:p-6">
+      <div className="flex flex-col gap-5 p-6 sm:p-7">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                room.status === "available"
-                  ? "bg-brand-soft text-brand-deep"
-                  : room.status === "limited"
-                    ? "bg-accent-warm/20 text-foreground"
-                    : "bg-muted text-muted-foreground"
-              }`}
-            >
-              {statusLabel(room)}
-            </span>
-            <span className="rounded-full bg-brand px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-primary-foreground">
-              {room.tag}
-            </span>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h3 className="text-lg font-bold leading-snug text-brand-deep sm:text-xl">
+                <Link
+                  to="/properties/$slug/rooms/$typeId"
+                  params={detail}
+                  className="hover:underline"
+                >
+                  {room.name}
+                </Link>
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">{room.unitType}</p>
+            </div>
+
+            {onSelect && (
+              <button
+                type="button"
+                onClick={() => onSelect(room)}
+                aria-pressed={!!selected}
+                aria-label={`Calculate cost for ${room.name}`}
+                className={`flex size-7 shrink-0 items-center justify-center rounded-full border transition ${
+                  selected
+                    ? "border-brand bg-brand text-primary-foreground"
+                    : "border-border text-transparent hover:border-brand hover:text-brand/40"
+                }`}
+              >
+                <Check className="size-4" />
+              </button>
+            )}
           </div>
 
-          <h3 className="mt-2 text-lg font-bold text-brand-deep sm:text-xl">
-            <Link
-              to="/properties/$slug/rooms/$typeId"
-              params={detail}
-              className="hover:underline"
-            >
-              {room.name}
-            </Link>
-          </h3>
-          <p className="text-sm text-muted-foreground">{room.unitType}</p>
-
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {chips.map((c) => (
-              <span
-                key={c.label}
-                className="inline-flex items-center gap-1.5 rounded-full bg-brand-tint px-2.5 py-1 text-xs text-brand-deep"
-              >
-                <c.icon className="size-3.5" /> {c.label}
+          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
+            {meta.map((m) => (
+              <span key={m.label} className="inline-flex items-center gap-1.5">
+                <m.icon className="size-4 text-brand/70" /> {m.label}
               </span>
             ))}
           </div>
-
-          <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-            <CalendarDays className="size-4" /> Available from {formatDate(room.availableFrom)}
-          </p>
         </div>
 
-        <div className="mt-auto flex flex-wrap items-end justify-between gap-3 border-t border-border/70 pt-4">
+        <div className="mt-auto flex flex-wrap items-end justify-between gap-4 border-t border-border/60 pt-5">
           <div>
-            <p className="text-2xl font-bold text-brand-deep">
+            <p className="text-[1.75rem] font-bold leading-none text-brand-deep">
               {formatRM(from)}
-              <span className="text-sm font-normal text-muted-foreground">
+              <span className="ml-1 text-sm font-normal text-muted-foreground">
                 /mo{room.occupancies.includes("twin") && from === room.rent.long.twin
                   ? " per pax"
                   : ""}
               </span>
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="mt-1.5 text-xs text-muted-foreground">
               {room.rent.short.single || room.rent.short.twin
                 ? "12-month & short-term available"
                 : "12-month stays"}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button asChild size="sm" variant="outline">
-              <Link to="/properties/$slug/rooms/$typeId" params={detail}>
-                Details <ArrowRight className="size-4" />
-              </Link>
-            </Button>
+          <div className="flex items-center gap-4">
+            <Link
+              to="/properties/$slug/rooms/$typeId"
+              params={detail}
+              className="text-sm font-medium text-brand-deep underline-offset-4 hover:underline"
+            >
+              Details
+            </Link>
             <EnquireDialog
               property={property}
               room={room}
-              trigger={<Button size="sm">Enquire</Button>}
+              trigger={<Button size="sm" className="rounded-full px-5">Enquire</Button>}
             />
           </div>
         </div>

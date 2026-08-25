@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { CalendarDays } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 import {
   addMonths,
   company,
@@ -19,6 +19,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import SegmentedToggle from "./SegmentedToggle";
 
 export type StayState = {
@@ -39,11 +44,15 @@ export default function StayCalculator({
   property,
   room,
   rooms,
+  selectedRoomId,
+  onRoomChange,
   actions,
 }: {
   property: Property;
   room?: RoomType;
   rooms?: RoomType[];
+  selectedRoomId?: string | undefined;
+  onRoomChange?: (id: string) => void;
   actions?: (state: StayState) => ReactNode;
 }) {
   const options = rooms && rooms.length > 0 ? rooms : room ? [room] : [];
@@ -51,24 +60,31 @@ export default function StayCalculator({
     room ??
     [...options].sort((a, b) => (lowestRent(a) ?? Infinity) - (lowestRent(b) ?? Infinity))[0]!;
 
-  const [selectedId, setSelectedId] = useState(initial.id);
-  const selected = options.find((r) => r.id === selectedId) ?? initial;
+  const [internalId, setInternalId] = useState(initial.id);
+  const currentId = selectedRoomId ?? internalId;
+  const selected = options.find((r) => r.id === currentId) ?? initial;
   const showSelector = !room && options.length > 1;
 
   const [occupancy, setOccupancy] = useState<Occupancy>(initial.occupancies[0] ?? "single");
   const [moveIn, setMoveIn] = useState(() => defaultMoveIn(initial));
   const [moveOut, setMoveOut] = useState(() => addMonths(defaultMoveIn(initial), 12));
 
-  function selectRoom(id: string) {
-    const next = options.find((r) => r.id === id);
-    if (!next) return;
-    setSelectedId(id);
-    if (!next.occupancies.includes(occupancy)) setOccupancy(next.occupancies[0] ?? "single");
-    const from = defaultMoveIn(next);
+  useEffect(() => {
+    if (!selected.occupancies.includes(occupancy)) {
+      setOccupancy(selected.occupancies[0] ?? "single");
+    }
+    const from = defaultMoveIn(selected);
     if (moveIn < from) {
       setMoveIn(from);
       setMoveOut(addMonths(from, 12));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected.id]);
+
+  function selectRoom(id: string) {
+    if (!options.some((r) => r.id === id)) return;
+    setInternalId(id);
+    onRoomChange?.(id);
   }
 
   const valid = moveOut > moveIn;
@@ -96,12 +112,13 @@ export default function StayCalculator({
     <div className="rounded-3xl bg-card p-5 shadow-card ring-1 ring-border/60">
       <p className="text-sm font-bold text-brand-deep">Your stay</p>
 
+
       {showSelector && (
         <div className="mt-3">
           <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             Room type
           </span>
-          <Select value={selectedId} onValueChange={selectRoom}>
+          <Select value={currentId} onValueChange={selectRoom}>
             <SelectTrigger className="mt-1 h-11 rounded-2xl bg-muted/70 text-sm font-semibold">
               <SelectValue />
             </SelectTrigger>
@@ -110,8 +127,8 @@ export default function StayCalculator({
                 const from = lowestRent(r);
                 return (
                   <SelectItem key={r.id} value={r.id}>
-                    {r.tag} — {r.name}
-                    {from ? ` · from ${formatRM(from)}/mo` : ""}
+                    {r.unitType.replace(" Apartment", "")} · {r.name}
+                    {from ? ` — from ${formatRM(from)}/mo` : ""}
                   </SelectItem>
                 );
               })}
@@ -170,42 +187,10 @@ export default function StayCalculator({
       ) : (
         quote && (
           <>
-            <div className="mt-3 flex items-center gap-2 rounded-full bg-brand-soft px-3 py-1.5 text-xs font-bold text-brand-deep">
-              <CalendarDays className="size-3.5 text-brand" />
+            <p className="mt-2 text-xs text-muted-foreground">
               {quote.term === "long" ? "12-month rate" : "Short-term rate"} ·{" "}
               {formatRM(quote.rent)}/mo · {quote.days} days
-            </div>
-
-            <div className="mt-4">
-              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                Rent schedule
-              </p>
-              <table className="mt-2 w-full text-sm">
-                <tbody>
-                  {quote.schedule.map((s) => (
-                    <tr key={s.label}>
-                      <td className="py-1 pr-3 text-muted-foreground">
-                        {s.label}
-                        {!s.full && (
-                          <span className="ml-1 text-[10px] uppercase tracking-wide text-brand">
-                            {s.days}/{s.daysInMonth} days
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-1 text-right font-semibold text-foreground">
-                        {formatRM(s.amount)}
-                      </td>
-                    </tr>
-                  ))}
-                  <tr className="border-t border-border">
-                    <td className="pt-2 font-semibold text-brand-deep">Total rent for stay</td>
-                    <td className="pt-2 text-right font-bold text-brand-deep">
-                      {formatRM(quote.totalStay)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            </p>
 
             <div className="mt-4 rounded-2xl bg-brand-tint p-4">
               <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
@@ -241,9 +226,51 @@ export default function StayCalculator({
                 offset against your first payment.
               </p>
             </div>
+
+            <Collapsible className="mt-3 rounded-2xl bg-muted/60">
+              <CollapsibleTrigger className="group flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
+                <span className="text-sm font-semibold text-brand-deep">
+                  Monthly rent breakdown
+                </span>
+                <span className="flex items-center gap-2 text-sm font-bold text-brand-deep">
+                  {formatRM(quote.totalStay)}
+                  <ChevronDown className="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                </span>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <table className="w-full px-4 pb-3 text-sm">
+                  <tbody>
+                    {quote.schedule.map((s) => (
+                      <tr key={s.label}>
+                        <td className="py-1 pl-4 pr-3 text-muted-foreground">
+                          {s.label}
+                          {!s.full && (
+                            <span className="ml-1 text-[10px] uppercase tracking-wide text-brand">
+                              {s.days}/{s.daysInMonth} days
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-1 pr-4 text-right font-semibold text-foreground">
+                          {formatRM(s.amount)}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr>
+                      <td className="pb-3 pl-4 pr-3 pt-2 font-semibold text-brand-deep">
+                        Total rent for stay
+                      </td>
+                      <td className="pb-3 pr-4 pt-2 text-right font-bold text-brand-deep">
+                        {formatRM(quote.totalStay)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </CollapsibleContent>
+            </Collapsible>
           </>
         )
       )}
+
 
       {actions && <div className="mt-4 space-y-2">{actions(state)}</div>}
     </div>
