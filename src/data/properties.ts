@@ -130,7 +130,7 @@ export const properties: Property[] = [
     ],
     includedInStay: [
       "Free Wi-Fi",
-      "Monthly Cleaning of Common Areas & Bathrooms",
+      "Monthly Common Area Cleaning",
       "24/7 Student & Warden Support",
       "Maintenance Support",
     ],
