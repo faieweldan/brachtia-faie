@@ -68,10 +68,12 @@ export type Property = {
   description: string[];
   heroImage: string;
   gallery: { src: string; caption: string }[];
-  facilities: string[];
+  buildingFacilities: string[];
+  includedInStay: string[];
+  utilitiesNote: string;
+  insideApartment: string[];
+  apartmentFootnote?: string;
   nearby: string[];
-  included: string[];
-  excluded: string[];
   terms: string[];
   contractTerms: ContractTerm[];
   paymentCycle: string;
