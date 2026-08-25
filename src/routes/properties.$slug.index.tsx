@@ -65,8 +65,11 @@ export const Route = createFileRoute("/properties/$slug/")({
 
 function PropertyPage() {
   const { property } = Route.useLoaderData();
+  const filters = Route.useSearch();
+  const navigate = Route.useNavigate();
   const [term, setTerm] = useState<ContractTerm>("long");
   const rooms = getRoomTypes(property.slug);
+  const visibleRooms = filterRoomTypes(rooms, filters);
   const activeTerm = property.contractTerms.includes(term) ? term : "long";
   const tables = property.pricing[activeTerm];
   const gallery = property.gallery;
