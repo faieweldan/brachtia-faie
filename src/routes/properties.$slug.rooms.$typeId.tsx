@@ -2,22 +2,16 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
 import { CalendarDays, Check, MessageCircle, Ruler } from "lucide-react";
 import {
-  costBreakdown,
   formatDate,
-  formatRM,
-  company,
   getProperty,
   getRoomType,
   getRoomTypes,
-  termsFor,
   whatsappUrl,
-  type ContractTerm,
-  type Occupancy,
 } from "@/data/properties";
 import { Button } from "@/components/ui/button";
 import EnquireDialog from "@/components/site/EnquireDialog";
 import RoomTypeCard, { statusLabel } from "@/components/site/RoomTypeCard";
-import SegmentedToggle from "@/components/site/SegmentedToggle";
+import StayCalculator, { type StayState } from "@/components/site/StayCalculator";
 
 export const Route = createFileRoute("/properties/$slug/rooms/$typeId")({
   loader: ({ params }) => {
@@ -48,14 +42,7 @@ export const Route = createFileRoute("/properties/$slug/rooms/$typeId")({
 
 function RoomTypePage() {
   const { property, room } = Route.useLoaderData();
-  const availableTerms = termsFor(room, property);
-  const [term, setTerm] = useState<ContractTerm>(availableTerms[0] ?? "long");
-  const [occupancy, setOccupancy] = useState<Occupancy>(room.occupancies[0] ?? "single");
   const [photo, setPhoto] = useState(room.gallery[0] ?? room.image);
-
-  const activeTerm = availableTerms.includes(term) ? term : (availableTerms[0] ?? "long");
-  const rent = room.rent[activeTerm][occupancy];
-  const breakdown = rent ? costBreakdown(property, rent, activeTerm) : null;
 
   const others = getRoomTypes(property.slug).filter((r) => r.id !== room.id);
   const message = `Hi Brachtia Homes, I'm interested in the ${room.name} at ${property.name}.`;
@@ -118,7 +105,10 @@ function RoomTypePage() {
               >
                 {statusLabel(room)}
               </span>
-              <h1 className="mt-3 font-display text-3xl font-semibold text-brand-deep sm:text-4xl">
+              <span className="ml-2 rounded-full bg-brand px-3 py-1 text-xs font-bold uppercase tracking-wide text-primary-foreground">
+                {room.tag}
+              </span>
+              <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-brand-deep sm:text-4xl">
                 {room.name}
               </h1>
               <p className="mt-2 text-sm text-muted-foreground">
@@ -166,7 +156,7 @@ function RoomTypePage() {
             <StayCalculator
               property={property}
               room={room}
-              actions={(s) => (
+              actions={(s: StayState) => (
                 <>
                   <EnquireDialog
                     property={property}
