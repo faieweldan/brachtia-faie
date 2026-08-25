@@ -48,8 +48,8 @@ const perks = [
   },
   {
     icon: Smartphone,
-    title: "Fully Digital Journey",
-    text: "From enquiry and booking to documents and check-in, all handled online.",
+    title: "Transparent Pricing",
+    text: "Know your rent, deposits and fees upfront, with no unexpected surprises.",
   },
   {
     icon: HeartHandshake,
