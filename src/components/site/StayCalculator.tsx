@@ -51,7 +51,7 @@ export default function StayCalculator({
   property: Property;
   room?: RoomType;
   rooms?: RoomType[];
-  selectedRoomId?: string;
+  selectedRoomId?: string | undefined;
   onRoomChange?: (id: string) => void;
   actions?: (state: StayState) => ReactNode;
 }) {
