@@ -12,7 +12,7 @@ export default function RoomFilters({
   onChange,
 }: {
   unitTypes: string[];
-  value: RoomFilterState;
+  value: Partial<RoomFilterState>;
   onChange: (next: Partial<RoomFilterState>) => void;
 }) {
   const groups: Group[] = [
@@ -55,7 +55,7 @@ export default function RoomFilters({
           </span>
           <div className="flex flex-wrap gap-2">
             {g.options.map((o) => {
-              const active = value[g.key] === o.value;
+              const active = (value[g.key] ?? "all") === o.value;
               return (
                 <button
                   key={o.value}

@@ -535,10 +535,10 @@ export type RoomFilterState = {
   view: string;
 };
 
-export function filterRoomTypes(rooms: RoomType[], f: RoomFilterState) {
+export function filterRoomTypes(rooms: RoomType[], f: Partial<RoomFilterState>) {
   return rooms.filter((r) => {
-    if (f.unit !== "all" && r.unitType !== f.unit) return false;
-    if (f.bath !== "all" && r.bathroom !== f.bath) return false;
+    if (f.unit && f.unit !== "all" && r.unitType !== f.unit) return false;
+    if (f.bath && f.bath !== "all" && r.bathroom !== f.bath) return false;
     if (f.view === "view" && !r.hasView) return false;
     return true;
   });
