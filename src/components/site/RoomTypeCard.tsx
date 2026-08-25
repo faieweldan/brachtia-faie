@@ -27,7 +27,7 @@ export default function RoomTypeCard({
   onSelect?: (room: RoomType) => void;
 }) {
   const from = lowestRent(room);
-  const detail = { slug: property.slug, typeId: room.id };
+  
   const showStatus = room.status !== "available";
 
   const meta = [

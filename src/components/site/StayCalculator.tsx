@@ -195,15 +195,11 @@ export default function StayCalculator({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {options.map((r) => {
-                  const from = lowestRent(r);
-                  return (
-                    <SelectItem key={r.id} value={r.id}>
-                      {r.unitType.replace(" Apartment", "")} · {r.name}
-                      {from ? ` — from ${formatRM(from)}/mo` : ""}
-                    </SelectItem>
-                  );
-                })}
+                {options.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>
+                    {r.unitType.replace(" Apartment", "")} · {r.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
