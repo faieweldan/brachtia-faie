@@ -34,6 +34,7 @@ const searchSchema = z.object({
   unit: fallback(z.string(), "all").default("all"),
   bath: fallback(z.string(), "all").default("all"),
   view: fallback(z.string(), "all").default("all"),
+  occ: fallback(z.string(), "all").default("all"),
 });
 
 export const Route = createFileRoute("/properties/$slug/")({
@@ -76,7 +77,7 @@ function PropertyPage() {
 
   return (
     <>
-      <section className="mx-auto max-w-6xl px-4 pt-6 sm:px-6">
+      <section className="mx-auto max-w-[88rem] px-4 pt-6 sm:px-6">
         <nav className="text-sm text-muted-foreground">
           <Link to="/properties" className="hover:text-brand">
             Properties
@@ -144,8 +145,8 @@ function PropertyPage() {
 
       </section>
 
-      <section className="mx-auto mt-8 max-w-6xl px-4 sm:px-6">
-        <div className="grid gap-10 lg:grid-cols-[1.6fr_1fr]">
+      <section className="mx-auto mt-8 max-w-[88rem] px-4 sm:px-6">
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_23rem] xl:grid-cols-[minmax(0,1fr)_25rem]">
           <div className="space-y-12">
             <div>
               <h1 className="text-3xl font-bold text-brand-deep sm:text-4xl">
@@ -198,7 +199,7 @@ function PropertyPage() {
                     value={filters}
                     resultLabel={`${visibleRooms.length} of ${rooms.length} room types`}
                     onClear={() =>
-                      navigate({ search: { unit: "all", bath: "all", view: "all" }, replace: true })
+                      navigate({ search: { unit: "all", bath: "all", view: "all", occ: "all" }, replace: true })
                     }
                     onChange={(next) =>
                       navigate({ search: (prev) => ({ ...prev, ...next }), replace: true })
@@ -235,7 +236,7 @@ function PropertyPage() {
                     variant="outline"
                     className="mt-4"
                     onClick={() =>
-                      navigate({ search: { unit: "all", bath: "all", view: "all" }, replace: true })
+                      navigate({ search: { unit: "all", bath: "all", view: "all", occ: "all" }, replace: true })
                     }
                   >
                     Clear filters

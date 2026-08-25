@@ -52,6 +52,15 @@ export default function RoomFilters({
         { value: "view", label: "With view" },
       ],
     },
+    {
+      key: "occ",
+      label: "Occupancy",
+      options: [
+        { value: "all", label: "Any occupancy" },
+        { value: "single", label: "Single" },
+        { value: "twin", label: "Twin sharing" },
+      ],
+    },
   ];
 
   const active = groups.some((g) => (value[g.key] ?? "all") !== "all");

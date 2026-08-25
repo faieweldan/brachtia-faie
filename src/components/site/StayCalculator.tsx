@@ -169,6 +169,14 @@ export default function StayCalculator({
           </div>
         )}
 
+        {selected.occupancies.length === 1 && selected.occupancies[0] === "single" &&
+          selected.unitType.toLowerCase().includes("4-bedroom") && (
+            <p className="mt-3 rounded-2xl bg-brand-tint px-3 py-2 text-xs text-brand-deep ring-1 ring-brand-soft">
+              Twin sharing is not available for 4-Bedroom apartments — this room is priced as single
+              occupancy.
+            </p>
+          )}
+
         {selected.occupancies.length > 1 && (
           <SegmentedToggle
             className="mt-3"
@@ -250,7 +258,7 @@ export default function StayCalculator({
 
                 <div className="mt-3 flex items-end justify-between gap-3 rounded-xl bg-card px-3 py-2.5 shadow-card">
                   <span className="text-sm font-bold text-brand-deep">
-                    Pay to secure your room
+                    Your first-time payment
                   </span>
                   <span className="whitespace-nowrap text-2xl font-extrabold tabular-nums text-brand">
                     {formatRM(quote.totalUpfront)}
@@ -258,9 +266,14 @@ export default function StayCalculator({
                 </div>
 
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Then {formatRM(quote.monthlyAfter)}/month. Booking fee {company.bookingFee} is
-                  offset against your first payment. No hidden fees.
+                  Then {formatRM(quote.monthlyAfter)}/month. No hidden fees.
                 </p>
+
+                <div className="mt-3 rounded-xl bg-card/70 px-3 py-2 text-xs text-brand-deep ring-1 ring-brand-soft">
+                  <span className="font-semibold">Pay to secure your room:</span> a booking fee of{" "}
+                  {company.bookingFee} is required to reserve your room once availability is
+                  confirmed — it is offset against your first payment.
+                </div>
               </div>
 
               <Collapsible className="mt-3 rounded-2xl bg-muted/60">

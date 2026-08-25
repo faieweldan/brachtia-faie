@@ -220,10 +220,10 @@ export const properties: Property[] = [
           unitType: "4-Bedroom Apartment",
           blocks: "Block A & B",
           rows: [
-            { roomType: "Room A", note: "Standard, with view · 105 sq ft", single: 800, twin: 450 },
-            { roomType: "Room B", note: "Standard, with view · 105 sq ft", single: 800, twin: 450 },
-            { roomType: "Room C", note: "Standard small, internal facing · 90 sq ft", single: 700, twin: 400 },
-            { roomType: "Room D", note: "Standard small, with view · 90 sq ft", single: 800, twin: 450 },
+            { roomType: "Room A", note: "Standard, with view · 105 sq ft", single: 800, twin: null },
+            { roomType: "Room B", note: "Standard, with view · 105 sq ft", single: 800, twin: null },
+            { roomType: "Room C", note: "Standard small, internal facing · 90 sq ft", single: 700, twin: null },
+            { roomType: "Room D", note: "Standard small, with view · 90 sq ft", single: 800, twin: null },
           ],
         },
       ],
@@ -423,8 +423,8 @@ export const roomTypes: RoomType[] = [
     image: roomSingle,
     gallery: [roomSingle, kitchen, livingDining],
     features: ["Exterior view", "Air-conditioned", "Study desk & wardrobe", "Two common bathrooms"],
-    occupancies: ["single", "twin"],
-    rent: { long: { single: 800, twin: 450 }, short: { single: null, twin: null } },
+    occupancies: ["single"],
+    rent: { long: { single: 800, twin: null }, short: { single: null, twin: null } },
     availableFrom: "2026-09-01",
     status: "available",
   },
@@ -446,8 +446,8 @@ export const roomTypes: RoomType[] = [
     image: roomTwin,
     gallery: [roomTwin, kitchen, livingDining],
     features: ["Exterior view", "Air-conditioned", "Study desk & wardrobe", "Two common bathrooms"],
-    occupancies: ["single", "twin"],
-    rent: { long: { single: 800, twin: 450 }, short: { single: null, twin: null } },
+    occupancies: ["single"],
+    rent: { long: { single: 800, twin: null }, short: { single: null, twin: null } },
     availableFrom: "2026-09-01",
     status: "available",
   },
@@ -469,8 +469,8 @@ export const roomTypes: RoomType[] = [
     image: roomTwin,
     gallery: [roomTwin, kitchen, livingDining],
     features: ["Best value", "Air-conditioned", "Study desk & wardrobe", "Two common bathrooms"],
-    occupancies: ["single", "twin"],
-    rent: { long: { single: 700, twin: 400 }, short: { single: null, twin: null } },
+    occupancies: ["single"],
+    rent: { long: { single: 700, twin: null }, short: { single: null, twin: null } },
     availableFrom: "2026-11-01",
     status: "available",
   },
@@ -492,8 +492,8 @@ export const roomTypes: RoomType[] = [
     image: roomSingle,
     gallery: [roomSingle, livingDining, kitchen],
     features: ["Exterior view", "Air-conditioned", "Study desk & wardrobe", "Two common bathrooms"],
-    occupancies: ["single", "twin"],
-    rent: { long: { single: 800, twin: 450 }, short: { single: null, twin: null } },
+    occupancies: ["single"],
+    rent: { long: { single: 800, twin: null }, short: { single: null, twin: null } },
     availableFrom: "2026-10-01",
     status: "available",
   },
@@ -533,6 +533,7 @@ export type RoomFilterState = {
   unit: string;
   bath: string;
   view: string;
+  occ: string;
 };
 
 export function filterRoomTypes(rooms: RoomType[], f: Partial<RoomFilterState>) {
@@ -540,6 +541,7 @@ export function filterRoomTypes(rooms: RoomType[], f: Partial<RoomFilterState>) 
     if (f.unit && f.unit !== "all" && r.unitType !== f.unit) return false;
     if (f.bath && f.bath !== "all" && r.bathroom !== f.bath) return false;
     if (f.view === "view" && !r.hasView) return false;
+    if (f.occ && f.occ !== "all" && !r.occupancies.includes(f.occ as Occupancy)) return false;
     return true;
   });
 }
