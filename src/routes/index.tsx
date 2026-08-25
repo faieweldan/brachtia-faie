@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowRight,
+  BadgePercent,
   CalendarCheck,
   ClipboardList,
   GraduationCap,
@@ -8,7 +9,6 @@ import {
   MailCheck,
   Receipt,
   ShieldCheck,
-  Smartphone,
   Sofa,
   Users,
   Headphones,
@@ -47,7 +47,7 @@ const perks = [
     text: "Single or twin-sharing rooms, with short and long-term stays.",
   },
   {
-    icon: Smartphone,
+    icon: BadgePercent,
     title: "Transparent Pricing",
     text: "Know your rent, deposits and fees upfront, with no unexpected surprises.",
   },
