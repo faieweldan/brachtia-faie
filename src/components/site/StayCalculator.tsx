@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ChevronDown, Download } from "lucide-react";
+import { Check, ChevronDown, Download, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Logo from "./Logo";
 
