@@ -28,6 +28,143 @@ import {
 
 const GENDERS = ["Female", "Male", "Prefer not to say"];
 
+const COUNTRIES = [
+  { name: "Malaysia", code: "+60" },
+  { name: "China", code: "+86" },
+  { name: "India", code: "+91" },
+  { name: "Indonesia", code: "+62" },
+  { name: "Bangladesh", code: "+880" },
+  { name: "Pakistan", code: "+92" },
+  { name: "Nigeria", code: "+234" },
+  { name: "Egypt", code: "+20" },
+  { name: "Saudi Arabia", code: "+966" },
+  { name: "United Arab Emirates", code: "+971" },
+  { name: "Kuwait", code: "+965" },
+  { name: "Qatar", code: "+974" },
+  { name: "Oman", code: "+968" },
+  { name: "Bahrain", code: "+973" },
+  { name: "Singapore", code: "+65" },
+  { name: "Thailand", code: "+66" },
+  { name: "Vietnam", code: "+84" },
+  { name: "Philippines", code: "+63" },
+  { name: "Myanmar", code: "+95" },
+  { name: "Cambodia", code: "+855" },
+  { name: "Laos", code: "+856" },
+  { name: "Brunei", code: "+673" },
+  { name: "Hong Kong", code: "+852" },
+  { name: "Taiwan", code: "+886" },
+  { name: "South Korea", code: "+82" },
+  { name: "Japan", code: "+81" },
+  { name: "Australia", code: "+61" },
+  { name: "United Kingdom", code: "+44" },
+  { name: "United States", code: "+1" },
+  { name: "Canada", code: "+1" },
+  { name: "South Africa", code: "+27" },
+  { name: "Kenya", code: "+254" },
+  { name: "Ghana", code: "+233" },
+  { name: "Uganda", code: "+256" },
+  { name: "Tanzania", code: "+255" },
+  { name: "Zimbabwe", code: "+263" },
+  { name: "Zambia", code: "+260" },
+  { name: "Rwanda", code: "+250" },
+  { name: "Ethiopia", code: "+251" },
+  { name: "Morocco", code: "+212" },
+  { name: "Algeria", code: "+213" },
+  { name: "Tunisia", code: "+216" },
+  { name: "Libya", code: "+218" },
+  { name: "Sudan", code: "+249" },
+  { name: "Jordan", code: "+962" },
+  { name: "Lebanon", code: "+961" },
+  { name: "Iraq", code: "+964" },
+  { name: "Iran", code: "+98" },
+  { name: "Turkey", code: "+90" },
+  { name: "Yemen", code: "+967" },
+  { name: "Syria", code: "+963" },
+  { name: "Afghanistan", code: "+93" },
+  { name: "Sri Lanka", code: "+94" },
+  { name: "Nepal", code: "+977" },
+  { name: "Maldives", code: "+960" },
+  { name: "Mongolia", code: "+976" },
+  { name: "Kazakhstan", code: "+7" },
+  { name: "Uzbekistan", code: "+998" },
+  { name: "Russia", code: "+7" },
+  { name: "Ukraine", code: "+380" },
+  { name: "France", code: "+33" },
+  { name: "Germany", code: "+49" },
+  { name: "Italy", code: "+39" },
+  { name: "Spain", code: "+34" },
+  { name: "Netherlands", code: "+31" },
+  { name: "Sweden", code: "+46" },
+  { name: "Norway", code: "+47" },
+  { name: "Denmark", code: "+45" },
+  { name: "Finland", code: "+358" },
+  { name: "Ireland", code: "+353" },
+  { name: "Belgium", code: "+32" },
+  { name: "Switzerland", code: "+41" },
+  { name: "Austria", code: "+43" },
+  { name: "Portugal", code: "+351" },
+  { name: "Greece", code: "+30" },
+  { name: "Poland", code: "+48" },
+  { name: "Czech Republic", code: "+420" },
+  { name: "Hungary", code: "+36" },
+  { name: "Romania", code: "+40" },
+  { name: "Bulgaria", code: "+359" },
+  { name: "Croatia", code: "+385" },
+  { name: "Serbia", code: "+381" },
+  { name: "Slovakia", code: "+421" },
+  { name: "Slovenia", code: "+386" },
+  { name: "Lithuania", code: "+370" },
+  { name: "Latvia", code: "+371" },
+  { name: "Estonia", code: "+372" },
+  { name: "Belarus", code: "+375" },
+  { name: "Moldova", code: "+373" },
+  { name: "Azerbaijan", code: "+994" },
+  { name: "Georgia", code: "+995" },
+  { name: "Armenia", code: "+374" },
+  { name: "Kyrgyzstan", code: "+996" },
+  { name: "Tajikistan", code: "+992" },
+  { name: "Turkmenistan", code: "+993" },
+  { name: "North Macedonia", code: "+389" },
+  { name: "Bosnia and Herzegovina", code: "+387" },
+  { name: "Albania", code: "+355" },
+  { name: "Montenegro", code: "+382" },
+  { name: "Cyprus", code: "+357" },
+  { name: "Malta", code: "+356" },
+  { name: "Iceland", code: "+354" },
+  { name: "Luxembourg", code: "+352" },
+  { name: "Monaco", code: "+377" },
+  { name: "Andorra", code: "+376" },
+  { name: "Liechtenstein", code: "+423" },
+  { name: "San Marino", code: "+378" },
+  { name: "Vatican City", code: "+379" },
+  { name: "Brazil", code: "+55" },
+  { name: "Mexico", code: "+52" },
+  { name: "Argentina", code: "+54" },
+  { name: "Colombia", code: "+57" },
+  { name: "Chile", code: "+56" },
+  { name: "Peru", code: "+51" },
+  { name: "Venezuela", code: "+58" },
+  { name: "Ecuador", code: "+593" },
+  { name: "Bolivia", code: "+591" },
+  { name: "Paraguay", code: "+595" },
+  { name: "Uruguay", code: "+598" },
+  { name: "Guyana", code: "+592" },
+  { name: "Suriname", code: "+597" },
+  { name: "New Zealand", code: "+64" },
+  { name: "Fiji", code: "+679" },
+  { name: "Papua New Guinea", code: "+675" },
+  { name: "Solomon Islands", code: "+677" },
+  { name: "Vanuatu", code: "+678" },
+  { name: "Samoa", code: "+685" },
+  { name: "Tonga", code: "+676" },
+  { name: "Kiribati", code: "+686" },
+  { name: "Tuvalu", code: "+688" },
+  { name: "Nauru", code: "+674" },
+  { name: "Palau", code: "+680" },
+  { name: "Marshall Islands", code: "+692" },
+  { name: "Micronesia", code: "+691" },
+];
+
 const selectClass =
   "h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-brand/40";
 
@@ -42,10 +179,10 @@ const leadSchema = z.object({
   name: z.string().trim().min(2, "Enter your full name").max(100),
   university: z.string().trim().min(2, "Select your university").max(120),
   intake: z.string().trim().min(4, "Select your intake").max(20),
-  nationality: z.string().trim().min(2, "Enter your nationality").max(60),
+  nationality: z.string().trim().min(2, "Select your nationality").max(60),
   gender: z.string().trim().min(1, "Select your gender").max(30),
   email: z.string().trim().email("Enter a valid email").max(255),
-  mobile: z.string().trim().min(7, "Enter a valid mobile number").max(25),
+  mobile: z.string().trim().min(7, "Enter a valid mobile number").max(30),
   message: z.string().trim().max(1000).optional(),
 });
 
@@ -82,6 +219,10 @@ export default function EnquiryDialog({
   const [submitted, setSubmitted] = useState(false);
   const [lead, setLead] = useState<z.infer<typeof leadSchema> | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [countryCode, setCountryCode] = useState("+60");
+  const [mobileNumber, setMobileNumber] = useState("");
+
+  const mobileCombined = `${countryCode} ${mobileNumber}`.trim();
 
   const room = stay.room;
   const occupancies = room?.occupancies ?? [];
@@ -106,6 +247,8 @@ export default function EnquiryDialog({
     if (!next) {
       setErrors({});
       setSubmitted(false);
+      setCountryCode("+60");
+      setMobileNumber("");
     }
   }
 
@@ -356,7 +499,21 @@ export default function EnquiryDialog({
 
                 <div className="space-y-1.5">
                   <Label htmlFor="en-nat">Nationality</Label>
-                  <Input id="en-nat" name="nationality" placeholder="Malaysian" maxLength={60} />
+                  <select
+                    id="en-nat"
+                    name="nationality"
+                    className={selectClass}
+                    defaultValue=""
+                  >
+                    <option value="" disabled>
+                      Select your country
+                    </option>
+                    {COUNTRIES.map((c) => (
+                      <option key={c.name} value={c.name}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
                   {errors['nationality'] && (
                     <p className="text-xs text-destructive">{errors['nationality']}</p>
                   )}
@@ -391,9 +548,34 @@ export default function EnquiryDialog({
                   {errors['email'] && <p className="text-xs text-destructive">{errors['email']}</p>}
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="en-mobile">Mobile / WhatsApp</Label>
-                  <Input id="en-mobile" name="mobile" placeholder="+60..." maxLength={25} />
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="en-mobile-number">Mobile / WhatsApp</Label>
+                  <div className="flex gap-2">
+                    <select
+                      id="en-country-code"
+                      aria-label="Country code"
+                      className={`${selectClass} w-28 shrink-0`}
+                      value={countryCode}
+                      onChange={(e) => setCountryCode(e.target.value)}
+                    >
+                      {COUNTRIES.map((c) => (
+                        <option key={c.code + c.name} value={c.code}>
+                          {c.code} · {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    <Input
+                      id="en-mobile-number"
+                      type="tel"
+                      inputMode="tel"
+                      placeholder="12 345 6789"
+                      maxLength={25}
+                      className="flex-1"
+                      value={mobileNumber}
+                      onChange={(e) => setMobileNumber(e.target.value)}
+                    />
+                    <input type="hidden" name="mobile" value={mobileCombined} />
+                  </div>
                   {errors['mobile'] && (
                     <p className="text-xs text-destructive">{errors['mobile']}</p>
                   )}
