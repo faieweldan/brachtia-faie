@@ -1,6 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Check, ChevronDown, Download, Info, MousePointerClick } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Check, ChevronDown, Info, MousePointerClick } from "lucide-react";
 import Logo from "./Logo";
 
 import {
@@ -16,6 +15,7 @@ import {
   type PaymentTerm,
   type Property,
   type RoomType,
+  type StayQuote,
 } from "@/data/properties";
 import {
   Collapsible,
@@ -23,16 +23,17 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import SegmentedToggle from "./SegmentedToggle";
-import QuoteDetailsDialog, { type QuoteLead } from "./QuoteDetailsDialog";
 
 export type StayState = {
-  occupancy: Occupancy;
+  occupancy: Occupancy | undefined;
   term: ContractTerm;
   rent: number | null;
   moveIn: string;
   moveOut: string;
-  room: RoomType;
+  room: RoomType | undefined;
+  quote: StayQuote | null;
 };
+
 
 function durationLabel(from: string, to: string) {
   const a = new Date(`${from}T00:00:00Z`);
