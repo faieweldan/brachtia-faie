@@ -1,8 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
 import { LayoutGrid, MapPin } from "lucide-react";
-import { fallback, zodValidator } from "@tanstack/zod-adapter";
-import { z } from "zod";
 
 import {
   Dialog,
@@ -26,15 +24,7 @@ import EnquireDialog from "@/components/site/EnquireDialog";
 import RoomPriceTable from "@/components/site/RoomPriceTable";
 import StayCalculator from "@/components/site/StayCalculator";
 
-const searchSchema = z.object({
-  unit: fallback(z.string(), "all").default("all"),
-  bath: fallback(z.string(), "all").default("all"),
-  view: fallback(z.string(), "all").default("all"),
-  occ: fallback(z.string(), "all").default("all"),
-});
-
 export const Route = createFileRoute("/properties/$slug/")({
-  validateSearch: zodValidator(searchSchema),
   loader: ({ params }) => {
     const property = getProperty(params.slug);
     if (!property) throw notFound();
@@ -58,14 +48,27 @@ export const Route = createFileRoute("/properties/$slug/")({
 });
 
 
+function plusMonths(iso: string, months: number) {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+
 function PropertyPage() {
   const { property } = Route.useLoaderData();
-  const filters = Route.useSearch();
-  const navigate = Route.useNavigate();
+  const [picks, setPicks] = useState<string[]>([]);
   const [term, setTerm] = useState<ContractTerm>("long");
   const [selectedRoomId, setSelectedRoomId] = useState<string | undefined>(undefined);
   const [selectedOccupancy, setSelectedOccupancy] = useState<Occupancy | undefined>(undefined);
   const [moveIn, setMoveIn] = useState(() => new Date().toISOString().slice(0, 10));
+  const [moveOut, setMoveOut] = useState(() =>
+    plusMonths(new Date().toISOString().slice(0, 10), 12),
+  );
+
+  function changeMoveIn(value: string) {
+    setMoveIn(value);
+    if (moveOut <= value) setMoveOut(plusMonths(value, term === "short" ? 3 : 12));
+  }
 
   const rooms = getRoomTypes(property.slug);
   const activeTerm = property.contractTerms.includes(term) ? term : "long";
@@ -192,9 +195,12 @@ function PropertyPage() {
                 <RoomPriceTable
                   property={property}
                   rooms={rooms}
-                  filters={filters}
+                  picks={picks}
+                  onPicksChange={setPicks}
                   moveIn={moveIn}
-                  onMoveInChange={setMoveIn}
+                  onMoveInChange={changeMoveIn}
+                  moveOut={moveOut}
+                  onMoveOutChange={setMoveOut}
                   term={activeTerm}
                   onTermChange={setTerm}
                   selectedRoomId={selectedRoomId}
@@ -205,15 +211,6 @@ function PropertyPage() {
                       .getElementById("stay-calculator")
                       ?.scrollIntoView({ behavior: "smooth", block: "center" });
                   }}
-                  onFilterChange={(next) =>
-                    navigate({ search: (prev) => ({ ...prev, ...next }), replace: true })
-                  }
-                  onClearFilters={() =>
-                    navigate({
-                      search: { unit: "all", bath: "all", view: "all", occ: "all" },
-                      replace: true,
-                    })
-                  }
                 />
               </div>
             </div>
@@ -237,6 +234,7 @@ function PropertyPage() {
                 selectedRoomId={selectedRoomId ?? undefined}
                 onRoomChange={setSelectedRoomId}
                 moveIn={moveIn}
+                moveOut={moveOut}
                 occupancy={selectedOccupancy}
                 actions={(state) => (
                   <EnquireDialog

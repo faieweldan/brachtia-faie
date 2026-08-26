@@ -100,6 +100,8 @@ export type Property = {
   pointsOfInterest: PlaceNearby[];
   terms: string[];
   contractTerms: ContractTerm[];
+  /** Bed choices offered for single occupancy at this residence */
+  singleBedOptions?: string[];
   paymentCycle: string;
   feeConfig: Record<ContractTerm, FeeConfig>;
   pricing: Record<ContractTerm, PricingTable[]>;
@@ -190,6 +192,7 @@ export const properties: Property[] = [
       "Room or unit changes permitted anytime with an RM100 administrative fee",
     ],
     contractTerms: ["long", "short"],
+    singleBedOptions: ["Single bed", "Queen bed", "King bed"],
     paymentCycle: "Rental payable bi-monthly",
     feeConfig: {
       long: {
@@ -304,6 +307,7 @@ export const properties: Property[] = [
       "Halal, non-smoking and gender-segregated units (no unisex)",
     ],
     contractTerms: ["long"],
+    singleBedOptions: ["Queen bed"],
     paymentCycle: "Rental payable monthly",
     feeConfig: {
       long: {
@@ -541,19 +545,42 @@ export function getRoomTypes(slug: string) {
   return roomTypes.filter((r) => r.propertySlug === slug && r.publicVisible);
 }
 
-export type RoomFilterState = {
-  unit: string;
-  bath: string;
-  view: string;
-  occ: string;
-};
+/**
+ * Flat list of filter tokens, e.g. ["occ:single", "unit:3 Bedroom Apartment",
+ * "bath:ensuite", "view:exterior"]. Tokens in the same family are OR'd,
+ * families are AND'd together.
+ */
+export type RoomFilterToken = string;
 
-export function filterRoomTypes(rooms: RoomType[], f: Partial<RoomFilterState>) {
+function family(token: string) {
+  return token.split(":")[0] ?? "";
+}
+
+export function filterRoomTypes(rooms: RoomType[], picks: RoomFilterToken[]) {
+  const groups = new Map<string, string[]>();
+  for (const t of picks) {
+    const f = family(t);
+    groups.set(f, [...(groups.get(f) ?? []), t.slice(f.length + 1)]);
+  }
+
   return rooms.filter((r) => {
-    if (f.unit && f.unit !== "all" && r.unitType !== f.unit) return false;
-    if (f.bath && f.bath !== "all" && r.bathroom !== f.bath) return false;
-    if (f.view === "view" && !r.hasView) return false;
-    if (f.occ && f.occ !== "all" && !r.occupancies.includes(f.occ as Occupancy)) return false;
+    for (const [f, values] of groups) {
+      if (values.length === 0) continue;
+      let ok = false;
+      if (f === "occ") ok = values.some((v) => r.occupancies.includes(v as Occupancy));
+      else if (f === "unit") ok = values.includes(r.unitType);
+      else if (f === "bath") ok = values.includes(r.bathroom);
+      else if (f === "view")
+        ok = values.some((v) =>
+          v === "exterior"
+            ? r.hasView && r.viewType !== "Corridor"
+            : v === "corridor"
+              ? r.hasView && r.viewType === "Corridor"
+              : false,
+        );
+      else ok = true;
+      if (!ok) return false;
+    }
     return true;
   });
 }

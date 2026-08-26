@@ -63,6 +63,7 @@ export default function StayCalculator({
   onRoomChange,
   actions,
   moveIn: moveInProp,
+  moveOut: moveOutProp,
   occupancy: occupancyProp,
 }: {
   property: Property;
@@ -73,6 +74,8 @@ export default function StayCalculator({
   actions?: (state: StayState) => ReactNode;
   /** Externally controlled move-in date (e.g. from the room table). */
   moveIn?: string | undefined;
+  /** Externally controlled move-out date (e.g. from the room table). */
+  moveOut?: string | undefined;
   /** Externally controlled occupancy (e.g. from the room table). */
   occupancy?: Occupancy | undefined;
 }) {
@@ -107,9 +110,9 @@ export default function StayCalculator({
     const from = defaultMoveIn(selected);
     const next = moveInProp < from ? from : moveInProp;
     setMoveIn(next);
-    setMoveOut(addMonths(next, 12));
+    setMoveOut(moveOutProp && moveOutProp > next ? moveOutProp : addMonths(next, 12));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [moveInProp, selected.id]);
+  }, [moveInProp, moveOutProp, selected.id]);
 
   useEffect(() => {
     if (occupancyProp && selected.occupancies.includes(occupancyProp)) {

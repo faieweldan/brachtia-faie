@@ -56,6 +56,7 @@ export default function RoomDetailDialog({
   ].filter(Boolean) as { icon: typeof Ruler; label: string }[];
 
   const furnishing = room.furnishing ?? DEFAULT_FURNISHING;
+  const bedOptions = property.singleBedOptions ?? [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -124,7 +125,12 @@ export default function RoomDetailDialog({
                         <td className="px-4 py-2.5 text-muted-foreground">
                           {offered ? (
                             <span className="inline-flex items-center gap-1.5">
-                              <BedDouble className="size-3.5 text-brand" /> {bedConfig(room, o)}
+                              <BedDouble className="size-3.5 shrink-0 text-brand" />
+                              {o === "single" && bedOptions.length > 0
+                                ? bedOptions.length > 1
+                                  ? `Choose: ${bedOptions.join(" / ")}`
+                                  : bedOptions[0]
+                                : bedConfig(room, o)}
                             </span>
                           ) : (
                             "—"
