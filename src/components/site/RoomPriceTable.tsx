@@ -142,7 +142,7 @@ export default function RoomPriceTable({
             {datesSet ? (
               term === "short" ? (
                 <p className="rounded-2xl bg-accent px-3.5 py-2 text-xs font-semibold text-brand-deep">
-                  11 months 15 days or less — short-term rates shown.
+                  short-term rental rates shown.
                 </p>
               ) : (
                 <p className="rounded-2xl bg-brand-tint px-3.5 py-2 text-xs font-semibold text-brand-deep">
