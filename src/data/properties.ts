@@ -738,7 +738,9 @@ export function stayDays(fromISO: string, toISOStr: string) {
 }
 
 export function termForRange(fromISO: string, toISOStr: string): ContractTerm {
-  return stayDays(fromISO, toISOStr) >= 182 ? "long" : "short";
+  const twelveMonthEnd = parseISO(addMonths(fromISO, 12));
+  twelveMonthEnd.setUTCDate(twelveMonthEnd.getUTCDate() - 1);
+  return parseISO(toISOStr).getTime() >= twelveMonthEnd.getTime() ? "long" : "short";
 }
 
 /** Splits a date range into calendar months and pro-rates partial ones daily. */
