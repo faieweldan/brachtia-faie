@@ -247,6 +247,8 @@ export default function EnquiryDialog({
     if (!next) {
       setErrors({});
       setSubmitted(false);
+      setCountryCode("+60");
+      setMobileNumber("");
     }
   }
 
