@@ -192,6 +192,7 @@ export const properties: Property[] = [
       "Room or unit changes permitted anytime with an RM100 administrative fee",
     ],
     contractTerms: ["long", "short"],
+    singleBedOptions: ["Single bed", "Queen bed", "King bed"],
     paymentCycle: "Rental payable bi-monthly",
     feeConfig: {
       long: {
