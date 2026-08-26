@@ -187,19 +187,22 @@ export default function RoomDetailDialog({
                   onOpenChange(false);
                 }}
               >
-                Use this room in the calculator
+                Select this room
               </Button>
             )}
-            <EnquireDialog
-              property={property}
-              room={room}
-              trigger={
-                <Button variant="outline" size="lg" className="flex-1">
-                  Enquire
-                </Button>
-              }
-            />
+            <Button asChild variant="outline" size="lg" className="flex-1">
+              <a
+                href={whatsappUrl(
+                  `Hi Brachtia Homes, I'd like to check availability for ${room.name} at ${property.name}.`,
+                )}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <MessageCircle className="size-4" /> WhatsApp us
+              </a>
+            </Button>
           </div>
+
         </div>
       </DialogContent>
     </Dialog>
