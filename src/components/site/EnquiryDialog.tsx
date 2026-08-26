@@ -499,7 +499,21 @@ export default function EnquiryDialog({
 
                 <div className="space-y-1.5">
                   <Label htmlFor="en-nat">Nationality</Label>
-                  <Input id="en-nat" name="nationality" placeholder="Malaysian" maxLength={60} />
+                  <select
+                    id="en-nat"
+                    name="nationality"
+                    className={selectClass}
+                    defaultValue=""
+                  >
+                    <option value="" disabled>
+                      Select your country
+                    </option>
+                    {COUNTRIES.map((c) => (
+                      <option key={c.name} value={c.name}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
                   {errors['nationality'] && (
                     <p className="text-xs text-destructive">{errors['nationality']}</p>
                   )}
@@ -534,9 +548,34 @@ export default function EnquiryDialog({
                   {errors['email'] && <p className="text-xs text-destructive">{errors['email']}</p>}
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="en-mobile">Mobile / WhatsApp</Label>
-                  <Input id="en-mobile" name="mobile" placeholder="+60..." maxLength={25} />
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="en-mobile-number">Mobile / WhatsApp</Label>
+                  <div className="flex gap-2">
+                    <select
+                      id="en-country-code"
+                      aria-label="Country code"
+                      className={`${selectClass} w-28 shrink-0`}
+                      value={countryCode}
+                      onChange={(e) => setCountryCode(e.target.value)}
+                    >
+                      {COUNTRIES.map((c) => (
+                        <option key={c.code + c.name} value={c.code}>
+                          {c.code} · {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    <Input
+                      id="en-mobile-number"
+                      type="tel"
+                      inputMode="tel"
+                      placeholder="12 345 6789"
+                      maxLength={25}
+                      className="flex-1"
+                      value={mobileNumber}
+                      onChange={(e) => setMobileNumber(e.target.value)}
+                    />
+                    <input type="hidden" name="mobile" value={mobileCombined} />
+                  </div>
                   {errors['mobile'] && (
                     <p className="text-xs text-destructive">{errors['mobile']}</p>
                   )}
