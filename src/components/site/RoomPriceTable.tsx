@@ -13,7 +13,6 @@ import {
 } from "@/data/properties";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import SegmentedToggle from "./SegmentedToggle";
 import RoomDetailDialog from "./RoomDetailDialog";
 
 export default function RoomPriceTable({
