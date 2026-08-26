@@ -237,11 +237,37 @@ export default function EnquiryDialog({
               }
 
               setErrors({});
-              setLead(leadParsed.success ? leadParsed.data : null);
+              const leadData = leadParsed.success ? leadParsed.data : null;
+              setLead(leadData);
               setSubmitted(true);
               toast.success("Enquiry sent", {
                 description: "We'll confirm availability within 24 hours.",
               });
+              if (leadData) {
+                void submitEnquiry({
+                  data: {
+                    residenceSlug: property.slug,
+                    residenceName: property.name,
+                    roomCode: room?.id ?? raw['roomId'] ?? "",
+                    roomName: room?.name ?? "",
+                    occupancy: occupancy ?? raw['occupancy'] ?? "single",
+                    moveIn: stay.moveIn,
+                    moveOut: stay.moveOut,
+                    term: stay.term ?? "long",
+                    monthlyRent: quote?.monthlyAfter ?? 0,
+                    firstPayment: quote?.totalUpfront ?? 0,
+                    fullName: leadData.name,
+                    email: leadData.email,
+                    phone: leadData.mobile,
+                    nationality: leadData.nationality,
+                    university: leadData.university,
+                    intake: leadData.intake,
+                    gender: leadData.gender,
+                    message: leadData.message ?? "",
+                  },
+                }).catch((err) => console.error(err));
+              }
+
             }}
           >
             <DialogHeader className="border-b px-6 py-5 text-left">
