@@ -50,7 +50,7 @@ function AdminLayout() {
             return (
               <Link
                 key={item.to}
-                to={item.to}
+                to={item.to as never}
                 className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                   active
                     ? "bg-brand-tint text-brand-deep"
@@ -85,7 +85,7 @@ function AdminLayout() {
           {NAV.map((item) => (
             <Link
               key={item.to}
-              to={item.to}
+              to={item.to as never}
               className="whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
             >
               {item.label}
