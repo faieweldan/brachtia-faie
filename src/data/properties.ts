@@ -521,6 +521,14 @@ export const roomTypes: RoomType[] = [
     rent: { long: { single: 1400, twin: null }, short: { single: null, twin: null } },
     availableFrom: "2026-09-01",
     status: "available",
+    beds: { single: "1 queen bed" },
+    furnishing: [
+      "Queen bed with mattress",
+      "Study desk & chair",
+      "Wardrobe",
+      "Air-conditioning",
+      "Kitchenette with fridge",
+    ],
   },
 ];
 
