@@ -2,18 +2,15 @@ import { createServerFn } from "@tanstack/react-start";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-/** Every query below runs as the signed-in user, so row-level rules decide access. */
+/** Admin portal data access. The portal lives at an unlisted /admin URL and has no login. */
+async function admin() {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  return supabaseAdmin;
+}
 
 export const adminOverview = createServerFn({ method: "GET" })
   .handler(async () => {
     const supabase = await admin();
-    const { supabase, userId } = context;
-    const { data: isAdmin } = await supabase.rpc("has_role", {
-      _user_id: userId,
-      _role: "admin",
-    });
-    if (!isAdmin) return { isAdmin: false as const };
-
     const nowISO = new Date().toISOString();
     const [enq, appt, upcoming] = await Promise.all([
       supabase.from("enquiries").select("id", { count: "exact", head: true }).eq("status", "new"),
@@ -30,7 +27,6 @@ export const adminOverview = createServerFn({ method: "GET" })
     ]);
 
     return {
-      isAdmin: true as const,
       newEnquiries: enq.count ?? 0,
       pendingAppointments: appt.count ?? 0,
       upcoming: upcoming.data ?? [],
