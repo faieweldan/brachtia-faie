@@ -236,6 +236,8 @@ function PropertyPage() {
                 rooms={rooms}
                 selectedRoomId={selectedRoomId ?? undefined}
                 onRoomChange={setSelectedRoomId}
+                moveIn={moveIn}
+                occupancy={selectedOccupancy}
                 actions={(state) => (
                   <EnquireDialog
                     property={property}
