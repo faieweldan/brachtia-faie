@@ -31,7 +31,7 @@ If nothing is selected yet, the calculator shows a prompt: "Pick a room and rate
 
 **Payment terms** — a small segmented control: Bi-monthly · Quarterly · Full term. Choosing one changes how much rent is collected upfront (2 months, 3 months, or full stay) and the recurring instalment shown below the total. For short-term stays the default is **Full**, with a note that bi-monthly may be allowed case by case.
 
-**Due before move-in** itemised list (labels exactly as requested):
+**Due before move-in** — keep the existing label wording from the current version, with only these minor adjustments:
 
 - First month rent
 - Advance rental (1 month)
