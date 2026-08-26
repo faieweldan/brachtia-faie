@@ -186,64 +186,42 @@ function PropertyPage() {
 
 
             <div id="rooms">
-              <h2 className="text-2xl font-bold text-brand-deep">Room options</h2>
+              <h2 className="text-2xl font-bold text-brand-deep">Rooms & pricing</h2>
               <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-                Tick a room to price it instantly — enquire with your preferences and our team will
-                confirm the exact unit and availability with you.
+                Set your move-in date, filter by what you need, then click a room to see photos and
+                full details. Select one to price it instantly in the calculator.
               </p>
 
-              {rooms.length > 1 && (
-                <div className="mt-5">
-                  <RoomFilters
-                    unitTypes={unitTypesFor(property.slug)}
-                    value={filters}
-                    resultLabel={`${visibleRooms.length} of ${rooms.length} room types`}
-                    onClear={() =>
-                      navigate({ search: { unit: "all", bath: "all", view: "all", occ: "all" }, replace: true })
-                    }
-                    onChange={(next) =>
-                      navigate({ search: (prev) => ({ ...prev, ...next }), replace: true })
-                    }
-                  />
-                </div>
-              )}
-
-              <div className="mt-6 space-y-5">
-                {visibleRooms.map((room) => (
-                  <RoomTypeCard
-                    key={room.id}
-                    property={property}
-                    room={room}
-                    selected={selectedRoomId === room.id}
-                    onSelect={(r) => {
-                      setSelectedRoomId(r.id);
-                      document
-                        .getElementById("stay-calculator")
-                        ?.scrollIntoView({ behavior: "smooth", block: "center" });
-                    }}
-                  />
-                ))}
+              <div className="mt-5">
+                <RoomPriceTable
+                  property={property}
+                  rooms={rooms}
+                  filters={filters}
+                  moveIn={moveIn}
+                  onMoveInChange={setMoveIn}
+                  term={activeTerm}
+                  onTermChange={setTerm}
+                  selectedRoomId={selectedRoomId}
+                  onSelect={(room, occ) => {
+                    setSelectedRoomId(room.id);
+                    setSelectedOccupancy(occ);
+                    document
+                      .getElementById("stay-calculator")
+                      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  }}
+                  onFilterChange={(next) =>
+                    navigate({ search: (prev) => ({ ...prev, ...next }), replace: true })
+                  }
+                  onClearFilters={() =>
+                    navigate({
+                      search: { unit: "all", bath: "all", view: "all", occ: "all" },
+                      replace: true,
+                    })
+                  }
+                />
               </div>
-
-
-              {visibleRooms.length === 0 && (
-                <div className="mt-5 rounded-3xl border border-dashed border-border bg-card p-8 text-center">
-                  <p className="font-medium text-brand-deep">No rooms match these filters.</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Try widening your search — or enquire and we'll suggest the closest option.
-                  </p>
-                  <Button
-                    variant="outline"
-                    className="mt-4"
-                    onClick={() =>
-                      navigate({ search: { unit: "all", bath: "all", view: "all", occ: "all" }, replace: true })
-                    }
-                  >
-                    Clear filters
-                  </Button>
-                </div>
-              )}
             </div>
+
 
 
             <div>
