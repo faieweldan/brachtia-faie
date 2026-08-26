@@ -65,6 +65,10 @@ export type RoomType = {
   availableFrom: string;
   status: RoomStatus;
   spotsLeft?: number;
+  /** Bed set-up per occupancy, e.g. { single: "1 single bed" } */
+  beds?: Partial<Record<Occupancy, string>>;
+  /** Furniture & fittings inside the room */
+  furnishing?: string[];
 };
 
 
