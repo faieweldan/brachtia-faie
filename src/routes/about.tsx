@@ -1,11 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { Building2, GraduationCap, Home, Landmark } from "lucide-react";
-import CtaBand from "@/components/site/CtaBand";
-import students from "@/assets/living-dining.jpg";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { CalendarCheck, HeartHandshake, LifeBuoy, ShieldCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import heroStudents from "@/assets/hero-students.jpg";
+import humanSide from "@/assets/parents-support.jpg";
 
-const title = "About Brachtia Homes | Property & Student Services";
+const title = "About Brachtia Homes | Student Accommodation in Malaysia";
 const description =
-  "Established 2009, Brachtia Homes manages 80+ properties and provides off-campus student accommodation, hostel management and global student services in Malaysia.";
+  "For over 17 years, Brachtia Homes has helped local and international students find safe, well-managed accommodation in Malaysia — appointed by leading universities.";
 
 export const Route = createFileRoute("/about")({
   head: () => ({
@@ -14,118 +15,240 @@ export const Route = createFileRoute("/about")({
       { name: "description", content: description },
       { property: "og:title", content: title },
       { property: "og:description", content: description },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: AboutPage,
 });
 
-const services = [
-  {
-    icon: Landmark,
-    title: "Property sales & leasing",
-    text: "Commercial and residential property and land sale and leasing services, guided end to end.",
-  },
-  {
-    icon: Building2,
-    title: "Property management",
-    text: "Rental property oversight, building management, renovation and interior design services.",
-  },
-  {
-    icon: Home,
-    title: "Student hostel management",
-    text: "Off-campus student accommodation and in-campus hostel management built around student wellbeing.",
-  },
-  {
-    icon: GraduationCap,
-    title: "Global student services",
-    text: "Student visa documentation, arrival assistance, ground transport, travel tours and training arrangements.",
-  },
+const stats = [
+  { value: "17+", label: "Years experience" },
+  { value: "100+", label: "Properties managed" },
+  { value: "20+", label: "Nationalities" },
+  { value: "24/7", label: "Student support" },
 ];
 
-const team = [
-  { name: "PS Valsala Purushothaman", role: "Head of Sales & Strategy" },
-  { name: "Syazwani Juhari", role: "Head of Operations" },
-  { name: "Lavania Vijyakumar", role: "Project Manager" },
+const partners = [
+  { short: "MMU", name: "Multimedia University" },
+  { short: "HWUM", name: "Heriot-Watt University Malaysia" },
+  { short: "UoC", name: "University of Cyberjaya" },
+  { short: "CITY", name: "City University Malaysia" },
+];
+
+const differences = [
+  {
+    icon: ShieldCheck,
+    title: "Student housing specialists",
+    text: "17+ years in student accommodation — we know what students living away from home need, including first-time arrivals in Malaysia.",
+  },
+  {
+    icon: HeartHandshake,
+    title: "A personal welcome",
+    text: "We welcome students in person, help with check-in, and run city briefings and local tours so they settle in fast.",
+  },
+  {
+    icon: CalendarCheck,
+    title: "Safe & supported living",
+    text: "Managed residences with security, wardens and round-the-clock student support — peace of mind for families too.",
+  },
+  {
+    icon: LifeBuoy,
+    title: "Here throughout your stay",
+    text: "From maintenance and everyday questions to the unexpected, our team stays reachable for the whole tenancy.",
+  },
 ];
 
 function AboutPage() {
   return (
     <>
-      <section className="border-b border-border bg-secondary/50">
-        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand">Our story</p>
-          <h1 className="mt-2 text-4xl font-bold tracking-tight text-brand-deep">
-            Property management & global student services
-          </h1>
-          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-            At Brachtia Homes, we take pride in offering top-notch property management services
-            tailored to meet the diverse needs of our clients. Specialising in both long-term and
-            short-term rentals, we cater to students — both local and international — professionals
-            and travellers seeking a home away from home. We work with property owners to maximise
-            the potential of their investments.
-          </p>
-        </div>
-      </section>
-
-      <section className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-2 md:items-center">
-        <img
-          src={students}
-          alt="Furnished student living and dining area"
-          loading="lazy"
-          width={1600}
-          height={1000}
-          className="aspect-[4/3] w-full rounded-2xl object-cover shadow-card"
-        />
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { value: "2009", label: "Established" },
-            { value: "15", label: "Years in business" },
-            { value: "80+", label: "Properties managed" },
-          ].map((s) => (
-            <div key={s.label} className="rounded-3xl border border-border/70 bg-card p-5 text-center shadow-card">
-              <p className="text-2xl font-bold text-brand">{s.value}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{s.label}</p>
+      {/* Hero */}
+      <section className="relative bg-brand-tint">
+        <div className="mx-auto max-w-6xl px-4 pb-28 pt-14 sm:px-6 sm:pb-32 sm:pt-20">
+          <div className="grid gap-10 md:grid-cols-[1.05fr_1fr] md:items-center">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-brand">
+                About Brachtia Homes
+              </p>
+              <h1 className="mt-3 text-4xl font-extrabold leading-[1.08] tracking-tight text-brand-deep sm:text-5xl">
+                Designed for students.
+                <span className="block">Trusted by parents and universities.</span>
+              </h1>
+              <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground">
+                For over 17 years, Brachtia Homes has been helping local and international students
+                find safe, well-managed accommodation and feel at home while studying in Malaysia.
+              </p>
+              <p className="mt-3 max-w-xl text-base leading-relaxed text-muted-foreground">
+                As an appointed off-campus accommodation provider for universities and education
+                institutions, we support students beyond finding a room — from arrival and check-in
+                to everyday living.
+              </p>
+              <Button
+                asChild
+                size="lg"
+                className="mt-7 h-13 rounded-full px-7 text-base font-bold"
+              >
+                <Link to="/properties">Explore our residences</Link>
+              </Button>
             </div>
-          ))}
-          <p className="col-span-3 text-sm leading-relaxed text-muted-foreground">
-            We create comfortable living environments conducive to student success, ensuring
-            seamless arrangements and exceptional service for both students and educational
-            institutions.
-          </p>
-        </div>
-      </section>
 
-      <section className="bg-secondary/50 py-14">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <h2 className="text-3xl font-bold tracking-tight text-brand-deep">Our services</h2>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2">
-            {services.map((s) => (
-              <div key={s.title} className="rounded-3xl border border-border/70 bg-card p-6 shadow-card">
-                <s.icon className="size-6 text-brand" />
-                <h3 className="mt-3 font-semibold text-foreground">{s.title}</h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{s.text}</p>
+            <img
+              src={heroStudents}
+              alt="Students together outside a Brachtia Homes residence"
+              width={1600}
+              height={1200}
+              className="aspect-[5/4] w-full rounded-[2.5rem] object-cover shadow-lift"
+            />
+          </div>
+        </div>
+
+        {/* Stats bar overlapping the hero edge */}
+        <div className="absolute inset-x-0 bottom-0 translate-y-1/2 px-4 sm:px-6">
+          <div className="mx-auto grid max-w-5xl grid-cols-2 gap-px overflow-hidden rounded-3xl bg-border shadow-lift sm:grid-cols-4">
+            {stats.map((s) => (
+              <div key={s.label} className="bg-card px-4 py-6 text-center">
+                <p className="text-2xl font-extrabold tracking-tight text-brand sm:text-3xl">
+                  {s.value}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">{s.label}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
-        <h2 className="text-3xl font-bold tracking-tight text-brand-deep">Meet our team</h2>
-        <div className="mt-8 grid gap-4 sm:grid-cols-3">
-          {team.map((m) => (
-            <div key={m.name} className="rounded-3xl border border-border/70 bg-card p-6 text-center shadow-card">
-              <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-brand-soft text-lg font-bold text-brand-deep">
-                {m.name.split(" ").slice(0, 2).map((n) => n[0]).join("")}
+      {/* University partners */}
+      <section className="bg-background pb-14 pt-24 sm:pb-20 sm:pt-28">
+        <div className="mx-auto max-w-6xl px-4 text-center sm:px-6">
+          <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-brand">
+            Our university partners
+          </p>
+          <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-brand-deep sm:text-4xl">
+            Appointed by leading universities to house their students.
+          </h2>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Official off-campus accommodation partner to:
+          </p>
+
+          <div className="mt-12 grid grid-cols-2 gap-x-6 gap-y-12 md:grid-cols-4">
+            {partners.map((p) => (
+              <div key={p.short} className="flex flex-col items-center gap-4">
+                <div className="flex h-24 w-full max-w-[180px] items-center justify-center rounded-2xl border border-border/70 bg-card px-4">
+                  <span className="text-2xl font-extrabold tracking-tight text-brand-deep">
+                    {p.short}
+                  </span>
+                </div>
+                <p className="text-sm font-semibold text-foreground">{p.name}</p>
               </div>
-              <p className="mt-3 font-semibold text-foreground">{m.name}</p>
-              <p className="text-sm text-muted-foreground">{m.role}</p>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </section>
 
-      <CtaBand />
+      {/* The Brachtia difference */}
+      <section className="bg-brand-tint py-14 sm:py-20">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-brand">
+            The Brachtia difference
+          </p>
+          <h2 className="mt-3 max-w-2xl text-3xl font-extrabold tracking-tight text-brand-deep sm:text-4xl">
+            More than a place to stay.
+          </h2>
+          <p className="mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground">
+            Moving away from home is a big step — for students and their families. Our job isn't
+            just to hand over the keys. It's to help students settle in and stay supported.
+          </p>
+
+          <div className="mt-12 grid gap-x-10 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
+            {differences.map((d) => (
+              <div key={d.title} className="border-t border-border pt-5">
+                <d.icon className="size-5 text-brand" strokeWidth={1.75} />
+                <h3 className="mt-4 text-base font-bold tracking-tight text-brand-deep">
+                  {d.title}
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{d.text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* The human side */}
+      <section className="bg-background py-14 sm:py-20">
+        <div className="mx-auto grid max-w-6xl gap-10 px-4 sm:px-6 md:grid-cols-2 md:items-center">
+          <img
+            src={humanSide}
+            alt="Brachtia Homes team welcoming international students on arrival"
+            loading="lazy"
+            width={1600}
+            height={1200}
+            className="aspect-[4/5] w-full rounded-[2.5rem] object-cover shadow-card md:aspect-[4/4.4]"
+          />
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-brand">
+              The human side
+            </p>
+            <h2 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight text-brand-deep sm:text-4xl">
+              Someone to turn to, even when home is far away.
+            </h2>
+            <p className="mt-5 text-base leading-relaxed text-muted-foreground">
+              Over the years, we've welcomed students from different countries, cultures and
+              backgrounds — many experiencing life away from home for the first time.
+            </p>
+            <p className="mt-3 text-base leading-relaxed text-muted-foreground">
+              From the day they arrive to the everyday questions that come afterwards, our team is
+              here to make student living feel a little easier, safer and more familiar.
+            </p>
+            <p className="mt-7 inline-block rounded-2xl bg-brand-soft px-5 py-3 text-lg font-semibold italic text-brand-deep">
+              "Finding the room is only the beginning."
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Closing CTA */}
+      <section className="bg-brand-tint px-4 py-14 sm:px-6 sm:py-20">
+        <div className="mx-auto max-w-6xl">
+          <div className="relative overflow-hidden rounded-[2.5rem] bg-brand-deep px-6 py-10 text-primary-foreground shadow-lift sm:px-12 sm:py-14">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -right-24 -top-24 size-80 rounded-full bg-brand-soft/15 blur-3xl"
+            />
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -bottom-32 -left-20 size-80 rounded-full bg-brand/40 blur-3xl"
+            />
+            <div className="relative grid gap-10 md:grid-cols-[1.4fr_1fr] md:items-center">
+              <div>
+                <h2 className="text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">
+                  Find your home away from home.
+                </h2>
+                <p className="mt-3 max-w-lg text-base text-primary-foreground/75">
+                  Explore our student residences and tell us what you're looking for. We'll help you
+                  find a suitable place and get settled.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3">
+                <Button
+                  asChild
+                  size="lg"
+                  className="h-13 w-full rounded-full bg-primary-foreground text-base font-bold text-brand-deep hover:bg-primary-foreground/90"
+                >
+                  <Link to="/properties">Explore residences</Link>
+                </Button>
+                <Button
+                  asChild
+                  size="lg"
+                  variant="outline"
+                  className="h-13 w-full rounded-full border-2 border-primary-foreground/35 bg-transparent text-base font-bold text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+                >
+                  <Link to="/book-viewing">Book a Viewing</Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
     </>
   );
 }
