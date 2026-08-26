@@ -199,9 +199,6 @@ function AboutPage() {
               From the day they arrive to the everyday questions that come afterwards, our team is
               here to make student living feel a little easier, safer and more familiar.
             </p>
-            <p className="mt-7 inline-block rounded-2xl bg-brand-soft px-5 py-3 text-lg font-semibold italic text-brand-deep">
-              "Finding the room is only the beginning."
-            </p>
           </div>
         </div>
       </section>
