@@ -9,7 +9,6 @@ import {
   formatDate,
   formatRM,
   paymentTermLabel,
-  stayDays,
   stayQuote,
   termForRange,
   type ContractTerm,
@@ -241,6 +240,46 @@ export default function StayCalculator({
                     )}
                   </div>
 
+                  {/* Optional bedding set */}
+                  {beddingOptions.length > 0 && (
+                    <div className="mt-4 rounded-2xl border border-border/70 bg-card p-3.5">
+                      <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                        Optional bedding set
+                      </p>
+                      <div className="space-y-2">
+                        {beddingOptions.map((b) => {
+                          const on = bedding === b.id;
+                          return (
+                            <button
+                              key={b.id}
+                              type="button"
+                              aria-pressed={on}
+                              onClick={() => setBedding(on ? null : b.id)}
+                              className={`flex w-full items-start justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-all ${
+                                on
+                                  ? "border-brand bg-brand-tint"
+                                  : "border-border/70 hover:border-brand/50"
+                              }`}
+                            >
+                              <div className="min-w-0">
+                                <span className="block text-sm font-bold text-brand-deep">
+                                  {b.label}
+                                </span>
+                                <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+                                  {b.items.join(" · ")}
+                                </span>
+                              </div>
+                              <span className="flex shrink-0 items-center gap-1 text-sm font-bold tabular-nums text-brand">
+                                {on && <Check className="size-3.5" />}
+                                {formatRM(b.price)}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Due before move-in */}
                   <div className="mt-4 rounded-2xl border border-border/70 bg-card">
                     <div className="border-b border-border/70 px-4 py-2.5">
@@ -289,44 +328,6 @@ export default function StayCalculator({
                       confirmed — offset against your first payment. No hidden fees.
                     </span>
                   </p>
-
-                  {/* Bedding add-ons */}
-                  {beddingOptions.length > 0 && (
-                    <div className="mt-4">
-                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        Optional bedding set
-                      </p>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {beddingOptions.map((b) => {
-                          const on = bedding === b.id;
-                          return (
-                            <button
-                              key={b.id}
-                              type="button"
-                              aria-pressed={on}
-                              onClick={() => setBedding(on ? null : b.id)}
-                              className={`rounded-2xl border px-3 py-2.5 text-left transition-all ${
-                                on
-                                  ? "border-brand bg-brand-tint"
-                                  : "border-border/70 hover:border-brand/50"
-                              }`}
-                            >
-                              <span className="flex items-center justify-between gap-2">
-                                <span className="text-sm font-bold text-brand-deep">{b.label}</span>
-                                <span className="flex items-center gap-1 text-sm font-bold tabular-nums text-brand">
-                                  {on && <Check className="size-3.5" />}
-                                  {formatRM(b.price)}
-                                </span>
-                              </span>
-                              <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
-                                {b.items.join(" · ")}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
 
                   <Collapsible className="mt-3 rounded-2xl bg-muted/60">
                     <CollapsibleTrigger className="group flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
@@ -403,5 +404,3 @@ export default function StayCalculator({
     </div>
   );
 }
-
-export { stayDays };
