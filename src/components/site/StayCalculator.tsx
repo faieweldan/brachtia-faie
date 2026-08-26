@@ -126,32 +126,16 @@ export default function StayCalculator({
     };
   }, [baseQuote, beddingChoice]);
 
-  const state: StayState | null = selected
-    ? { occupancy, term, rent: rateAvailable ? rent : null, moveIn, moveOut, room: selected }
-    : null;
+  const state: StayState = {
+    occupancy: selected ? occupancy : undefined,
+    term,
+    rent: rateAvailable ? rent : null,
+    moveIn,
+    moveOut,
+    room: selected,
+    quote,
+  };
 
-  const [leadOpen, setLeadOpen] = useState(false);
-  const [downloading, setDownloading] = useState(false);
-
-  async function generatePdf(lead: QuoteLead) {
-    if (!quote || !selected) return;
-    setDownloading(true);
-    try {
-      const { downloadStayQuote } = await import("@/lib/quote-pdf");
-      await downloadStayQuote({
-        property,
-        room: selected,
-        occupancy,
-        term,
-        moveIn,
-        moveOut,
-        quote,
-        lead,
-      });
-    } finally {
-      setDownloading(false);
-    }
-  }
 
   return (
     <div className="overflow-hidden rounded-3xl bg-card shadow-lift ring-1 ring-brand-soft">
