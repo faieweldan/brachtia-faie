@@ -142,13 +142,9 @@ export default function RoomPriceTable({
             {datesSet ? (
               term === "short" ? (
                 <p className="rounded-2xl bg-accent px-3.5 py-2 text-xs font-semibold text-brand-deep">
-                  short-term rental rates shown.
+                  Short-term rental rates shown.
                 </p>
-              ) : (
-                <p className="rounded-2xl bg-brand-tint px-3.5 py-2 text-xs font-semibold text-brand-deep">
-                  More than 11 months 15 days — 12-month rates shown.
-                </p>
-              )
+              ) : null
             ) : (
               <p className="px-1 text-xs text-muted-foreground">
                 Add your dates to calculate your move-in cost.
