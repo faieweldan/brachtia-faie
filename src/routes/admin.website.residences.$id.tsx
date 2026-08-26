@@ -1,0 +1,601 @@
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+
+import {
+  deleteResidence,
+  deleteRoomType,
+  listResidences,
+  saveResidence,
+  saveRoomType,
+} from "@/lib/admin.functions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { AreaField, Field, RowList, Section, StringList, TextField } from "@/components/admin/fields";
+
+export const Route = createFileRoute("/admin/website/residences/$id")({
+  component: ResidenceEditor,
+});
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+type Place = { name: string; distance: string; walk: string; bike: string; transit: string };
+const blankPlace = (): Place => ({ name: "", distance: "", walk: "", bike: "", transit: "" });
+
+const FEE_FIELDS: { key: string; label: string }[] = [
+  { key: "advanceMonths", label: "Advance months" },
+  { key: "utilitiesMonths", label: "Utilities deposit (months)" },
+  { key: "securityMonths", label: "Security deposit (months)" },
+  { key: "accessCardDeposit", label: "Access card deposit (RM)" },
+  { key: "accessCardCharge", label: "Access card charge (RM)" },
+  { key: "adminFee", label: "Admin fee (RM)" },
+];
+
+const num = (v: string) => (v.trim() === "" ? null : Number(v));
+
+function ResidenceEditor() {
+  const { id } = Route.useParams();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin", "residences"],
+    queryFn: () => listResidences(),
+  });
+
+  const residence: any = useMemo(
+    () => ((data as any)?.residences ?? []).find((r: any) => r.id === id),
+    [data, id],
+  );
+  const rooms: any[] = useMemo(
+    () => ((data as any)?.rooms ?? []).filter((r: any) => r.residence_id === id),
+    [data, id],
+  );
+
+  const [form, setForm] = useState<any>(null);
+  useEffect(() => {
+    if (residence) setForm(JSON.parse(JSON.stringify(residence)));
+  }, [residence]);
+
+  const set = (key: string, value: unknown) => setForm((f: any) => ({ ...f, [key]: value }));
+
+  const save = useMutation({
+    mutationFn: (values: Record<string, unknown>) => saveResidence({ data: { id, values } }),
+    onSuccess: () => {
+      toast.success("Residence saved");
+      void queryClient.invalidateQueries({ queryKey: ["admin", "residences"] });
+    },
+    onError: () => toast.error("Could not save"),
+  });
+
+  const remove = useMutation({
+    mutationFn: () => deleteResidence({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Residence deleted");
+      void queryClient.invalidateQueries({ queryKey: ["admin", "residences"] });
+      void navigate({ to: "/admin/website/residences" });
+    },
+    onError: () => toast.error("Could not delete"),
+  });
+
+  const saveSection = (keys: string[]) => {
+    const values: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    keys.forEach((k) => (values[k] = form[k]));
+    save.mutate(values);
+  };
+
+  const SaveBtn = ({ keys }: { keys: string[] }) => (
+    <Button size="sm" onClick={() => saveSection(keys)} disabled={save.isPending}>
+      Save
+    </Button>
+  );
+
+  if (isLoading || !form) {
+    return <p className="text-sm text-muted-foreground">Loading…</p>;
+  }
+
+  const gallery: { src: string; caption: string }[] = form.gallery ?? [];
+  const fees = form.fee_config ?? {};
+
+  return (
+    <div className="space-y-5 pb-16">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Button asChild variant="ghost" size="sm">
+          <Link to="/admin/website/residences">
+            <ArrowLeft className="mr-1 size-4" /> All residences
+          </Link>
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-destructive"
+          onClick={() => {
+            if (confirm("Delete this residence and all its rooms?")) remove.mutate();
+          }}
+        >
+          <Trash2 className="mr-1 size-4" /> Delete residence
+        </Button>
+      </div>
+
+      {/* Basics */}
+      <Section title="Basics" action={<SaveBtn keys={["name", "slug", "location", "tagline", "summary", "description", "published", "sort_order"]} />}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextField label="Name" value={form.name} onChange={(v) => set("name", v)} />
+          <TextField label="Slug (URL)" value={form.slug} onChange={(v) => set("slug", v)} />
+          <TextField label="Location" value={form.location} onChange={(v) => set("location", v)} />
+          <TextField label="Tagline" value={form.tagline} onChange={(v) => set("tagline", v)} />
+        </div>
+        <AreaField label="Summary" value={form.summary ?? ""} onChange={(v) => set("summary", v)} />
+        <StringList
+          label="Description paragraphs"
+          items={form.description ?? []}
+          multiline
+          onChange={(v) => set("description", v)}
+          addLabel="Add paragraph"
+        />
+        <div className="flex flex-wrap items-center gap-6">
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Switch checked={!!form.published} onCheckedChange={(v) => set("published", v)} />
+            Published on the website
+          </label>
+          <TextField
+            label="Sort order"
+            type="number"
+            value={form.sort_order}
+            onChange={(v) => set("sort_order", Number(v || 0))}
+            className="w-36"
+          />
+        </div>
+      </Section>
+
+      {/* Photos */}
+      <Section
+        title="Photos"
+        description="Image URLs. Hero shows first on the residence page."
+        action={<SaveBtn keys={["hero_image", "gallery"]} />}
+      >
+        <TextField label="Hero image URL" value={form.hero_image} onChange={(v) => set("hero_image", v)} />
+        <RowList<{ src: string; caption: string }>
+          label="Gallery"
+          items={gallery}
+          columns={[
+            { key: "src", label: "Image URL" },
+            { key: "caption", label: "Caption" },
+          ]}
+          blank={() => ({ src: "", caption: "" })}
+          onChange={(v) => set("gallery", v)}
+          addLabel="Add photo"
+        />
+      </Section>
+
+      {/* Facilities */}
+      <Section
+        title="Facilities & amenities"
+        action={
+          <SaveBtn
+            keys={[
+              "building_facilities",
+              "included_in_stay",
+              "utilities_note",
+              "inside_apartment",
+              "apartment_footnote",
+            ]}
+          />
+        }
+      >
+        <StringList
+          label="Building facilities"
+          items={form.building_facilities ?? []}
+          onChange={(v) => set("building_facilities", v)}
+        />
+        <StringList
+          label="Included in your stay"
+          items={form.included_in_stay ?? []}
+          onChange={(v) => set("included_in_stay", v)}
+        />
+        <AreaField
+          label="Utilities note"
+          value={form.utilities_note ?? ""}
+          onChange={(v) => set("utilities_note", v)}
+        />
+        <StringList
+          label="Inside your apartment"
+          items={form.inside_apartment ?? []}
+          onChange={(v) => set("inside_apartment", v)}
+        />
+        <TextField
+          label="Apartment footnote"
+          value={form.apartment_footnote ?? ""}
+          onChange={(v) => set("apartment_footnote", v)}
+        />
+      </Section>
+
+      {/* Location */}
+      <Section
+        title="Where you'll be"
+        action={<SaveBtn keys={["coords", "waze_url", "nearby_universities", "points_of_interest"]} />}
+      >
+        <div className="grid gap-4 sm:grid-cols-3">
+          <TextField
+            label="Latitude"
+            value={form.coords?.lat}
+            onChange={(v) => set("coords", { ...(form.coords ?? {}), lat: Number(v || 0) })}
+          />
+          <TextField
+            label="Longitude"
+            value={form.coords?.lng}
+            onChange={(v) => set("coords", { ...(form.coords ?? {}), lng: Number(v || 0) })}
+          />
+          <TextField label="Waze link" value={form.waze_url} onChange={(v) => set("waze_url", v)} />
+        </div>
+        <RowList<Place>
+          label="Nearby universities"
+          items={form.nearby_universities ?? []}
+          columns={[
+            { key: "name", label: "Name" },
+            { key: "distance", label: "Distance" },
+            { key: "walk", label: "Walk" },
+            { key: "bike", label: "Bike" },
+            { key: "transit", label: "Transit" },
+          ]}
+          blank={blankPlace}
+          onChange={(v) => set("nearby_universities", v)}
+        />
+        <RowList<Place>
+          label="Points of interest"
+          items={form.points_of_interest ?? []}
+          columns={[
+            { key: "name", label: "Name" },
+            { key: "distance", label: "Distance" },
+            { key: "walk", label: "Walk" },
+            { key: "bike", label: "Bike" },
+            { key: "transit", label: "Transit" },
+          ]}
+          blank={blankPlace}
+          onChange={(v) => set("points_of_interest", v)}
+        />
+      </Section>
+
+      {/* Terms & fees */}
+      <Section
+        title="Terms & fees"
+        action={
+          <SaveBtn keys={["payment_cycle", "contract_terms", "terms", "single_bed_options", "fee_config"]} />
+        }
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextField
+            label="Payment cycle"
+            value={form.payment_cycle}
+            onChange={(v) => set("payment_cycle", v)}
+          />
+          <Field label="Contract terms offered">
+            <div className="flex gap-4 pt-2">
+              {(["long", "short"] as const).map((t) => {
+                const on = (form.contract_terms ?? []).includes(t);
+                return (
+                  <label key={t} className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Switch
+                      checked={on}
+                      onCheckedChange={(v) =>
+                        set(
+                          "contract_terms",
+                          v
+                            ? [...(form.contract_terms ?? []), t]
+                            : (form.contract_terms ?? []).filter((x: string) => x !== t),
+                        )
+                      }
+                    />
+                    {t === "long" ? "12-month" : "Short-term"}
+                  </label>
+                );
+              })}
+            </div>
+          </Field>
+        </div>
+        <StringList label="Terms & conditions" items={form.terms ?? []} multiline onChange={(v) => set("terms", v)} />
+        <StringList
+          label="Single bed options"
+          items={form.single_bed_options ?? []}
+          onChange={(v) => set("single_bed_options", v)}
+        />
+
+        {(["long", "short"] as const).map((term) => (
+          <div key={term} className="rounded-xl border border-border p-3">
+            <p className="mb-2 text-xs font-semibold text-brand-deep">
+              {term === "long" ? "12-month stay fees" : "Short-term stay fees"}
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {FEE_FIELDS.map((f) => (
+                <TextField
+                  key={f.key}
+                  label={f.label}
+                  type="number"
+                  value={fees?.[term]?.[f.key] ?? ""}
+                  onChange={(v) =>
+                    set("fee_config", {
+                      ...fees,
+                      [term]: { ...(fees?.[term] ?? {}), [f.key]: Number(v || 0) },
+                    })
+                  }
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </Section>
+
+      <RoomsSection residenceId={id} rooms={rooms} />
+    </div>
+  );
+}
+
+/* ---------------- Rooms ---------------- */
+
+function blankRoom(residenceId: string, sortOrder: number) {
+  return {
+    residence_id: residenceId,
+    code: `room-${Date.now().toString().slice(-5)}`,
+    tag: "",
+    room_code: "",
+    name: "New room type",
+    unit_type: "",
+    description: "",
+    size_sqft: null,
+    size_label: "",
+    bathroom: "shared",
+    has_view: false,
+    view_type: "",
+    public_visible: true,
+    image: "",
+    gallery: [],
+    features: [],
+    occupancies: ["single"],
+    rent: { long: { single: null, twin: null }, short: { single: null, twin: null } },
+    status: "available",
+    beds: {},
+    furnishing: [],
+    sort_order: sortOrder,
+  };
+}
+
+function RoomsSection({ residenceId, rooms }: { residenceId: string; rooms: any[] }) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState<any>(null);
+
+  const save = useMutation({
+    mutationFn: (input: { id?: string; values: Record<string, unknown> }) =>
+      saveRoomType({ data: input }),
+    onSuccess: () => {
+      toast.success("Room saved");
+      setEditing(null);
+      void queryClient.invalidateQueries({ queryKey: ["admin", "residences"] });
+    },
+    onError: () => toast.error("Could not save room"),
+  });
+
+  const remove = useMutation({
+    mutationFn: (rid: string) => deleteRoomType({ data: { id: rid } }),
+    onSuccess: () => {
+      toast.success("Room deleted");
+      void queryClient.invalidateQueries({ queryKey: ["admin", "residences"] });
+    },
+    onError: () => toast.error("Could not delete room"),
+  });
+
+  const rate = (r: any, term: string, occ: string) => r?.rent?.[term]?.[occ] ?? null;
+  const set = (key: string, value: unknown) => setEditing((e: any) => ({ ...e, [key]: value }));
+  const setRent = (term: string, occ: string, v: string) =>
+    setEditing((e: any) => ({
+      ...e,
+      rent: { ...(e.rent ?? {}), [term]: { ...(e.rent?.[term] ?? {}), [occ]: num(v) } },
+    }));
+
+  return (
+    <Section
+      title="Room types & pricing"
+      description="Blank rate means that option is not offered."
+      action={
+        <Button size="sm" onClick={() => setEditing(blankRoom(residenceId, rooms.length))}>
+          <Plus className="mr-1 size-4" /> Add room type
+        </Button>
+      }
+    >
+      {rooms.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No room types yet.</p>
+      ) : (
+        <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+          {rooms.map((r) => (
+            <div key={r.id} className="flex flex-wrap items-center gap-3 p-3">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-brand-deep">{r.name}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {r.unit_type || "—"} · {r.bathroom} bathroom ·{" "}
+                  {r.public_visible ? "Visible" : "Hidden"}
+                </p>
+              </div>
+              <div className="text-right text-xs text-muted-foreground">
+                <p>12-mo: {rate(r, "long", "single") ?? "—"} / {rate(r, "long", "twin") ?? "—"}</p>
+                <p>Short: {rate(r, "short", "single") ?? "—"} / {rate(r, "short", "twin") ?? "—"}</p>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => setEditing({ ...r })}>
+                Edit
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => {
+                  if (confirm(`Delete ${r.name}?`)) remove.mutate(r.id);
+                }}
+              >
+                <Trash2 className="size-4 text-destructive" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editing?.id ? "Edit room type" : "New room type"}</DialogTitle>
+          </DialogHeader>
+
+          {editing ? (
+            <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <TextField label="Name" value={editing.name} onChange={(v) => set("name", v)} />
+                <TextField label="Unit type" value={editing.unit_type} onChange={(v) => set("unit_type", v)} />
+                <TextField label="Room code (A, B…)" value={editing.room_code} onChange={(v) => set("room_code", v)} />
+                <TextField label="Admin tag" value={editing.tag} onChange={(v) => set("tag", v)} />
+                <TextField label="Internal code (unique)" value={editing.code} onChange={(v) => set("code", v)} />
+                <TextField
+                  label="Sort order"
+                  type="number"
+                  value={editing.sort_order}
+                  onChange={(v) => set("sort_order", Number(v || 0))}
+                />
+              </div>
+
+              <AreaField
+                label="Description"
+                value={editing.description ?? ""}
+                onChange={(v) => set("description", v)}
+              />
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <TextField
+                  label="Size (sqft)"
+                  type="number"
+                  value={editing.size_sqft ?? ""}
+                  onChange={(v) => set("size_sqft", num(v))}
+                />
+                <TextField label="Size label" value={editing.size_label ?? ""} onChange={(v) => set("size_label", v)} />
+                <Field label="Bathroom">
+                  <select
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    value={editing.bathroom}
+                    onChange={(e) => set("bathroom", e.target.value)}
+                  >
+                    <option value="shared">Shared</option>
+                    <option value="ensuite">Ensuite</option>
+                  </select>
+                </Field>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-6">
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Switch checked={!!editing.has_view} onCheckedChange={(v) => set("has_view", v)} />
+                  Has a view
+                </label>
+                <Input
+                  className="w-48"
+                  placeholder="View type (e.g. Exterior)"
+                  value={editing.view_type ?? ""}
+                  onChange={(e) => set("view_type", e.target.value)}
+                />
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Switch
+                    checked={editing.public_visible !== false}
+                    onCheckedChange={(v) => set("public_visible", v)}
+                  />
+                  Visible on the website
+                </label>
+              </div>
+
+              <div className="rounded-xl border border-border p-3">
+                <p className="mb-2 text-xs font-semibold text-brand-deep">Monthly rent per person (RM)</p>
+                <div className="grid gap-3 sm:grid-cols-4">
+                  {(["long", "short"] as const).map((term) =>
+                    (["single", "twin"] as const).map((occ) => (
+                      <TextField
+                        key={`${term}-${occ}`}
+                        label={`${term === "long" ? "12-month" : "Short"} · ${occ === "single" ? "Single" : "Twin"}`}
+                        type="number"
+                        value={editing.rent?.[term]?.[occ] ?? ""}
+                        onChange={(v) => setRent(term, occ, v)}
+                      />
+                    )),
+                  )}
+                </div>
+              </div>
+
+              <Field label="Occupancies offered">
+                <div className="flex gap-6 pt-2">
+                  {(["single", "twin"] as const).map((o) => (
+                    <label key={o} className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Switch
+                        checked={(editing.occupancies ?? []).includes(o)}
+                        onCheckedChange={(v) =>
+                          set(
+                            "occupancies",
+                            v
+                              ? [...(editing.occupancies ?? []), o]
+                              : (editing.occupancies ?? []).filter((x: string) => x !== o),
+                          )
+                        }
+                      />
+                      {o === "single" ? "Single" : "Twin sharing"}
+                    </label>
+                  ))}
+                </div>
+              </Field>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <TextField
+                  label="Bed setup — single"
+                  value={editing.beds?.single ?? ""}
+                  onChange={(v) => set("beds", { ...(editing.beds ?? {}), single: v })}
+                />
+                <TextField
+                  label="Bed setup — twin"
+                  value={editing.beds?.twin ?? ""}
+                  onChange={(v) => set("beds", { ...(editing.beds ?? {}), twin: v })}
+                />
+              </div>
+
+              <TextField label="Main image URL" value={editing.image} onChange={(v) => set("image", v)} />
+              <StringList
+                label="Gallery image URLs"
+                items={editing.gallery ?? []}
+                onChange={(v) => set("gallery", v)}
+                addLabel="Add image"
+              />
+              <StringList label="Features" items={editing.features ?? []} onChange={(v) => set("features", v)} />
+              <StringList
+                label="Furnishing"
+                items={editing.furnishing ?? []}
+                onChange={(v) => set("furnishing", v)}
+              />
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={save.isPending}
+              onClick={() => {
+                const { id: rid, created_at: _c, updated_at: _u, ...values } = editing;
+                save.mutate(rid ? { id: rid, values } : { values });
+              }}
+            >
+              Save room
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Section>
+  );
+}

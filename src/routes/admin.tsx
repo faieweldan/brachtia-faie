@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { CalendarDays, Inbox, LayoutDashboard } from "lucide-react";
+import { CalendarDays, Globe, Inbox, LayoutDashboard } from "lucide-react";
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
@@ -18,7 +18,9 @@ const NAV: { to: string; label: string; icon: typeof Inbox; exact?: boolean }[] 
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/admin/appointments", label: "Appointment Manager", icon: CalendarDays },
   { to: "/admin/bookings", label: "Bookings", icon: Inbox },
+  { to: "/admin/website", label: "Website", icon: Globe },
 ];
+
 
 
 function AdminLayout() {
