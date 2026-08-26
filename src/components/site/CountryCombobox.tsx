@@ -89,12 +89,17 @@ export default function CountryCombobox({
         >
           {selected ? (
             <>
-              <span className="text-base leading-none">{flagFor(selected.iso)}</span>
-              <span className="truncate">
+              {variant === "dial" && (
+                <span className="text-[10px] font-bold tracking-wide text-muted-foreground">
+                  {selected.iso}
+                </span>
+              )}
+              <span className="truncate font-medium">
                 {variant === "dial" ? selected.dial : selected.name}
               </span>
             </>
           ) : (
+
             <span className="truncate text-muted-foreground">{placeholder}</span>
           )}
           <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground" />
