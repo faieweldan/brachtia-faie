@@ -203,7 +203,8 @@ function PropertyPage() {
                   moveOut={moveOut}
                   onMoveOutChange={setMoveOut}
                   term={activeTerm}
-                  onTermChange={setTerm}
+                  datesSet={datesSet}
+
                   selectedRoomId={selectedRoomId}
                   selectedOccupancy={selectedOccupancy}
                   onSelect={(room, occ) => {
