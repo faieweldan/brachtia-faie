@@ -225,7 +225,7 @@ export default function RoomPriceTable({
                     <li
                       key={room.id}
                       onClick={() => setDetailRoom(room)}
-                      className={`group grid cursor-pointer grid-cols-1 items-center gap-4 border-t border-border/70 px-5 py-4 transition-colors md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.1fr)_11rem_11rem] ${
+                      className={`group grid cursor-pointer grid-cols-1 items-center gap-4 border-t border-border/70 px-5 py-4 transition-colors md:grid-cols-[minmax(0,2.8fr)_minmax(0,1fr)_8.5rem_8.5rem] ${
                         selected ? "bg-brand-tint/60" : "hover:bg-muted/40"
                       }`}
                     >
