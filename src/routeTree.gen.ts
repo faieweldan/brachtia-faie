@@ -22,6 +22,7 @@ import { Route as PropertiesIndexRouteImport } from './routes/properties.index'
 import { Route as AdminWebsiteIndexRouteImport } from './routes/admin.website.index'
 import { Route as PropertiesSlugIndexRouteImport } from './routes/properties.$slug.index'
 import { Route as AdminWebsiteResidencesIndexRouteImport } from './routes/admin.website.residences.index'
+import { Route as AdminWebsiteResidencesIdRouteImport } from './routes/admin.website.residences.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -89,6 +90,12 @@ const AdminWebsiteResidencesIndexRoute =
     path: '/residences/',
     getParentRoute: () => AdminWebsiteRoute,
   } as any)
+const AdminWebsiteResidencesIdRoute =
+  AdminWebsiteResidencesIdRouteImport.update({
+    id: '/residences/$id',
+    path: '/residences/$id',
+    getParentRoute: () => AdminWebsiteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -103,6 +110,7 @@ export interface FileRoutesByFullPath {
   '/properties/': typeof PropertiesIndexRoute
   '/admin/website/': typeof AdminWebsiteIndexRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
+  '/admin/website/residences/$id': typeof AdminWebsiteResidencesIdRoute
   '/admin/website/residences/': typeof AdminWebsiteResidencesIndexRoute
 }
 export interface FileRoutesByTo {
@@ -116,6 +124,7 @@ export interface FileRoutesByTo {
   '/properties': typeof PropertiesIndexRoute
   '/admin/website': typeof AdminWebsiteIndexRoute
   '/properties/$slug': typeof PropertiesSlugIndexRoute
+  '/admin/website/residences/$id': typeof AdminWebsiteResidencesIdRoute
   '/admin/website/residences': typeof AdminWebsiteResidencesIndexRoute
 }
 export interface FileRoutesById {
@@ -132,6 +141,7 @@ export interface FileRoutesById {
   '/properties/': typeof PropertiesIndexRoute
   '/admin/website/': typeof AdminWebsiteIndexRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
+  '/admin/website/residences/$id': typeof AdminWebsiteResidencesIdRoute
   '/admin/website/residences/': typeof AdminWebsiteResidencesIndexRoute
 }
 export interface FileRouteTypes {
@@ -149,6 +159,7 @@ export interface FileRouteTypes {
     | '/properties/'
     | '/admin/website/'
     | '/properties/$slug/'
+    | '/admin/website/residences/$id'
     | '/admin/website/residences/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -162,6 +173,7 @@ export interface FileRouteTypes {
     | '/properties'
     | '/admin/website'
     | '/properties/$slug'
+    | '/admin/website/residences/$id'
     | '/admin/website/residences'
   id:
     | '__root__'
@@ -177,6 +189,7 @@ export interface FileRouteTypes {
     | '/properties/'
     | '/admin/website/'
     | '/properties/$slug/'
+    | '/admin/website/residences/$id'
     | '/admin/website/residences/'
   fileRoutesById: FileRoutesById
 }
@@ -283,16 +296,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminWebsiteResidencesIndexRouteImport
       parentRoute: typeof AdminWebsiteRoute
     }
+    '/admin/website/residences/$id': {
+      id: '/admin/website/residences/$id'
+      path: '/residences/$id'
+      fullPath: '/admin/website/residences/$id'
+      preLoaderRoute: typeof AdminWebsiteResidencesIdRouteImport
+      parentRoute: typeof AdminWebsiteRoute
+    }
   }
 }
 
 interface AdminWebsiteRouteChildren {
   AdminWebsiteIndexRoute: typeof AdminWebsiteIndexRoute
+  AdminWebsiteResidencesIdRoute: typeof AdminWebsiteResidencesIdRoute
   AdminWebsiteResidencesIndexRoute: typeof AdminWebsiteResidencesIndexRoute
 }
 
 const AdminWebsiteRouteChildren: AdminWebsiteRouteChildren = {
   AdminWebsiteIndexRoute: AdminWebsiteIndexRoute,
+  AdminWebsiteResidencesIdRoute: AdminWebsiteResidencesIdRoute,
   AdminWebsiteResidencesIndexRoute: AdminWebsiteResidencesIndexRoute,
 }
 
