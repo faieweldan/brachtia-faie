@@ -49,22 +49,8 @@ function AdminLayout() {
             );
           })}
         </nav>
-        <div className="mt-auto">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start text-muted-foreground"
-            onClick={async () => {
-              await queryClient.cancelQueries();
-              queryClient.clear();
-              await supabase.auth.signOut();
-              void navigate({ to: "/admin-login", replace: true });
-            }}
-          >
-            <LogOut className="size-4" /> Sign out
-          </Button>
-        </div>
       </aside>
+
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center gap-2 overflow-x-auto border-b border-border bg-card px-4 py-2 md:hidden">
