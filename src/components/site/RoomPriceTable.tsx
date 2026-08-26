@@ -55,15 +55,8 @@ export default function RoomPriceTable({
   const occPicks = picks.filter((p) => p.startsWith("occ:")).map((p) => p.slice(4));
 
   const options: { token: string; label: string }[] = [
-    { token: "occ:single", label: "Single" },
-    { token: "occ:twin", label: "Twin sharing" },
-    ...allUnitTypes.map((u) => ({
-      token: `unit:${u}`,
-      label: u.replace(" Apartment", ""),
-    })),
     { token: "bath:ensuite", label: "Ensuite" },
     { token: "view:exterior", label: "Exterior view" },
-    { token: "view:corridor", label: "Corridor view" },
   ];
 
   function toggle(token: string) {
