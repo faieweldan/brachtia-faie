@@ -1,4 +1,4 @@
-import { Bath, BedDouble, Check, Eye, Ruler, Sparkles } from "lucide-react";
+import { Bath, BedDouble, Check, Eye, MessageCircle, Ruler, Sparkles } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -12,12 +12,13 @@ import {
   bedConfig,
   formatRM,
   viewLabel,
+  whatsappUrl,
   type Occupancy,
   type Property,
   type RoomType,
 } from "@/data/properties";
 import RoomGallery from "./RoomGallery";
-import EnquireDialog from "./EnquireDialog";
+
 
 const DEFAULT_FURNISHING = [
   "Single bed with mattress",
@@ -187,19 +188,22 @@ export default function RoomDetailDialog({
                   onOpenChange(false);
                 }}
               >
-                Use this room in the calculator
+                Select this room
               </Button>
             )}
-            <EnquireDialog
-              property={property}
-              room={room}
-              trigger={
-                <Button variant="outline" size="lg" className="flex-1">
-                  Enquire
-                </Button>
-              }
-            />
+            <Button asChild variant="outline" size="lg" className="flex-1">
+              <a
+                href={whatsappUrl(
+                  `Hi Brachtia Homes, I'd like to check availability for ${room.name} at ${property.name}.`,
+                )}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <MessageCircle className="size-4" /> WhatsApp us
+              </a>
+            </Button>
           </div>
+
         </div>
       </DialogContent>
     </Dialog>

@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import AmenitySection from "@/components/site/AmenitySection";
 import LocationSection from "@/components/site/LocationSection";
 import CtaBand from "@/components/site/CtaBand";
-import EnquireDialog from "@/components/site/EnquireDialog";
+import EnquiryDialog from "@/components/site/EnquiryDialog";
 import RoomPriceTable from "@/components/site/RoomPriceTable";
 import StayCalculator from "@/components/site/StayCalculator";
 
@@ -239,23 +239,44 @@ function PropertyPage() {
                 moveOut={moveOut}
                 occupancy={selectedOccupancy}
                 actions={(state) => (
-                  <EnquireDialog
-                    property={property}
-                    room={state.room}
-                    term={state.term}
-                    occupancy={state.occupancy}
-                    moveIn={state.moveIn}
-                    moveOut={state.moveOut}
-                    trigger={
-                      <Button size="lg" className="w-full">
-                        Reserve with these dates
-                      </Button>
-                    }
-                  />
+                  <>
+                    <EnquiryDialog
+                      property={property}
+                      rooms={rooms}
+                      stay={{
+                        room: state.room,
+                        occupancy: state.occupancy,
+                        term: state.term,
+                        rent: state.rent,
+                        moveIn: state.moveIn,
+                        moveOut: state.moveOut,
+                        quote: state.quote,
+                      }}
+                      onStayChange={(next) => {
+                        if (next.roomId !== undefined) {
+                          setSelectedRoomId(next.roomId);
+                          const room = rooms.find((r) => r.id === next.roomId);
+                          setSelectedOccupancy(room?.occupancies[0]);
+                        }
+                        if (next.occupancy !== undefined) setSelectedOccupancy(next.occupancy);
+                        if (next.moveIn !== undefined) changeMoveIn(next.moveIn);
+                        if (next.moveOut !== undefined) setMoveOut(next.moveOut);
+                      }}
+                      trigger={
+                        <Button size="lg" className="w-full">
+                          Check Availability
+                        </Button>
+                      }
+                    />
+                    <Button asChild size="lg" variant="outline" className="w-full">
+                      <Link to="/book-viewing">Book a Viewing</Link>
+                    </Button>
+                  </>
                 )}
               />
               </div>
             )}
+
           </aside>
 
 

@@ -113,7 +113,7 @@ function Home() {
                 </a>
               </Button>
               <Button asChild size="lg" variant="outline" className="h-13 rounded-full border-2 px-8 text-base">
-                <Link to="/apply">Check Availability</Link>
+                <Link to="/properties">Check Availability</Link>
               </Button>
             </div>
 

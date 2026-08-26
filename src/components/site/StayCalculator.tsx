@@ -1,6 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Check, ChevronDown, Download, Info, MousePointerClick } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Check, ChevronDown, Info, MousePointerClick } from "lucide-react";
 import Logo from "./Logo";
 
 import {
@@ -16,6 +15,7 @@ import {
   type PaymentTerm,
   type Property,
   type RoomType,
+  type StayQuote,
 } from "@/data/properties";
 import {
   Collapsible,
@@ -23,16 +23,17 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import SegmentedToggle from "./SegmentedToggle";
-import QuoteDetailsDialog, { type QuoteLead } from "./QuoteDetailsDialog";
 
 export type StayState = {
-  occupancy: Occupancy;
+  occupancy: Occupancy | undefined;
   term: ContractTerm;
   rent: number | null;
   moveIn: string;
   moveOut: string;
-  room: RoomType;
+  room: RoomType | undefined;
+  quote: StayQuote | null;
 };
+
 
 function durationLabel(from: string, to: string) {
   const a = new Date(`${from}T00:00:00Z`);
@@ -125,32 +126,16 @@ export default function StayCalculator({
     };
   }, [baseQuote, beddingChoice]);
 
-  const state: StayState | null = selected
-    ? { occupancy, term, rent: rateAvailable ? rent : null, moveIn, moveOut, room: selected }
-    : null;
+  const state: StayState = {
+    occupancy: selected ? occupancy : undefined,
+    term,
+    rent: rateAvailable ? rent : null,
+    moveIn,
+    moveOut,
+    room: selected,
+    quote,
+  };
 
-  const [leadOpen, setLeadOpen] = useState(false);
-  const [downloading, setDownloading] = useState(false);
-
-  async function generatePdf(lead: QuoteLead) {
-    if (!quote || !selected) return;
-    setDownloading(true);
-    try {
-      const { downloadStayQuote } = await import("@/lib/quote-pdf");
-      await downloadStayQuote({
-        property,
-        room: selected,
-        occupancy,
-        term,
-        moveIn,
-        moveOut,
-        quote,
-        lead,
-      });
-    } finally {
-      setDownloading(false);
-    }
-  }
 
   return (
     <div className="overflow-hidden rounded-3xl bg-card shadow-lift ring-1 ring-brand-soft">
@@ -383,34 +368,12 @@ export default function StayCalculator({
               )
             )}
 
-            {actions && state && <div className="mt-4 space-y-2">{actions(state)}</div>}
-
-            {quote && (
-              <>
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="mt-2 w-full"
-                  onClick={() => setLeadOpen(true)}
-                  disabled={downloading}
-                >
-                  <Download className="size-4" />
-                  {downloading ? "Preparing quote…" : "Download quote (PDF)"}
-                </Button>
-                <p className="mt-2 text-center text-[11px] text-muted-foreground">
-                  Free to enquire — no payment yet.
-                </p>
-                <QuoteDetailsDialog
-                  open={leadOpen}
-                  onOpenChange={setLeadOpen}
-                  property={property}
-                  onSubmit={generatePdf}
-                />
-              </>
-            )}
           </>
         )}
+
+        {actions && <div className="mt-4 space-y-2">{actions(state)}</div>}
       </div>
+
     </div>
   );
 }
