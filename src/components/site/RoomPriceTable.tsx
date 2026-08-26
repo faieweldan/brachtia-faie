@@ -216,28 +216,24 @@ export default function RoomPriceTable({
                 </p>
               </div>
 
-              <div className="hidden grid-cols-[minmax(0,2.6fr)_minmax(0,1.2fr)_minmax(0,1fr)_auto] gap-4 bg-muted/50 px-5 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid">
+              <div className="hidden grid-cols-[minmax(0,2.2fr)_minmax(0,1.1fr)_11rem_11rem] gap-4 bg-muted/50 px-5 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid">
                 <span>Room</span>
                 <span>Details</span>
-                <span>Monthly rate</span>
-                <span className="w-24" />
+                <span>Single</span>
+                <span>Twin sharing</span>
               </div>
 
               <ul>
                 {list.map((room) => {
                   const selected = selectedRoomId === room.id;
-                  const pickOcc: Occupancy =
-                    (occPicks.find((o) => room.occupancies.includes(o as Occupancy)) as
-                      | Occupancy
-                      | undefined) ?? (room.occupancies[0] ?? "single");
                   const photos = room.gallery.length || 1;
 
                   return (
                     <li
                       key={room.id}
                       onClick={() => setDetailRoom(room)}
-                      className={`group grid cursor-pointer grid-cols-1 items-center gap-4 border-t border-border/70 px-5 py-4 transition-colors md:grid-cols-[minmax(0,2.6fr)_minmax(0,1.2fr)_minmax(0,1fr)_auto] ${
-                        selected ? "bg-brand-tint/60" : "hover:bg-muted/50"
+                      className={`group grid cursor-pointer grid-cols-1 items-center gap-4 border-t border-border/70 px-5 py-4 transition-colors md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.1fr)_11rem_11rem] ${
+                        selected ? "bg-brand-tint/60" : "hover:bg-muted/40"
                       }`}
                     >
                       <div className="flex min-w-0 items-center gap-3">
@@ -278,26 +274,9 @@ export default function RoomPriceTable({
                         </span>
                       </div>
 
-                      <div>{rateCell(room)}</div>
-
-                      <div className="md:w-28">
-                        <Button
-                          size="sm"
-                          variant={selected ? "default" : "outline"}
-                          className="w-full rounded-full"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelect(room, pickOcc);
-                          }}
-                        >
-                          {selected ? (
-                            <>
-                              <Check className="size-4" /> Selected
-                            </>
-                          ) : (
-                            "Select"
-                          )}
-                        </Button>
+                      <div className="grid grid-cols-2 gap-2 md:contents">
+                        <div>{fareTile(room, "single", selected ? selectedOccupancy : undefined)}</div>
+                        <div>{fareTile(room, "twin", selected ? selectedOccupancy : undefined)}</div>
                       </div>
                     </li>
                   );
