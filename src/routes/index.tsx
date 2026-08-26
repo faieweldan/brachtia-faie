@@ -81,26 +81,6 @@ const perks = [
   },
 ];
 
-const steps = [
-  {
-    n: "01",
-    icon: ClipboardList,
-    title: "Tell us what you need",
-    text: "Choose your preferred residence, room type and move-in date, and tell us a little about yourself.",
-  },
-  {
-    n: "02",
-    icon: CalendarCheck,
-    title: "We find your match",
-    text: "Our team checks current availability and finds a suitable room based on your requirements.",
-  },
-  {
-    n: "03",
-    icon: MailCheck,
-    title: "Get your room offer",
-    text: "Receive your room details, price and next steps directly by email within 24 hours.*",
-  },
-];
 
 const stats = [
   { value: "100+", label: "Properties Managed" },
@@ -173,6 +153,9 @@ function Home() {
           ))}
         </div>
       </section>
+
+      {/* How it works */}
+      <HowItWorks />
 
       {/* Why students stay */}
       <section className="relative overflow-hidden py-16 sm:py-20">
