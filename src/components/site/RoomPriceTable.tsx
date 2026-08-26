@@ -151,7 +151,7 @@ export default function RoomPriceTable({
               )
             ) : (
               <p className="px-1 text-xs text-muted-foreground">
-                Add your dates to see live rates and availability.
+                Add your dates to calculate your move-in cost.
               </p>
             )}
           </div>
