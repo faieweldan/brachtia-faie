@@ -43,7 +43,7 @@ export default function Header() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-64 rounded-2xl p-2 shadow-card">
               {properties.map((p) => (
-                <DropdownMenuItem key={p.slug} asChild className="rounded-xl px-3 py-2.5 text-sm font-semibold text-brand-deep hover:bg-peach/40 focus:bg-peach/40 cursor-pointer">
+                <DropdownMenuItem key={p.slug} asChild className="rounded-xl px-3 py-2.5 text-sm font-semibold text-brand-deep hover:bg-brand-soft/40 focus:bg-brand-soft/40 cursor-pointer">
                   <Link to="/properties/$slug" params={{ slug: p.slug }}>
                     {p.name}
                   </Link>
