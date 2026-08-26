@@ -368,34 +368,12 @@ export default function StayCalculator({
               )
             )}
 
-            {actions && state && <div className="mt-4 space-y-2">{actions(state)}</div>}
-
-            {quote && (
-              <>
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="mt-2 w-full"
-                  onClick={() => setLeadOpen(true)}
-                  disabled={downloading}
-                >
-                  <Download className="size-4" />
-                  {downloading ? "Preparing quote…" : "Download quote (PDF)"}
-                </Button>
-                <p className="mt-2 text-center text-[11px] text-muted-foreground">
-                  Free to enquire — no payment yet.
-                </p>
-                <QuoteDetailsDialog
-                  open={leadOpen}
-                  onOpenChange={setLeadOpen}
-                  property={property}
-                  onSubmit={generatePdf}
-                />
-              </>
-            )}
           </>
         )}
+
+        {actions && <div className="mt-4 space-y-2">{actions(state)}</div>}
       </div>
+
     </div>
   );
 }
