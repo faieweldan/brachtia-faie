@@ -110,9 +110,9 @@ export default function StayCalculator({
     const from = defaultMoveIn(selected);
     const next = moveInProp < from ? from : moveInProp;
     setMoveIn(next);
-    setMoveOut(addMonths(next, 12));
+    setMoveOut(moveOutProp && moveOutProp > next ? moveOutProp : addMonths(next, 12));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [moveInProp, selected.id]);
+  }, [moveInProp, moveOutProp, selected.id]);
 
   useEffect(() => {
     if (occupancyProp && selected.occupancies.includes(occupancyProp)) {
