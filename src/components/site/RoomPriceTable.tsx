@@ -50,7 +50,7 @@ export default function RoomPriceTable({
   const withRate = rooms.filter((r) => r.occupancies.some((o) => r.rent[term][o] != null));
   const visible = filterRoomTypes(withRate, picks);
   const unitTypes = Array.from(new Set(visible.map((r) => r.unitType)));
-  const allUnitTypes = Array.from(new Set(rooms.map((r) => r.unitType)));
+  
 
   const occPicks = picks.filter((p) => p.startsWith("occ:")).map((p) => p.slice(4));
 
