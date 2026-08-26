@@ -201,7 +201,7 @@ export const properties: Property[] = [
         securityMonths: 2,
         accessCardDeposit: 50,
         accessCardCharge: 20,
-        adminFee: 200,
+        adminFee: 250,
       },
       short: {
         advanceMonths: 2,
@@ -315,7 +315,7 @@ export const properties: Property[] = [
         utilitiesMonths: 1,
         securityMonths: 2,
         accessCardDeposit: 50,
-        accessCardCharge: 0,
+        accessCardCharge: 20,
         adminFee: 350,
       },
       short: {
@@ -323,7 +323,7 @@ export const properties: Property[] = [
         utilitiesMonths: 0,
         securityMonths: 0.5,
         accessCardDeposit: 50,
-        accessCardCharge: 0,
+        accessCardCharge: 20,
         adminFee: 350,
       },
     },
@@ -682,7 +682,7 @@ export function costBreakdown(property: Property, rent: number, term: ContractTe
   });
   lines.push({ label: "Access card deposit", amount: cfg.accessCardDeposit, kind: "refundable" });
   if (cfg.accessCardCharge > 0) {
-    lines.push({ label: "Access card charges", amount: cfg.accessCardCharge, kind: "onetime" });
+    lines.push({ label: "Resident card charges", amount: cfg.accessCardCharge, kind: "onetime" });
   }
   lines.push({
     label: term === "long" ? "Admin + agreement charges" : "Admin charges",
