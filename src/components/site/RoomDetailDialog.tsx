@@ -1,4 +1,4 @@
-import { Bath, BedDouble, Check, Eye, Ruler, Sparkles } from "lucide-react";
+import { Bath, BedDouble, Check, Eye, MessageCircle, Ruler, Sparkles } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -12,12 +12,13 @@ import {
   bedConfig,
   formatRM,
   viewLabel,
+  whatsappUrl,
   type Occupancy,
   type Property,
   type RoomType,
 } from "@/data/properties";
 import RoomGallery from "./RoomGallery";
-import EnquireDialog from "./EnquireDialog";
+
 
 const DEFAULT_FURNISHING = [
   "Single bed with mattress",
