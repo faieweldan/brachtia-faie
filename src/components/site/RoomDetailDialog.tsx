@@ -56,6 +56,7 @@ export default function RoomDetailDialog({
   ].filter(Boolean) as { icon: typeof Ruler; label: string }[];
 
   const furnishing = room.furnishing ?? DEFAULT_FURNISHING;
+  const bedOptions = property.singleBedOptions ?? [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
