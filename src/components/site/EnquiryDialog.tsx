@@ -219,6 +219,10 @@ export default function EnquiryDialog({
   const [submitted, setSubmitted] = useState(false);
   const [lead, setLead] = useState<z.infer<typeof leadSchema> | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [countryCode, setCountryCode] = useState("+60");
+  const [mobileNumber, setMobileNumber] = useState("");
+
+  const mobileCombined = `${countryCode} ${mobileNumber}`.trim();
 
   const room = stay.room;
   const occupancies = room?.occupancies ?? [];
