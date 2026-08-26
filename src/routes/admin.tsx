@@ -24,8 +24,7 @@ const NAV: { to: string; label: string; icon: typeof Inbox; exact?: boolean }[] 
 
 function AdminLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
+
 
   return (
     <div className="flex min-h-screen bg-muted/30">
