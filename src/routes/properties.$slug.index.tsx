@@ -197,9 +197,12 @@ function PropertyPage() {
                 <RoomPriceTable
                   property={property}
                   rooms={rooms}
-                  filters={filters}
+                  picks={picks}
+                  onPicksChange={setPicks}
                   moveIn={moveIn}
-                  onMoveInChange={setMoveIn}
+                  onMoveInChange={changeMoveIn}
+                  moveOut={moveOut}
+                  onMoveOutChange={setMoveOut}
                   term={activeTerm}
                   onTermChange={setTerm}
                   selectedRoomId={selectedRoomId}
@@ -210,15 +213,6 @@ function PropertyPage() {
                       .getElementById("stay-calculator")
                       ?.scrollIntoView({ behavior: "smooth", block: "center" });
                   }}
-                  onFilterChange={(next) =>
-                    navigate({ search: (prev) => ({ ...prev, ...next }), replace: true })
-                  }
-                  onClearFilters={() =>
-                    navigate({
-                      search: { unit: "all", bath: "all", view: "all", occ: "all" },
-                      replace: true,
-                    })
-                  }
                 />
               </div>
             </div>
