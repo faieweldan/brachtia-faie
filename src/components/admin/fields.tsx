@@ -39,9 +39,9 @@ export function Field({
   className = "",
 }: {
   label: string;
-  hint?: string;
+  hint?: string | undefined;
   children: ReactNode;
-  className?: string;
+  className?: string | undefined;
 }) {
   return (
     <label className={`block space-y-1.5 ${className}`}>
@@ -64,9 +64,9 @@ export function TextField({
   label: string;
   value: string | number | null | undefined;
   onChange: (v: string) => void;
-  placeholder?: string;
-  hint?: string;
-  className?: string;
+  placeholder?: string | undefined;
+  hint?: string | undefined;
+  className?: string | undefined;
   type?: string;
 }) {
   return (
@@ -93,8 +93,8 @@ export function AreaField({
   value: string;
   onChange: (v: string) => void;
   rows?: number;
-  hint?: string;
-  className?: string;
+  hint?: string | undefined;
+  className?: string | undefined;
 }) {
   return (
     <Field label={label} hint={hint} className={className}>
