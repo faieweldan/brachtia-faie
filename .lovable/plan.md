@@ -5,7 +5,7 @@
 Each rate line becomes an icon + price instead of wordy text:
 
 - Single person icon + `RM 1,050`
-- Two-person icon + `RM 550` (per pax)
+- Two-person icon + `RM 550`
 
 Compact, aligned, with a tooltip/short caption ("per pax") only where needed. The full wording — "RM 1,050 per month, single occupancy" and "RM 550 per person per month, twin sharing" — moves into the room detail popup, which already has the full rates table.
 
