@@ -41,11 +41,11 @@ export default function Header() {
             <DropdownMenuTrigger className={`inline-flex items-center gap-1 outline-none ${linkClass}`}>
               Residences <ChevronDown className="size-3.5" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-64 rounded-2xl">
+            <DropdownMenuContent align="start" className="w-64 rounded-2xl p-2 shadow-card">
               {properties.map((p) => (
-                <DropdownMenuItem key={p.slug} asChild className="rounded-xl">
+                <DropdownMenuItem key={p.slug} asChild className="rounded-xl px-3 py-2.5 text-sm font-semibold text-brand-deep hover:bg-peach/40 focus:bg-peach/40 cursor-pointer">
                   <Link to="/properties/$slug" params={{ slug: p.slug }}>
-                    <span className="block text-sm font-semibold text-brand-deep">{p.name}</span>
+                    {p.name}
                   </Link>
                 </DropdownMenuItem>
               ))}
