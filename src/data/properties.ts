@@ -738,10 +738,12 @@ export function stayDays(fromISO: string, toISOStr: string) {
 }
 
 export function termForRange(fromISO: string, toISOStr: string): ContractTerm {
-  const twelveMonthEnd = parseISO(addMonths(fromISO, 12));
-  twelveMonthEnd.setUTCDate(twelveMonthEnd.getUTCDate() - 1);
-  return parseISO(toISOStr).getTime() >= twelveMonthEnd.getTime() ? "long" : "short";
+  // Stays longer than 11 months and 15 days are treated as a 12-month term.
+  const threshold = parseISO(addMonths(fromISO, 11));
+  threshold.setUTCDate(threshold.getUTCDate() + 15);
+  return parseISO(toISOStr).getTime() > threshold.getTime() ? "long" : "short";
 }
+
 
 /** Splits a date range into calendar months and pro-rates partial ones daily. */
 export function staySchedule(fromISO: string, toISOStr: string, rent: number): StaySegment[] {
