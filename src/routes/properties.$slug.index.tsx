@@ -236,6 +236,7 @@ function PropertyPage() {
                 selectedRoomId={selectedRoomId ?? undefined}
                 onRoomChange={setSelectedRoomId}
                 moveIn={moveIn}
+                moveOut={moveOut}
                 occupancy={selectedOccupancy}
                 actions={(state) => (
                   <EnquireDialog
