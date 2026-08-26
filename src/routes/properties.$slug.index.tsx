@@ -204,6 +204,7 @@ function PropertyPage() {
                   term={activeTerm}
                   onTermChange={setTerm}
                   selectedRoomId={selectedRoomId}
+                  selectedOccupancy={selectedOccupancy}
                   onSelect={(room, occ) => {
                     setSelectedRoomId(room.id);
                     setSelectedOccupancy(occ);
@@ -232,7 +233,6 @@ function PropertyPage() {
                 property={property}
                 rooms={rooms}
                 selectedRoomId={selectedRoomId ?? undefined}
-                onRoomChange={setSelectedRoomId}
                 moveIn={moveIn}
                 moveOut={moveOut}
                 occupancy={selectedOccupancy}

@@ -103,7 +103,7 @@ export default function QuoteDetailsDialog({
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="q-name">Full name</Label>
               <Input id="q-name" name="name" placeholder="Aisha Rahman" maxLength={100} />
-              {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
+              {errors['name'] && <p className="text-xs text-destructive">{errors['name']}</p>}
             </div>
 
             <div className="space-y-1.5">
@@ -118,8 +118,8 @@ export default function QuoteDetailsDialog({
                   </option>
                 ))}
               </select>
-              {errors.university && (
-                <p className="text-xs text-destructive">{errors.university}</p>
+              {errors['university'] && (
+                <p className="text-xs text-destructive">{errors['university']}</p>
               )}
             </div>
 
@@ -135,14 +135,14 @@ export default function QuoteDetailsDialog({
                   </option>
                 ))}
               </select>
-              {errors.intake && <p className="text-xs text-destructive">{errors.intake}</p>}
+              {errors['intake'] && <p className="text-xs text-destructive">{errors['intake']}</p>}
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="q-nat">Nationality</Label>
               <Input id="q-nat" name="nationality" placeholder="Malaysian" maxLength={60} />
-              {errors.nationality && (
-                <p className="text-xs text-destructive">{errors.nationality}</p>
+              {errors['nationality'] && (
+                <p className="text-xs text-destructive">{errors['nationality']}</p>
               )}
             </div>
 
@@ -158,19 +158,19 @@ export default function QuoteDetailsDialog({
                   </option>
                 ))}
               </select>
-              {errors.gender && <p className="text-xs text-destructive">{errors.gender}</p>}
+              {errors['gender'] && <p className="text-xs text-destructive">{errors['gender']}</p>}
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="q-email">Email</Label>
               <Input id="q-email" name="email" type="email" placeholder="you@email.com" maxLength={255} />
-              {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
+              {errors['email'] && <p className="text-xs text-destructive">{errors['email']}</p>}
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="q-mobile">Mobile / WhatsApp</Label>
               <Input id="q-mobile" name="mobile" placeholder="+60..." maxLength={25} />
-              {errors.mobile && <p className="text-xs text-destructive">{errors.mobile}</p>}
+              {errors['mobile'] && <p className="text-xs text-destructive">{errors['mobile']}</p>}
             </div>
           </div>
 
