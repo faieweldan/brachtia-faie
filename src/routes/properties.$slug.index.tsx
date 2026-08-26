@@ -13,6 +13,7 @@ import {
 import {
   getProperty,
   getRoomTypes,
+  termForRange,
   type ContractTerm,
   type Occupancy,
 } from "@/data/properties";
