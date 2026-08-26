@@ -247,7 +247,7 @@ export default function RoomPriceTable({
                 </p>
               </div>
 
-              <div className="hidden grid-cols-[minmax(0,2.2fr)_minmax(0,1.3fr)_minmax(0,1.2fr)_minmax(0,1fr)_auto] gap-4 bg-muted/50 px-5 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid">
+              <div className="hidden grid-cols-[minmax(0,2.6fr)_minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_auto] gap-4 bg-muted/50 px-5 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid">
                 <span>Room</span>
                 <span>Details</span>
                 <span>Monthly rate</span>
@@ -269,7 +269,7 @@ export default function RoomPriceTable({
                     <li
                       key={room.id}
                       onClick={() => setDetailRoom(room)}
-                      className={`group grid cursor-pointer grid-cols-1 items-center gap-4 border-t border-border/70 px-5 py-4 transition-colors md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.3fr)_minmax(0,1.2fr)_minmax(0,1fr)_auto] ${
+                      className={`group grid cursor-pointer grid-cols-1 items-center gap-4 border-t border-border/70 px-5 py-4 transition-colors md:grid-cols-[minmax(0,2.6fr)_minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_auto] ${
                         selected ? "bg-brand-tint/60" : "hover:bg-muted/50"
                       }`}
                     >
@@ -289,7 +289,7 @@ export default function RoomPriceTable({
                           </span>
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate font-semibold text-brand-deep">{room.name}</p>
+                          <p className="font-semibold leading-snug text-brand-deep">{room.name}</p>
                           <span className="inline-flex items-center gap-1 text-xs font-semibold text-brand underline-offset-2 group-hover:underline">
                             View details <ChevronRight className="size-3" />
                           </span>
