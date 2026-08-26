@@ -1,22 +1,8 @@
-import { createFileRoute, Link, Outlet, redirect, useNavigate, useRouterState } from "@tanstack/react-router";
-import { CalendarDays, Inbox, LayoutDashboard, LogOut, Building2 } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
-
-import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { CalendarDays, Inbox, LayoutDashboard } from "lucide-react";
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
-  beforeLoad: async () => {
-    const { data, error } = await supabase.auth.getUser();
-    if (error || !data.user) throw redirect({ to: "/admin-login" });
-    const { data: isAdmin } = await supabase.rpc("has_role", {
-      _user_id: data.user.id,
-      _role: "admin",
-    });
-    if (!isAdmin) throw redirect({ to: "/admin-login" });
-    return { user: data.user };
-  },
   head: () => ({
     meta: [
       { title: "Admin | Brachtia Homes" },
@@ -27,18 +13,17 @@ export const Route = createFileRoute("/admin")({
   component: AdminLayout,
 });
 
+
 const NAV: { to: string; label: string; icon: typeof Inbox; exact?: boolean }[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/admin/appointments", label: "Appointment Manager", icon: CalendarDays },
   { to: "/admin/bookings", label: "Bookings", icon: Inbox },
-  { to: "/admin/residences", label: "Residences", icon: Building2 },
 ];
 
 
 function AdminLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
+
 
   return (
     <div className="flex min-h-screen bg-muted/30">
@@ -63,22 +48,8 @@ function AdminLayout() {
             );
           })}
         </nav>
-        <div className="mt-auto">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start text-muted-foreground"
-            onClick={async () => {
-              await queryClient.cancelQueries();
-              queryClient.clear();
-              await supabase.auth.signOut();
-              void navigate({ to: "/admin-login", replace: true });
-            }}
-          >
-            <LogOut className="size-4" /> Sign out
-          </Button>
-        </div>
       </aside>
+
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center gap-2 overflow-x-auto border-b border-border bg-card px-4 py-2 md:hidden">
