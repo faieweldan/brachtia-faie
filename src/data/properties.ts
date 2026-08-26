@@ -554,6 +554,42 @@ export function unitTypesFor(slug: string) {
   return Array.from(new Set(getRoomTypes(slug).map((r) => r.unitType)));
 }
 
+/** Bed set-up shown in the room detail popup. */
+export function bedConfig(room: RoomType, occupancy: Occupancy) {
+  const explicit = room.beds?.[occupancy];
+  if (explicit) return explicit;
+  return occupancy === "twin" ? "2 single beds" : "1 single bed";
+}
+
+export function viewLabel(room: RoomType) {
+  if (!room.hasView) return "Internal facing";
+  return room.viewType === "Corridor" ? "Corridor view" : "Exterior view";
+}
+
+export type RoomAvailability = {
+  tone: "ready" | "later" | "waitlist";
+  label: string;
+  note?: string;
+};
+
+/** Availability of a room relative to a chosen move-in date. */
+export function availabilityFor(room: RoomType, moveIn?: string): RoomAvailability {
+  if (room.status === "occupied") {
+    return { tone: "waitlist", label: "Waitlist", note: "Join the waitlist" };
+  }
+  const spots = room.status === "limited" ? `${room.spotsLeft ?? 1} spots left` : "Available";
+  if (moveIn && room.availableFrom > moveIn) {
+    return {
+      tone: "later",
+      label: `From ${formatDate(room.availableFrom)}`,
+      note: "Not ready on your date",
+    };
+  }
+  return { tone: "ready", label: spots, note: `Ready ${formatDate(room.availableFrom)}` };
+}
+
+
+
 
 export function getRoomType(slug: string, typeId: string) {
   return roomTypes.find((r) => r.propertySlug === slug && r.id === typeId);
