@@ -45,6 +45,15 @@ export type QuoteInput = {
   moveIn: string;
   moveOut: string;
   quote: StayQuote;
+  lead?: {
+    name: string;
+    university: string;
+    intake: string;
+    nationality: string;
+    gender: string;
+    email: string;
+    mobile: string;
+  };
 };
 
 export async function downloadStayQuote({
@@ -55,6 +64,7 @@ export async function downloadStayQuote({
   moveIn,
   moveOut,
   quote,
+  lead,
 }: QuoteInput) {
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
@@ -103,6 +113,27 @@ export async function downloadStayQuote({
   y += 14;
   doc.text(property.location, M, y);
   y += 18;
+
+  if (lead) {
+    const leadRows: [string, string][] = [
+      ["Prepared for", lead.name],
+      ["University", `${lead.university}  ·  Intake ${lead.intake}`],
+      ["Nationality", `${lead.nationality}  ·  ${lead.gender}`],
+      ["Contact", `${lead.email}  ·  ${lead.mobile}`],
+    ];
+    autoTable(doc, {
+      startY: y,
+      margin: { left: M, right: M, bottom: 84 },
+      theme: "plain",
+      styles: { fontSize: 9.5, cellPadding: { top: 3, bottom: 3, left: 0, right: 0 } },
+      columnStyles: {
+        0: { cellWidth: 120, textColor: MUTED },
+        1: { fontStyle: "bold", textColor: [30, 30, 30] },
+      },
+      body: leadRows,
+    });
+    y = (doc as any).lastAutoTable.finalY + 16;
+  }
 
   const details: [string, string][] = [
     ["Room type", `${room.unitType} · ${room.name}`],

@@ -201,7 +201,7 @@ export const properties: Property[] = [
         securityMonths: 2,
         accessCardDeposit: 50,
         accessCardCharge: 20,
-        adminFee: 200,
+        adminFee: 250,
       },
       short: {
         advanceMonths: 2,
@@ -315,7 +315,7 @@ export const properties: Property[] = [
         utilitiesMonths: 1,
         securityMonths: 2,
         accessCardDeposit: 50,
-        accessCardCharge: 0,
+        accessCardCharge: 20,
         adminFee: 350,
       },
       short: {
@@ -323,7 +323,7 @@ export const properties: Property[] = [
         utilitiesMonths: 0,
         securityMonths: 0.5,
         accessCardDeposit: 50,
-        accessCardCharge: 0,
+        accessCardCharge: 20,
         adminFee: 350,
       },
     },
@@ -682,7 +682,7 @@ export function costBreakdown(property: Property, rent: number, term: ContractTe
   });
   lines.push({ label: "Access card deposit", amount: cfg.accessCardDeposit, kind: "refundable" });
   if (cfg.accessCardCharge > 0) {
-    lines.push({ label: "Access card charges", amount: cfg.accessCardCharge, kind: "onetime" });
+    lines.push({ label: "Resident card charges", amount: cfg.accessCardCharge, kind: "onetime" });
   }
   lines.push({
     label: term === "long" ? "Admin + agreement charges" : "Admin charges",
@@ -785,6 +785,48 @@ export type StayQuote = {
   monthlyAfter: number;
 };
 
+export type PaymentTerm = "bimonthly" | "quarterly" | "full";
+
+export const paymentTermLabel: Record<PaymentTerm, string> = {
+  bimonthly: "Bi-monthly",
+  quarterly: "Quarterly",
+  full: "Full term",
+};
+
+/** Bedding sets offered as optional add-ons. */
+export type BeddingOption = { id: string; label: string; price: number; items: string[] };
+
+export const BEDDING_SETS: BeddingOption[] = [
+  {
+    id: "single",
+    label: "Single Bedding Set",
+    price: 250,
+    items: ["1 Single quilted comforter", "1 Single bedsheet", "1 Pillow"],
+  },
+  {
+    id: "queen",
+    label: "Queen Bedding Set",
+    price: 300,
+    items: ["1 Queen quilted comforter", "1 Queen bedsheet", "2 Pillows"],
+  },
+  {
+    id: "king",
+    label: "King Bedding Set",
+    price: 350,
+    items: ["1 King quilted comforter", "1 King bedsheet", "2 Pillows"],
+  },
+];
+
+/** Bedding sets available for a given residence + occupancy (bed configuration). */
+export function beddingOptionsFor(property: Property, occupancy: Occupancy): BeddingOption[] {
+  if (occupancy === "twin") return BEDDING_SETS.filter((b) => b.id === "single");
+  const beds = property.singleBedOptions ?? ["Single bed"];
+  const ids = new Set(
+    beds.map((b) => b.toLowerCase().split(" ")[0]!).filter((b) => ["single", "queen", "king"].includes(b)),
+  );
+  return BEDDING_SETS.filter((b) => ids.has(b.id));
+}
+
 /** Full quote: pro-rated rent schedule + deposits/fees due before move-in. */
 export function stayQuote(
   property: Property,
@@ -792,6 +834,7 @@ export function stayQuote(
   term: ContractTerm,
   fromISO: string,
   toISOStr: string,
+  paymentTerm: PaymentTerm = "bimonthly",
 ): StayQuote | null {
   const days = stayDays(fromISO, toISOStr);
   if (!rent || days < 1) return null;
@@ -800,6 +843,10 @@ export function stayQuote(
   const cfg = property.feeConfig[term];
   const first = schedule[0];
   const lines: CostLine[] = [];
+
+  const cycleMonths =
+    paymentTerm === "full" ? schedule.length : paymentTerm === "quarterly" ? 3 : 2;
+  const covered = Math.min(Math.max(cycleMonths, 1), schedule.length);
 
   if (first) {
     lines.push({
@@ -810,11 +857,14 @@ export function stayQuote(
       kind: "advance",
     });
   }
-  const extraAdvance = Math.max(0, cfg.advanceMonths - 1);
-  if (extraAdvance > 0) {
+  const advanceSegments = schedule.slice(1, covered);
+  if (advanceSegments.length > 0) {
     lines.push({
-      label: `Advance rental (${formatMonths(extraAdvance)})`,
-      amount: round2(rent * extraAdvance),
+      label:
+        paymentTerm === "full"
+          ? `Rent for the rest of the stay (${advanceSegments.length} months)`
+          : `Advance rental (${formatMonths(advanceSegments.length)})`,
+      amount: round2(advanceSegments.reduce((s, seg) => s + seg.amount, 0)),
       kind: "advance",
     });
   }
@@ -832,7 +882,7 @@ export function stayQuote(
   });
   lines.push({ label: "Access card deposit", amount: cfg.accessCardDeposit, kind: "refundable" });
   if (cfg.accessCardCharge > 0) {
-    lines.push({ label: "Access card charges", amount: cfg.accessCardCharge, kind: "onetime" });
+    lines.push({ label: "Resident card charges", amount: cfg.accessCardCharge, kind: "onetime" });
   }
   lines.push({
     label: term === "long" ? "Admin + agreement charges" : "Admin charges",
