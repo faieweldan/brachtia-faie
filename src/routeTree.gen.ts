@@ -19,6 +19,7 @@ import { Route as AdminAppointmentsRouteImport } from './routes/admin.appointmen
 import { Route as AdminBookingsRouteImport } from './routes/admin.bookings'
 import { Route as AdminWebsiteRouteImport } from './routes/admin.website'
 import { Route as PropertiesIndexRouteImport } from './routes/properties.index'
+import { Route as AdminWebsiteIndexRouteImport } from './routes/admin.website.index'
 import { Route as PropertiesSlugIndexRouteImport } from './routes/properties.$slug.index'
 
 const IndexRoute = IndexRouteImport.update({
@@ -71,6 +72,11 @@ const PropertiesIndexRoute = PropertiesIndexRouteImport.update({
   path: '/properties/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminWebsiteIndexRoute = AdminWebsiteIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminWebsiteRoute,
+} as any)
 const PropertiesSlugIndexRoute = PropertiesSlugIndexRouteImport.update({
   id: '/properties/$slug/',
   path: '/properties/$slug/',
@@ -85,9 +91,10 @@ export interface FileRoutesByFullPath {
   '/contact': typeof ContactRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/bookings': typeof AdminBookingsRoute
-  '/admin/website': typeof AdminWebsiteRoute
+  '/admin/website': typeof AdminWebsiteRouteWithChildren
   '/admin/': typeof AdminIndexRoute
   '/properties/': typeof PropertiesIndexRoute
+  '/admin/website/': typeof AdminWebsiteIndexRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
 }
 export interface FileRoutesByTo {
@@ -97,9 +104,9 @@ export interface FileRoutesByTo {
   '/contact': typeof ContactRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/bookings': typeof AdminBookingsRoute
-  '/admin/website': typeof AdminWebsiteRoute
   '/admin': typeof AdminIndexRoute
   '/properties': typeof PropertiesIndexRoute
+  '/admin/website': typeof AdminWebsiteIndexRoute
   '/properties/$slug': typeof PropertiesSlugIndexRoute
 }
 export interface FileRoutesById {
@@ -111,9 +118,10 @@ export interface FileRoutesById {
   '/contact': typeof ContactRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/bookings': typeof AdminBookingsRoute
-  '/admin/website': typeof AdminWebsiteRoute
+  '/admin/website': typeof AdminWebsiteRouteWithChildren
   '/admin/': typeof AdminIndexRoute
   '/properties/': typeof PropertiesIndexRoute
+  '/admin/website/': typeof AdminWebsiteIndexRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
 }
 export interface FileRouteTypes {
@@ -129,6 +137,7 @@ export interface FileRouteTypes {
     | '/admin/website'
     | '/admin/'
     | '/properties/'
+    | '/admin/website/'
     | '/properties/$slug/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -138,9 +147,9 @@ export interface FileRouteTypes {
     | '/contact'
     | '/admin/appointments'
     | '/admin/bookings'
-    | '/admin/website'
     | '/admin'
     | '/properties'
+    | '/admin/website'
     | '/properties/$slug'
   id:
     | '__root__'
@@ -154,6 +163,7 @@ export interface FileRouteTypes {
     | '/admin/website'
     | '/admin/'
     | '/properties/'
+    | '/admin/website/'
     | '/properties/$slug/'
   fileRoutesById: FileRoutesById
 }
@@ -239,6 +249,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PropertiesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/website/': {
+      id: '/admin/website/'
+      path: '/'
+      fullPath: '/admin/website/'
+      preLoaderRoute: typeof AdminWebsiteIndexRouteImport
+      parentRoute: typeof AdminWebsiteRoute
+    }
     '/properties/$slug/': {
       id: '/properties/$slug/'
       path: '/properties/$slug'
@@ -249,17 +266,29 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AdminWebsiteRouteChildren {
+  AdminWebsiteIndexRoute: typeof AdminWebsiteIndexRoute
+}
+
+const AdminWebsiteRouteChildren: AdminWebsiteRouteChildren = {
+  AdminWebsiteIndexRoute: AdminWebsiteIndexRoute,
+}
+
+const AdminWebsiteRouteWithChildren = AdminWebsiteRoute._addFileChildren(
+  AdminWebsiteRouteChildren,
+)
+
 interface AdminRouteChildren {
   AdminAppointmentsRoute: typeof AdminAppointmentsRoute
   AdminBookingsRoute: typeof AdminBookingsRoute
-  AdminWebsiteRoute: typeof AdminWebsiteRoute
+  AdminWebsiteRoute: typeof AdminWebsiteRouteWithChildren
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAppointmentsRoute: AdminAppointmentsRoute,
   AdminBookingsRoute: AdminBookingsRoute,
-  AdminWebsiteRoute: AdminWebsiteRoute,
+  AdminWebsiteRoute: AdminWebsiteRouteWithChildren,
   AdminIndexRoute: AdminIndexRoute,
 }
 
