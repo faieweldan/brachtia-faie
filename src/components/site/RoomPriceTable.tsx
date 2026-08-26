@@ -245,7 +245,7 @@ export default function RoomPriceTable({
                           </span>
                         </div>
                         <div className="min-w-0">
-                          <p className="font-semibold leading-snug text-brand-deep">{room.name}</p>
+                          <p className="truncate font-semibold leading-snug text-brand-deep">{room.name}</p>
                           <span className="inline-flex items-center gap-1 text-xs font-semibold text-brand underline-offset-2 group-hover:underline">
                             View details <ChevronRight className="size-3" />
                           </span>
