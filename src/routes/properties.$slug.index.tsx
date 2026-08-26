@@ -1,8 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
 import { LayoutGrid, MapPin } from "lucide-react";
-import { fallback, zodValidator } from "@tanstack/zod-adapter";
-import { z } from "zod";
 
 import {
   Dialog,
