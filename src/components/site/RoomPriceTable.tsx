@@ -209,7 +209,7 @@ export default function RoomPriceTable({
                 </p>
               </div>
 
-              <div className="hidden grid-cols-[minmax(0,2.2fr)_minmax(0,1.1fr)_11rem_11rem] gap-4 bg-muted/50 px-5 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid">
+              <div className="hidden grid-cols-[minmax(0,2.8fr)_minmax(0,1fr)_8.5rem_8.5rem] gap-4 bg-muted/50 px-5 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid">
                 <span>Room</span>
                 <span>Details</span>
                 <span>Single</span>
