@@ -65,6 +65,10 @@ export type RoomType = {
   availableFrom: string;
   status: RoomStatus;
   spotsLeft?: number;
+  /** Bed set-up per occupancy, e.g. { single: "1 single bed" } */
+  beds?: Partial<Record<Occupancy, string>>;
+  /** Furniture & fittings inside the room */
+  furnishing?: string[];
 };
 
 
@@ -517,6 +521,14 @@ export const roomTypes: RoomType[] = [
     rent: { long: { single: 1400, twin: null }, short: { single: null, twin: null } },
     availableFrom: "2026-09-01",
     status: "available",
+    beds: { single: "1 queen bed" },
+    furnishing: [
+      "Queen bed with mattress",
+      "Study desk & chair",
+      "Wardrobe",
+      "Air-conditioning",
+      "Kitchenette with fridge",
+    ],
   },
 ];
 
@@ -549,6 +561,42 @@ export function filterRoomTypes(rooms: RoomType[], f: Partial<RoomFilterState>) 
 export function unitTypesFor(slug: string) {
   return Array.from(new Set(getRoomTypes(slug).map((r) => r.unitType)));
 }
+
+/** Bed set-up shown in the room detail popup. */
+export function bedConfig(room: RoomType, occupancy: Occupancy) {
+  const explicit = room.beds?.[occupancy];
+  if (explicit) return explicit;
+  return occupancy === "twin" ? "2 single beds" : "1 single bed";
+}
+
+export function viewLabel(room: RoomType) {
+  if (!room.hasView) return "Internal facing";
+  return room.viewType === "Corridor" ? "Corridor view" : "Exterior view";
+}
+
+export type RoomAvailability = {
+  tone: "ready" | "later" | "waitlist";
+  label: string;
+  note?: string;
+};
+
+/** Availability of a room relative to a chosen move-in date. */
+export function availabilityFor(room: RoomType, moveIn?: string): RoomAvailability {
+  if (room.status === "occupied") {
+    return { tone: "waitlist", label: "Waitlist", note: "Join the waitlist" };
+  }
+  const spots = room.status === "limited" ? `${room.spotsLeft ?? 1} spots left` : "Available";
+  if (moveIn && room.availableFrom > moveIn) {
+    return {
+      tone: "later",
+      label: `From ${formatDate(room.availableFrom)}`,
+      note: "Not ready on your date",
+    };
+  }
+  return { tone: "ready", label: spots, note: `Ready ${formatDate(room.availableFrom)}` };
+}
+
+
 
 
 export function getRoomType(slug: string, typeId: string) {

@@ -13,21 +13,17 @@ import {
 } from "@/components/ui/dialog";
 
 import {
-  filterRoomTypes,
-  formatRM,
   getProperty,
   getRoomTypes,
-  unitTypesFor,
   type ContractTerm,
+  type Occupancy,
 } from "@/data/properties";
 import { Button } from "@/components/ui/button";
 import AmenitySection from "@/components/site/AmenitySection";
 import LocationSection from "@/components/site/LocationSection";
 import CtaBand from "@/components/site/CtaBand";
 import EnquireDialog from "@/components/site/EnquireDialog";
-import RoomFilters from "@/components/site/RoomFilters";
-import RoomTypeCard from "@/components/site/RoomTypeCard";
-import SegmentedToggle from "@/components/site/SegmentedToggle";
+import RoomPriceTable from "@/components/site/RoomPriceTable";
 import StayCalculator from "@/components/site/StayCalculator";
 
 const searchSchema = z.object({
@@ -68,11 +64,11 @@ function PropertyPage() {
   const navigate = Route.useNavigate();
   const [term, setTerm] = useState<ContractTerm>("long");
   const [selectedRoomId, setSelectedRoomId] = useState<string | undefined>(undefined);
+  const [selectedOccupancy, setSelectedOccupancy] = useState<Occupancy | undefined>(undefined);
+  const [moveIn, setMoveIn] = useState(() => new Date().toISOString().slice(0, 10));
 
   const rooms = getRoomTypes(property.slug);
-  const visibleRooms = filterRoomTypes(rooms, filters);
   const activeTerm = property.contractTerms.includes(term) ? term : "long";
-  const tables = property.pricing[activeTerm];
   const gallery = property.gallery;
 
   return (
@@ -186,134 +182,44 @@ function PropertyPage() {
 
 
             <div id="rooms">
-              <h2 className="text-2xl font-bold text-brand-deep">Room options</h2>
+              <h2 className="text-2xl font-bold text-brand-deep">Rooms & pricing</h2>
               <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-                Tick a room to price it instantly — enquire with your preferences and our team will
-                confirm the exact unit and availability with you.
+                Set your move-in date, filter by what you need, then click a room to see photos and
+                full details. Select one to price it instantly in the calculator.
               </p>
 
-              {rooms.length > 1 && (
-                <div className="mt-5">
-                  <RoomFilters
-                    unitTypes={unitTypesFor(property.slug)}
-                    value={filters}
-                    resultLabel={`${visibleRooms.length} of ${rooms.length} room types`}
-                    onClear={() =>
-                      navigate({ search: { unit: "all", bath: "all", view: "all", occ: "all" }, replace: true })
-                    }
-                    onChange={(next) =>
-                      navigate({ search: (prev) => ({ ...prev, ...next }), replace: true })
-                    }
-                  />
-                </div>
-              )}
-
-              <div className="mt-6 space-y-5">
-                {visibleRooms.map((room) => (
-                  <RoomTypeCard
-                    key={room.id}
-                    property={property}
-                    room={room}
-                    selected={selectedRoomId === room.id}
-                    onSelect={(r) => {
-                      setSelectedRoomId(r.id);
-                      document
-                        .getElementById("stay-calculator")
-                        ?.scrollIntoView({ behavior: "smooth", block: "center" });
-                    }}
-                  />
-                ))}
-              </div>
-
-
-              {visibleRooms.length === 0 && (
-                <div className="mt-5 rounded-3xl border border-dashed border-border bg-card p-8 text-center">
-                  <p className="font-medium text-brand-deep">No rooms match these filters.</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Try widening your search — or enquire and we'll suggest the closest option.
-                  </p>
-                  <Button
-                    variant="outline"
-                    className="mt-4"
-                    onClick={() =>
-                      navigate({ search: { unit: "all", bath: "all", view: "all", occ: "all" }, replace: true })
-                    }
-                  >
-                    Clear filters
-                  </Button>
-                </div>
-              )}
-            </div>
-
-
-            <div>
-              <h2 className="text-2xl font-bold text-brand-deep">
-                Full price list
-              </h2>
-              {property.contractTerms.length > 1 && (
-                <div className="mt-4 max-w-sm">
-                  <SegmentedToggle
-                    value={activeTerm}
-                    onChange={setTerm}
-                    options={property.contractTerms.map((t) => ({
-                      value: t,
-                      label: t === "long" ? "12-month stay" : "Short-term",
-                    }))}
-                  />
-                </div>
-              )}
-              <div className="mt-5 space-y-6">
-                {tables.map((table) => (
-                  <div
-                    key={table.unitType}
-                    className="overflow-hidden rounded-3xl border border-border/70 bg-card shadow-card"
-                  >
-                    <div className="border-b border-border px-5 py-3">
-                      <p className="font-medium text-brand-deep">{table.unitType}</p>
-                      {table.blocks && (
-                        <p className="text-xs text-muted-foreground">{table.blocks}</p>
-                      )}
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead className="bg-muted/60 text-left text-xs uppercase text-muted-foreground">
-                          <tr>
-                            <th className="px-5 py-2 font-medium">Room</th>
-                            <th className="px-5 py-2 font-medium">Single</th>
-                            <th className="px-5 py-2 font-medium">Twin sharing</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {table.rows.map((row) => (
-                            <tr key={row.roomType} className="border-t border-border">
-                              <td className="px-5 py-3">
-                                <span className="font-medium text-foreground">{row.roomType}</span>
-                                {row.note && (
-                                  <span className="block text-xs text-muted-foreground">
-                                    {row.note}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-5 py-3">
-                                {row.single ? `${formatRM(row.single)}/mo` : "—"}
-                              </td>
-                              <td className="px-5 py-3">
-                                {row.twin ? `${formatRM(row.twin)}/mo per pax` : "—"}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ))}
-                {tables.length === 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    Short-term stays are not offered at this residence.
-                  </p>
-                )}
+              <div className="mt-5">
+                <RoomPriceTable
+                  property={property}
+                  rooms={rooms}
+                  filters={filters}
+                  moveIn={moveIn}
+                  onMoveInChange={setMoveIn}
+                  term={activeTerm}
+                  onTermChange={setTerm}
+                  selectedRoomId={selectedRoomId}
+                  onSelect={(room, occ) => {
+                    setSelectedRoomId(room.id);
+                    setSelectedOccupancy(occ);
+                    document
+                      .getElementById("stay-calculator")
+                      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  }}
+                  onFilterChange={(next) =>
+                    navigate({ search: (prev) => ({ ...prev, ...next }), replace: true })
+                  }
+                  onClearFilters={() =>
+                    navigate({
+                      search: { unit: "all", bath: "all", view: "all", occ: "all" },
+                      replace: true,
+                    })
+                  }
+                />
               </div>
             </div>
+
+
+
 
             <LocationSection property={property} />
           </div>
@@ -330,6 +236,8 @@ function PropertyPage() {
                 rooms={rooms}
                 selectedRoomId={selectedRoomId ?? undefined}
                 onRoomChange={setSelectedRoomId}
+                moveIn={moveIn}
+                occupancy={selectedOccupancy}
                 actions={(state) => (
                   <EnquireDialog
                     property={property}
