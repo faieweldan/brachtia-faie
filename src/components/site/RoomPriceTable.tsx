@@ -28,6 +28,7 @@ export default function RoomPriceTable({
   term,
   onTermChange,
   selectedRoomId,
+  selectedOccupancy,
   onSelect,
 }: {
   property: Property;
@@ -41,6 +42,7 @@ export default function RoomPriceTable({
   term: ContractTerm;
   onTermChange: (term: ContractTerm) => void;
   selectedRoomId?: string | undefined;
+  selectedOccupancy?: Occupancy | undefined;
   onSelect: (room: RoomType, occupancy: Occupancy) => void;
 }) {
   const [detailRoom, setDetailRoom] = useState<RoomType | null>(null);
