@@ -100,6 +100,8 @@ export type Property = {
   pointsOfInterest: PlaceNearby[];
   terms: string[];
   contractTerms: ContractTerm[];
+  /** Bed choices offered for single occupancy at this residence */
+  singleBedOptions?: string[];
   paymentCycle: string;
   feeConfig: Record<ContractTerm, FeeConfig>;
   pricing: Record<ContractTerm, PricingTable[]>;
