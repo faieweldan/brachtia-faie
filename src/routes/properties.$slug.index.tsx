@@ -13,21 +13,17 @@ import {
 } from "@/components/ui/dialog";
 
 import {
-  filterRoomTypes,
-  formatRM,
   getProperty,
   getRoomTypes,
-  unitTypesFor,
   type ContractTerm,
+  type Occupancy,
 } from "@/data/properties";
 import { Button } from "@/components/ui/button";
 import AmenitySection from "@/components/site/AmenitySection";
 import LocationSection from "@/components/site/LocationSection";
 import CtaBand from "@/components/site/CtaBand";
 import EnquireDialog from "@/components/site/EnquireDialog";
-import RoomFilters from "@/components/site/RoomFilters";
-import RoomTypeCard from "@/components/site/RoomTypeCard";
-import SegmentedToggle from "@/components/site/SegmentedToggle";
+import RoomPriceTable from "@/components/site/RoomPriceTable";
 import StayCalculator from "@/components/site/StayCalculator";
 
 const searchSchema = z.object({
