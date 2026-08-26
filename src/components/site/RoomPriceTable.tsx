@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bath, Check, ChevronRight, Eye, Images, Ruler, User, Users } from "lucide-react";
+import { Bath, ChevronRight, Eye, Images, Ruler } from "lucide-react";
 
 import {
   filterRoomTypes,
@@ -50,7 +50,6 @@ export default function RoomPriceTable({
   const withRate = rooms.filter((r) => r.occupancies.some((o) => r.rent[term][o] != null));
   const visible = filterRoomTypes(withRate, picks);
   const unitTypes = Array.from(new Set(visible.map((r) => r.unitType)));
-  
 
   const occPicks = picks.filter((p) => p.startsWith("occ:")).map((p) => p.slice(4));
 
@@ -65,15 +64,14 @@ export default function RoomPriceTable({
     );
   }
 
-  function fareTile(room: RoomType, occ: Occupancy, selectedOcc?: Occupancy) {
+  function fareTile(room: RoomType, occ: Occupancy) {
     const price = room.occupancies.includes(occ) ? room.rent[term][occ] : null;
-    const Icon = occ === "single" ? User : Users;
-    const active = selectedRoomId === room.id && selectedOcc === occ;
+    const active = selectedRoomId === room.id && selectedOccupancy === occ;
 
     if (price == null) {
       return (
-        <div className="flex h-full min-h-[4.25rem] flex-col justify-center rounded-2xl border border-dashed border-border/70 px-3 py-2 text-center">
-          <span className="text-xs text-muted-foreground">Not available</span>
+        <div className="flex h-14 flex-col items-center justify-center rounded-xl border border-dashed border-border/70 px-2 text-center text-xs text-muted-foreground">
+          —
         </div>
       );
     }
@@ -86,34 +84,25 @@ export default function RoomPriceTable({
           e.stopPropagation();
           onSelect(room, occ);
         }}
-        className={`flex h-full min-h-[4.25rem] w-full flex-col justify-center rounded-2xl border px-3 py-2 text-left transition-all ${
+        className={`flex h-14 w-full items-center justify-center rounded-xl border px-3 text-center transition-all ${
           active
-            ? "border-brand-deep bg-brand-deep text-primary-foreground shadow-card"
-            : "border-border bg-card hover:border-brand hover:shadow-card"
+            ? "border-brand-deep bg-brand-deep text-primary-foreground shadow-sm"
+            : "border-border bg-card hover:border-brand hover:shadow-sm"
         }`}
       >
         <span
-          className={`flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide ${
-            active ? "text-primary-foreground/80" : "text-muted-foreground"
-          }`}
-        >
-          <Icon className="size-3.5" />
-          {occ === "single" ? "Single" : "Twin sharing"}
-          {active && <Check className="ml-auto size-3.5" />}
-        </span>
-        <span
-          className={`mt-0.5 text-base font-extrabold tabular-nums ${
+          className={`text-base font-extrabold tabular-nums ${
             active ? "text-primary-foreground" : "text-brand-deep"
           }`}
         >
           {formatRM(price)}
-          <span
-            className={`ml-1 text-[10px] font-semibold ${
-              active ? "text-primary-foreground/75" : "text-muted-foreground"
-            }`}
-          >
-            /mo{occ === "twin" ? " per pax" : ""}
-          </span>
+        </span>
+        <span
+          className={`ml-1 text-xs font-semibold ${
+            active ? "text-primary-foreground/80" : "text-muted-foreground"
+          }`}
+        >
+          /mo
         </span>
       </button>
     );
@@ -271,8 +260,8 @@ export default function RoomPriceTable({
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 md:contents">
-                        <div>{fareTile(room, "single", selected ? selectedOccupancy : undefined)}</div>
-                        <div>{fareTile(room, "twin", selected ? selectedOccupancy : undefined)}</div>
+                        <div>{fareTile(room, "single")}</div>
+                        <div>{fareTile(room, "twin")}</div>
                       </div>
                     </li>
                   );
