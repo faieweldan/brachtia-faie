@@ -13,7 +13,6 @@ import {
 } from "@/data/properties";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import SegmentedToggle from "./SegmentedToggle";
 import RoomDetailDialog from "./RoomDetailDialog";
 
 export default function RoomPriceTable({
@@ -26,7 +25,7 @@ export default function RoomPriceTable({
   moveOut,
   onMoveOutChange,
   term,
-  onTermChange,
+  datesSet,
   selectedRoomId,
   selectedOccupancy,
   onSelect,
@@ -40,7 +39,7 @@ export default function RoomPriceTable({
   moveOut: string;
   onMoveOutChange: (value: string) => void;
   term: ContractTerm;
-  onTermChange: (term: ContractTerm) => void;
+  datesSet: boolean;
   selectedRoomId?: string | undefined;
   selectedOccupancy?: Occupancy | undefined;
   onSelect: (room: RoomType, occupancy: Occupancy) => void;
@@ -48,7 +47,10 @@ export default function RoomPriceTable({
   const [detailRoom, setDetailRoom] = useState<RoomType | null>(null);
 
   const withRate = rooms.filter((r) => r.occupancies.some((o) => r.rent[term][o] != null));
-  const visible = filterRoomTypes(withRate, picks);
+  const readyByDate = moveIn
+    ? withRate.filter((r) => r.availableFrom <= moveIn)
+    : withRate;
+  const visible = filterRoomTypes(readyByDate, picks);
   const unitTypes = Array.from(new Set(visible.map((r) => r.unitType)));
 
   const occPicks = picks.filter((p) => p.startsWith("occ:")).map((p) => p.slice(4));
@@ -57,6 +59,7 @@ export default function RoomPriceTable({
     { token: "bath:ensuite", label: "Ensuite" },
     { token: "view:exterior", label: "Exterior view" },
   ];
+
 
   function toggle(token: string) {
     onPicksChange(
@@ -138,20 +141,25 @@ export default function RoomPriceTable({
             />
           </label>
 
-          {property.contractTerms.length > 1 && (
-            <div className="w-full sm:ml-auto sm:max-w-xs">
-              <SegmentedToggle
-                size="sm"
-                value={term}
-                onChange={onTermChange}
-                options={property.contractTerms.map((t) => ({
-                  value: t,
-                  label: t === "long" ? "12-month stay" : "Short-term",
-                }))}
-              />
-            </div>
-          )}
+          <div className="sm:ml-auto">
+            {datesSet ? (
+              term === "short" ? (
+                <p className="rounded-2xl bg-accent px-3.5 py-2 text-xs font-semibold text-brand-deep">
+                  Stay under 12 months — short-term rates shown.
+                </p>
+              ) : (
+                <p className="rounded-2xl bg-brand-tint px-3.5 py-2 text-xs font-semibold text-brand-deep">
+                  12-month rates shown.
+                </p>
+              )
+            ) : (
+              <p className="px-1 text-xs text-muted-foreground">
+                Add your dates to see live rates and availability.
+              </p>
+            )}
+          </div>
         </div>
+
 
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3 border-t border-border/60 pt-4">
           <span className="text-sm font-bold text-brand-deep">Filter</span>

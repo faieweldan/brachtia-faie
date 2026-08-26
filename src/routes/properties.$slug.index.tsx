@@ -13,6 +13,7 @@ import {
 import {
   getProperty,
   getRoomTypes,
+  termForRange,
   type ContractTerm,
   type Occupancy,
 } from "@/data/properties";
@@ -57,21 +58,21 @@ function plusMonths(iso: string, months: number) {
 function PropertyPage() {
   const { property } = Route.useLoaderData();
   const [picks, setPicks] = useState<string[]>([]);
-  const [term, setTerm] = useState<ContractTerm>("long");
   const [selectedRoomId, setSelectedRoomId] = useState<string | undefined>(undefined);
   const [selectedOccupancy, setSelectedOccupancy] = useState<Occupancy | undefined>(undefined);
-  const [moveIn, setMoveIn] = useState(() => new Date().toISOString().slice(0, 10));
-  const [moveOut, setMoveOut] = useState(() =>
-    plusMonths(new Date().toISOString().slice(0, 10), 12),
-  );
+  const [moveIn, setMoveIn] = useState("");
+  const [moveOut, setMoveOut] = useState("");
 
   function changeMoveIn(value: string) {
     setMoveIn(value);
-    if (moveOut <= value) setMoveOut(plusMonths(value, term === "short" ? 3 : 12));
+    if (value && moveOut && moveOut <= value) setMoveOut(plusMonths(value, 12));
   }
 
   const rooms = getRoomTypes(property.slug);
-  const activeTerm = property.contractTerms.includes(term) ? term : "long";
+  const datesSet = !!moveIn && !!moveOut && moveOut > moveIn;
+  const derivedTerm: ContractTerm = datesSet ? termForRange(moveIn, moveOut) : "long";
+  const activeTerm = property.contractTerms.includes(derivedTerm) ? derivedTerm : "long";
+
   const gallery = property.gallery;
 
   return (
@@ -202,7 +203,8 @@ function PropertyPage() {
                   moveOut={moveOut}
                   onMoveOutChange={setMoveOut}
                   term={activeTerm}
-                  onTermChange={setTerm}
+                  datesSet={datesSet}
+
                   selectedRoomId={selectedRoomId}
                   selectedOccupancy={selectedOccupancy}
                   onSelect={(room, occ) => {
