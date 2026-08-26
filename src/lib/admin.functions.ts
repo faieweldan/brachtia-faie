@@ -57,7 +57,7 @@ export const updateEnquiry = createServerFn({ method: "POST" })
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (data.status) patch["status"] = data.status;
     if (data.adminNotes !== undefined) patch["admin_notes"] = data.adminNotes;
-    const { error } = await context.supabase.from("enquiries").update(patch).eq("id", data.id);
+    const { error } = await context.supabase.from("enquiries").update(patch as any).eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -86,7 +86,7 @@ export const saveAppointment = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const values = { ...data.values, updated_at: new Date().toISOString() };
     const q = data.id
-      ? context.supabase.from("appointments").update(values).eq("id", data.id)
+      ? context.supabase.from("appointments").update(values as any).eq("id", data.id)
       : context.supabase.from("appointments").insert(values as any);
     const { error } = await q;
     if (error) throw new Error(error.message);
@@ -107,7 +107,7 @@ export const saveAvailabilityRule = createServerFn({ method: "POST" })
   .inputValidator((data: { id?: string; values: Record<string, unknown> }) => data)
   .handler(async ({ data, context }) => {
     const q = data.id
-      ? context.supabase.from("availability_rules").update(data.values).eq("id", data.id)
+      ? context.supabase.from("availability_rules").update(data.values as any).eq("id", data.id)
       : context.supabase.from("availability_rules").insert(data.values as any);
     const { error } = await q;
     if (error) throw new Error(error.message);
@@ -148,7 +148,7 @@ export const saveAppointmentType = createServerFn({ method: "POST" })
   .inputValidator((data: { id?: string; values: Record<string, unknown> }) => data)
   .handler(async ({ data, context }) => {
     const q = data.id
-      ? context.supabase.from("appointment_types").update(data.values).eq("id", data.id)
+      ? context.supabase.from("appointment_types").update(data.values as any).eq("id", data.id)
       : context.supabase.from("appointment_types").insert(data.values as any);
     const { error } = await q;
     if (error) throw new Error(error.message);
@@ -173,7 +173,7 @@ export const saveResidence = createServerFn({ method: "POST" })
   .inputValidator((data: { id?: string; values: Record<string, unknown> }) => data)
   .handler(async ({ data, context }) => {
     const q = data.id
-      ? context.supabase.from("residences").update(data.values).eq("id", data.id).select("id")
+      ? context.supabase.from("residences").update(data.values as any).eq("id", data.id).select("id")
       : context.supabase.from("residences").insert(data.values as any).select("id");
     const { data: row, error } = await q.maybeSingle();
     if (error) throw new Error(error.message);
@@ -194,7 +194,7 @@ export const saveRoomType = createServerFn({ method: "POST" })
   .inputValidator((data: { id?: string; values: Record<string, unknown> }) => data)
   .handler(async ({ data, context }) => {
     const q = data.id
-      ? context.supabase.from("room_types").update(data.values).eq("id", data.id)
+      ? context.supabase.from("room_types").update(data.values as any).eq("id", data.id)
       : context.supabase.from("room_types").insert(data.values as any);
     const { error } = await q;
     if (error) throw new Error(error.message);
