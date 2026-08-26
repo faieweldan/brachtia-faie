@@ -275,6 +275,11 @@ export default function EnquiryDialog({
 
                 {!showStayFields ? (
                   <div className="mt-3 space-y-2">
+                    <input type="hidden" name="roomId" value={room?.id ?? ""} />
+                    <input type="hidden" name="occupancy" value={occupancy ?? ""} />
+                    <input type="hidden" name="moveIn" value={stay.moveIn} />
+                    <input type="hidden" name="moveOut" value={stay.moveOut} />
+
                     <p className="text-sm font-bold text-brand-deep">
                       {room?.name} ·{" "}
                       {occupancy === "single" ? "Single occupancy" : "Twin sharing"}
