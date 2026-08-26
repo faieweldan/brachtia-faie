@@ -26,15 +26,7 @@ import EnquireDialog from "@/components/site/EnquireDialog";
 import RoomPriceTable from "@/components/site/RoomPriceTable";
 import StayCalculator from "@/components/site/StayCalculator";
 
-const searchSchema = z.object({
-  unit: fallback(z.string(), "all").default("all"),
-  bath: fallback(z.string(), "all").default("all"),
-  view: fallback(z.string(), "all").default("all"),
-  occ: fallback(z.string(), "all").default("all"),
-});
-
 export const Route = createFileRoute("/properties/$slug/")({
-  validateSearch: zodValidator(searchSchema),
   loader: ({ params }) => {
     const property = getProperty(params.slug);
     if (!property) throw notFound();
