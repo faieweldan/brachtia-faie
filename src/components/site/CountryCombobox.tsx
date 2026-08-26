@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { COMMON_ISO, COUNTRIES, flagFor, type Country } from "@/data/countries";
+import { COMMON_ISO, COUNTRIES, type Country } from "@/data/countries";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
