@@ -50,20 +50,13 @@ export default function RoomPriceTable({
   const withRate = rooms.filter((r) => r.occupancies.some((o) => r.rent[term][o] != null));
   const visible = filterRoomTypes(withRate, picks);
   const unitTypes = Array.from(new Set(visible.map((r) => r.unitType)));
-  const allUnitTypes = Array.from(new Set(rooms.map((r) => r.unitType)));
+  
 
   const occPicks = picks.filter((p) => p.startsWith("occ:")).map((p) => p.slice(4));
 
   const options: { token: string; label: string }[] = [
-    { token: "occ:single", label: "Single" },
-    { token: "occ:twin", label: "Twin sharing" },
-    ...allUnitTypes.map((u) => ({
-      token: `unit:${u}`,
-      label: u.replace(" Apartment", ""),
-    })),
     { token: "bath:ensuite", label: "Ensuite" },
     { token: "view:exterior", label: "Exterior view" },
-    { token: "view:corridor", label: "Corridor view" },
   ];
 
   function toggle(token: string) {
@@ -172,6 +165,7 @@ export default function RoomPriceTable({
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3 border-t border-border/60 pt-4">
+          <span className="text-sm font-bold text-brand-deep">Filter</span>
           {options.map((o) => {
             const checked = picks.includes(o.token);
             return (
