@@ -13,10 +13,13 @@ import {
 import {
   getProperty,
   getRoomTypes,
+  setSiteData,
   termForRange,
   type ContractTerm,
   type Occupancy,
 } from "@/data/properties";
+import { fetchSiteData } from "@/lib/site-data.functions";
+
 import { Button } from "@/components/ui/button";
 import AmenitySection from "@/components/site/AmenitySection";
 import LocationSection from "@/components/site/LocationSection";
@@ -26,11 +29,13 @@ import RoomPriceTable from "@/components/site/RoomPriceTable";
 import StayCalculator from "@/components/site/StayCalculator";
 
 export const Route = createFileRoute("/properties/$slug/")({
-  loader: ({ params }) => {
+  loader: async ({ params }) => {
+    setSiteData(await fetchSiteData());
     const property = getProperty(params.slug);
     if (!property) throw notFound();
     return { property };
   },
+
   head: ({ loaderData }) => {
     const name = loaderData?.property.name ?? "Property";
     const title = `${name} | Brachtia Homes Student Accommodation`;

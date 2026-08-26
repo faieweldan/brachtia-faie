@@ -537,6 +537,48 @@ export const roomTypes: RoomType[] = [
 ];
 
 
+/**
+ * Bundled sample images. Residence/room records store either a full URL or an
+ * `asset:<name>` key that resolves to one of these.
+ */
+export const assetRegistry: Record<string, string> = {
+  "arc-exterior": arcExterior,
+  "arc-pool": arcPool,
+  "room-twin": roomTwin,
+  "room-single": roomSingle,
+  "living-dining": livingDining,
+  kitchen: kitchen,
+  "solstice-exterior": solsticeExterior,
+  "solstice-studio": solsticeStudio,
+};
+
+export const assetKeys = Object.keys(assetRegistry);
+
+export function resolveImage(value: string): string {
+  if (!value) return arcExterior;
+  if (value.startsWith("asset:")) return assetRegistry[value.slice(6)] ?? arcExterior;
+  return value;
+}
+
+function withResolvedImages(p: Property): Property {
+  return {
+    ...p,
+    heroImage: resolveImage(p.heroImage),
+    gallery: p.gallery.map((g) => ({ ...g, src: resolveImage(g.src) })),
+  };
+}
+
+function withResolvedRoomImages(r: RoomType): RoomType {
+  return { ...r, image: resolveImage(r.image), gallery: (r.gallery ?? []).map(resolveImage) };
+}
+
+/** Replaces the in-memory site content with records loaded from the database. */
+export function setSiteData(data: { properties: Property[]; roomTypes: RoomType[] }) {
+  if (!data?.properties?.length) return;
+  properties.splice(0, properties.length, ...data.properties.map(withResolvedImages));
+  roomTypes.splice(0, roomTypes.length, ...data.roomTypes.map(withResolvedRoomImages));
+}
+
 export function getProperty(slug: string) {
   return properties.find((p) => p.slug === slug);
 }
@@ -544,6 +586,7 @@ export function getProperty(slug: string) {
 export function getRoomTypes(slug: string) {
   return roomTypes.filter((r) => r.propertySlug === slug && r.publicVisible);
 }
+
 
 /**
  * Flat list of filter tokens, e.g. ["occ:single", "unit:3 Bedroom Apartment",
