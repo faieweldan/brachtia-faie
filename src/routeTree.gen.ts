@@ -15,6 +15,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AdminLoginRouteImport } from './routes/admin-login'
 import { Route as BookViewingRouteImport } from './routes/book-viewing'
 import { Route as ContactRouteImport } from './routes/contact'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as PropertiesIndexRouteImport } from './routes/properties.index'
 import { Route as ApiPublicBootstrapAdminRouteImport } from './routes/api/public/bootstrap-admin'
 import { Route as PropertiesSlugIndexRouteImport } from './routes/properties.$slug.index'
@@ -49,6 +50,11 @@ const ContactRoute = ContactRouteImport.update({
   path: '/contact',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
 const PropertiesIndexRoute = PropertiesIndexRouteImport.update({
   id: '/properties/',
   path: '/properties/',
@@ -68,10 +74,11 @@ const PropertiesSlugIndexRoute = PropertiesSlugIndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/admin-login': typeof AdminLoginRoute
   '/book-viewing': typeof BookViewingRoute
   '/contact': typeof ContactRoute
+  '/admin/': typeof AdminIndexRoute
   '/properties/': typeof PropertiesIndexRoute
   '/api/public/bootstrap-admin': typeof ApiPublicBootstrapAdminRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
@@ -79,10 +86,10 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
-  '/admin': typeof AdminRoute
   '/admin-login': typeof AdminLoginRoute
   '/book-viewing': typeof BookViewingRoute
   '/contact': typeof ContactRoute
+  '/admin': typeof AdminIndexRoute
   '/properties': typeof PropertiesIndexRoute
   '/api/public/bootstrap-admin': typeof ApiPublicBootstrapAdminRoute
   '/properties/$slug': typeof PropertiesSlugIndexRoute
@@ -91,10 +98,11 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/admin-login': typeof AdminLoginRoute
   '/book-viewing': typeof BookViewingRoute
   '/contact': typeof ContactRoute
+  '/admin/': typeof AdminIndexRoute
   '/properties/': typeof PropertiesIndexRoute
   '/api/public/bootstrap-admin': typeof ApiPublicBootstrapAdminRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
@@ -108,6 +116,7 @@ export interface FileRouteTypes {
     | '/admin-login'
     | '/book-viewing'
     | '/contact'
+    | '/admin/'
     | '/properties/'
     | '/api/public/bootstrap-admin'
     | '/properties/$slug/'
@@ -115,10 +124,10 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/about'
-    | '/admin'
     | '/admin-login'
     | '/book-viewing'
     | '/contact'
+    | '/admin'
     | '/properties'
     | '/api/public/bootstrap-admin'
     | '/properties/$slug'
@@ -130,6 +139,7 @@ export interface FileRouteTypes {
     | '/admin-login'
     | '/book-viewing'
     | '/contact'
+    | '/admin/'
     | '/properties/'
     | '/api/public/bootstrap-admin'
     | '/properties/$slug/'
@@ -138,7 +148,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
-  AdminRoute: typeof AdminRoute
+  AdminRoute: typeof AdminRouteWithChildren
   AdminLoginRoute: typeof AdminLoginRoute
   BookViewingRoute: typeof BookViewingRoute
   ContactRoute: typeof ContactRoute
@@ -191,6 +201,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContactRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/properties/': {
       id: '/properties/'
       path: '/properties'
@@ -215,10 +232,20 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AdminRouteChildren {
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
-  AdminRoute: AdminRoute,
+  AdminRoute: AdminRouteWithChildren,
   AdminLoginRoute: AdminLoginRoute,
   BookViewingRoute: BookViewingRoute,
   ContactRoute: ContactRoute,
