@@ -61,7 +61,10 @@ export default function CountryCombobox({
         }}
         className="gap-2.5"
       >
-        <span className="text-base leading-none">{flagFor(c.iso)}</span>
+        <span className="w-7 shrink-0 text-[10px] font-bold tracking-wide text-muted-foreground">
+          {c.iso}
+        </span>
+
         <span className="flex-1 truncate">{c.name}</span>
         <span className="text-xs tabular-nums text-muted-foreground">{c.dial}</span>
         {selected?.iso === c.iso && <Check className="size-4 text-brand" />}
