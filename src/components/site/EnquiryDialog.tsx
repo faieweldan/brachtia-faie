@@ -22,6 +22,7 @@ import {
 } from "@/data/properties";
 import { countryByIso, type Country } from "@/data/countries";
 import CountryCombobox from "@/components/site/CountryCombobox";
+import { submitEnquiry } from "@/lib/public.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -265,7 +266,7 @@ export default function EnquiryDialog({
                     gender: leadData.gender,
                     message: leadData.message ?? "",
                   },
-                }).catch((err) => console.error(err));
+                }).catch((err: unknown) => console.error(err));
               }
 
             }}
