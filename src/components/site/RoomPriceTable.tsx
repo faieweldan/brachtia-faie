@@ -165,6 +165,7 @@ export default function RoomPriceTable({
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3 border-t border-border/60 pt-4">
+          <span className="text-sm font-bold text-brand-deep">Filter</span>
           {options.map((o) => {
             const checked = picks.includes(o.token);
             return (
