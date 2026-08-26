@@ -16,6 +16,7 @@ import { Route as AdminLoginRouteImport } from './routes/admin-login'
 import { Route as BookViewingRouteImport } from './routes/book-viewing'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminBookingsRouteImport } from './routes/admin.bookings'
 import { Route as PropertiesIndexRouteImport } from './routes/properties.index'
 import { Route as ApiPublicBootstrapAdminRouteImport } from './routes/api/public/bootstrap-admin'
 import { Route as PropertiesSlugIndexRouteImport } from './routes/properties.$slug.index'
@@ -55,6 +56,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminBookingsRoute = AdminBookingsRouteImport.update({
+  id: '/bookings',
+  path: '/bookings',
+  getParentRoute: () => AdminRoute,
+} as any)
 const PropertiesIndexRoute = PropertiesIndexRouteImport.update({
   id: '/properties/',
   path: '/properties/',
@@ -78,6 +84,7 @@ export interface FileRoutesByFullPath {
   '/admin-login': typeof AdminLoginRoute
   '/book-viewing': typeof BookViewingRoute
   '/contact': typeof ContactRoute
+  '/admin/bookings': typeof AdminBookingsRoute
   '/admin/': typeof AdminIndexRoute
   '/properties/': typeof PropertiesIndexRoute
   '/api/public/bootstrap-admin': typeof ApiPublicBootstrapAdminRoute
@@ -89,6 +96,7 @@ export interface FileRoutesByTo {
   '/admin-login': typeof AdminLoginRoute
   '/book-viewing': typeof BookViewingRoute
   '/contact': typeof ContactRoute
+  '/admin/bookings': typeof AdminBookingsRoute
   '/admin': typeof AdminIndexRoute
   '/properties': typeof PropertiesIndexRoute
   '/api/public/bootstrap-admin': typeof ApiPublicBootstrapAdminRoute
@@ -102,6 +110,7 @@ export interface FileRoutesById {
   '/admin-login': typeof AdminLoginRoute
   '/book-viewing': typeof BookViewingRoute
   '/contact': typeof ContactRoute
+  '/admin/bookings': typeof AdminBookingsRoute
   '/admin/': typeof AdminIndexRoute
   '/properties/': typeof PropertiesIndexRoute
   '/api/public/bootstrap-admin': typeof ApiPublicBootstrapAdminRoute
@@ -116,6 +125,7 @@ export interface FileRouteTypes {
     | '/admin-login'
     | '/book-viewing'
     | '/contact'
+    | '/admin/bookings'
     | '/admin/'
     | '/properties/'
     | '/api/public/bootstrap-admin'
@@ -127,6 +137,7 @@ export interface FileRouteTypes {
     | '/admin-login'
     | '/book-viewing'
     | '/contact'
+    | '/admin/bookings'
     | '/admin'
     | '/properties'
     | '/api/public/bootstrap-admin'
@@ -139,6 +150,7 @@ export interface FileRouteTypes {
     | '/admin-login'
     | '/book-viewing'
     | '/contact'
+    | '/admin/bookings'
     | '/admin/'
     | '/properties/'
     | '/api/public/bootstrap-admin'
@@ -208,6 +220,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/bookings': {
+      id: '/admin/bookings'
+      path: '/bookings'
+      fullPath: '/admin/bookings'
+      preLoaderRoute: typeof AdminBookingsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/properties/': {
       id: '/properties/'
       path: '/properties'
@@ -233,10 +252,12 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminRouteChildren {
+  AdminBookingsRoute: typeof AdminBookingsRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminBookingsRoute: AdminBookingsRoute,
   AdminIndexRoute: AdminIndexRoute,
 }
 
