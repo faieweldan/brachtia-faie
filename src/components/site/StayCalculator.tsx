@@ -86,8 +86,10 @@ export default function StayCalculator({
       ? occupancyProp
       : (selected?.occupancies[0] ?? "single");
 
-  const valid = !!selected && moveOut > moveIn;
+  const datesFilled = !!moveIn && !!moveOut;
+  const valid = !!selected && datesFilled && moveOut > moveIn;
   const term: ContractTerm = valid ? termForRange(moveIn, moveOut) : "long";
+
   const rent = selected ? selected.rent[term][occupancy] : null;
   const rateAvailable = rent != null;
 
