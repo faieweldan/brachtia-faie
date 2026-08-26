@@ -26,7 +26,7 @@ export default function RoomPriceTable({
   moveOut,
   onMoveOutChange,
   term,
-  onTermChange,
+  datesSet,
   selectedRoomId,
   selectedOccupancy,
   onSelect,
@@ -40,7 +40,7 @@ export default function RoomPriceTable({
   moveOut: string;
   onMoveOutChange: (value: string) => void;
   term: ContractTerm;
-  onTermChange: (term: ContractTerm) => void;
+  datesSet: boolean;
   selectedRoomId?: string | undefined;
   selectedOccupancy?: Occupancy | undefined;
   onSelect: (room: RoomType, occupancy: Occupancy) => void;
@@ -48,7 +48,10 @@ export default function RoomPriceTable({
   const [detailRoom, setDetailRoom] = useState<RoomType | null>(null);
 
   const withRate = rooms.filter((r) => r.occupancies.some((o) => r.rent[term][o] != null));
-  const visible = filterRoomTypes(withRate, picks);
+  const readyByDate = moveIn
+    ? withRate.filter((r) => r.availableFrom <= moveIn)
+    : withRate;
+  const visible = filterRoomTypes(readyByDate, picks);
   const unitTypes = Array.from(new Set(visible.map((r) => r.unitType)));
 
   const occPicks = picks.filter((p) => p.startsWith("occ:")).map((p) => p.slice(4));
@@ -57,6 +60,7 @@ export default function RoomPriceTable({
     { token: "bath:ensuite", label: "Ensuite" },
     { token: "view:exterior", label: "Exterior view" },
   ];
+
 
   function toggle(token: string) {
     onPicksChange(
