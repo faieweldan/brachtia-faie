@@ -1,0 +1,220 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { Mail, Phone, Search } from "lucide-react";
+import { toast } from "sonner";
+
+import { listEnquiries, updateEnquiry } from "@/lib/admin.functions";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+export const Route = createFileRoute("/admin/bookings")({
+  component: BookingsPage,
+});
+
+const STATUSES = ["new", "contacted", "reserved", "closed"] as const;
+
+const money = (n: number) =>
+  `RM ${Number(n || 0).toLocaleString("en-MY", { maximumFractionDigits: 0 })}`;
+
+function BookingsPage() {
+  const queryClient = useQueryClient();
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<string>("all");
+  const [open, setOpen] = useState<any>(null);
+
+  const { data = [], isLoading } = useQuery({
+    queryKey: ["admin", "enquiries"],
+    queryFn: () => listEnquiries(),
+  });
+
+  const mutate = useMutation({
+    mutationFn: (input: { id: string; status?: string; adminNotes?: string }) =>
+      updateEnquiry({ data: input }),
+    onSuccess: () => {
+      toast.success("Enquiry updated");
+      void queryClient.invalidateQueries({ queryKey: ["admin"] });
+    },
+    onError: () => toast.error("Could not save changes"),
+  });
+
+  const rows = (data as any[]).filter((r) => {
+    if (status !== "all" && r.status !== status) return false;
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return [r.full_name, r.email, r.phone, r.residence_name, r.room_name]
+      .join(" ")
+      .toLowerCase()
+      .includes(q);
+  });
+
+  return (
+    <div className="mx-auto max-w-6xl space-y-5">
+      <div>
+        <h1 className="text-2xl font-bold text-brand-deep">Bookings</h1>
+        <p className="text-sm text-muted-foreground">
+          Enquiries submitted from the residence pages.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[220px] flex-1">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search name, email, room..."
+            className="pl-9"
+          />
+        </div>
+        <div className="flex gap-1">
+          {["all", ...STATUSES].map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setStatus(s)}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
+                status === s
+                  ? "bg-brand-deep text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-border bg-card">
+        <div className="hidden grid-cols-[1.4fr_1.3fr_1fr_0.8fr_auto] gap-3 border-b border-border px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground md:grid">
+          <span>Student</span>
+          <span>Stay</span>
+          <span>First payment</span>
+          <span>Status</span>
+          <span />
+        </div>
+        {isLoading ? (
+          <p className="p-4 text-sm text-muted-foreground">Loading…</p>
+        ) : rows.length === 0 ? (
+          <p className="p-4 text-sm text-muted-foreground">No enquiries yet.</p>
+        ) : (
+          rows.map((r) => (
+            <div
+              key={r.id}
+              className="grid gap-2 border-b border-border px-4 py-3 text-sm last:border-0 md:grid-cols-[1.4fr_1.3fr_1fr_0.8fr_auto] md:items-center md:gap-3"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-medium text-foreground">{r.full_name}</p>
+                <p className="truncate text-xs text-muted-foreground">{r.email}</p>
+              </div>
+              <div className="min-w-0 text-xs text-muted-foreground">
+                <p className="truncate text-foreground">{r.room_name || "—"}</p>
+                <p className="truncate">
+                  {r.residence_name} · {r.occupancy === "twin" ? "Twin sharing" : "Single"}
+                  {r.move_in ? ` · ${r.move_in}` : ""}
+                </p>
+              </div>
+              <p className="text-xs font-semibold text-brand-deep md:text-sm">
+                {money(r.first_payment)}
+              </p>
+              <select
+                value={r.status}
+                onChange={(e) => mutate.mutate({ id: r.id, status: e.target.value })}
+                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs capitalize"
+              >
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+              <Button size="sm" variant="ghost" onClick={() => setOpen(r)}>
+                View
+              </Button>
+            </div>
+          ))
+        )}
+      </div>
+
+      <Dialog open={!!open} onOpenChange={(v) => !v && setOpen(null)}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          {open ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>{open.full_name}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 text-sm">
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild size="sm" variant="outline">
+                    <a href={`mailto:${open.email}`}>
+                      <Mail className="size-4" /> Email
+                    </a>
+                  </Button>
+                  <Button asChild size="sm" variant="outline">
+                    <a
+                      href={`https://wa.me/${String(open.phone).replace(/\D/g, "")}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <Phone className="size-4" /> WhatsApp
+                    </a>
+                  </Button>
+                </div>
+
+                <dl className="grid grid-cols-2 gap-3">
+                  {[
+                    ["Residence", open.residence_name],
+                    ["Room", open.room_name],
+                    ["Occupancy", open.occupancy],
+                    ["Move in", open.move_in ?? "—"],
+                    ["Move out", open.move_out ?? "—"],
+                    ["Rate", open.term === "short" ? "Short term" : "12 month"],
+                    ["Monthly rent", money(open.monthly_rent)],
+                    ["First payment", money(open.first_payment)],
+                    ["Add-ons", (open.addons ?? []).join(", ") || "—"],
+                    ["University", open.university || "—"],
+                    ["Intake", open.intake || "—"],
+                    ["Nationality", open.nationality || "—"],
+                    ["Gender", open.gender || "—"],
+                    ["Phone", open.phone],
+                  ].map(([k, v]) => (
+                    <div key={String(k)}>
+                      <dt className="text-xs text-muted-foreground">{k}</dt>
+                      <dd className="font-medium capitalize text-foreground">{String(v)}</dd>
+                    </div>
+                  ))}
+                </dl>
+
+                {open.message ? (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Message</p>
+                    <p className="mt-1 rounded-lg bg-muted p-3">{open.message}</p>
+                  </div>
+                ) : null}
+
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Internal notes</p>
+                  <Textarea
+                    defaultValue={open.admin_notes ?? ""}
+                    rows={3}
+                    onBlur={(e) =>
+                      e.target.value !== (open.admin_notes ?? "") &&
+                      mutate.mutate({ id: open.id, adminNotes: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
