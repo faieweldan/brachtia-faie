@@ -184,7 +184,7 @@ export default function HowItWorks() {
             size="lg"
             className="h-13 rounded-full bg-background px-8 text-base text-brand-deep hover:bg-background/90"
           >
-            <Link to="/apply">
+            <Link to="/properties">
               Check Availability <ArrowRight className="size-5" />
             </Link>
           </Button>
