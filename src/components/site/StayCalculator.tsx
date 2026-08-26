@@ -188,15 +188,23 @@ export default function StayCalculator({
                 value={occupancy === "single" ? "Single" : "Twin sharing"}
               />
               <div className="my-1 border-t border-border/60" />
-              <SummaryRow label="Move in" value={formatDate(moveIn)} />
-              <SummaryRow label="Move out" value={formatDate(moveOut)} />
-              <SummaryRow label="Duration" value={durationLabel(moveIn, moveOut)} />
+              <SummaryRow label="Move in" value={moveIn ? formatDate(moveIn) : "—"} />
+              <SummaryRow label="Move out" value={moveOut ? formatDate(moveOut) : "—"} />
+              <SummaryRow
+                label="Duration"
+                value={datesFilled ? durationLabel(moveIn, moveOut) : "—"}
+              />
             </div>
 
-            {!valid ? (
+            {!datesFilled ? (
+              <p className="mt-3 rounded-2xl bg-muted px-3 py-2 text-xs text-muted-foreground">
+                Add your move-in and move-out dates above to calculate your costs.
+              </p>
+            ) : !valid ? (
               <p className="mt-3 rounded-2xl bg-destructive/10 px-3 py-2 text-xs text-destructive">
                 Move-out must be after move-in.
               </p>
+
             ) : !rateAvailable ? (
               <p className="mt-3 rounded-2xl bg-muted px-3 py-2 text-xs text-muted-foreground">
                 No published rate for this combination — enquire and we'll quote you.
