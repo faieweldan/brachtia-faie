@@ -2,11 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowRight,
   BadgePercent,
-  CalendarCheck,
-  ClipboardList,
   GraduationCap,
   HeartHandshake,
-  MailCheck,
   Receipt,
   ShieldCheck,
   Sofa,
@@ -20,6 +17,7 @@ import PropertyCard from "@/components/site/PropertyCard";
 import Reviews from "@/components/site/Reviews";
 import CtaBand from "@/components/site/CtaBand";
 import UniversityStrip from "@/components/site/UniversityStrip";
+import HowItWorks from "@/components/site/HowItWorks";
 import { properties } from "@/data/properties";
 
 const title = "Student Accommodation in Cyberjaya | Brachtia Homes";
