@@ -62,6 +62,8 @@ export default function StayCalculator({
   selectedRoomId,
   onRoomChange,
   actions,
+  moveIn: moveInProp,
+  occupancy: occupancyProp,
 }: {
   property: Property;
   room?: RoomType;
@@ -69,6 +71,10 @@ export default function StayCalculator({
   selectedRoomId?: string | undefined;
   onRoomChange?: (id: string) => void;
   actions?: (state: StayState) => ReactNode;
+  /** Externally controlled move-in date (e.g. from the room table). */
+  moveIn?: string | undefined;
+  /** Externally controlled occupancy (e.g. from the room table). */
+  occupancy?: Occupancy | undefined;
 }) {
   const options = rooms && rooms.length > 0 ? rooms : room ? [room] : [];
   const initial =
@@ -95,6 +101,23 @@ export default function StayCalculator({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected.id]);
+
+  useEffect(() => {
+    if (!moveInProp) return;
+    const from = defaultMoveIn(selected);
+    const next = moveInProp < from ? from : moveInProp;
+    setMoveIn(next);
+    setMoveOut(addMonths(next, 12));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moveInProp, selected.id]);
+
+  useEffect(() => {
+    if (occupancyProp && selected.occupancies.includes(occupancyProp)) {
+      setOccupancy(occupancyProp);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [occupancyProp, selected.id]);
+
 
   function selectRoom(id: string) {
     if (!options.some((r) => r.id === id)) return;
