@@ -307,6 +307,7 @@ export const properties: Property[] = [
       "Halal, non-smoking and gender-segregated units (no unisex)",
     ],
     contractTerms: ["long"],
+    singleBedOptions: ["Queen bed"],
     paymentCycle: "Rental payable monthly",
     feeConfig: {
       long: {
