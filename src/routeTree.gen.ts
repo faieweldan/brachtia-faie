@@ -14,6 +14,7 @@ import { Route as AboutRouteImport } from './routes/about'
 import { Route as BookViewingRouteImport } from './routes/book-viewing'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as PropertiesIndexRouteImport } from './routes/properties.index'
+import { Route as ApiPublicBootstrapAdminRouteImport } from './routes/api/public/bootstrap-admin'
 import { Route as PropertiesSlugIndexRouteImport } from './routes/properties.$slug.index'
 
 const IndexRoute = IndexRouteImport.update({
@@ -41,6 +42,11 @@ const PropertiesIndexRoute = PropertiesIndexRouteImport.update({
   path: '/properties/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicBootstrapAdminRoute = ApiPublicBootstrapAdminRouteImport.update({
+  id: '/api/public/bootstrap-admin',
+  path: '/api/public/bootstrap-admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PropertiesSlugIndexRoute = PropertiesSlugIndexRouteImport.update({
   id: '/properties/$slug/',
   path: '/properties/$slug/',
@@ -53,6 +59,7 @@ export interface FileRoutesByFullPath {
   '/book-viewing': typeof BookViewingRoute
   '/contact': typeof ContactRoute
   '/properties/': typeof PropertiesIndexRoute
+  '/api/public/bootstrap-admin': typeof ApiPublicBootstrapAdminRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
 }
 export interface FileRoutesByTo {
@@ -61,6 +68,7 @@ export interface FileRoutesByTo {
   '/book-viewing': typeof BookViewingRoute
   '/contact': typeof ContactRoute
   '/properties': typeof PropertiesIndexRoute
+  '/api/public/bootstrap-admin': typeof ApiPublicBootstrapAdminRoute
   '/properties/$slug': typeof PropertiesSlugIndexRoute
 }
 export interface FileRoutesById {
@@ -70,6 +78,7 @@ export interface FileRoutesById {
   '/book-viewing': typeof BookViewingRoute
   '/contact': typeof ContactRoute
   '/properties/': typeof PropertiesIndexRoute
+  '/api/public/bootstrap-admin': typeof ApiPublicBootstrapAdminRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
 }
 export interface FileRouteTypes {
@@ -80,6 +89,7 @@ export interface FileRouteTypes {
     | '/book-viewing'
     | '/contact'
     | '/properties/'
+    | '/api/public/bootstrap-admin'
     | '/properties/$slug/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -88,6 +98,7 @@ export interface FileRouteTypes {
     | '/book-viewing'
     | '/contact'
     | '/properties'
+    | '/api/public/bootstrap-admin'
     | '/properties/$slug'
   id:
     | '__root__'
@@ -96,6 +107,7 @@ export interface FileRouteTypes {
     | '/book-viewing'
     | '/contact'
     | '/properties/'
+    | '/api/public/bootstrap-admin'
     | '/properties/$slug/'
   fileRoutesById: FileRoutesById
 }
@@ -105,6 +117,7 @@ export interface RootRouteChildren {
   BookViewingRoute: typeof BookViewingRoute
   ContactRoute: typeof ContactRoute
   PropertiesIndexRoute: typeof PropertiesIndexRoute
+  ApiPublicBootstrapAdminRoute: typeof ApiPublicBootstrapAdminRoute
   PropertiesSlugIndexRoute: typeof PropertiesSlugIndexRoute
 }
 
@@ -145,6 +158,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PropertiesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/bootstrap-admin': {
+      id: '/api/public/bootstrap-admin'
+      path: '/api/public/bootstrap-admin'
+      fullPath: '/api/public/bootstrap-admin'
+      preLoaderRoute: typeof ApiPublicBootstrapAdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/properties/$slug/': {
       id: '/properties/$slug/'
       path: '/properties/$slug'
@@ -161,6 +181,7 @@ const rootRouteChildren: RootRouteChildren = {
   BookViewingRoute: BookViewingRoute,
   ContactRoute: ContactRoute,
   PropertiesIndexRoute: PropertiesIndexRoute,
+  ApiPublicBootstrapAdminRoute: ApiPublicBootstrapAdminRoute,
   PropertiesSlugIndexRoute: PropertiesSlugIndexRoute,
 }
 export const routeTree = rootRouteImport
