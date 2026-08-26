@@ -45,10 +45,7 @@ export default function Header() {
               {properties.map((p) => (
                 <DropdownMenuItem key={p.slug} asChild className="rounded-xl">
                   <Link to="/properties/$slug" params={{ slug: p.slug }}>
-                    <span>
-                      <span className="block text-sm font-semibold text-brand-deep">{p.name}</span>
-                      <span className="block text-xs text-muted-foreground">{p.location}</span>
-                    </span>
+                    <span className="block text-sm font-semibold text-brand-deep">{p.name}</span>
                   </Link>
                 </DropdownMenuItem>
               ))}
