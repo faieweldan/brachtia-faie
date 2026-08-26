@@ -63,6 +63,7 @@ export default function StayCalculator({
   onRoomChange,
   actions,
   moveIn: moveInProp,
+  moveOut: moveOutProp,
   occupancy: occupancyProp,
 }: {
   property: Property;
@@ -73,6 +74,8 @@ export default function StayCalculator({
   actions?: (state: StayState) => ReactNode;
   /** Externally controlled move-in date (e.g. from the room table). */
   moveIn?: string | undefined;
+  /** Externally controlled move-out date (e.g. from the room table). */
+  moveOut?: string | undefined;
   /** Externally controlled occupancy (e.g. from the room table). */
   occupancy?: Occupancy | undefined;
 }) {
