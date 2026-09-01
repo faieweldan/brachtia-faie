@@ -1,5 +1,4 @@
-import arcExterior from "@/assets/arc-exterior.jpg";
-import arcCyberjayaAsset from "@/assets/arc-cyberjaya.png.asset.json";
+import arcCyberjayaAsset from "@/assets/arc-cyberjaya-v2.png.asset.json";
 import arcPool from "@/assets/arc-pool.jpg";
 import roomTwin from "@/assets/room-twin.jpg";
 import roomSingle from "@/assets/room-single.jpg";
@@ -546,7 +545,7 @@ export const roomTypes: RoomType[] = [
  */
 export const assetRegistry: Record<string, string> = {
   "arc-cyberjaya": arcCyberjaya,
-  "arc-exterior": arcExterior,
+  "arc-exterior": arcCyberjaya,
   "arc-pool": arcPool,
   "room-twin": roomTwin,
   "room-single": roomSingle,
@@ -559,8 +558,8 @@ export const assetRegistry: Record<string, string> = {
 export const assetKeys = Object.keys(assetRegistry);
 
 export function resolveImage(value: string): string {
-  if (!value) return arcExterior;
-  if (value.startsWith("asset:")) return assetRegistry[value.slice(6)] ?? arcExterior;
+  if (!value) return arcCyberjaya;
+  if (value.startsWith("asset:")) return assetRegistry[value.slice(6)] ?? arcCyberjaya;
   return value;
 }
 
