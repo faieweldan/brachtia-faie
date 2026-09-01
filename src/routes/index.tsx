@@ -10,7 +10,7 @@ import {
   Users,
   Headphones,
 } from "lucide-react";
-import heroImage from "@/assets/hero-students.jpg";
+import heroAsset from "@/assets/hero-cover.png.asset.json";
 import parentsImage from "@/assets/parents-support.jpg";
 import { Button } from "@/components/ui/button";
 import PropertyCard from "@/components/site/PropertyCard";
@@ -125,7 +125,7 @@ function Home() {
           <div className="rounded-[2.5rem] border border-border/70 bg-card p-2.5 shadow-lift">
             <div className="aspect-[4/3] overflow-hidden rounded-[2rem]">
               <img
-                src={heroImage}
+                src={heroAsset.url}
                 alt="Students relaxing together in a Brachtia Homes student residence in Cyberjaya"
                 width={1600}
                 height={1104}
