@@ -4,10 +4,11 @@ import roomTwin from "@/assets/room-twin.jpg";
 import roomSingle from "@/assets/room-single.jpg";
 import livingDining from "@/assets/living-dining.jpg";
 import kitchen from "@/assets/kitchen.jpg";
-import solsticeExterior from "@/assets/solstice-exterior.jpg";
+import solsticeExteriorAsset from "@/assets/solstice-cyberjaya-v2.png.asset.json";
 import solsticeStudio from "@/assets/solstice-studio.jpg";
 
 const arcCyberjaya = arcCyberjayaAsset.url;
+const solsticeExterior = solsticeExteriorAsset.url;
 
 export type Occupancy = "single" | "twin";
 export type ContractTerm = "long" | "short";
@@ -552,6 +553,7 @@ export const assetRegistry: Record<string, string> = {
   "living-dining": livingDining,
   kitchen: kitchen,
   "solstice-exterior": solsticeExterior,
+  "solstice-cyberjaya": solsticeExterior,
   "solstice-studio": solsticeStudio,
 };
 
