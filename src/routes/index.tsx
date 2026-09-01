@@ -10,7 +10,7 @@ import {
   Users,
   Headphones,
 } from "lucide-react";
-import heroImage from "@/assets/hero-students.jpg";
+import heroAsset from "@/assets/hero-cover.png.asset.json";
 import parentsImage from "@/assets/parents-support.jpg";
 import { Button } from "@/components/ui/button";
 import PropertyCard from "@/components/site/PropertyCard";
