@@ -558,8 +558,8 @@ export const assetRegistry: Record<string, string> = {
 export const assetKeys = Object.keys(assetRegistry);
 
 export function resolveImage(value: string): string {
-  if (!value) return arcExterior;
-  if (value.startsWith("asset:")) return assetRegistry[value.slice(6)] ?? arcExterior;
+  if (!value) return arcCyberjaya;
+  if (value.startsWith("asset:")) return assetRegistry[value.slice(6)] ?? arcCyberjaya;
   return value;
 }
 
