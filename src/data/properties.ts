@@ -1,4 +1,5 @@
 import arcExterior from "@/assets/arc-exterior.jpg";
+import arcCyberjayaAsset from "@/assets/arc-cyberjaya.png.asset.json";
 import arcPool from "@/assets/arc-pool.jpg";
 import roomTwin from "@/assets/room-twin.jpg";
 import roomSingle from "@/assets/room-single.jpg";
@@ -6,6 +7,8 @@ import livingDining from "@/assets/living-dining.jpg";
 import kitchen from "@/assets/kitchen.jpg";
 import solsticeExterior from "@/assets/solstice-exterior.jpg";
 import solsticeStudio from "@/assets/solstice-studio.jpg";
+
+const arcCyberjaya = arcCyberjayaAsset.url;
 
 export type Occupancy = "single" | "twin";
 export type ContractTerm = "long" | "short";
