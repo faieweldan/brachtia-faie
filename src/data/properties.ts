@@ -1,4 +1,5 @@
 import arcExterior from "@/assets/arc-exterior.jpg";
+import arcCyberjayaAsset from "@/assets/arc-cyberjaya.png.asset.json";
 import arcPool from "@/assets/arc-pool.jpg";
 import roomTwin from "@/assets/room-twin.jpg";
 import roomSingle from "@/assets/room-single.jpg";
@@ -6,6 +7,8 @@ import livingDining from "@/assets/living-dining.jpg";
 import kitchen from "@/assets/kitchen.jpg";
 import solsticeExterior from "@/assets/solstice-exterior.jpg";
 import solsticeStudio from "@/assets/solstice-studio.jpg";
+
+const arcCyberjaya = arcCyberjayaAsset.url;
 
 export type Occupancy = "single" | "twin";
 export type ContractTerm = "long" | "short";
@@ -138,14 +141,14 @@ export const properties: Property[] = [
       "The Arc is our flagship off-campus student residence in Cyberjaya, minutes from the main university campuses and a 3 minute walk to the bus stop for the MRT feeder and free university shuttle.",
       "Units are fully furnished with a shared living and dining area and a fully equipped kitchen. Choose a single room for your own space, or twin sharing to keep costs low. Every unit is gender-segregated, halal and non-smoking.",
     ],
-    heroImage: arcExterior,
+    heroImage: arcCyberjaya,
     gallery: [
       { src: arcPool, caption: "Swimming pool" },
       { src: livingDining, caption: "Living & dining area" },
       { src: roomTwin, caption: "Twin-share room" },
       { src: roomSingle, caption: "Single occupancy room" },
       { src: kitchen, caption: "Fully equipped kitchen" },
-      { src: arcExterior, caption: "The Arc, Cyberjaya" },
+      { src: arcCyberjaya, caption: "The Arc, Cyberjaya" },
     ],
     buildingFacilities: [
       "Swimming Pool",
@@ -542,6 +545,7 @@ export const roomTypes: RoomType[] = [
  * `asset:<name>` key that resolves to one of these.
  */
 export const assetRegistry: Record<string, string> = {
+  "arc-cyberjaya": arcCyberjaya,
   "arc-exterior": arcExterior,
   "arc-pool": arcPool,
   "room-twin": roomTwin,
