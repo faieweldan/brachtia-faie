@@ -1,9 +1,9 @@
 const universities = [
   { short: "MMU", full: "Multimedia University" },
   { short: "HWUM", full: "Heriot-Watt University Malaysia" },
-  { short: "UTP", full: "Universiti Teknologi PETRONAS" },
-  { short: "UCSI", full: "UCSI University" },
-  { short: "CUCMS", full: "Cyberjaya University" },
+  { short: "UOC", full: "University of Cyberjaya" },
+  { short: "City University", full: "City University" },
+  { short: "UNIMY", full: "University of Malaysia in Information Technology" },
 ];
 
 export default function UniversityStrip() {
