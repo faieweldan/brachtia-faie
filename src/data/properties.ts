@@ -545,6 +545,7 @@ export const roomTypes: RoomType[] = [
  * `asset:<name>` key that resolves to one of these.
  */
 export const assetRegistry: Record<string, string> = {
+  "arc-cyberjaya": arcCyberjaya,
   "arc-exterior": arcExterior,
   "arc-pool": arcPool,
   "room-twin": roomTwin,
