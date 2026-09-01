@@ -1,4 +1,3 @@
-import arcExterior from "@/assets/arc-exterior.jpg";
 import arcCyberjayaAsset from "@/assets/arc-cyberjaya-v2.png.asset.json";
 import arcPool from "@/assets/arc-pool.jpg";
 import roomTwin from "@/assets/room-twin.jpg";
