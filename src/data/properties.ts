@@ -546,7 +546,7 @@ export const roomTypes: RoomType[] = [
  */
 export const assetRegistry: Record<string, string> = {
   "arc-cyberjaya": arcCyberjaya,
-  "arc-exterior": arcExterior,
+  "arc-exterior": arcCyberjaya,
   "arc-pool": arcPool,
   "room-twin": roomTwin,
   "room-single": roomSingle,
