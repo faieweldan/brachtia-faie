@@ -88,16 +88,9 @@ export default function CountryCombobox({
           )}
         >
           {selected ? (
-            <>
-              {variant === "dial" && (
-                <span className="text-[10px] font-bold tracking-wide text-muted-foreground">
-                  {selected.iso}
-                </span>
-              )}
-              <span className="truncate font-medium">
-                {variant === "dial" ? selected.dial : selected.name}
-              </span>
-            </>
+            <span className="truncate font-medium tabular-nums">
+              {variant === "dial" ? selected.dial : selected.name}
+            </span>
           ) : (
 
             <span className="truncate text-muted-foreground">{placeholder}</span>
