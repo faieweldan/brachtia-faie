@@ -212,7 +212,9 @@ export default function RoomPriceTable({
               <ul>
                 {list.map((room) => {
                   const selected = selectedRoomId === room.id;
-                  const photos = room.gallery.length || 1;
+                  const photos = new Set(
+                    [room.image, ...room.gallery].filter(Boolean),
+                  ).size;
 
                   return (
                     <li

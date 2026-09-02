@@ -50,7 +50,10 @@ export default function RoomDetailDialog({
 
   const photos: Photo[] = useMemo(() => {
     if (!room) return [];
-    const own = (room.gallery.length ? room.gallery : [room.image]).map((src, i) => ({
+    const ownSrcs = Array.from(
+      new Set([room.image, ...room.gallery].filter(Boolean) as string[]),
+    );
+    const own = ownSrcs.map((src, i) => ({
       src,
       caption: `${room.name} — photo ${i + 1}`,
       badge: "This room",
