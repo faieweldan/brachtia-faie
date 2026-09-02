@@ -4,7 +4,12 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DropZone, previewSrc } from "@/components/admin/ImageUploader";
 
-export type GalleryItem = { src: string; caption: string; category?: string };
+export type GalleryItem = {
+  src: string;
+  caption: string;
+  category?: string;
+  featured?: boolean;
+};
 
 const CATEGORIES = [
   { value: "building", label: "Building amenities" },
