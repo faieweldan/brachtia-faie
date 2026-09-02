@@ -39,6 +39,14 @@ export function GalleryEditor({
     onChange(next);
   };
 
+  const featuredCount = items.filter((it) => it.featured).length;
+
+  const toggleFeatured = (i: number) => {
+    const item = items[i]!;
+    if (!item.featured && featuredCount >= 4) return;
+    patch(i, { featured: !item.featured });
+  };
+
   return (
     <div className="space-y-4">
       <DropZone
@@ -46,6 +54,12 @@ export function GalleryEditor({
         label="Drop photos here or click to upload — you can select several at once"
         onUploaded={(urls) => onChange([...items, ...urls.map((src) => ({ src, caption: "", category: "building" }))])}
       />
+
+      <p className="text-xs text-muted-foreground">
+        Pick up to 4 photos to show in the grid beside the hero photo on the residence page —{" "}
+        <span className="font-semibold text-foreground">{featuredCount} of 4 selected</span>. If none
+        are selected we pick a mix automatically.
+      </p>
 
       {items.length === 0 ? (
         <p className="text-xs text-muted-foreground">No photos yet.</p>
