@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
+  ArrowRight,
   CalendarCheck,
   CheckCircle2,
   Loader2,
@@ -79,6 +80,7 @@ function toISODate(d: Date) {
 function BookViewingPage() {
   const { property } = Route.useSearch();
   const [mode, setMode] = useState<Mode>("in_person");
+  const [showAvailabilityNudge, setShowAvailabilityNudge] = useState(true);
   const [slug, setSlug] = useState(property ?? properties[0]?.slug ?? "");
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [slot, setSlot] = useState<string | null>(null);
@@ -167,6 +169,34 @@ function BookViewingPage() {
         Choose a residence, pick a time that suits you, and we'll confirm within 24 hours. Overseas?
         Take a live video tour instead.
       </p>
+
+      {showAvailabilityNudge ? (
+        <div className="mt-6 grid gap-4 rounded-2xl border border-brand/30 bg-brand-tint/50 p-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-brand-deep">
+              Checked room availability and pricing yet?
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Most students pick a room type first — then we tailor the viewing to the rooms you
+              actually want. It only takes a minute.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild className="rounded-full">
+              <Link to="/properties/$slug" params={{ slug }}>
+                Check availability <ArrowRight className="size-4" />
+              </Link>
+            </Button>
+            <Button
+              variant="ghost"
+              className="rounded-full text-muted-foreground"
+              onClick={() => setShowAvailabilityNudge(false)}
+            >
+              I'd rather view first
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1.15fr_1fr]">
         {/* Left: choices */}
