@@ -260,3 +260,15 @@
   }
 }
 
+
+/* Admin portal: tighter, less pill-shaped controls */
+.admin-ui input,
+.admin-ui textarea,
+.admin-ui select,
+.admin-ui button {
+  border-radius: 0.375rem;
+}
+.admin-ui input,
+.admin-ui select {
+  height: 2.25rem;
+}
