@@ -30,6 +30,11 @@ const STATUSES = ["new", "contacted", "reserved", "closed"] as const;
 const money = (n: number) =>
   `RM ${Number(n || 0).toLocaleString("en-MY", { maximumFractionDigits: 0 })}`;
 
+function hasSnapshot(row: any) {
+  const q = row?.quote_snapshot;
+  return Boolean(q && q.property && q.room && q.quote);
+}
+
 function BookingsPage() {
   const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
@@ -68,6 +73,20 @@ function BookingsPage() {
     },
     onError: () => toast.error("Could not save changes"),
   });
+
+  async function downloadQuote(row: any) {
+    if (!hasSnapshot(row)) return;
+    setDownloading(true);
+    try {
+      const { downloadStayQuote } = await import("@/lib/quote-pdf");
+      await downloadStayQuote({ ...row.quote_snapshot, reference: row.reference });
+    } catch (err) {
+      console.error(err);
+      toast.error("Could not build the quotation");
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   const rows = (data as any[]).filter((r) => {
     if (status !== "all" && r.status !== status) return false;
@@ -241,6 +260,141 @@ function BookingsPage() {
                     <p className="mt-1 rounded-lg bg-muted p-3">{open.message}</p>
                   </div>
                 ) : null}
+
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Linked viewings</p>
+                  {appointments.filter((a) => a.enquiry_id === open.id).length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No viewings tagged yet.</p>
+                  ) : (
+                    appointments
+                      .filter((a) => a.enquiry_id === open.id)
+                      .map((a) => (
+                        <div
+                          key={a.id}
+                          className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
+                        >
+                          <span className="text-xs">
+                            <span className="font-medium text-foreground">
+                              {new Date(a.starts_at).toLocaleDateString("en-MY", {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                              })}{" "}
+                              · {formatSlot(a.starts_at)}
+                            </span>{" "}
+                            <span className="text-muted-foreground">
+                              {a.mode === "virtual" ? "Virtual tour" : "In person"} · {a.status}
+                            </span>
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              link.mutate({ appointmentId: a.id, enquiryId: null })
+                            }
+                          >
+                            <X className="size-4" />
+                          </Button>
+                        </div>
+                      ))
+                  )}
+
+                  <div className="space-y-2 rounded-lg bg-muted/40 p-3">
+                    <p className="text-xs font-medium text-foreground">Tag a viewing</p>
+                    <Input
+                      value={linkQuery}
+                      onChange={(e) => setLinkQuery(e.target.value)}
+                      placeholder="Search viewings by name, email or date…"
+                      className="h-9"
+                    />
+                    <div className="max-h-44 space-y-1 overflow-y-auto">
+                      {appointments
+                        .filter((a) => a.enquiry_id !== open.id)
+                        .map((a) => ({
+                          a,
+                          match:
+                            a.email?.toLowerCase() === String(open.email).toLowerCase() ||
+                            String(a.phone).replace(/\D/g, "") ===
+                              String(open.phone).replace(/\D/g, ""),
+                        }))
+                        .filter(({ a }) => {
+                          const q = linkQuery.trim().toLowerCase();
+                          if (!q) return true;
+                          return [a.full_name, a.email, a.phone, a.starts_at]
+                            .join(" ")
+                            .toLowerCase()
+                            .includes(q);
+                        })
+                        .sort((x, y) => Number(y.match) - Number(x.match))
+                        .slice(0, 12)
+                        .map(({ a, match }) => (
+                          <button
+                            key={a.id}
+                            type="button"
+                            onClick={() =>
+                              link.mutate({ appointmentId: a.id, enquiryId: open.id })
+                            }
+                            className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left text-xs hover:bg-background"
+                          >
+                            <span className="min-w-0 truncate">
+                              <span className="font-medium text-foreground">{a.full_name}</span>{" "}
+                              <span className="text-muted-foreground">
+                                ·{" "}
+                                {new Date(a.starts_at).toLocaleDateString("en-MY", {
+                                  day: "numeric",
+                                  month: "short",
+                                })}{" "}
+                                {formatSlot(a.starts_at)}
+                              </span>
+                              {a.enquiry_id ? (
+                                <span className="text-muted-foreground"> · linked elsewhere</span>
+                              ) : null}
+                            </span>
+                            <span className="flex shrink-0 items-center gap-1 font-semibold text-brand-deep">
+                              {match ? "Suggested" : null}
+                              <Link2 className="size-3.5" />
+                            </span>
+                          </button>
+                        ))}
+                      {appointments.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No viewings booked yet.</p>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Activity timeline</p>
+                  <ol className="space-y-1.5 border-l border-border pl-3 text-xs">
+                    {[
+                      {
+                        at: open.created_at,
+                        label: `Enquiry ${open.reference} submitted`,
+                      },
+                      ...appointments
+                        .filter((a) => a.enquiry_id === open.id)
+                        .map((a) => ({
+                          at: a.starts_at,
+                          label: `Viewing (${a.mode === "virtual" ? "virtual" : "in person"}) · ${a.status}`,
+                        })),
+                      { at: open.updated_at, label: "Last updated" },
+                    ]
+                      .filter((e) => e.at)
+                      .sort((x, y) => new Date(x.at).getTime() - new Date(y.at).getTime())
+                      .map((e, i) => (
+                        <li key={i} className="text-muted-foreground">
+                          <span className="font-medium text-foreground">
+                            {new Date(e.at).toLocaleDateString("en-MY", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </span>{" "}
+                          — {e.label}
+                        </li>
+                      ))}
+                  </ol>
+                </div>
 
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground">Internal notes</p>
