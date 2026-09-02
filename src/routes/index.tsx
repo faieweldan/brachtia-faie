@@ -9,6 +9,8 @@ import {
   Sofa,
   Users,
   Headphones,
+  MapPin,
+  Star,
 } from "lucide-react";
 import heroAsset from "@/assets/hero-cover.png.asset.json";
 import parentsImage from "@/assets/parents-support.jpg";
@@ -19,6 +21,7 @@ import CtaBand from "@/components/site/CtaBand";
 import UniversityStrip from "@/components/site/UniversityStrip";
 import HowItWorks from "@/components/site/HowItWorks";
 import { properties } from "@/data/properties";
+import { reviewSummary } from "@/data/reviews";
 
 const title = "Student Accommodation in Cyberjaya | Brachtia Homes";
 const description =
