@@ -29,3 +29,24 @@ At submission the full calculator result (monthly rent, pro-rated first month, a
 - `src/lib/quote-pdf.ts`: `QuoteInput` gains an optional `reference`; drawn in the header block and used in the file name.
 - `src/routes/admin.bookings.tsx`: render `reference`, include it in the search filter, and add a Download quotation button that dynamic-imports `downloadStayQuote` with the stored `quote_snapshot` (button disabled with a hint for older enquiries that have no snapshot).
 - `src/lib/admin.functions.ts`: `listEnquiries` already selects `*`, so the new columns come through with no change.
+
+---
+
+# Linking enquiries to viewings (interaction timeline)
+
+Admin can tag an enquiry to any scheduled viewing, so each student's history — enquiry submitted, viewing booked, viewing completed — reads as one timeline.
+
+## What admin sees
+
+- **In the enquiry detail dialog:** a "Linked viewings" block listing any viewings tied to this enquiry (date/time, in-person or virtual, status), plus a **Link a viewing** picker that searches existing appointments (by name, email or date) and attaches one. Each linked viewing can be unlinked.
+- **In Appointment Manager:** each appointment shows the linked enquiry's reference and student name when tagged, with a link that opens that enquiry.
+- **Activity timeline** at the bottom of the enquiry dialog: enquiry created → each linked viewing (scheduled date, current status) → last updated, in chronological order.
+- Suggested matches: when an appointment shares the enquiry's email or phone, the picker surfaces it first so tagging is one click.
+
+## Technical notes
+
+- Migration: add `enquiry_id uuid references public.enquiries(id) on delete set null` to `public.appointments`, plus an index on it. Existing rows stay null.
+- `src/lib/admin.functions.ts`: `listEnquiries` also returns appointments joined by `enquiry_id`; add `linkAppointmentToEnquiry({ appointmentId, enquiryId | null })` using the existing admin client pattern.
+- `src/routes/admin.bookings.tsx`: enquiry dialog gains the linked-viewings list, the search-and-link picker (fed by `listAppointments`), unlink action, and the timeline; mutations invalidate `["admin"]` so both tabs refresh.
+- `src/routes/admin.appointments.tsx`: show the linked enquiry reference/name on each row when present.
+- No public-site changes; this is admin-only.
