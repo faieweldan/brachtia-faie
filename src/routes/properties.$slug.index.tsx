@@ -115,8 +115,8 @@ function PropertyPage() {
             />
           </div>
           <div className="relative hidden grid-cols-2 grid-rows-2 gap-2 sm:grid sm:h-[30rem] lg:gap-3">
-            {gallery.slice(0, 4).map((g) => (
-              <div key={g.caption} className="overflow-hidden rounded-3xl">
+            {preview.map((g) => (
+              <div key={g.src} className="overflow-hidden rounded-3xl">
                 <img
                   src={g.src}
                   alt={`${property.name} — ${g.caption}`}
