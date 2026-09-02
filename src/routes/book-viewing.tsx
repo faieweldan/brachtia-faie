@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
+  ArrowRight,
   CalendarCheck,
   CheckCircle2,
   Loader2,
@@ -79,6 +80,7 @@ function toISODate(d: Date) {
 function BookViewingPage() {
   const { property } = Route.useSearch();
   const [mode, setMode] = useState<Mode>("in_person");
+  const [showAvailabilityNudge, setShowAvailabilityNudge] = useState(true);
   const [slug, setSlug] = useState(property ?? properties[0]?.slug ?? "");
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [slot, setSlot] = useState<string | null>(null);
