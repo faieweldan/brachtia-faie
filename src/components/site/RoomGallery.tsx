@@ -5,10 +5,12 @@ export default function RoomGallery({
   images,
   alt,
   className = "",
+  fit = "cover",
 }: {
   images: string[];
   alt: string;
   className?: string;
+  fit?: "cover" | "contain";
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
@@ -50,7 +52,7 @@ export default function RoomGallery({
             loading={i === 0 ? "eager" : "lazy"}
             width={1200}
             height={900}
-            className="h-full w-full shrink-0 snap-center object-cover"
+            className={`h-full w-full shrink-0 snap-center ${fit === "contain" ? "object-contain" : "object-cover"}`}
           />
         ))}
       </div>
