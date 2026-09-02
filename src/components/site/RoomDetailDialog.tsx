@@ -18,6 +18,7 @@ import {
   type RoomType,
 } from "@/data/properties";
 import RoomGallery from "./RoomGallery";
+import PhotoLightbox, { type Photo } from "./PhotoLightbox";
 
 
 const DEFAULT_FURNISHING = [
