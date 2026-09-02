@@ -305,6 +305,7 @@ export type Database = {
           name: string
           nearby_universities: Json
           payment_cycle: string
+          payment_terms: string[]
           points_of_interest: Json
           pricing: Json
           published: boolean
@@ -335,6 +336,7 @@ export type Database = {
           name: string
           nearby_universities?: Json
           payment_cycle?: string
+          payment_terms?: string[]
           points_of_interest?: Json
           pricing?: Json
           published?: boolean
@@ -365,6 +367,7 @@ export type Database = {
           name?: string
           nearby_universities?: Json
           payment_cycle?: string
+          payment_terms?: string[]
           points_of_interest?: Json
           pricing?: Json
           published?: boolean

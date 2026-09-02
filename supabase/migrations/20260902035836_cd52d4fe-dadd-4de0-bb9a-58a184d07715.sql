@@ -1,0 +1,1 @@
+ALTER TABLE public.residences ADD COLUMN IF NOT EXISTS payment_terms text[] NOT NULL DEFAULT ARRAY['bimonthly','quarterly','full']::text[];
