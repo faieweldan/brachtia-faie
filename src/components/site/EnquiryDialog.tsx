@@ -36,10 +36,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-const GENDERS = ["Female", "Male", "Prefer not to say"];
-
-const fieldClass =
-  "h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-brand/40";
+import {
+  GENDERS,
+  HEARD_ABOUT,
+  UNIVERSITIES,
+  intakeMonths,
+} from "@/data/form-options";
+import { fieldClass } from "@/components/site/form-fields";
 
 const staySchema = z.object({
   roomId: z.string().min(1, "Select a room type"),
@@ -54,6 +57,7 @@ const leadSchema = z.object({
   intake: z.string().trim().min(4, "Select your intake").max(20),
   nationality: z.string().trim().min(2, "Select your nationality").max(60),
   gender: z.string().trim().min(1, "Select your gender").max(30),
+  heardAbout: z.string().trim().min(1, "Tell us how you heard about us").max(120),
   email: z.string().trim().email("Enter a valid email").max(255),
   mobile: z.string().trim().min(9, "Enter a valid mobile number").max(30),
   message: z.string().trim().max(1000).optional(),
@@ -102,6 +106,10 @@ export default function EnquiryDialog({
   const [mobileNumber, setMobileNumber] = useState("");
   const [nationalityIso, setNationalityIso] = useState<string | undefined>(undefined);
   const [editStay, setEditStay] = useState(false);
+  const [universityChoice, setUniversityChoice] = useState("");
+  const [universityOther, setUniversityOther] = useState("");
+  const [heardChoice, setHeardChoice] = useState("");
+  const [heardOther, setHeardOther] = useState("");
 
   const room = stay.room;
   const occupancies = room?.occupancies ?? [];
@@ -115,17 +123,11 @@ export default function EnquiryDialog({
   const stayComplete = Boolean(room && occupancy && stay.moveIn && stay.moveOut);
   const showStayFields = editStay || !stayComplete;
 
-  const universities = useMemo(
-    () => [...property.nearbyUniversities.map((u) => u.name), "Other"],
-    [property],
-  );
-  const intakes = useMemo(() => {
-    const now = new Date();
-    return Array.from({ length: 18 }, (_, i) => {
-      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-      return d.toLocaleDateString("en-MY", { month: "long", year: "numeric" });
-    });
-  }, []);
+  const universities = UNIVERSITIES;
+  const intakes = useMemo(() => intakeMonths(), []);
+  const universityValue =
+    universityChoice === "Other" ? universityOther.trim() : universityChoice;
+  const heardValue = heardChoice === "Other" ? (heardOther.trim() || "Other") : heardChoice;
 
   const summaryMessage = `Hi Brachtia Homes, I'd like to check availability at ${property.name}${
     room ? ` — ${room.name}` : ""
@@ -143,6 +145,10 @@ export default function EnquiryDialog({
       setDialIso("MY");
       setMobileNumber("");
       setNationalityIso(undefined);
+      setUniversityChoice("");
+      setUniversityOther("");
+      setHeardChoice("");
+      setHeardOther("");
     }
   }
 
@@ -272,6 +278,8 @@ export default function EnquiryDialog({
                     university: leadData.university,
                     intake: leadData.intake,
                     gender: leadData.gender,
+                    heardAbout: heardChoice,
+                    heardAboutOther: heardChoice === "Other" ? heardOther.trim() : "",
                     message: leadData.message ?? "",
                     quoteSnapshot: {
                       property,
@@ -513,9 +521,9 @@ export default function EnquiryDialog({
                     <Label htmlFor="en-uni">University</Label>
                     <select
                       id="en-uni"
-                      name="university"
                       className={fieldClass}
-                      defaultValue=""
+                      value={universityChoice}
+                      onChange={(e) => setUniversityChoice(e.target.value)}
                       data-invalid={errors['university'] ? "true" : undefined}
                     >
                       <option value="" disabled>
@@ -527,6 +535,16 @@ export default function EnquiryDialog({
                         </option>
                       ))}
                     </select>
+                    {universityChoice === "Other" && (
+                      <Input
+                        className="mt-2 h-11 rounded-xl"
+                        placeholder="Your university"
+                        maxLength={120}
+                        value={universityOther}
+                        onChange={(e) => setUniversityOther(e.target.value)}
+                      />
+                    )}
+                    <input type="hidden" name="university" value={universityValue} />
                     <FieldError msg={errors['university']} />
                   </div>
 
@@ -584,6 +602,37 @@ export default function EnquiryDialog({
                       ))}
                     </select>
                     <FieldError msg={errors['gender']} />
+                  </div>
+
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label htmlFor="en-heard">How did you hear about us?</Label>
+                    <select
+                      id="en-heard"
+                      className={fieldClass}
+                      value={heardChoice}
+                      onChange={(e) => setHeardChoice(e.target.value)}
+                      data-invalid={errors['heardAbout'] ? "true" : undefined}
+                    >
+                      <option value="" disabled>
+                        Select
+                      </option>
+                      {HEARD_ABOUT.map((h) => (
+                        <option key={h} value={h}>
+                          {h}
+                        </option>
+                      ))}
+                    </select>
+                    {heardChoice === "Other" && (
+                      <Input
+                        className="mt-2 h-11 rounded-xl"
+                        placeholder="Tell us more"
+                        maxLength={120}
+                        value={heardOther}
+                        onChange={(e) => setHeardOther(e.target.value)}
+                      />
+                    )}
+                    <input type="hidden" name="heardAbout" value={heardValue} />
+                    <FieldError msg={errors['heardAbout']} />
                   </div>
 
                   <div className="space-y-1.5 sm:col-span-2">
