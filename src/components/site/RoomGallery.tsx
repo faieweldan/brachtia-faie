@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Expand } from "lucide-react";
+import type { Photo } from "./PhotoLightbox";
 
 export default function RoomGallery({
-  images,
+  items,
   alt,
   className = "",
-  fit = "cover",
+  onOpen,
 }: {
-  images: string[];
+  items: (string | Photo)[];
   alt: string;
   className?: string;
-  fit?: "cover" | "contain";
+  onOpen?: (index: number) => void;
 }) {
+  const photos: Photo[] = items.map((it) => (typeof it === "string" ? { src: it } : it));
   const ref = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
-  const count = images.length;
+  const count = photos.length;
 
   const onScroll = useCallback(() => {
     const el = ref.current;
@@ -38,24 +40,52 @@ export default function RoomGallery({
     setIndex(target);
   }
 
+  const current = photos[index];
+
   return (
     <div className={`group/gallery relative overflow-hidden bg-muted ${className}`}>
       <div
         ref={ref}
         className="flex h-full w-full snap-x snap-mandatory overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {images.map((src, i) => (
-          <img
-            key={`${src}-${i}`}
-            src={src}
-            alt={`${alt} — photo ${i + 1}`}
-            loading={i === 0 ? "eager" : "lazy"}
-            width={1200}
-            height={900}
-            className={`h-full w-full shrink-0 snap-center ${fit === "contain" ? "object-contain" : "object-cover"}`}
-          />
+        {photos.map((p, i) => (
+          <button
+            key={`${p.src}-${i}`}
+            type="button"
+            onClick={() => onOpen?.(i)}
+            aria-label={`View ${p.caption || alt} full size`}
+            className="relative h-full w-full shrink-0 snap-center cursor-zoom-in overflow-hidden"
+          >
+            <img
+              src={p.src}
+              alt=""
+              aria-hidden
+              className="absolute inset-0 size-full scale-110 object-cover opacity-40 blur-2xl"
+            />
+            <img
+              src={p.src}
+              alt={p.caption ? `${alt} — ${p.caption}` : `${alt} — photo ${i + 1}`}
+              loading={i === 0 ? "eager" : "lazy"}
+              className="relative h-full w-full object-contain"
+            />
+          </button>
         ))}
       </div>
+
+      {current?.badge ? (
+        <span className="pointer-events-none absolute left-3 top-3 rounded-full bg-card/90 px-2.5 py-1 text-[11px] font-semibold text-foreground shadow-card">
+          {current.badge}
+        </span>
+      ) : null}
+
+      <button
+        type="button"
+        aria-label="View full size"
+        onClick={() => onOpen?.(index)}
+        className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-card/90 px-2.5 py-1.5 text-[11px] font-semibold text-foreground shadow-card transition hover:bg-card"
+      >
+        <Expand className="size-3.5" /> View full
+      </button>
 
       {count > 1 && (
         <>
@@ -78,7 +108,7 @@ export default function RoomGallery({
             <ChevronRight className="size-4" />
           </button>
           <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center gap-1.5">
-            {images.map((_, i) => (
+            {photos.map((_, i) => (
               <span
                 key={i}
                 className={`size-1.5 rounded-full transition ${

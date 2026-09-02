@@ -63,10 +63,22 @@ export default function RoomDetailDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] gap-0 overflow-y-auto p-0 sm:max-w-3xl">
         <RoomGallery
-          images={room.gallery.length ? room.gallery : [room.image]}
+          items={photos}
           alt={`${room.name} at ${property.name}`}
-          fit="contain"
-          className="aspect-[4/3] w-full rounded-t-lg bg-muted sm:aspect-[16/10]"
+          onOpen={(i) => {
+            setLightboxIndex(i);
+            setLightboxOpen(true);
+          }}
+          className="aspect-[4/3] w-full rounded-t-lg sm:aspect-[16/10]"
+        />
+
+        <PhotoLightbox
+          photos={photos}
+          index={lightboxIndex}
+          onIndexChange={setLightboxIndex}
+          open={lightboxOpen}
+          onOpenChange={setLightboxOpen}
+          title={`${room.name} — ${property.name}`}
         />
 
         <div className="space-y-6 p-6">
