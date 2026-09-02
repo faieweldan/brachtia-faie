@@ -49,10 +49,7 @@ export default function PhotoLightbox({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        showCloseButton={false}
-        className="flex h-[100dvh] max-h-none w-screen max-w-none flex-col gap-0 border-0 bg-foreground/95 p-0 sm:max-w-none"
-      >
+      <DialogContent className="flex h-[100dvh] max-h-none w-screen max-w-none flex-col gap-0 rounded-none border-0 bg-foreground/95 p-0 sm:max-w-none [&>button:last-child]:hidden">
         <DialogTitle className="sr-only">{title}</DialogTitle>
 
         <div className="flex items-center justify-between gap-4 px-4 py-3 text-background sm:px-6">
