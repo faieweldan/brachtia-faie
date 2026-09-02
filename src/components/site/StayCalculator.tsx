@@ -94,7 +94,16 @@ export default function StayCalculator({
   const rent = selected ? selected.rent[term][occupancy] : null;
   const rateAvailable = rent != null;
 
-  const [paymentTerm, setPaymentTerm] = useState<PaymentTerm>("bimonthly");
+  const offeredTerms = useMemo<PaymentTerm[]>(() => {
+    const all: PaymentTerm[] = ["bimonthly", "quarterly", "full"];
+    const offered = all.filter((t) => (property.paymentTerms ?? all).includes(t));
+    return offered.length > 0 ? offered : ["full"];
+  }, [property.paymentTerms]);
+
+  const [paymentTermRaw, setPaymentTerm] = useState<PaymentTerm>("bimonthly");
+  const paymentTerm: PaymentTerm = offeredTerms.includes(paymentTermRaw)
+    ? paymentTermRaw
+    : offeredTerms[0]!;
   const [bedding, setBedding] = useState<string | null>(null);
   const effectiveTerm: PaymentTerm = term === "short" ? "full" : paymentTerm;
 
@@ -221,7 +230,7 @@ export default function StayCalculator({
                       size="sm"
                       value={effectiveTerm}
                       onChange={setPaymentTerm}
-                      options={(["bimonthly", "quarterly", "full"] as PaymentTerm[]).map((t) => ({
+                      options={offeredTerms.map((t) => ({
                         value: t,
                         label: paymentTermLabel[t],
                         disabled: term === "short" && t !== "full",
