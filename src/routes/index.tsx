@@ -93,48 +93,101 @@ function Home() {
   return (
     <>
       {/* Hero */}
-      <section className="px-4 pb-14 pt-14 sm:px-6 sm:pb-20 sm:pt-20">
-        <div className="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-2 lg:gap-14">
-          <div>
-            <h1 className="mt-6 text-4xl font-extrabold leading-[1.05] tracking-tight text-brand-deep sm:text-6xl">
-              Student living,
-              <br />
-              <span className="text-brand">made simple.</span>
-            </h1>
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
-              Find comfortable, well-managed student accommodation in Cyberjaya — with the support
-              you need from enquiry to move-in.
-            </p>
+      <section className="relative overflow-hidden">
+        {/* soft warm wash tying both columns together */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-[560px] bg-[radial-gradient(80%_100%_at_75%_0%,color-mix(in_oklab,var(--brand-soft)_60%,transparent),transparent_70%)]"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -left-32 top-40 size-96 rounded-full bg-brand/5 blur-3xl"
+        />
 
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Button asChild size="lg" className="h-13 rounded-full px-8 text-base">
-                <a href="#residences">
-                  Explore Residences <ArrowRight className="size-5" />
-                </a>
-              </Button>
-              <Button asChild size="lg" variant="outline" className="h-13 rounded-full border-2 px-8 text-base">
-                <Link to="/properties">Check Availability</Link>
-              </Button>
+        <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-12 sm:px-6 sm:pb-24 sm:pt-16">
+          <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
+            <div className="min-w-0">
+              <span className="inline-flex items-center gap-2 rounded-full border border-brand/15 bg-card px-3.5 py-1.5 text-xs font-semibold text-brand shadow-sm">
+                <MapPin className="size-3.5 shrink-0" /> Cyberjaya, Malaysia
+              </span>
+
+              <h1 className="mt-6 text-[2.6rem] font-extrabold leading-[1.03] tracking-tight text-brand-deep sm:text-6xl">
+                Student living,
+                <br />
+                <span className="text-brand">made simple.</span>
+              </h1>
+
+              <p className="mt-6 max-w-lg text-base leading-relaxed text-muted-foreground sm:text-lg">
+                Comfortable, well-managed student accommodation — with the support you need from
+                enquiry to move-in.
+              </p>
+
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <Button asChild size="lg" className="h-13 rounded-full px-8 text-base shadow-lift">
+                  <a href="#residences">
+                    Explore Residences <ArrowRight className="size-5" />
+                  </a>
+                </Button>
+                <Button asChild size="lg" variant="outline" className="h-13 rounded-full border-2 px-8 text-base">
+                  <Link to="/properties">Check Availability</Link>
+                </Button>
+              </div>
+
+              <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-4 border-t border-border/70 pt-6">
+                {[
+                  { value: "17+", label: "Years managing homes" },
+                  { value: "20+", label: "Nationalities hosted" },
+                  { value: "24/7", label: "Support & security" },
+                ].map((s) => (
+                  <div key={s.label} className="min-w-0">
+                    <p className="text-2xl font-extrabold tracking-tight text-brand-deep">{s.value}</p>
+                    <p className="mt-0.5 text-xs font-medium text-muted-foreground">{s.label}</p>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <p className="mt-6 text-sm text-muted-foreground">
-              Student accommodation for local and international students studying in Cyberjaya.
-            </p>
-          </div>
-
-          <div className="rounded-[2.5rem] border border-border/70 bg-card p-2.5 shadow-lift">
-            <div className="aspect-[4/3] overflow-hidden rounded-[2rem]">
-              <img
-                src={heroAsset.url}
-                alt="Students relaxing together in a Brachtia Homes student residence in Cyberjaya"
-                width={1600}
-                height={1104}
-                className="size-full object-cover"
+            {/* Image */}
+            <div className="relative">
+              <div
+                aria-hidden
+                className="absolute -right-6 -top-6 hidden h-40 w-40 rounded-[2rem] bg-brand-soft lg:block"
               />
+              <div className="relative overflow-hidden rounded-[2rem] shadow-lift ring-1 ring-border/70">
+                <img
+                  src={heroAsset.url}
+                  alt="Students relaxing together in a Brachtia Homes student residence in Cyberjaya"
+                  width={1600}
+                  height={1200}
+                  className="aspect-[4/3.4] size-full object-cover sm:aspect-[4/3]"
+                />
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-brand-deep/45 to-transparent"
+                />
+              </div>
+
+              {/* rating chip */}
+              <div className="absolute -bottom-5 left-4 flex items-center gap-3 rounded-2xl bg-card px-4 py-3 shadow-lift ring-1 ring-border/70 sm:left-6">
+                <div className="flex items-center gap-0.5">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Star key={i} className="size-3.5 fill-gold text-gold" />
+                  ))}
+                </div>
+                <div className="leading-tight">
+                  <p className="text-sm font-bold text-brand-deep">{reviewSummary.average} on Google</p>
+                  <p className="text-xs text-muted-foreground">{reviewSummary.count} student reviews</p>
+                </div>
+              </div>
             </div>
           </div>
+
+          <p className="mt-14 text-sm text-muted-foreground sm:mt-16">
+            Student accommodation for local and international students studying in Cyberjaya.
+          </p>
         </div>
       </section>
+
 
       <UniversityStrip />
 
