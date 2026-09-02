@@ -64,6 +64,7 @@ const EDITABLE_KEYS = [
   "nearby_universities",
   "points_of_interest",
   "payment_cycle",
+  "payment_terms",
   "contract_terms",
   "terms",
   "single_bed_options",

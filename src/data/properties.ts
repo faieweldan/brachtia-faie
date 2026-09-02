@@ -136,6 +136,8 @@ export type Property = {
   /** Bed choices offered for single occupancy at this residence */
   singleBedOptions?: string[];
   paymentCycle: string;
+  /** Payment frequencies offered to students at this residence */
+  paymentTerms?: PaymentTerm[];
   feeConfig: Record<ContractTerm, FeeConfig>;
   pricing: Record<ContractTerm, PricingTable[]>;
   wazeUrl: string;
@@ -236,6 +238,7 @@ export const properties: Property[] = [
     contractTerms: ["long", "short"],
     singleBedOptions: ["Single bed", "Queen bed", "King bed"],
     paymentCycle: "Rental payable bi-monthly",
+    paymentTerms: ["bimonthly", "quarterly", "full"],
     feeConfig: {
       long: {
         advanceMonths: 2,
@@ -351,6 +354,7 @@ export const properties: Property[] = [
     contractTerms: ["long"],
     singleBedOptions: ["Queen bed"],
     paymentCycle: "Rental payable monthly",
+    paymentTerms: ["bimonthly", "quarterly", "full"],
     feeConfig: {
       long: {
         advanceMonths: 2,
