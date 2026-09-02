@@ -66,11 +66,34 @@ export function GalleryEditor({
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {items.map((item, i) => (
-            <div key={`${item.src}-${i}`} className="overflow-hidden rounded-md border border-border bg-card">
+            <div
+              key={`${item.src}-${i}`}
+              className={`overflow-hidden rounded-md border bg-card ${
+                item.featured ? "border-brand ring-1 ring-brand/40" : "border-border"
+              }`}
+            >
               <div className="relative aspect-[4/3] bg-muted">
                 {item.src ? (
                   <img src={previewSrc(item.src)} alt="" className="size-full object-cover" />
                 ) : null}
+                <button
+                  type="button"
+                  onClick={() => toggleFeatured(i)}
+                  disabled={!item.featured && featuredCount >= 4}
+                  title={
+                    !item.featured && featuredCount >= 4
+                      ? "Unselect another photo first (max 4)"
+                      : "Show on the residence page grid"
+                  }
+                  className={`absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold transition disabled:opacity-40 ${
+                    item.featured
+                      ? "bg-brand text-brand-foreground"
+                      : "bg-background/90 text-foreground hover:bg-background"
+                  }`}
+                >
+                  <Star className={`size-3 ${item.featured ? "fill-current" : ""}`} />
+                  {item.featured ? "On page" : "Feature"}
+                </button>
                 <div className="absolute right-1.5 top-1.5 flex gap-1">
                   <Button
                     type="button"
