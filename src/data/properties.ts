@@ -32,6 +32,11 @@ const arcDining = arcDiningAsset.url;
 const arcKitchen = arcKitchenAsset.url;
 const arcLiving = arcLivingAsset.url;
 const arcYard = arcYardAsset.url;
+const arcRoomD = arcRoomDAsset.url;
+const arcRoomATwin = arcRoomATwinAsset.url;
+const arcRoomBTwin = arcRoomBTwinAsset.url;
+const arcRoomCSingle = arcRoomCSingleAsset.url;
+const arcRoomCSingle2 = arcRoomCSingle2Asset.url;
 
 export type Occupancy = "single" | "twin";
 export type ContractTerm = "long" | "short";
@@ -106,6 +111,8 @@ export type PlaceNearby = {
   transit: string;
 };
 
+export type GalleryCategory = "building" | "apartment" | "room";
+
 export type Property = {
   id: string;
   slug: string;
@@ -166,16 +173,21 @@ export const properties: Property[] = [
     ],
     heroImage: arcCyberjaya,
     gallery: [
-      { src: arcPoolNew, caption: "Swimming pool" },
-      { src: arcLiving, caption: "Living area" },
-      { src: arcDining, caption: "Dining area" },
-      { src: arcKitchen, caption: "Fully equipped kitchen" },
-      { src: arcCafeteria, caption: "Arc Café / food court" },
-      { src: arcLaundry, caption: "Self-service laundry" },
-      { src: arcConvenience, caption: "Mini mart & vending" },
-      { src: arcCourtyard, caption: "Ground floor seating area" },
-      { src: arcYard, caption: "Washing machine in unit yard" },
-      { src: arcCyberjaya, caption: "The Arc, Cyberjaya" },
+      { src: arcPoolNew, caption: "Swimming pool", category: "building" },
+      { src: arcCafeteria, caption: "Arc Café / food court", category: "building" },
+      { src: arcLaundry, caption: "Self-service laundry", category: "building" },
+      { src: arcConvenience, caption: "Mini mart & vending", category: "building" },
+      { src: arcCourtyard, caption: "Ground floor seating area", category: "building" },
+      { src: arcCyberjaya, caption: "The Arc, Cyberjaya", category: "building" },
+      { src: arcLiving, caption: "Living area", category: "apartment" },
+      { src: arcDining, caption: "Dining area", category: "apartment" },
+      { src: arcKitchen, caption: "Fully equipped kitchen", category: "apartment" },
+      { src: arcYard, caption: "Washing machine in unit yard", category: "apartment" },
+      { src: arcRoomCSingle, caption: "Single room with wardrobe & study desk", category: "room" },
+      { src: arcRoomCSingle2, caption: "Single room", category: "room" },
+      { src: arcRoomD, caption: "Single room with air-conditioning", category: "room" },
+      { src: arcRoomATwin, caption: "Twin sharing room with exterior view", category: "room" },
+      { src: arcRoomBTwin, caption: "Twin sharing room", category: "room" },
     ],
     buildingFacilities: [
       "Swimming Pool",
@@ -293,10 +305,10 @@ export const properties: Property[] = [
     ],
     heroImage: solsticeExterior,
     gallery: [
-      { src: solsticeStudio, caption: "1-bedroom apartment" },
-      { src: livingDining, caption: "Living & dining area" },
-      { src: kitchen, caption: "Kitchenette" },
-      { src: solsticeExterior, caption: "Solstice Residence" },
+      { src: solsticeExterior, caption: "Solstice Residence", category: "building" },
+      { src: livingDining, caption: "Living & dining area", category: "apartment" },
+      { src: kitchen, caption: "Kitchenette", category: "apartment" },
+      { src: solsticeStudio, caption: "1-bedroom apartment", category: "room" },
     ],
     buildingFacilities: [
       "Swimming Pool",
@@ -571,8 +583,6 @@ export const roomTypes: RoomType[] = [
  * Bundled sample images. Residence/room records store either a full URL or an
  * `asset:<name>` key that resolves to one of these.
  */
-export type GalleryCategoryDummy = never;
-
 export const assetRegistry: Record<string, string> = {
   "arc-cyberjaya": arcCyberjaya,
   "arc-exterior": arcCyberjaya,
@@ -587,6 +597,11 @@ export const assetRegistry: Record<string, string> = {
   "arc-kitchen": arcKitchen,
   "arc-living": arcLiving,
   "arc-yard": arcYard,
+  "arc-room-d": arcRoomD,
+  "arc-room-a-twin": arcRoomATwin,
+  "arc-room-b-twin": arcRoomBTwin,
+  "arc-room-c-single": arcRoomCSingle,
+  "arc-room-c-single-2": arcRoomCSingle2,
   "room-twin": roomTwin,
   "room-single": roomSingle,
   "living-dining": livingDining,
