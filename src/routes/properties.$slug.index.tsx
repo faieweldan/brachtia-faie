@@ -79,6 +79,19 @@ function PropertyPage() {
   const activeTerm = property.contractTerms.includes(derivedTerm) ? derivedTerm : "long";
 
   const gallery = property.gallery;
+  const byCategory = (c: string) =>
+    gallery.filter((g) => (g.category ?? "building") === c);
+  const galleryGroups: { label: string; items: typeof gallery }[] = [
+    { label: "Building amenities", items: byCategory("building") },
+    { label: "In your apartment", items: byCategory("apartment") },
+    { label: "In your room", items: byCategory("room") },
+  ].filter((g) => g.items.length > 0);
+  const preview = [
+    byCategory("building")[0],
+    byCategory("apartment")[0],
+    byCategory("room")[0],
+    byCategory("room")[1] ?? byCategory("apartment")[1] ?? byCategory("building")[1],
+  ].filter(Boolean) as typeof gallery;
 
   return (
     <>
@@ -102,8 +115,8 @@ function PropertyPage() {
             />
           </div>
           <div className="relative hidden grid-cols-2 grid-rows-2 gap-2 sm:grid sm:h-[30rem] lg:gap-3">
-            {gallery.slice(0, 4).map((g) => (
-              <div key={g.caption} className="overflow-hidden rounded-3xl">
+            {preview.map((g) => (
+              <div key={g.src} className="overflow-hidden rounded-3xl">
                 <img
                   src={g.src}
                   alt={`${property.name} — ${g.caption}`}
@@ -128,19 +141,28 @@ function PropertyPage() {
                 <DialogHeader>
                   <DialogTitle>{property.name} — photos</DialogTitle>
                 </DialogHeader>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {gallery.map((g) => (
-                    <figure key={g.caption} className="overflow-hidden rounded-2xl">
-                      <img
-                        src={g.src}
-                        alt={`${property.name} — ${g.caption}`}
-                        loading="lazy"
-                        className="h-56 w-full object-cover"
-                      />
-                      <figcaption className="px-1 py-2 text-xs text-muted-foreground">
-                        {g.caption}
-                      </figcaption>
-                    </figure>
+                <div className="space-y-8">
+                  {galleryGroups.map((group) => (
+                    <section key={group.label}>
+                      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-brand-deep">
+                        {group.label}
+                      </h3>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {group.items.map((g) => (
+                          <figure key={g.src} className="overflow-hidden rounded-2xl">
+                            <img
+                              src={g.src}
+                              alt={`${property.name} — ${g.caption}`}
+                              loading="lazy"
+                              className="h-56 w-full rounded-2xl object-cover"
+                            />
+                            <figcaption className="px-1 py-2 text-xs text-muted-foreground">
+                              {g.caption}
+                            </figcaption>
+                          </figure>
+                        ))}
+                      </div>
+                    </section>
                   ))}
                 </div>
               </DialogContent>
