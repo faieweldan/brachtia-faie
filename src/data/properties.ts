@@ -844,9 +844,8 @@ export function stayDays(fromISO: string, toISOStr: string) {
 }
 
 export function termForRange(fromISO: string, toISOStr: string): ContractTerm {
-  // Stays longer than 11 months and 15 days are treated as a 12-month term.
-  const threshold = parseISO(addMonths(fromISO, 11));
-  threshold.setUTCDate(threshold.getUTCDate() + 15);
+  // Stays of 6 months or less use the short-term rate; longer stays use the 12-month rate.
+  const threshold = parseISO(addMonths(fromISO, 6));
   return parseISO(toISOStr).getTime() > threshold.getTime() ? "long" : "short";
 }
 
