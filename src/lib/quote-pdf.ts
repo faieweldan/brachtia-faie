@@ -211,32 +211,28 @@ export async function downloadStayQuote({
     y,
   );
 
-  // Rent schedule
-  y += 22;
-  doc.setTextColor(...GREEN);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.text("Monthly rent breakdown", M, y);
+  // Terms & conditions
+  if (property.terms.length > 0) {
+    y += 24;
+    doc.setTextColor(...GREEN);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("Terms & conditions", M, y);
 
-  autoTable(doc, {
-    startY: y + 8,
-    margin: { left: M, right: M, bottom: 84 },
-    theme: "grid",
-    headStyles: { fillColor: PEACH, textColor: GREEN, fontStyle: "bold", fontSize: 9 },
-    styles: { fontSize: 9, cellPadding: 5, lineColor: [230, 226, 220], lineWidth: 0.5 },
-    columnStyles: { 1: { halign: "right", cellWidth: 110 } },
-    head: [["Month", "Rent"]],
-    body: quote.schedule.map((s) => [
-      s.full ? s.label : `${s.label}  (pro-rated ${s.days}/${s.daysInMonth} days)`,
-      formatRM(s.amount),
-    ]),
-    foot: [["Total rent for stay", formatRM(quote.totalStay)]],
-    showFoot: "lastPage",
-    footStyles: { fillColor: PEACH, textColor: GREEN, fontStyle: "bold", fontSize: 9.5 },
-    didParseCell: (data: any) => {
-      if (data.section === "foot" && data.column.index === 1) data.cell.styles.halign = "right";
-    },
-  });
+    autoTable(doc, {
+      startY: y + 8,
+      margin: { left: M, right: M, bottom: 84 },
+      theme: "plain",
+      styles: {
+        fontSize: 9,
+        cellPadding: { top: 3, bottom: 3, left: 0, right: 0 },
+        textColor: [60, 60, 58],
+        valign: "top",
+      },
+      columnStyles: { 0: { cellWidth: 18, textColor: MUTED }, 1: { cellWidth: "auto" } },
+      body: property.terms.map((t, i) => [`${i + 1}.`, t]),
+    });
+  }
 
   // Footer
   const H = doc.internal.pageSize.getHeight();
