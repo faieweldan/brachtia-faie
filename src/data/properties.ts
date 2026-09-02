@@ -110,7 +110,7 @@ export type Property = {
   summary: string;
   description: string[];
   heroImage: string;
-  gallery: { src: string; caption: string }[];
+  gallery: { src: string; caption: string; category?: GalleryCategory }[];
   buildingFacilities: string[];
   includedInStay: string[];
   utilitiesNote: string;
