@@ -46,6 +46,7 @@ export type QuoteInput = {
   moveIn: string;
   moveOut: string;
   quote: StayQuote;
+  reference?: string;
   lead?: {
     name: string;
     university: string;
@@ -71,14 +72,16 @@ export async function downloadStayQuote(input: QuoteInput) {
 
   const safe = (str: string) => str.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
   doc.save(
-    `Brachtia-Quote-${safe(input.property.name)}-${safe(input.room.name)}-${input.moveIn}.pdf`,
+    input.reference
+      ? `Brachtia-Quote-${safe(input.reference)}.pdf`
+      : `Brachtia-Quote-${safe(input.property.name)}-${safe(input.room.name)}-${input.moveIn}.pdf`,
   );
 }
 
 function build(
   jsPDF: any,
   autoTable: any,
-  { property, room, occupancy, term, moveIn, moveOut, quote, lead }: QuoteInput,
+  { property, room, occupancy, term, moveIn, moveOut, quote, lead, reference }: QuoteInput,
   k: number,
 ) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
@@ -118,6 +121,11 @@ function build(
     band / 2 + g(8),
     { align: "right" },
   );
+  if (reference) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(g(8));
+    doc.text(`Ref ${reference}`, W - M, band / 2 + g(19), { align: "right" });
+  }
 
   // Listing summary
   let y = band + g(30);

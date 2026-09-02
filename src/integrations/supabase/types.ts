@@ -56,6 +56,7 @@ export type Database = {
           created_at: string
           duration_minutes: number
           email: string
+          enquiry_id: string | null
           full_name: string
           id: string
           mode: string
@@ -76,6 +77,7 @@ export type Database = {
           created_at?: string
           duration_minutes?: number
           email?: string
+          enquiry_id?: string | null
           full_name?: string
           id?: string
           mode?: string
@@ -96,6 +98,7 @@ export type Database = {
           created_at?: string
           duration_minutes?: number
           email?: string
+          enquiry_id?: string | null
           full_name?: string
           id?: string
           mode?: string
@@ -112,6 +115,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "appointments_enquiry_id_fkey"
+            columns: ["enquiry_id"]
+            isOneToOne: false
+            referencedRelation: "enquiries"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "appointments_residence_id_fkey"
             columns: ["residence_id"]
@@ -222,6 +232,8 @@ export type Database = {
           occupancy: string
           payment_term: string
           phone: string
+          quote_snapshot: Json
+          reference: string
           residence_name: string
           residence_slug: string
           room_code: string
@@ -249,6 +261,8 @@ export type Database = {
           occupancy?: string
           payment_term?: string
           phone?: string
+          quote_snapshot?: Json
+          reference?: string
           residence_name?: string
           residence_slug?: string
           room_code?: string
@@ -276,6 +290,8 @@ export type Database = {
           occupancy?: string
           payment_term?: string
           phone?: string
+          quote_snapshot?: Json
+          reference?: string
           residence_name?: string
           residence_slug?: string
           room_code?: string
@@ -514,6 +530,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      next_enquiry_reference: { Args: never; Returns: string }
     }
     Enums: {
       app_role: "admin"

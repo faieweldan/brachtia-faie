@@ -204,3 +204,17 @@ export const deleteRoomType = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+/* ---------------- Enquiry ↔ viewing links ---------------- */
+
+export const linkAppointmentToEnquiry = createServerFn({ method: "POST" })
+  .inputValidator((data: { appointmentId: string; enquiryId: string | null }) => data)
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    const { error } = await supabase
+      .from("appointments")
+      .update({ enquiry_id: data.enquiryId, updated_at: new Date().toISOString() } as any)
+      .eq("id", data.appointmentId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });

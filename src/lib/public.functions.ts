@@ -22,6 +22,7 @@ const enquirySchema = z.object({
   intake: z.string().trim().max(40).default(""),
   gender: z.string().trim().max(40).default(""),
   message: z.string().trim().max(1000).default(""),
+  quoteSnapshot: z.unknown().optional(),
 });
 
 export type EnquiryInput = z.input<typeof enquirySchema>;
@@ -30,7 +31,7 @@ export const submitEnquiry = createServerFn({ method: "POST" })
   .inputValidator((data: EnquiryInput) => enquirySchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin.from("enquiries").insert({
+    const { data: row, error } = await supabaseAdmin.from("enquiries").insert({
       residence_slug: data.residenceSlug,
       residence_name: data.residenceName,
       room_code: data.roomCode,
@@ -51,12 +52,13 @@ export const submitEnquiry = createServerFn({ method: "POST" })
       intake: data.intake,
       gender: data.gender,
       message: data.message,
-    });
+      quote_snapshot: (data.quoteSnapshot ?? {}) as never,
+    }).select("reference").maybeSingle();
     if (error) {
       console.error("enquiry insert failed", error);
-      return { ok: false as const };
+      return { ok: false as const, reference: "" };
     }
-    return { ok: true as const };
+    return { ok: true as const, reference: (row?.reference ?? "") as string };
   });
 
 /* ---------------- Viewing / appointment booking ---------------- */
