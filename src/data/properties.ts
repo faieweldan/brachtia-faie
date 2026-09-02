@@ -176,7 +176,7 @@ export const properties: Property[] = [
       { src: arcPoolNew, caption: "Swimming pool", category: "building" },
       { src: arcCafeteria, caption: "Arc Café / food court", category: "building" },
       { src: arcLaundry, caption: "Self-service laundry", category: "building" },
-      { src: arcConvenience, caption: "Mini mart & vending", category: "building" },
+      { src: arcConvenience, caption: "Vending Machine", category: "building" },
       { src: arcCourtyard, caption: "Ground floor seating area", category: "building" },
       { src: arcCyberjaya, caption: "The Arc, Cyberjaya", category: "building" },
       { src: arcLiving, caption: "Living area", category: "apartment" },
