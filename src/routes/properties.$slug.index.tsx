@@ -128,19 +128,28 @@ function PropertyPage() {
                 <DialogHeader>
                   <DialogTitle>{property.name} — photos</DialogTitle>
                 </DialogHeader>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {gallery.map((g) => (
-                    <figure key={g.caption} className="overflow-hidden rounded-2xl">
-                      <img
-                        src={g.src}
-                        alt={`${property.name} — ${g.caption}`}
-                        loading="lazy"
-                        className="h-56 w-full object-cover"
-                      />
-                      <figcaption className="px-1 py-2 text-xs text-muted-foreground">
-                        {g.caption}
-                      </figcaption>
-                    </figure>
+                <div className="space-y-8">
+                  {galleryGroups.map((group) => (
+                    <section key={group.label}>
+                      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-brand-deep">
+                        {group.label}
+                      </h3>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {group.items.map((g) => (
+                          <figure key={g.src} className="overflow-hidden rounded-2xl">
+                            <img
+                              src={g.src}
+                              alt={`${property.name} — ${g.caption}`}
+                              loading="lazy"
+                              className="h-56 w-full rounded-2xl object-cover"
+                            />
+                            <figcaption className="px-1 py-2 text-xs text-muted-foreground">
+                              {g.caption}
+                            </figcaption>
+                          </figure>
+                        ))}
+                      </div>
+                    </section>
                   ))}
                 </div>
               </DialogContent>
