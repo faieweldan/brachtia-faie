@@ -110,11 +110,7 @@ function Home() {
         <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-12 sm:px-6 sm:pb-24 sm:pt-16">
           <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
             <div className="min-w-0">
-              <span className="inline-flex items-center gap-2 rounded-full border border-brand/15 bg-card px-3.5 py-1.5 text-xs font-semibold text-brand shadow-sm">
-                <MapPin className="size-3.5 shrink-0" /> Cyberjaya, Malaysia
-              </span>
-
-              <h1 className="mt-6 text-[2.6rem] font-extrabold leading-[1.03] tracking-tight text-brand-deep sm:text-6xl">
+              <h1 className="text-[2.6rem] font-extrabold leading-[1.03] tracking-tight text-brand-deep sm:text-6xl">
                 Student living,
                 <br />
                 <span className="text-brand">made simple.</span>
