@@ -1,6 +1,6 @@
 import CountryCombobox from "@/components/site/CountryCombobox";
 import { Label } from "@/components/ui/label";
-import type { Country } from "@/data/countries";
+import { countryByIso, type Country } from "@/data/countries";
 
 export const fieldClass =
   "h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-brand/40";
@@ -115,13 +115,11 @@ export function PhoneField({
         />
       </div>
       <FieldError msg={error} />
-      <input type="hidden" name={name} value={number ? `${dialLabel(dialIso)} ${number}`.trim() : ""} />
+      <input
+        type="hidden"
+        name={name}
+        value={number ? `${countryByIso(dialIso)?.dial ?? "+60"} ${number}`.trim() : ""}
+      />
     </div>
   );
-}
-
-function dialLabel(iso: string) {
-  // resolved lazily to avoid importing the whole country list at module scope twice
-  const { countryByIso } = require("@/data/countries") as typeof import("@/data/countries");
-  return countryByIso(iso)?.dial ?? "+60";
 }
