@@ -329,6 +329,7 @@ export type Database = {
       }
       residences: {
         Row: {
+          addons: Json
           apartment_footnote: string | null
           building_facilities: Json
           contract_terms: Json
@@ -360,6 +361,7 @@ export type Database = {
           waze_url: string
         }
         Insert: {
+          addons?: Json
           apartment_footnote?: string | null
           building_facilities?: Json
           contract_terms?: Json
@@ -391,6 +393,7 @@ export type Database = {
           waze_url?: string
         }
         Update: {
+          addons?: Json
           apartment_footnote?: string | null
           building_facilities?: Json
           contract_terms?: Json

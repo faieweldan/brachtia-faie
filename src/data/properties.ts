@@ -138,6 +138,8 @@ export type Property = {
   paymentCycle: string;
   /** Payment frequencies offered to students at this residence */
   paymentTerms?: PaymentTerm[];
+  /** Optional extras a student can add to their booking */
+  addons?: Addon[];
   feeConfig: Record<ContractTerm, FeeConfig>;
   pricing: Record<ContractTerm, PricingTable[]>;
   wazeUrl: string;
@@ -902,38 +904,22 @@ export const paymentTermLabel: Record<PaymentTerm, string> = {
   full: "Full term",
 };
 
-/** Bedding sets offered as optional add-ons. */
-export type BeddingOption = { id: string; label: string; price: number; items: string[] };
+/** Optional extras (bedding sets, parking, etc.) configured per residence by admin. */
+export type Addon = {
+  id: string;
+  label: string;
+  price: number;
+  chargeType: "onetime" | "monthly";
+  items: string[];
+  occupancies: Occupancy[];
+  active: boolean;
+};
 
-export const BEDDING_SETS: BeddingOption[] = [
-  {
-    id: "single",
-    label: "Single Bedding Set",
-    price: 250,
-    items: ["1 Single quilted comforter", "1 Single bedsheet", "1 Pillow"],
-  },
-  {
-    id: "queen",
-    label: "Queen Bedding Set",
-    price: 300,
-    items: ["1 Queen quilted comforter", "1 Queen bedsheet", "2 Pillows"],
-  },
-  {
-    id: "king",
-    label: "King Bedding Set",
-    price: 350,
-    items: ["1 King quilted comforter", "1 King bedsheet", "2 Pillows"],
-  },
-];
-
-/** Bedding sets available for a given residence + occupancy (bed configuration). */
-export function beddingOptionsFor(property: Property, occupancy: Occupancy): BeddingOption[] {
-  if (occupancy === "twin") return BEDDING_SETS.filter((b) => b.id === "single");
-  const beds = property.singleBedOptions ?? ["Single bed"];
-  const ids = new Set(
-    beds.map((b) => b.toLowerCase().split(" ")[0]!).filter((b) => ["single", "queen", "king"].includes(b)),
+/** Add-ons offered for a residence, filtered by the selected occupancy. */
+export function addonsFor(property: Property, occupancy: Occupancy): Addon[] {
+  return (property.addons ?? []).filter(
+    (a) => a.active !== false && (a.occupancies ?? []).includes(occupancy),
   );
-  return BEDDING_SETS.filter((b) => ids.has(b.id));
 }
 
 /** Full quote: pro-rated rent schedule + deposits/fees due before move-in. */
@@ -944,11 +930,16 @@ export function stayQuote(
   fromISO: string,
   toISOStr: string,
   paymentTerm: PaymentTerm = "bimonthly",
+  selectedAddons: Addon[] = [],
 ): StayQuote | null {
   const days = stayDays(fromISO, toISOStr);
   if (!rent || days < 1) return null;
 
-  const schedule = staySchedule(fromISO, toISOStr, rent);
+  const monthlyAddons = selectedAddons
+    .filter((a) => a.chargeType === "monthly")
+    .reduce((s2, a) => s2 + a.price, 0);
+  const effectiveRent = round2(rent + monthlyAddons);
+  const schedule = staySchedule(fromISO, toISOStr, effectiveRent);
   const cfg = property.feeConfig[term];
   const first = schedule[0];
   const lines: CostLine[] = [];
@@ -999,6 +990,10 @@ export function stayQuote(
     kind: "onetime",
   });
 
+  for (const a of selectedAddons.filter((x) => x.chargeType === "onetime")) {
+    lines.push({ label: a.label, amount: a.price, kind: "onetime" });
+  }
+
   const totalUpfront = round2(lines.reduce((s, l) => s + l.amount, 0));
   const totalStay = round2(schedule.reduce((s, seg) => s + seg.amount, 0));
 
@@ -1011,7 +1006,7 @@ export function stayQuote(
     firstPayment: lines,
     totalUpfront,
     totalStay,
-    monthlyAfter: rent,
+    monthlyAfter: effectiveRent,
   };
 }
 
