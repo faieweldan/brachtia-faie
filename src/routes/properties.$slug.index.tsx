@@ -86,12 +86,17 @@ function PropertyPage() {
     { label: "INSIDE YOUR APARTMENT", items: byCategory("apartment") },
     { label: "INSIDE YOUR ROOM", items: byCategory("room") },
   ].filter((g) => g.items.length > 0);
-  const preview = [
-    byCategory("building")[0],
-    byCategory("apartment")[0],
-    byCategory("room")[0],
-    byCategory("room")[1] ?? byCategory("apartment")[1] ?? byCategory("building")[1],
-  ].filter(Boolean) as typeof gallery;
+  const featured = gallery.filter((g) => (g as { featured?: boolean }).featured);
+  const preview = (
+    featured.length
+      ? featured
+      : ([
+          byCategory("building")[0],
+          byCategory("apartment")[0],
+          byCategory("room")[0],
+          byCategory("room")[1] ?? byCategory("apartment")[1] ?? byCategory("building")[1],
+        ].filter(Boolean) as typeof gallery)
+  ).slice(0, 4);
 
   return (
     <>
