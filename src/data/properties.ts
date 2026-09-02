@@ -185,7 +185,7 @@ export const properties: Property[] = [
       { src: arcYard, caption: "Washing machine in yard", category: "apartment" },
       { src: arcRoomCSingle, caption: "Single room with wardrobe & study desk", category: "room" },
       { src: arcRoomCSingle2, caption: "Single room", category: "room" },
-      { src: arcRoomD, caption: "Single room with air-conditioning", category: "room" },
+      { src: arcRoomD, caption: "Room C Single", category: "room" },
       { src: arcRoomATwin, caption: "Twin sharing room with exterior view", category: "room" },
       { src: arcRoomBTwin, caption: "Twin sharing room", category: "room" },
     ],
