@@ -23,6 +23,7 @@ import { Route as AdminWebsiteIndexRouteImport } from './routes/admin.website.in
 import { Route as PropertiesSlugIndexRouteImport } from './routes/properties.$slug.index'
 import { Route as AdminWebsiteResidencesIndexRouteImport } from './routes/admin.website.residences.index'
 import { Route as AdminWebsiteResidencesIdRouteImport } from './routes/admin.website.residences.$id'
+import { Route as ApiPublicPhotoSplatRouteImport } from './routes/api/public/photo.$'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -96,6 +97,11 @@ const AdminWebsiteResidencesIdRoute =
     path: '/residences/$id',
     getParentRoute: () => AdminWebsiteRoute,
   } as any)
+const ApiPublicPhotoSplatRoute = ApiPublicPhotoSplatRouteImport.update({
+  id: '/api/public/photo/$',
+  path: '/api/public/photo/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -111,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/admin/website/': typeof AdminWebsiteIndexRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
   '/admin/website/residences/$id': typeof AdminWebsiteResidencesIdRoute
+  '/api/public/photo/$': typeof ApiPublicPhotoSplatRoute
   '/admin/website/residences/': typeof AdminWebsiteResidencesIndexRoute
 }
 export interface FileRoutesByTo {
@@ -125,6 +132,7 @@ export interface FileRoutesByTo {
   '/admin/website': typeof AdminWebsiteIndexRoute
   '/properties/$slug': typeof PropertiesSlugIndexRoute
   '/admin/website/residences/$id': typeof AdminWebsiteResidencesIdRoute
+  '/api/public/photo/$': typeof ApiPublicPhotoSplatRoute
   '/admin/website/residences': typeof AdminWebsiteResidencesIndexRoute
 }
 export interface FileRoutesById {
@@ -142,6 +150,7 @@ export interface FileRoutesById {
   '/admin/website/': typeof AdminWebsiteIndexRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
   '/admin/website/residences/$id': typeof AdminWebsiteResidencesIdRoute
+  '/api/public/photo/$': typeof ApiPublicPhotoSplatRoute
   '/admin/website/residences/': typeof AdminWebsiteResidencesIndexRoute
 }
 export interface FileRouteTypes {
@@ -160,6 +169,7 @@ export interface FileRouteTypes {
     | '/admin/website/'
     | '/properties/$slug/'
     | '/admin/website/residences/$id'
+    | '/api/public/photo/$'
     | '/admin/website/residences/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -174,6 +184,7 @@ export interface FileRouteTypes {
     | '/admin/website'
     | '/properties/$slug'
     | '/admin/website/residences/$id'
+    | '/api/public/photo/$'
     | '/admin/website/residences'
   id:
     | '__root__'
@@ -190,6 +201,7 @@ export interface FileRouteTypes {
     | '/admin/website/'
     | '/properties/$slug/'
     | '/admin/website/residences/$id'
+    | '/api/public/photo/$'
     | '/admin/website/residences/'
   fileRoutesById: FileRoutesById
 }
@@ -201,6 +213,7 @@ export interface RootRouteChildren {
   ContactRoute: typeof ContactRoute
   PropertiesIndexRoute: typeof PropertiesIndexRoute
   PropertiesSlugIndexRoute: typeof PropertiesSlugIndexRoute
+  ApiPublicPhotoSplatRoute: typeof ApiPublicPhotoSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -303,6 +316,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminWebsiteResidencesIdRouteImport
       parentRoute: typeof AdminWebsiteRoute
     }
+    '/api/public/photo/$': {
+      id: '/api/public/photo/$'
+      path: '/api/public/photo/$'
+      fullPath: '/api/public/photo/$'
+      preLoaderRoute: typeof ApiPublicPhotoSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -346,6 +366,7 @@ const rootRouteChildren: RootRouteChildren = {
   ContactRoute: ContactRoute,
   PropertiesIndexRoute: PropertiesIndexRoute,
   PropertiesSlugIndexRoute: PropertiesSlugIndexRoute,
+  ApiPublicPhotoSplatRoute: ApiPublicPhotoSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
