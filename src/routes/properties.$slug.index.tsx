@@ -83,8 +83,8 @@ function PropertyPage() {
     gallery.filter((g) => (g.category ?? "building") === c);
   const galleryGroups: { label: string; items: typeof gallery }[] = [
     { label: "Building amenities", items: byCategory("building") },
-    { label: "In your apartment", items: byCategory("apartment") },
-    { label: "In your room", items: byCategory("room") },
+    { label: "INSIDE YOUR APARTMENT", items: byCategory("apartment") },
+    { label: "INSIDE YOUR ROOM", items: byCategory("room") },
   ].filter((g) => g.items.length > 0);
   const preview = [
     byCategory("building")[0],
