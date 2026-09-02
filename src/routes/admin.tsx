@@ -28,7 +28,7 @@ function AdminLayout() {
 
 
   return (
-    <div className="flex min-h-screen bg-muted/30">
+    <div className="admin-ui flex min-h-screen bg-muted/30">
       <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-card p-4 md:flex">
         <p className="px-2 text-sm font-bold text-brand-deep">Brachtia Admin</p>
         <nav className="mt-6 space-y-1">
