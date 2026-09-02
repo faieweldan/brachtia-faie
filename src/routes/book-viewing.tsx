@@ -329,8 +329,8 @@ function BookViewingPage() {
             {/* Your details */}
             <section className="space-y-4">
               <SectionLabel>Your details</SectionLabel>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5 sm:col-span-2">
+              <div className="grid gap-4">
+                <div className="space-y-1.5">
                   <Label htmlFor="bv-name">Full name</Label>
                   <Input
                     id="bv-name"
@@ -371,7 +371,7 @@ function BookViewingPage() {
             {/* Study details */}
             <section className="space-y-4">
               <SectionLabel>Study details</SectionLabel>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 xl:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="bv-uni">University</Label>
                   <select
