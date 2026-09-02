@@ -1,5 +1,14 @@
 import arcCyberjayaAsset from "@/assets/arc-cyberjaya-v2.png.asset.json";
 import arcPool from "@/assets/arc-pool.jpg";
+import arcPoolNewAsset from "@/assets/arc-pool-new.jpg.asset.json";
+import arcCourtyardAsset from "@/assets/arc-courtyard.jpg.asset.json";
+import arcCafeteriaAsset from "@/assets/arc-cafeteria.jpg.asset.json";
+import arcLaundryAsset from "@/assets/arc-laundry.jpg.asset.json";
+import arcConvenienceAsset from "@/assets/arc-convenience.jpg.asset.json";
+import arcDiningAsset from "@/assets/arc-dining.jpg.asset.json";
+import arcKitchenAsset from "@/assets/arc-kitchen.png.asset.json";
+import arcLivingAsset from "@/assets/arc-living.jpg.asset.json";
+import arcYardAsset from "@/assets/arc-yard.jpg.asset.json";
 import roomTwin from "@/assets/room-twin.jpg";
 import roomSingle from "@/assets/room-single.jpg";
 import livingDining from "@/assets/living-dining.jpg";
@@ -9,6 +18,15 @@ import solsticeStudio from "@/assets/solstice-studio.jpg";
 
 const arcCyberjaya = arcCyberjayaAsset.url;
 const solsticeExterior = solsticeExteriorAsset.url;
+const arcPoolNew = arcPoolNewAsset.url;
+const arcCourtyard = arcCourtyardAsset.url;
+const arcCafeteria = arcCafeteriaAsset.url;
+const arcLaundry = arcLaundryAsset.url;
+const arcConvenience = arcConvenienceAsset.url;
+const arcDining = arcDiningAsset.url;
+const arcKitchen = arcKitchenAsset.url;
+const arcLiving = arcLivingAsset.url;
+const arcYard = arcYardAsset.url;
 
 export type Occupancy = "single" | "twin";
 export type ContractTerm = "long" | "short";
@@ -143,11 +161,15 @@ export const properties: Property[] = [
     ],
     heroImage: arcCyberjaya,
     gallery: [
-      { src: arcPool, caption: "Swimming pool" },
-      { src: livingDining, caption: "Living & dining area" },
-      { src: roomTwin, caption: "Twin-share room" },
-      { src: roomSingle, caption: "Single occupancy room" },
-      { src: kitchen, caption: "Fully equipped kitchen" },
+      { src: arcPoolNew, caption: "Swimming pool" },
+      { src: arcLiving, caption: "Living area" },
+      { src: arcDining, caption: "Dining area" },
+      { src: arcKitchen, caption: "Fully equipped kitchen" },
+      { src: arcCafeteria, caption: "Arc Café / food court" },
+      { src: arcLaundry, caption: "Self-service laundry" },
+      { src: arcConvenience, caption: "Mini mart & vending" },
+      { src: arcCourtyard, caption: "Ground floor seating area" },
+      { src: arcYard, caption: "Washing machine in unit yard" },
       { src: arcCyberjaya, caption: "The Arc, Cyberjaya" },
     ],
     buildingFacilities: [
@@ -547,7 +569,17 @@ export const roomTypes: RoomType[] = [
 export const assetRegistry: Record<string, string> = {
   "arc-cyberjaya": arcCyberjaya,
   "arc-exterior": arcCyberjaya,
-  "arc-pool": arcPool,
+  "arc-pool": arcPoolNew,
+  "arc-pool-old": arcPool,
+  "arc-pool-new": arcPoolNew,
+  "arc-courtyard": arcCourtyard,
+  "arc-cafeteria": arcCafeteria,
+  "arc-laundry": arcLaundry,
+  "arc-convenience": arcConvenience,
+  "arc-dining": arcDining,
+  "arc-kitchen": arcKitchen,
+  "arc-living": arcLiving,
+  "arc-yard": arcYard,
   "room-twin": roomTwin,
   "room-single": roomSingle,
   "living-dining": livingDining,
