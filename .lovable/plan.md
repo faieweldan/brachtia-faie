@@ -1,21 +1,31 @@
-# Fix: advance rental ignores the admin "Advance months" setting
+# Reference IDs and admin-side quote copies
 
-## What's wrong
+Every enquiry gets a short, human-readable reference number, and admin can open or download the exact same quotation PDF the student received.
 
-The residence config for The Arc (and Solstice) has **Advance months = 2** for both 12-month and short-term stays, but the calculator never reads that value. Instead it derives the advance amount from the selected payment frequency: bi-monthly covers 2 months total, so after the pro-rated first month only **1** month of advance rent is charged — which is what the quote shows.
+## What changes for the student
 
-## The fix
+- After submitting the enquiry, the success screen shows the reference, e.g. **BRH-2609-0142**.
+- The downloaded quotation PDF carries the same reference in the header (next to "Stay quote" and the date), and the file name becomes `Brachtia-Quote-BRH-2609-0142.pdf`.
 
-Advance rental is driven by the admin setting, not the payment frequency:
+## What changes for admin
 
-- Line 1 stays: first month rent (pro-rated by move-in date).
-- Line 2 becomes: **Advance rental (2 months)** = 2 x monthly rent, using the residence's configured `advanceMonths` for the applicable contract term (capped at the remaining months of the stay).
-- Deposits, admin fees and the rest of the upfront table are unchanged.
-- Payment frequency (bi-monthly / quarterly / full term) keeps doing what it does today for the ongoing rent schedule and the "then RM x/month" line; for a full-term selection the whole remaining rent is still collected upfront (so it takes precedence over the advance-months figure when it is larger).
+- The Bookings list gets a **Ref** shown under the student's name, and search matches on it.
+- The enquiry detail dialog gets a **Download quotation** button that regenerates the identical PDF (same numbers, same terms) from what was captured at submission time.
+- Reference is also shown at the top of the detail dialog.
 
-Both the on-page calculator and the downloaded quote PDF pick this up automatically, since they share the same quote calculation.
+## How the numbers stay identical
+
+At submission the full calculator result (monthly rent, pro-rated first month, advance, deposits, add-ons, fees, terms text, room and residence details) is stored as a snapshot on the enquiry row. The admin PDF is built from that snapshot, so it can never drift even if pricing or residence content is edited later.
 
 ## Technical notes
 
-- `src/data/properties.ts`, `stayQuote()`: replace the `covered` derivation with `covered = min(schedule.length, 1 + cfg.advanceMonths)`, and keep the full-term branch as `schedule.length`. Label uses `formatMonths(advanceSegments.length)`.
-- No database or admin UI changes needed — the values are already stored correctly.
+- Migration: add to `public.enquiries`
+  - `reference text not null unique` (generated server-side as `BRH-YYMM-NNNN` from a Postgres sequence, so it is short and never collides)
+  - `quote_snapshot jsonb not null default '{}'::jsonb`
+  - a `seq` backing sequence + `default` expression or a `before insert` trigger to fill `reference` when empty.
+  - Existing rows get backfilled references.
+- `src/lib/public.functions.ts`: `submitEnquiry` accepts an optional `quoteSnapshot` object (property, room, occupancy, term, dates, `StayQuote`, lead fields — the same payload `downloadStayQuote` already takes), inserts it, and returns `{ ok, reference }`.
+- `src/components/site/EnquiryDialog.tsx`: passes the snapshot on submit, stores the returned reference in state, shows it on the success screen, and forwards it to `downloadStayQuote`.
+- `src/lib/quote-pdf.ts`: `QuoteInput` gains an optional `reference`; drawn in the header block and used in the file name.
+- `src/routes/admin.bookings.tsx`: render `reference`, include it in the search filter, and add a Download quotation button that dynamic-imports `downloadStayQuote` with the stored `quote_snapshot` (button disabled with a hint for older enquiries that have no snapshot).
+- `src/lib/admin.functions.ts`: `listEnquiries` already selects `*`, so the new columns come through with no change.
