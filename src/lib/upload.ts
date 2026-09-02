@@ -19,7 +19,7 @@ export async function uploadPhoto(file: File, folder: string): Promise<string> {
   const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
     cacheControl: "31536000",
     upsert: false,
-    contentType: file.type || undefined,
+    ...(file.type ? { contentType: file.type } : {}),
   });
   if (error) throw new Error(error.message);
   return `/api/public/photo/${path}`;
