@@ -1040,7 +1040,7 @@ export const company = {
   whatsapp: "60129505670",
   address:
     "Level 15 D'Pulze, Lingkaran Cyber Point Timur, Cyber 12, 63000 Cyberjaya, Selangor",
-  bookingFee: "RM500 / USD100",
+  bookingFee: "RM500",
 };
 
 export function whatsappUrl(message: string) {

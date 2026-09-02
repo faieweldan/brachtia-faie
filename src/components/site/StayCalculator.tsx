@@ -22,6 +22,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import SegmentedToggle from "./SegmentedToggle";
 
 export type StayState = {
@@ -329,7 +336,24 @@ export default function StayCalculator({
                     <Info className="mt-0.5 size-3.5 shrink-0 text-brand" />
                     <span>
                       A booking fee of {company.bookingFee} secures your room once availability is
-                      confirmed — offset against your first payment. No hidden fees.
+                      confirmed — offset against your first payment. No hidden fees.{" "}
+                      {property.terms.length > 0 && (
+                        <Dialog>
+                          <DialogTrigger className="font-semibold text-brand underline underline-offset-2 hover:text-brand-deep">
+                            Terms &amp; conditions
+                          </DialogTrigger>
+                          <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
+                            <DialogHeader>
+                              <DialogTitle>Terms &amp; conditions</DialogTitle>
+                            </DialogHeader>
+                            <ol className="list-decimal space-y-2 pl-5 text-sm leading-relaxed text-muted-foreground">
+                              {property.terms.map((t) => (
+                                <li key={t}>{t}</li>
+                              ))}
+                            </ol>
+                          </DialogContent>
+                        </Dialog>
+                      )}
                     </span>
                   </p>
 
