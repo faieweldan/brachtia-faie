@@ -173,10 +173,7 @@ function Home() {
                     <Star key={i} className="size-3.5 fill-gold text-gold" />
                   ))}
                 </div>
-                <div className="leading-tight">
-                  <p className="text-sm font-bold text-brand-deep">{reviewSummary.average} on Google</p>
-                  <p className="text-xs text-muted-foreground">{reviewSummary.count} student reviews</p>
-                </div>
+                <p className="text-sm font-bold text-brand-deep">{reviewSummary.average} on Google</p>
               </div>
             </div>
           </div>
