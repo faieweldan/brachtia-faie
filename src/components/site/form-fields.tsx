@@ -100,7 +100,7 @@ export function PhoneField({
           variant="dial"
           ariaLabel="Country calling code"
           onChange={(c: Country) => onDialChange(c.iso)}
-          className="h-full w-[7.25rem] shrink-0 rounded-none border-0 border-r border-input bg-muted/40 px-2.5 focus:ring-0"
+          className="h-full w-[5.5rem] shrink-0 gap-1 rounded-none border-0 border-r border-input bg-muted/40 px-2 text-sm focus:ring-0"
         />
         <input
           id={id}
