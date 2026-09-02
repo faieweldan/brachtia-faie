@@ -3,7 +3,7 @@ import { Check, ChevronDown, Info, MousePointerClick } from "lucide-react";
 import Logo from "./Logo";
 
 import {
-  beddingOptionsFor,
+  addonsFor,
   company,
   formatDate,
   formatRM,
@@ -13,6 +13,7 @@ import {
   type ContractTerm,
   type Occupancy,
   type PaymentTerm,
+  type Addon,
   type Property,
   type RoomType,
   type StayQuote,
@@ -111,36 +112,27 @@ export default function StayCalculator({
   const paymentTerm: PaymentTerm = offeredTerms.includes(paymentTermRaw)
     ? paymentTermRaw
     : offeredTerms[0]!;
-  const [bedding, setBedding] = useState<string | null>(null);
+  const [addonIds, setAddonIds] = useState<string[]>([]);
   const effectiveTerm: PaymentTerm = term === "short" ? "full" : paymentTerm;
 
-  const beddingOptions = useMemo(
-    () => (selected ? beddingOptionsFor(property, occupancy) : []),
+  const addonOptions = useMemo<Addon[]>(
+    () => (selected ? addonsFor(property, occupancy) : []),
     [property, occupancy, selected],
   );
-  const beddingChoice = beddingOptions.find((b) => b.id === bedding) ?? null;
+  const chosenAddons = useMemo(
+    () => addonOptions.filter((a) => addonIds.includes(a.id)),
+    [addonOptions, addonIds],
+  );
+  const toggleAddon = (addonId: string) =>
+    setAddonIds((ids) => (ids.includes(addonId) ? ids.filter((x) => x !== addonId) : [...ids, addonId]));
 
-  const baseQuote = useMemo(
+  const quote = useMemo(
     () =>
       valid && rent
-        ? stayQuote(property, rent, term, moveIn, moveOut, effectiveTerm)
+        ? stayQuote(property, rent, term, moveIn, moveOut, effectiveTerm, chosenAddons)
         : null,
-    [property, rent, term, moveIn, moveOut, valid, effectiveTerm],
+    [property, rent, term, moveIn, moveOut, valid, effectiveTerm, chosenAddons],
   );
-
-  const quote = useMemo(() => {
-    if (!baseQuote) return null;
-    if (!beddingChoice) return baseQuote;
-    const lines = [
-      ...baseQuote.firstPayment,
-      { label: beddingChoice.label, amount: beddingChoice.price, kind: "onetime" as const },
-    ];
-    return {
-      ...baseQuote,
-      firstPayment: lines,
-      totalUpfront: lines.reduce((s, l) => s + l.amount, 0),
-    };
-  }, [baseQuote, beddingChoice]);
 
   const state: StayState = {
     occupancy: selected ? occupancy : undefined,
@@ -251,21 +243,21 @@ export default function StayCalculator({
                     )}
                   </div>
 
-                  {/* Optional bedding set */}
-                  {beddingOptions.length > 0 && (
+                  {/* Optional add-ons */}
+                  {addonOptions.length > 0 && (
                     <div className="mt-4 rounded-2xl border border-border/70 bg-card p-3.5">
                       <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-                        Optional bedding set
+                        Optional add-ons
                       </p>
                       <div className="space-y-2">
-                        {beddingOptions.map((b) => {
-                          const on = bedding === b.id;
+                        {addonOptions.map((a) => {
+                          const on = addonIds.includes(a.id);
                           return (
                             <button
-                              key={b.id}
+                              key={a.id}
                               type="button"
                               aria-pressed={on}
-                              onClick={() => setBedding(on ? null : b.id)}
+                              onClick={() => toggleAddon(a.id)}
                               className={`flex w-full items-start justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-all ${
                                 on
                                   ? "border-brand bg-brand-tint"
@@ -274,15 +266,22 @@ export default function StayCalculator({
                             >
                               <div className="min-w-0">
                                 <span className="block text-sm font-bold text-brand-deep">
-                                  {b.label}
+                                  {a.label}
                                 </span>
-                                <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
-                                  {b.items.join(" · ")}
-                                </span>
+                                {a.items.length > 0 && (
+                                  <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+                                    {a.items.join(" · ")}
+                                  </span>
+                                )}
                               </div>
                               <span className="flex shrink-0 items-center gap-1 text-sm font-bold tabular-nums text-brand">
                                 {on && <Check className="size-3.5" />}
-                                {formatRM(b.price)}
+                                {formatRM(a.price)}
+                                {a.chargeType === "monthly" && (
+                                  <span className="text-[10px] font-semibold text-muted-foreground">
+                                    /mo
+                                  </span>
+                                )}
                               </span>
                             </button>
                           );
