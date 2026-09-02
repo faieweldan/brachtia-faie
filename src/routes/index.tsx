@@ -9,7 +9,6 @@ import {
   Sofa,
   Users,
   Headphones,
-  MapPin,
   Star,
 } from "lucide-react";
 import heroAsset from "@/assets/hero-cover.png.asset.json";
