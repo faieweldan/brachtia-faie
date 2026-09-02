@@ -13,6 +13,8 @@ const GREEN: [number, number, number] = [26, 71, 52];
 const PEACH: [number, number, number] = [250, 240, 231];
 const MUTED: [number, number, number] = [110, 110, 105];
 
+const PDF_PHONE = "+6012 330 6815";
+
 /** Brachtia mark: same geometry as Logo.tsx, drawn in a 64x64 box. */
 function drawLogo(doc: any, x: number, y: number, size: number) {
   const s = size / 64;
@@ -36,7 +38,6 @@ function drawLogo(doc: any, x: number, y: number, size: number) {
   }
 }
 
-
 export type QuoteInput = {
   property: Property;
   room: RoomType;
@@ -56,132 +57,159 @@ export type QuoteInput = {
   };
 };
 
-export async function downloadStayQuote({
-  property,
-  room,
-  occupancy,
-  term,
-  moveIn,
-  moveOut,
-  quote,
-  lead,
-}: QuoteInput) {
+export async function downloadStayQuote(input: QuoteInput) {
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
 
+  // Render at progressively tighter scales until everything fits on one page.
+  const scales = [1, 0.92, 0.85, 0.78, 0.72, 0.66];
+  let doc: any = null;
+  for (const s of scales) {
+    doc = build(jsPDF, autoTable, input, s);
+    if (doc.getNumberOfPages() === 1) break;
+  }
+
+  const safe = (str: string) => str.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
+  doc.save(
+    `Brachtia-Quote-${safe(input.property.name)}-${safe(input.room.name)}-${input.moveIn}.pdf`,
+  );
+}
+
+function build(
+  jsPDF: any,
+  autoTable: any,
+  { property, room, occupancy, term, moveIn, moveOut, quote, lead }: QuoteInput,
+  k: number,
+) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
   const M = 44;
+  const FOOT = 54;
+  const g = (n: number) => n * k; // scaled gaps / font sizes
 
-  // Header
+  // Header band
+  const band = g(72);
   doc.setFillColor(...GREEN);
-  doc.rect(0, 0, W, 96, "F");
+  doc.rect(0, 0, W, band, "F");
+  const tile = g(38);
   doc.setFillColor(255, 255, 255);
-  doc.roundedRect(M, 24, 48, 48, 10, 10, "F");
-  drawLogo(doc, M + 8, 32, 32);
+  doc.roundedRect(M, (band - tile) / 2, tile, tile, g(8), g(8), "F");
+  drawLogo(doc, M + tile * 0.17, (band - tile) / 2 + tile * 0.17, tile * 0.66);
 
+  const tx = M + tile + g(14);
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(17);
-  doc.text(company.name, M + 62, 46);
+  doc.setFontSize(g(14));
+  doc.text(company.name, tx, band / 2 - g(8));
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.text(company.tagline, M + 62, 60);
-  doc.text(`${company.email}  ·  WhatsApp +${company.whatsapp}`, M + 62, 73);
+  doc.setFontSize(g(8));
+  doc.text(company.tagline, tx, band / 2 + g(4));
+  doc.text(`${company.email}  ·  WhatsApp ${PDF_PHONE}`, tx, band / 2 + g(15));
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.text("Stay quote", W - M, 46, { align: "right" });
+  doc.setFontSize(g(10));
+  doc.text("Stay quote", W - M, band / 2 - g(4), { align: "right" });
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
+  doc.setFontSize(g(8));
   doc.text(
     new Date().toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" }),
     W - M,
-    60,
+    band / 2 + g(8),
     { align: "right" },
   );
 
   // Listing summary
-  let y = 128;
+  let y = band + g(30);
   doc.setTextColor(...GREEN);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(15);
+  doc.setFontSize(g(13.5));
   doc.text(property.name, M, y);
   doc.setTextColor(...MUTED);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9.5);
-  y += 14;
+  doc.setFontSize(g(8.5));
+  y += g(12);
   doc.text(property.location, M, y);
-  y += 18;
+  y += g(12);
+
+  const rowPad = { top: g(1.8), bottom: g(1.8), left: 0, right: 0 };
+  const infoStyles = {
+    fontSize: g(8.5),
+    cellPadding: rowPad,
+  };
+  const infoCols = {
+    0: { cellWidth: g(112), textColor: MUTED },
+    1: { fontStyle: "bold" as const, textColor: [30, 30, 30] as [number, number, number] },
+  };
 
   if (lead) {
-    const leadRows: [string, string][] = [
-      ["Prepared for", lead.name],
-      ["University", `${lead.university}  ·  Intake ${lead.intake}`],
-      ["Nationality", `${lead.nationality}  ·  ${lead.gender}`],
-      ["Contact", `${lead.email}  ·  ${lead.mobile}`],
-    ];
     autoTable(doc, {
       startY: y,
-      margin: { left: M, right: M, bottom: 84 },
+      margin: { left: M, right: M, bottom: FOOT },
       theme: "plain",
-      styles: { fontSize: 9.5, cellPadding: { top: 3, bottom: 3, left: 0, right: 0 } },
-      columnStyles: {
-        0: { cellWidth: 120, textColor: MUTED },
-        1: { fontStyle: "bold", textColor: [30, 30, 30] },
-      },
-      body: leadRows,
+      styles: infoStyles,
+      columnStyles: infoCols,
+      body: [
+        ["Prepared for", lead.name],
+        ["University", `${lead.university}  ·  Intake ${lead.intake}`],
+        ["Nationality", `${lead.nationality}  ·  ${lead.gender}`],
+        ["Contact", `${lead.email}  ·  ${lead.mobile}`],
+      ],
     });
-    y = (doc as any).lastAutoTable.finalY + 16;
+    y = doc.lastAutoTable.finalY + g(8);
+    doc.setDrawColor(230, 226, 220);
+    doc.setLineWidth(0.5);
+    doc.line(M, y, W - M, y);
+    y += g(8);
   }
-
-  const details: [string, string][] = [
-    ["Room type", `${room.unitType} · ${room.name}`],
-    ["Occupancy", occupancy === "single" ? "Single" : "Twin sharing (per pax)"],
-    [
-      "Room details",
-      [
-        room.sizeLabel,
-        room.bathroom === "ensuite" ? "Private ensuite" : "Shared bathroom",
-        room.hasView ? `With view${room.viewType ? ` (${room.viewType})` : ""}` : "Internal facing",
-      ]
-        .filter(Boolean)
-        .join(" · "),
-    ],
-    ["Move in", formatDate(moveIn)],
-    ["Move out", formatDate(moveOut)],
-    ["Contract term", term === "long" ? "12-month stay" : "Short-term stay"],
-    ["Monthly rate", `${formatRM(quote.rent)} / month  (${quote.days} days total)`],
-  ];
 
   autoTable(doc, {
     startY: y,
-    margin: { left: M, right: M, bottom: 84 },
+    margin: { left: M, right: M, bottom: FOOT },
     theme: "plain",
-    styles: { fontSize: 9.5, cellPadding: { top: 3, bottom: 3, left: 0, right: 0 } },
-    columnStyles: {
-      0: { cellWidth: 120, textColor: MUTED },
-      1: { fontStyle: "bold", textColor: [30, 30, 30] },
-    },
-    body: details,
+    styles: infoStyles,
+    columnStyles: infoCols,
+    body: [
+      ["Room type", `${room.unitType} · ${room.name}`],
+      ["Occupancy", occupancy === "single" ? "Single" : "Twin sharing (per pax)"],
+      [
+        "Room details",
+        [
+          room.sizeLabel,
+          room.bathroom === "ensuite" ? "Private ensuite" : "Shared bathroom",
+          room.hasView ? `With view${room.viewType ? ` (${room.viewType})` : ""}` : "Internal facing",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      ],
+      ["Move in", formatDate(moveIn)],
+      ["Move out", formatDate(moveOut)],
+      ["Contract term", term === "long" ? "12-month stay" : "Short-term stay"],
+      ["Monthly rate", `${formatRM(quote.rent)} / month  (${quote.days} days total)`],
+    ],
   });
 
-  y = (doc as any).lastAutoTable.finalY + 24;
+  y = doc.lastAutoTable.finalY + g(18);
 
   // Due before move-in
   doc.setTextColor(...GREEN);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
+  doc.setFontSize(g(10.5));
   doc.text("Due before move-in", M, y);
-  y += 8;
+  y += g(6);
 
   autoTable(doc, {
     startY: y,
-    margin: { left: M, right: M, bottom: 84 },
+    margin: { left: M, right: M, bottom: FOOT },
     theme: "grid",
-    headStyles: { fillColor: PEACH, textColor: GREEN, fontStyle: "bold", fontSize: 9 },
-    styles: { fontSize: 9.5, cellPadding: 6, lineColor: [230, 226, 220], lineWidth: 0.5 },
-    columnStyles: { 1: { halign: "right", cellWidth: 110 } },
+    headStyles: { fillColor: PEACH, textColor: GREEN, fontStyle: "bold", fontSize: g(8.5) },
+    styles: {
+      fontSize: g(8.5),
+      cellPadding: g(4.5),
+      lineColor: [230, 226, 220],
+      lineWidth: 0.5,
+    },
+    columnStyles: { 1: { halign: "right", cellWidth: g(105) } },
     head: [["Item", "Amount"]],
     body: quote.firstPayment.map((l) => [
       l.kind === "refundable" ? `${l.label}  (refundable)` : l.label,
@@ -193,7 +221,7 @@ export async function downloadStayQuote({
       fillColor: PEACH,
       textColor: GREEN,
       fontStyle: "bold",
-      fontSize: 11,
+      fontSize: g(10),
       halign: "left",
     },
     didParseCell: (data: any) => {
@@ -201,10 +229,10 @@ export async function downloadStayQuote({
     },
   });
 
-  y = (doc as any).lastAutoTable.finalY + 10;
+  y = doc.lastAutoTable.finalY + g(11);
   doc.setTextColor(...MUTED);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
+  doc.setFontSize(g(8));
   doc.text(
     `Then ${formatRM(quote.monthlyAfter)}/month. Booking fee ${company.bookingFee} is offset against your first payment.`,
     M,
@@ -213,38 +241,37 @@ export async function downloadStayQuote({
 
   // Terms & conditions
   if (property.terms.length > 0) {
-    y += 24;
+    y += g(18);
     doc.setTextColor(...GREEN);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
+    doc.setFontSize(g(10.5));
     doc.text("Terms & conditions", M, y);
 
     autoTable(doc, {
-      startY: y + 8,
-      margin: { left: M, right: M, bottom: 84 },
+      startY: y + g(6),
+      margin: { left: M, right: M, bottom: FOOT },
       theme: "plain",
       styles: {
-        fontSize: 9,
-        cellPadding: { top: 3, bottom: 3, left: 0, right: 0 },
+        fontSize: g(8),
+        cellPadding: { top: g(1.4), bottom: g(1.4), left: 0, right: 0 },
         textColor: [60, 60, 58],
         valign: "top",
       },
-      columnStyles: { 0: { cellWidth: 18, textColor: MUTED }, 1: { cellWidth: "auto" } },
+      columnStyles: { 0: { cellWidth: g(16), textColor: MUTED }, 1: { cellWidth: "auto" } },
       body: property.terms.map((t, i) => [`${i + 1}.`, t]),
     });
   }
 
-  // Footer
-  const H = doc.internal.pageSize.getHeight();
+  // Footer on every page (normally just one)
   const pages = doc.getNumberOfPages();
   for (let p = 1; p <= pages; p++) {
     doc.setPage(p);
     doc.setDrawColor(230, 226, 220);
     doc.setLineWidth(0.5);
-    doc.line(M, H - 62, W - M, H - 62);
+    doc.line(M, H - 46, W - M, H - 46);
     doc.setTextColor(...MUTED);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
+    doc.setFontSize(7);
     doc.text(
       [
         `${company.legalName} · ${company.registration}`,
@@ -252,11 +279,10 @@ export async function downloadStayQuote({
         "Indicative quote — subject to availability and final tenancy agreement.",
       ],
       M,
-      H - 48,
+      H - 35,
     );
-    doc.text("brachtiahomes.com", W - M, H - 48, { align: "right" });
+    doc.text("brachtiahomes.com", W - M, H - 35, { align: "right" });
   }
 
-  const safe = (s: string) => s.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
-  doc.save(`Brachtia-Quote-${safe(property.name)}-${safe(room.name)}-${moveIn}.pdf`);
+  return doc;
 }
