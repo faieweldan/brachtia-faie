@@ -453,7 +453,7 @@ function ResidenceEditor() {
               </div>
             </Section>
 
-            <Section id="addons" title="Add-ons" desc="Optional extras students can add in the cost calculator.">
+            <Section id="addons" title="Add-ons" description="Optional extras students can add in the cost calculator.">
               <AddonsEditor items={form.addons ?? []} onChange={(v) => set("addons", v)} />
             </Section>
 
