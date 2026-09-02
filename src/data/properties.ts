@@ -9,6 +9,11 @@ import arcDiningAsset from "@/assets/arc-dining.jpg.asset.json";
 import arcKitchenAsset from "@/assets/arc-kitchen.png.asset.json";
 import arcLivingAsset from "@/assets/arc-living.jpg.asset.json";
 import arcYardAsset from "@/assets/arc-yard.jpg.asset.json";
+import arcRoomDAsset from "@/assets/arc-room-d.jpg.asset.json";
+import arcRoomATwinAsset from "@/assets/arc-room-a-twin.jpg.asset.json";
+import arcRoomBTwinAsset from "@/assets/arc-room-b-twin.jpg.asset.json";
+import arcRoomCSingleAsset from "@/assets/arc-room-c-single.jpg.asset.json";
+import arcRoomCSingle2Asset from "@/assets/arc-room-c-single-2.jpg.asset.json";
 import roomTwin from "@/assets/room-twin.jpg";
 import roomSingle from "@/assets/room-single.jpg";
 import livingDining from "@/assets/living-dining.jpg";
@@ -566,6 +571,8 @@ export const roomTypes: RoomType[] = [
  * Bundled sample images. Residence/room records store either a full URL or an
  * `asset:<name>` key that resolves to one of these.
  */
+export type GalleryCategoryDummy = never;
+
 export const assetRegistry: Record<string, string> = {
   "arc-cyberjaya": arcCyberjaya,
   "arc-exterior": arcCyberjaya,
