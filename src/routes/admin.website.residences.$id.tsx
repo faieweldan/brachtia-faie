@@ -720,9 +720,9 @@ function RoomsSection({ residenceId, rooms }: { residenceId: string; rooms: any[
                   onChange={(v) => set("gallery", v)}
                 />
               </div>
-              <StringList label="Features" items={editing.features ?? []} onChange={(v) => set("features", v)} />
+              <StringList label="Shared in the apartment" items={editing.features ?? []} onChange={(v) => set("features", v)} />
               <StringList
-                label="Furnishing"
+                label="In your room"
                 items={editing.furnishing ?? []}
                 onChange={(v) => set("furnishing", v)}
               />
