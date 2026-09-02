@@ -56,7 +56,7 @@ export const submitEnquiry = createServerFn({ method: "POST" })
     }).select("reference").maybeSingle();
     if (error) {
       console.error("enquiry insert failed", error);
-      return { ok: false as const };
+      return { ok: false as const, reference: "" };
     }
     return { ok: true as const, reference: (row?.reference ?? "") as string };
   });
