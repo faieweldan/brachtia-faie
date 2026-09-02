@@ -79,6 +79,19 @@ function PropertyPage() {
   const activeTerm = property.contractTerms.includes(derivedTerm) ? derivedTerm : "long";
 
   const gallery = property.gallery;
+  const byCategory = (c: string) =>
+    gallery.filter((g) => (g.category ?? "building") === c);
+  const galleryGroups: { label: string; items: typeof gallery }[] = [
+    { label: "Building amenities", items: byCategory("building") },
+    { label: "In your apartment", items: byCategory("apartment") },
+    { label: "In your room", items: byCategory("room") },
+  ].filter((g) => g.items.length > 0);
+  const preview = [
+    byCategory("building")[0],
+    byCategory("apartment")[0],
+    byCategory("room")[0],
+    byCategory("room")[1] ?? byCategory("apartment")[1] ?? byCategory("building")[1],
+  ].filter(Boolean) as typeof gallery;
 
   return (
     <>
