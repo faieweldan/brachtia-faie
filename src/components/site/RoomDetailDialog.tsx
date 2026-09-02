@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import { Bath, BedDouble, Check, Eye, MessageCircle, Ruler, Sparkles } from "lucide-react";
 import {
   Dialog,
@@ -44,7 +45,28 @@ export default function RoomDetailDialog({
   onOpenChange: (open: boolean) => void;
   onUseInCalculator?: (room: RoomType) => void;
 }) {
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+
+  const photos: Photo[] = useMemo(() => {
+    if (!room) return [];
+    const own = (room.gallery.length ? room.gallery : [room.image]).map((src, i) => ({
+      src,
+      caption: `${room.name} — photo ${i + 1}`,
+      badge: "This room",
+    }));
+    const apartment = property.gallery
+      .filter((g) => g.category === "apartment")
+      .map((g) => ({ src: g.src, caption: g.caption, badge: "Inside the apartment" }));
+    return [...own, ...apartment];
+  }, [room, property]);
+
+  useEffect(() => {
+    if (open) setLightboxIndex(0);
+  }, [open, room?.id]);
+
   if (!room) return null;
+
 
   const availability = availabilityFor(room, moveIn);
   const facts = [
