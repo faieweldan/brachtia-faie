@@ -19,6 +19,36 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
+import CountryCombobox from "@/components/site/CountryCombobox";
+import {
+  FieldError,
+  PhoneField,
+  SectionLabel,
+  SelectField,
+  fieldClass,
+} from "@/components/site/form-fields";
+import { countryByIso, type Country } from "@/data/countries";
+import {
+  ENQUIRY_STATUS,
+  GENDERS,
+  HEARD_ABOUT,
+  UNIVERSITIES,
+  intakeMonths,
+} from "@/data/form-options";
+import { z } from "zod";
+
+const leadSchema = z.object({
+  name: z.string().trim().min(2, "Enter your full name").max(100),
+  email: z.string().trim().email("Enter a valid email").max(255),
+  mobile: z.string().trim().min(7, "Enter your mobile number").max(30),
+  university: z.string().trim().min(2, "Select your university").max(160),
+  intake: z.string().trim().min(1, "Select your intake").max(40),
+  nationality: z.string().trim().min(2, "Select your nationality").max(80),
+  gender: z.string().trim().min(1, "Select your gender").max(30),
+  enquiryStatus: z.string().trim().min(1, "Let us know").max(40),
+  heardAbout: z.string().trim().min(1, "Tell us how you heard about us").max(120),
+  notes: z.string().trim().max(1000).optional(),
+});
 
 const title = "Book a Viewing | Brachtia Homes Student Accommodation";
 const description =
@@ -54,6 +84,20 @@ function BookViewingPage() {
   const [slot, setSlot] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState<{ slot: string } | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [dialIso, setDialIso] = useState("MY");
+  const [mobileNumber, setMobileNumber] = useState("");
+  const [nationalityIso, setNationalityIso] = useState<string | undefined>(undefined);
+  const [universityChoice, setUniversityChoice] = useState("");
+  const [universityOther, setUniversityOther] = useState("");
+  const [heardChoice, setHeardChoice] = useState("");
+  const [heardOther, setHeardOther] = useState("");
+
+  const intakes = useMemo(() => intakeMonths(), []);
+  const nationality = nationalityIso ? (countryByIso(nationalityIso)?.name ?? "") : "";
+  const universityValue =
+    universityChoice === "Other" ? universityOther.trim() : universityChoice;
+  const heardValue = heardChoice === "Other" ? heardOther.trim() || "Other" : heardChoice;
 
   const residence = properties.find((p) => p.slug === slug);
   const isoDate = date ? toISODate(date) : "";
