@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import { Bath, BedDouble, Check, Eye, MessageCircle, Ruler, Sparkles } from "lucide-react";
 import {
   Dialog,
@@ -18,6 +19,7 @@ import {
   type RoomType,
 } from "@/data/properties";
 import RoomGallery from "./RoomGallery";
+import PhotoLightbox, { type Photo } from "./PhotoLightbox";
 
 
 const DEFAULT_FURNISHING = [
@@ -43,7 +45,28 @@ export default function RoomDetailDialog({
   onOpenChange: (open: boolean) => void;
   onUseInCalculator?: (room: RoomType) => void;
 }) {
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+
+  const photos: Photo[] = useMemo(() => {
+    if (!room) return [];
+    const own = (room.gallery.length ? room.gallery : [room.image]).map((src, i) => ({
+      src,
+      caption: `${room.name} — photo ${i + 1}`,
+      badge: "This room",
+    }));
+    const apartment = property.gallery
+      .filter((g) => g.category === "apartment")
+      .map((g) => ({ src: g.src, caption: g.caption, badge: "Inside the apartment" }));
+    return [...own, ...apartment];
+  }, [room, property]);
+
+  useEffect(() => {
+    if (open) setLightboxIndex(0);
+  }, [open, room?.id]);
+
   if (!room) return null;
+
 
   const availability = availabilityFor(room, moveIn);
   const facts = [
@@ -63,10 +86,22 @@ export default function RoomDetailDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] gap-0 overflow-y-auto p-0 sm:max-w-3xl">
         <RoomGallery
-          images={room.gallery.length ? room.gallery : [room.image]}
+          items={photos}
           alt={`${room.name} at ${property.name}`}
-          fit="contain"
-          className="aspect-[4/3] w-full rounded-t-lg bg-muted sm:aspect-[16/10]"
+          onOpen={(i) => {
+            setLightboxIndex(i);
+            setLightboxOpen(true);
+          }}
+          className="aspect-[4/3] w-full rounded-t-lg sm:aspect-[16/10]"
+        />
+
+        <PhotoLightbox
+          photos={photos}
+          index={lightboxIndex}
+          onIndexChange={setLightboxIndex}
+          open={lightboxOpen}
+          onOpenChange={setLightboxOpen}
+          title={`${room.name} — ${property.name}`}
         />
 
         <div className="space-y-6 p-6">
