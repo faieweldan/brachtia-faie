@@ -1,10 +1,15 @@
-import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Star, Trash2 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DropZone, previewSrc } from "@/components/admin/ImageUploader";
 
-export type GalleryItem = { src: string; caption: string; category?: string };
+export type GalleryItem = {
+  src: string;
+  caption: string;
+  category?: string;
+  featured?: boolean;
+};
 
 const CATEGORIES = [
   { value: "building", label: "Building amenities" },
@@ -34,6 +39,14 @@ export function GalleryEditor({
     onChange(next);
   };
 
+  const featuredCount = items.filter((it) => it.featured).length;
+
+  const toggleFeatured = (i: number) => {
+    const item = items[i]!;
+    if (!item.featured && featuredCount >= 4) return;
+    patch(i, { featured: !item.featured });
+  };
+
   return (
     <div className="space-y-4">
       <DropZone
@@ -42,16 +55,45 @@ export function GalleryEditor({
         onUploaded={(urls) => onChange([...items, ...urls.map((src) => ({ src, caption: "", category: "building" }))])}
       />
 
+      <p className="text-xs text-muted-foreground">
+        Pick up to 4 photos to show in the grid beside the hero photo on the residence page —{" "}
+        <span className="font-semibold text-foreground">{featuredCount} of 4 selected</span>. If none
+        are selected we pick a mix automatically.
+      </p>
+
       {items.length === 0 ? (
         <p className="text-xs text-muted-foreground">No photos yet.</p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {items.map((item, i) => (
-            <div key={`${item.src}-${i}`} className="overflow-hidden rounded-md border border-border bg-card">
+            <div
+              key={`${item.src}-${i}`}
+              className={`overflow-hidden rounded-md border bg-card ${
+                item.featured ? "border-brand ring-1 ring-brand/40" : "border-border"
+              }`}
+            >
               <div className="relative aspect-[4/3] bg-muted">
                 {item.src ? (
                   <img src={previewSrc(item.src)} alt="" className="size-full object-cover" />
                 ) : null}
+                <button
+                  type="button"
+                  onClick={() => toggleFeatured(i)}
+                  disabled={!item.featured && featuredCount >= 4}
+                  title={
+                    !item.featured && featuredCount >= 4
+                      ? "Unselect another photo first (max 4)"
+                      : "Show on the residence page grid"
+                  }
+                  className={`absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold transition disabled:opacity-40 ${
+                    item.featured
+                      ? "bg-brand text-brand-foreground"
+                      : "bg-background/90 text-foreground hover:bg-background"
+                  }`}
+                >
+                  <Star className={`size-3 ${item.featured ? "fill-current" : ""}`} />
+                  {item.featured ? "On page" : "Feature"}
+                </button>
                 <div className="absolute right-1.5 top-1.5 flex gap-1">
                   <Button
                     type="button"
