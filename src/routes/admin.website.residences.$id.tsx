@@ -75,6 +75,7 @@ const EDITABLE_KEYS = [
   "terms",
   "single_bed_options",
   "fee_config",
+  "addons",
 ];
 
 const NAV = [
@@ -83,6 +84,7 @@ const NAV = [
   { id: "facilities", label: "Facilities" },
   { id: "location", label: "Location" },
   { id: "terms", label: "Terms & fees" },
+  { id: "addons", label: "Add-ons" },
   { id: "rooms", label: "Room types" },
 ];
 
@@ -451,6 +453,10 @@ function ResidenceEditor() {
               </div>
             </Section>
 
+            <Section id="addons" title="Add-ons" desc="Optional extras students can add in the cost calculator.">
+              <AddonsEditor items={form.addons ?? []} onChange={(v) => set("addons", v)} />
+            </Section>
+
             <RoomsSection residenceId={id} rooms={rooms} />
           </div>
         </div>
@@ -746,5 +752,144 @@ function RoomsSection({ residenceId, rooms }: { residenceId: string; rooms: any[
         </DialogContent>
       </Dialog>
     </Section>
+  );
+}
+
+/* ---------------- Add-ons ---------------- */
+
+type AddonRow = {
+  id: string;
+  label: string;
+  price: number;
+  chargeType: "onetime" | "monthly";
+  items: string[];
+  occupancies: ("single" | "twin")[];
+  active: boolean;
+};
+
+const slugify = (v: string) =>
+  v.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `addon-${Date.now()}`;
+
+function AddonsEditor({
+  items,
+  onChange,
+}: {
+  items: AddonRow[];
+  onChange: (v: AddonRow[]) => void;
+}) {
+  const patch = (i: number, p: Partial<AddonRow>) =>
+    onChange(items.map((it, idx) => (idx === i ? { ...it, ...p } : it)));
+
+  return (
+    <div className="space-y-3">
+      {items.length === 0 && (
+        <p className="text-xs text-muted-foreground">No add-ons yet for this residence.</p>
+      )}
+
+      {items.map((a, i) => (
+        <div key={a.id || i} className="rounded-md border border-border p-3">
+          <div className="grid gap-2 sm:grid-cols-[2fr_1fr_1fr_auto]">
+            <Input
+              className="h-9 text-sm"
+              placeholder="Name (e.g. Queen Bedding Set)"
+              value={a.label ?? ""}
+              onChange={(e) =>
+                patch(i, { label: e.target.value, id: a.id || slugify(e.target.value) })
+              }
+            />
+            <Input
+              className="h-9 text-sm"
+              type="number"
+              placeholder="Price (RM)"
+              value={a.price ?? ""}
+              onChange={(e) => patch(i, { price: Number(e.target.value || 0) })}
+            />
+            <select
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              value={a.chargeType ?? "onetime"}
+              onChange={(e) => patch(i, { chargeType: e.target.value as AddonRow["chargeType"] })}
+            >
+              <option value="onetime">One-time</option>
+              <option value="monthly">Per month</option>
+            </select>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-9"
+              onClick={() => onChange(items.filter((_, idx) => idx !== i))}
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
+
+          <div className="mt-2 grid gap-2 sm:grid-cols-[2fr_1fr]">
+            <Input
+              className="h-9 text-sm"
+              placeholder="What's included (comma separated)"
+              value={(a.items ?? []).join(", ")}
+              onChange={(e) =>
+                patch(i, {
+                  items: e.target.value
+                    .split(",")
+                    .map((x) => x.trim())
+                    .filter(Boolean),
+                })
+              }
+            />
+            <div className="flex items-center gap-4 px-1">
+              {(["single", "twin"] as const).map((occ) => {
+                const on = (a.occupancies ?? []).includes(occ);
+                return (
+                  <label key={occ} className="flex items-center gap-1.5 text-xs capitalize">
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={() =>
+                        patch(i, {
+                          occupancies: on
+                            ? (a.occupancies ?? []).filter((o) => o !== occ)
+                            : [...(a.occupancies ?? []), occ],
+                        })
+                      }
+                    />
+                    {occ}
+                  </label>
+                );
+              })}
+              <label className="ml-auto flex items-center gap-2 text-xs">
+                <Switch
+                  checked={a.active !== false}
+                  onCheckedChange={(v) => patch(i, { active: v })}
+                />
+                Active
+              </label>
+            </div>
+          </div>
+        </div>
+      ))}
+
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() =>
+          onChange([
+            ...items,
+            {
+              id: `addon-${Date.now()}`,
+              label: "",
+              price: 0,
+              chargeType: "onetime",
+              items: [],
+              occupancies: ["single", "twin"],
+              active: true,
+            },
+          ])
+        }
+      >
+        <Plus className="mr-1.5 size-4" /> Add add-on
+      </Button>
+    </div>
   );
 }
