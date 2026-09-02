@@ -187,7 +187,7 @@ export const properties: Property[] = [
       { src: arcRoomCSingle2, caption: "Single room", category: "room" },
       { src: arcRoomD, caption: "Room C Single", category: "room" },
       { src: arcRoomATwin, caption: "Twin sharing room with exterior view", category: "room" },
-      { src: arcRoomBTwin, caption: "Twin sharing room", category: "room" },
+      { src: arcRoomBTwin, caption: "Room A  Twin sharing", category: "room" },
     ],
     buildingFacilities: [
       "Swimming Pool",
