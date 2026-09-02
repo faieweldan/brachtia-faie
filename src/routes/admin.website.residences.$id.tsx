@@ -43,6 +43,12 @@ const FEE_FIELDS: { key: string; label: string }[] = [
   { key: "adminFee", label: "Admin fee (RM)" },
 ];
 
+const PAYMENT_TERMS: { key: string; label: string }[] = [
+  { key: "bimonthly", label: "Bi-monthly" },
+  { key: "quarterly", label: "Quarterly" },
+  { key: "full", label: "Full term" },
+];
+
 const EDITABLE_KEYS = [
   "name",
   "slug",
