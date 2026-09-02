@@ -205,7 +205,10 @@ export function RowList<T>({
     <div className="space-y-2">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
       {items.map((row, i) => (
-        <div key={i} className="flex flex-wrap items-end gap-2 rounded-xl border border-border p-2">
+        <div
+          key={i}
+          className="flex flex-wrap items-end gap-2 rounded-md border border-border/70 bg-muted/20 p-2"
+        >
           {columns.map((c) => (
             <label key={c.key} className={`min-w-[120px] flex-1 space-y-1 ${c.width ?? ""}`}>
               <span className="text-[11px] text-muted-foreground">{c.label}</span>
