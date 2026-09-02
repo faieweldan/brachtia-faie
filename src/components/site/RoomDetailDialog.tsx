@@ -65,7 +65,8 @@ export default function RoomDetailDialog({
         <RoomGallery
           images={room.gallery.length ? room.gallery : [room.image]}
           alt={`${room.name} at ${property.name}`}
-          className="h-60 w-full rounded-t-lg sm:h-80"
+          fit="contain"
+          className="aspect-[4/3] w-full rounded-t-lg bg-muted sm:aspect-[16/10]"
         />
 
         <div className="space-y-6 p-6">
