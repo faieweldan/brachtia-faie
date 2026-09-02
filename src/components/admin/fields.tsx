@@ -6,31 +6,34 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 
 export function Section({
+  id,
   title,
   description,
   children,
   action,
 }: {
+  id?: string;
   title: string;
   description?: string;
   children: ReactNode;
   action?: ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-border bg-card p-5">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+    <section id={id} className="scroll-mt-24 border-b border-border pb-8 last:border-0">
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b border-border/60 pb-3">
         <div>
-          <h2 className="text-base font-semibold text-brand-deep">{title}</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-deep">{title}</h2>
           {description ? (
-            <p className="text-xs text-muted-foreground">{description}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
           ) : null}
         </div>
         {action}
       </div>
-      <div className="space-y-4">{children}</div>
+      <div className="space-y-5">{children}</div>
     </section>
   );
 }
+
 
 export function Field({
   label,
