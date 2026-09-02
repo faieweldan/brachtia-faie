@@ -18,6 +18,15 @@ import solsticeStudio from "@/assets/solstice-studio.jpg";
 
 const arcCyberjaya = arcCyberjayaAsset.url;
 const solsticeExterior = solsticeExteriorAsset.url;
+const arcPoolNew = arcPoolNewAsset.url;
+const arcCourtyard = arcCourtyardAsset.url;
+const arcCafeteria = arcCafeteriaAsset.url;
+const arcLaundry = arcLaundryAsset.url;
+const arcConvenience = arcConvenienceAsset.url;
+const arcDining = arcDiningAsset.url;
+const arcKitchen = arcKitchenAsset.url;
+const arcLiving = arcLivingAsset.url;
+const arcYard = arcYardAsset.url;
 
 export type Occupancy = "single" | "twin";
 export type ContractTerm = "long" | "short";
