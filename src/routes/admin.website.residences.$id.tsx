@@ -43,6 +43,12 @@ const FEE_FIELDS: { key: string; label: string }[] = [
   { key: "adminFee", label: "Admin fee (RM)" },
 ];
 
+const PAYMENT_TERMS: { key: string; label: string }[] = [
+  { key: "bimonthly", label: "Bi-monthly" },
+  { key: "quarterly", label: "Quarterly" },
+  { key: "full", label: "Full term" },
+];
+
 const EDITABLE_KEYS = [
   "name",
   "slug",
@@ -64,6 +70,7 @@ const EDITABLE_KEYS = [
   "nearby_universities",
   "points_of_interest",
   "payment_cycle",
+  "payment_terms",
   "contract_terms",
   "terms",
   "single_bed_options",
@@ -330,14 +337,12 @@ function ResidenceEditor() {
 
             {/* Terms & fees */}
             <Section id="terms" title="Terms & fees">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <TextField
-                  label="Payment cycle"
-                  value={form.payment_cycle}
-                  onChange={(v) => set("payment_cycle", v)}
-                />
-                <Field label="Contract terms offered">
-                  <div className="flex gap-4 pt-2">
+              <div className="grid gap-6 sm:grid-cols-2">
+                <Field
+                  label="Contract lengths offered"
+                  hint="Which stay lengths students can price on the website."
+                >
+                  <div className="flex gap-4 pt-1">
                     {(["long", "short"] as const).map((t) => {
                       const on = (form.contract_terms ?? []).includes(t);
                       return (
@@ -359,6 +364,45 @@ function ResidenceEditor() {
                     })}
                   </div>
                 </Field>
+                <Field
+                  label="Payment frequencies offered"
+                  hint="Shown as choices in the student's move-in cost calculator. Short-term stays are always paid in full."
+                >
+                  <div className="flex flex-wrap gap-4 pt-1">
+                    {PAYMENT_TERMS.map((t) => {
+                      const list: string[] = form.payment_terms ?? [];
+                      const on = list.includes(t.key);
+                      return (
+                        <label
+                          key={t.key}
+                          className="flex items-center gap-2 text-xs text-muted-foreground"
+                        >
+                          <Switch
+                            checked={on}
+                            onCheckedChange={(v) =>
+                              set(
+                                "payment_terms",
+                                v
+                                  ? [...list, t.key]
+                                  : list.filter((x) => x !== t.key),
+                              )
+                            }
+                          />
+                          {t.label}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </Field>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <TextField
+                  label="Payment cycle note"
+                  value={form.payment_cycle}
+                  onChange={(v) => set("payment_cycle", v)}
+                  placeholder="e.g. Rental payable bi-monthly"
+                  hint="Free-text line shown on the residence terms — not a selectable option."
+                />
               </div>
 
               {/* Fee table */}
