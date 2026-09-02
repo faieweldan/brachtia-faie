@@ -97,6 +97,7 @@ export default function EnquiryDialog({
   const [submitted, setSubmitted] = useState(false);
   const [lead, setLead] = useState<z.infer<typeof leadSchema> | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [reference, setReference] = useState("");
   const [dialIso, setDialIso] = useState("MY");
   const [mobileNumber, setMobileNumber] = useState("");
   const [nationalityIso, setNationalityIso] = useState<string | undefined>(undefined);
@@ -137,6 +138,7 @@ export default function EnquiryDialog({
     if (!next) {
       setErrors({});
       setSubmitted(false);
+      setReference("");
       setEditStay(false);
       setDialIso("MY");
       setMobileNumber("");
@@ -157,6 +159,7 @@ export default function EnquiryDialog({
         moveIn: stay.moveIn,
         moveOut: stay.moveOut,
         quote,
+        ...(reference ? { reference } : {}),
         lead: {
           name: lead.name,
           university: lead.university,
@@ -186,6 +189,11 @@ export default function EnquiryDialog({
               We'll confirm availability for {room ? room.name : "your room"} at {property.name}{" "}
               within 24 hours by email or WhatsApp.
             </p>
+            {reference ? (
+              <p className="mx-auto mt-3 inline-flex rounded-full bg-muted px-3 py-1 text-xs font-semibold tracking-wide text-foreground">
+                Reference {reference}
+              </p>
+            ) : null}
             <div className="mt-6 flex flex-col gap-2 sm:flex-row">
               {quote && (
                 <Button size="lg" className="flex-1" onClick={downloadQuote} disabled={downloading}>
@@ -265,8 +273,30 @@ export default function EnquiryDialog({
                     intake: leadData.intake,
                     gender: leadData.gender,
                     message: leadData.message ?? "",
+                    quoteSnapshot: {
+                      property,
+                      room,
+                      occupancy: occupancy ?? raw['occupancy'] ?? "single",
+                      term: stay.term ?? "long",
+                      moveIn: stay.moveIn,
+                      moveOut: stay.moveOut,
+                      quote,
+                      lead: {
+                        name: leadData.name,
+                        university: leadData.university,
+                        intake: leadData.intake,
+                        nationality: leadData.nationality,
+                        gender: leadData.gender,
+                        email: leadData.email,
+                        mobile: leadData.mobile,
+                      },
+                    },
                   },
-                }).catch((err: unknown) => console.error(err));
+                })
+                  .then((res) => {
+                    if (res?.ok && res.reference) setReference(res.reference);
+                  })
+                  .catch((err: unknown) => console.error(err));
               }
 
             }}
