@@ -211,7 +211,7 @@ export const properties: Property[] = [
     utilitiesNote: "Utilities: Water and electricity are billed separately based on usage.",
     insideApartment: [
       "Fully Furnished",
-      "Single-Size Bed",
+      "Bed with Mattress",
       "Study Desk & Chair",
       "Wardrobe",
       "Air Conditioning & Fan",
