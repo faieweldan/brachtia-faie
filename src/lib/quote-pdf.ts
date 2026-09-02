@@ -193,7 +193,7 @@ function build(
       ["Move in", formatDate(moveIn)],
       ["Move out", formatDate(moveOut)],
       ["Contract term", term === "long" ? "12-month stay" : "Short-term stay"],
-      ["Monthly rate", `${formatRM(quote.rent)} / month  (${quote.days} days total)`],
+      ["Monthly rate", `${formatRM(quote.monthlyAfter)} / month  (${quote.days} days total)`],
     ],
   });
 
