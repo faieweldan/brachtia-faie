@@ -246,6 +246,14 @@ function BookingsPage() {
                     ["Nationality", open.nationality || "—"],
                     ["Gender", open.gender || "—"],
                     ["Phone", open.phone],
+                    [
+                      "Heard about us",
+                      open.heard_about
+                        ? open.heard_about === "Other" && open.heard_about_other
+                          ? `Other — ${open.heard_about_other}`
+                          : open.heard_about
+                        : "—",
+                    ],
                   ].map(([k, v]) => (
                     <div key={String(k)}>
                       <dt className="text-xs text-muted-foreground">{k}</dt>
