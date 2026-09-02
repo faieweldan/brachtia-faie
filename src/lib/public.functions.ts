@@ -22,6 +22,8 @@ const enquirySchema = z.object({
   intake: z.string().trim().max(40).default(""),
   gender: z.string().trim().max(40).default(""),
   message: z.string().trim().max(1000).default(""),
+  heardAbout: z.string().trim().max(120).default(""),
+  heardAboutOther: z.string().trim().max(200).default(""),
   quoteSnapshot: z.unknown().optional(),
 });
 
@@ -52,6 +54,8 @@ export const submitEnquiry = createServerFn({ method: "POST" })
       intake: data.intake,
       gender: data.gender,
       message: data.message,
+      heard_about: data.heardAbout,
+      heard_about_other: data.heardAboutOther,
       quote_snapshot: (data.quoteSnapshot ?? {}) as never,
     }).select("reference").maybeSingle();
     if (error) {
@@ -121,6 +125,12 @@ const appointmentSchema = z.object({
   email: z.string().trim().email().max(255),
   phone: z.string().trim().min(5).max(30),
   university: z.string().trim().max(160).default(""),
+  nationality: z.string().trim().max(80).default(""),
+  intake: z.string().trim().max(40).default(""),
+  gender: z.string().trim().max(40).default(""),
+  heardAbout: z.string().trim().max(120).default(""),
+  heardAboutOther: z.string().trim().max(200).default(""),
+  enquiryStatus: z.string().trim().max(40).default(""),
   notes: z.string().trim().max(1000).default(""),
 });
 
@@ -149,6 +159,12 @@ export const bookAppointment = createServerFn({ method: "POST" })
       email: data.email,
       phone: data.phone,
       university: data.university,
+      nationality: data.nationality,
+      intake: data.intake,
+      gender: data.gender,
+      heard_about: data.heardAbout,
+      heard_about_other: data.heardAboutOther,
+      enquiry_status: data.enquiryStatus,
       notes: data.notes,
     });
 
