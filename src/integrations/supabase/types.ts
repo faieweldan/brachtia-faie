@@ -57,9 +57,15 @@ export type Database = {
           duration_minutes: number
           email: string
           enquiry_id: string | null
+          enquiry_status: string
           full_name: string
+          gender: string
+          heard_about: string
+          heard_about_other: string
           id: string
+          intake: string
           mode: string
+          nationality: string
           notes: string
           phone: string
           residence_id: string | null
@@ -78,9 +84,15 @@ export type Database = {
           duration_minutes?: number
           email?: string
           enquiry_id?: string | null
+          enquiry_status?: string
           full_name?: string
+          gender?: string
+          heard_about?: string
+          heard_about_other?: string
           id?: string
+          intake?: string
           mode?: string
+          nationality?: string
           notes?: string
           phone?: string
           residence_id?: string | null
@@ -99,9 +111,15 @@ export type Database = {
           duration_minutes?: number
           email?: string
           enquiry_id?: string | null
+          enquiry_status?: string
           full_name?: string
+          gender?: string
+          heard_about?: string
+          heard_about_other?: string
           id?: string
+          intake?: string
           mode?: string
+          nationality?: string
           notes?: string
           phone?: string
           residence_id?: string | null
@@ -222,6 +240,8 @@ export type Database = {
           first_payment: number
           full_name: string
           gender: string
+          heard_about: string
+          heard_about_other: string
           id: string
           intake: string
           message: string
@@ -251,6 +271,8 @@ export type Database = {
           first_payment?: number
           full_name?: string
           gender?: string
+          heard_about?: string
+          heard_about_other?: string
           id?: string
           intake?: string
           message?: string
@@ -280,6 +302,8 @@ export type Database = {
           first_payment?: number
           full_name?: string
           gender?: string
+          heard_about?: string
+          heard_about_other?: string
           id?: string
           intake?: string
           message?: string
