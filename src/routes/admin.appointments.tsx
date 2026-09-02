@@ -2,7 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { listAppointments, saveAppointment, deleteAppointment } from "@/lib/admin.functions";
+import {
+  listAppointments,
+  saveAppointment,
+  deleteAppointment,
+  listEnquiries,
+} from "@/lib/admin.functions";
 import { formatSlot } from "@/lib/slots";
 import { Button } from "@/components/ui/button";
 
@@ -19,6 +24,12 @@ function AppointmentsPage() {
     queryKey: ["admin", "appointments"],
     queryFn: () => listAppointments(),
   });
+
+  const { data: enquiries = [] } = useQuery({
+    queryKey: ["admin", "enquiries"],
+    queryFn: () => listEnquiries(),
+  });
+  const enquiryById = new Map((enquiries as any[]).map((e) => [e.id, e]));
 
   const setStatus = useMutation({
     mutationFn: (input: { id: string; status: string }) =>
@@ -78,6 +89,12 @@ function AppointmentsPage() {
                 <p>
                   {a.residence_name} · {a.mode === "virtual" ? "Virtual tour" : "In person"}
                 </p>
+                {a.enquiry_id && enquiryById.get(a.enquiry_id) ? (
+                  <p className="mt-1 inline-flex rounded-full bg-brand-tint px-2 py-0.5 text-[11px] font-semibold text-brand-deep">
+                    Enquiry {enquiryById.get(a.enquiry_id).reference} ·{" "}
+                    {enquiryById.get(a.enquiry_id).full_name}
+                  </p>
+                ) : null}
               </div>
               <select
                 value={a.status}
