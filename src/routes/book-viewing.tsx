@@ -222,14 +222,34 @@ function BookViewingPage() {
           </div>
 
           <form
-            className="space-y-4 border-t border-border pt-5"
+            className="space-y-6 border-t border-border pt-5"
             onSubmit={async (e) => {
               e.preventDefault();
+              const form = e.currentTarget;
+              const fd = new FormData(form);
+              const raw = Object.fromEntries(fd.entries()) as Record<string, string>;
+              const parsed = leadSchema.safeParse(raw);
+              const next: Record<string, string> = {};
+              if (!parsed.success) {
+                for (const issue of parsed.error.issues)
+                  next[String(issue.path[0])] = issue.message;
+              }
+              if (Object.keys(next).length > 0) {
+                setErrors(next);
+                requestAnimationFrame(() => {
+                  const first = form.querySelector<HTMLElement>("[data-invalid='true']");
+                  first?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  first?.focus?.();
+                });
+                return;
+              }
+              setErrors({});
               if (!slot) {
                 toast.error("Pick a date and time first");
                 return;
               }
-              const fd = new FormData(e.currentTarget);
+              const lead = parsed.success ? parsed.data : null;
+              if (!lead) return;
               setSaving(true);
               try {
                 const res = await bookAppointment({
@@ -238,11 +258,17 @@ function BookViewingPage() {
                     residenceSlug: slug,
                     residenceName: residence?.name ?? "",
                     startsAt: slot,
-                    fullName: String(fd.get("name") ?? ""),
-                    email: String(fd.get("email") ?? ""),
-                    phone: String(fd.get("phone") ?? ""),
-                    university: String(fd.get("university") ?? ""),
-                    notes: String(fd.get("notes") ?? ""),
+                    fullName: lead.name,
+                    email: lead.email,
+                    phone: lead.mobile,
+                    university: lead.university,
+                    nationality: lead.nationality,
+                    intake: lead.intake,
+                    gender: lead.gender,
+                    heardAbout: heardChoice,
+                    heardAboutOther: heardChoice === "Other" ? heardOther.trim() : "",
+                    enquiryStatus: lead.enquiryStatus,
+                    notes: lead.notes ?? "",
                   },
                 });
                 if (!res.ok) throw new Error("failed");
@@ -256,28 +282,172 @@ function BookViewingPage() {
               }
             }}
           >
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="name">Full name</Label>
-                <Input id="name" name="name" required placeholder="Your name" />
+            {/* Your details */}
+            <section className="space-y-4">
+              <SectionLabel>Your details</SectionLabel>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="bv-name">Full name</Label>
+                  <Input
+                    id="bv-name"
+                    name="name"
+                    placeholder="Aisha Rahman"
+                    maxLength={100}
+                    className="h-11 rounded-xl"
+                    data-invalid={errors['name'] ? "true" : undefined}
+                  />
+                  <FieldError msg={errors['name']} />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="bv-email">Email</Label>
+                  <Input
+                    id="bv-email"
+                    name="email"
+                    type="email"
+                    placeholder="you@email.com"
+                    maxLength={255}
+                    className="h-11 rounded-xl"
+                    data-invalid={errors['email'] ? "true" : undefined}
+                  />
+                  <FieldError msg={errors['email']} />
+                </div>
+
+                <PhoneField
+                  id="bv-mobile"
+                  dialIso={dialIso}
+                  onDialChange={setDialIso}
+                  number={mobileNumber}
+                  onNumberChange={setMobileNumber}
+                  error={errors['mobile']}
+                />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" name="email" type="email" required placeholder="you@email.com" />
+            </section>
+
+            {/* Study details */}
+            <section className="space-y-4">
+              <SectionLabel>Study details</SectionLabel>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="bv-uni">University</Label>
+                  <select
+                    id="bv-uni"
+                    className={fieldClass}
+                    value={universityChoice}
+                    onChange={(e) => setUniversityChoice(e.target.value)}
+                    data-invalid={errors['university'] ? "true" : undefined}
+                  >
+                    <option value="" disabled>
+                      Select
+                    </option>
+                    {UNIVERSITIES.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
+                  {universityChoice === "Other" && (
+                    <Input
+                      className="mt-2 h-11 rounded-xl"
+                      placeholder="Your university"
+                      maxLength={120}
+                      value={universityOther}
+                      onChange={(e) => setUniversityOther(e.target.value)}
+                    />
+                  )}
+                  <input type="hidden" name="university" value={universityValue} />
+                  <FieldError msg={errors['university']} />
+                </div>
+
+                <SelectField
+                  id="bv-intake"
+                  name="intake"
+                  label="Intake"
+                  placeholder="Select month & year"
+                  options={intakes}
+                  error={errors['intake']}
+                />
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="bv-nat">Nationality</Label>
+                  <CountryCombobox
+                    id="bv-nat"
+                    value={nationalityIso}
+                    placeholder="Search your country"
+                    onChange={(c: Country) => setNationalityIso(c.iso)}
+                    className="w-full"
+                    invalid={Boolean(errors['nationality'])}
+                  />
+                  <input type="hidden" name="nationality" value={nationality} />
+                  <FieldError msg={errors['nationality']} />
+                </div>
+
+                <SelectField
+                  id="bv-gender"
+                  name="gender"
+                  label="Gender"
+                  options={GENDERS}
+                  error={errors['gender']}
+                />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone / WhatsApp</Label>
-                <Input id="phone" name="phone" required placeholder="+60..." />
+            </section>
+
+            {/* Viewing details */}
+            <section className="space-y-4">
+              <SectionLabel>Viewing details</SectionLabel>
+              <div className="grid gap-4">
+                <SelectField
+                  id="bv-status"
+                  name="enquiryStatus"
+                  label="Have you already submitted an availability enquiry?"
+                  options={ENQUIRY_STATUS}
+                  error={errors['enquiryStatus']}
+                />
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="bv-heard">How did you hear about us?</Label>
+                  <select
+                    id="bv-heard"
+                    className={fieldClass}
+                    value={heardChoice}
+                    onChange={(e) => setHeardChoice(e.target.value)}
+                    data-invalid={errors['heardAbout'] ? "true" : undefined}
+                  >
+                    <option value="" disabled>
+                      Select
+                    </option>
+                    {HEARD_ABOUT.map((h) => (
+                      <option key={h} value={h}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
+                  {heardChoice === "Other" && (
+                    <Input
+                      className="mt-2 h-11 rounded-xl"
+                      placeholder="Tell us more"
+                      maxLength={120}
+                      value={heardOther}
+                      onChange={(e) => setHeardOther(e.target.value)}
+                    />
+                  )}
+                  <input type="hidden" name="heardAbout" value={heardValue} />
+                  <FieldError msg={errors['heardAbout']} />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="bv-notes">Anything we should know? (optional)</Label>
+                  <Textarea
+                    id="bv-notes"
+                    name="notes"
+                    rows={3}
+                    maxLength={1000}
+                    className="rounded-xl"
+                    placeholder="Room type, budget, move-in date..."
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="university">University</Label>
-                <Input id="university" name="university" placeholder="MMU, HWUM..." />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="notes">Anything we should know?</Label>
-              <Textarea id="notes" name="notes" rows={3} placeholder="Room type, budget, move-in date..." />
-            </div>
+            </section>
 
             <Button type="submit" size="lg" className="w-full rounded-full" disabled={saving}>
               {saving ? <Loader2 className="size-4 animate-spin" /> : null}
