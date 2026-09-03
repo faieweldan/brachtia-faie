@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export const Route = createFileRoute("/admin-unlock")({
-  ssr: false,
   head: () => ({
     meta: [
       { title: "Staff access | Brachtia Homes" },
