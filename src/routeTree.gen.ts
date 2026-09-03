@@ -21,6 +21,7 @@ import { Route as AdminAppointmentsRouteImport } from './routes/admin.appointmen
 import { Route as AdminBookingsRouteImport } from './routes/admin.bookings'
 import { Route as AdminWebsiteRouteImport } from './routes/admin.website'
 import { Route as PropertiesIndexRouteImport } from './routes/properties.index'
+import { Route as AdminAppointmentsIndexRouteImport } from './routes/admin.appointments.index'
 import { Route as AdminWebsiteIndexRouteImport } from './routes/admin.website.index'
 import { Route as PropertiesSlugIndexRouteImport } from './routes/properties.$slug.index'
 import { Route as AdminWebsiteResidencesIndexRouteImport } from './routes/admin.website.residences.index'
@@ -87,6 +88,11 @@ const PropertiesIndexRoute = PropertiesIndexRouteImport.update({
   path: '/properties/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminAppointmentsIndexRoute = AdminAppointmentsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminAppointmentsRoute,
+} as any)
 const AdminWebsiteIndexRoute = AdminWebsiteIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -123,11 +129,12 @@ export interface FileRoutesByFullPath {
   '/book-viewing': typeof BookViewingRoute
   '/contact': typeof ContactRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/admin/appointments': typeof AdminAppointmentsRoute
+  '/admin/appointments': typeof AdminAppointmentsRouteWithChildren
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/website': typeof AdminWebsiteRouteWithChildren
   '/admin/': typeof AdminIndexRoute
   '/properties/': typeof PropertiesIndexRoute
+  '/admin/appointments/': typeof AdminAppointmentsIndexRoute
   '/admin/website/': typeof AdminWebsiteIndexRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
   '/admin/website/residences/$id': typeof AdminWebsiteResidencesIdRoute
@@ -141,10 +148,10 @@ export interface FileRoutesByTo {
   '/book-viewing': typeof BookViewingRoute
   '/contact': typeof ContactRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin': typeof AdminIndexRoute
   '/properties': typeof PropertiesIndexRoute
+  '/admin/appointments': typeof AdminAppointmentsIndexRoute
   '/admin/website': typeof AdminWebsiteIndexRoute
   '/properties/$slug': typeof PropertiesSlugIndexRoute
   '/admin/website/residences/$id': typeof AdminWebsiteResidencesIdRoute
@@ -160,11 +167,12 @@ export interface FileRoutesById {
   '/book-viewing': typeof BookViewingRoute
   '/contact': typeof ContactRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/admin/appointments': typeof AdminAppointmentsRoute
+  '/admin/appointments': typeof AdminAppointmentsRouteWithChildren
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/website': typeof AdminWebsiteRouteWithChildren
   '/admin/': typeof AdminIndexRoute
   '/properties/': typeof PropertiesIndexRoute
+  '/admin/appointments/': typeof AdminAppointmentsIndexRoute
   '/admin/website/': typeof AdminWebsiteIndexRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
   '/admin/website/residences/$id': typeof AdminWebsiteResidencesIdRoute
@@ -186,6 +194,7 @@ export interface FileRouteTypes {
     | '/admin/website'
     | '/admin/'
     | '/properties/'
+    | '/admin/appointments/'
     | '/admin/website/'
     | '/properties/$slug/'
     | '/admin/website/residences/$id'
@@ -199,10 +208,10 @@ export interface FileRouteTypes {
     | '/book-viewing'
     | '/contact'
     | '/sitemap.xml'
-    | '/admin/appointments'
     | '/admin/bookings'
     | '/admin'
     | '/properties'
+    | '/admin/appointments'
     | '/admin/website'
     | '/properties/$slug'
     | '/admin/website/residences/$id'
@@ -222,6 +231,7 @@ export interface FileRouteTypes {
     | '/admin/website'
     | '/admin/'
     | '/properties/'
+    | '/admin/appointments/'
     | '/admin/website/'
     | '/properties/$slug/'
     | '/admin/website/residences/$id'
@@ -328,6 +338,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PropertiesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/appointments/': {
+      id: '/admin/appointments/'
+      path: '/'
+      fullPath: '/admin/appointments/'
+      preLoaderRoute: typeof AdminAppointmentsIndexRouteImport
+      parentRoute: typeof AdminAppointmentsRoute
+    }
     '/admin/website/': {
       id: '/admin/website/'
       path: '/'
@@ -366,6 +383,17 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AdminAppointmentsRouteChildren {
+  AdminAppointmentsIndexRoute: typeof AdminAppointmentsIndexRoute
+}
+
+const AdminAppointmentsRouteChildren: AdminAppointmentsRouteChildren = {
+  AdminAppointmentsIndexRoute: AdminAppointmentsIndexRoute,
+}
+
+const AdminAppointmentsRouteWithChildren =
+  AdminAppointmentsRoute._addFileChildren(AdminAppointmentsRouteChildren)
+
 interface AdminWebsiteRouteChildren {
   AdminWebsiteIndexRoute: typeof AdminWebsiteIndexRoute
   AdminWebsiteResidencesIdRoute: typeof AdminWebsiteResidencesIdRoute
@@ -383,14 +411,14 @@ const AdminWebsiteRouteWithChildren = AdminWebsiteRoute._addFileChildren(
 )
 
 interface AdminRouteChildren {
-  AdminAppointmentsRoute: typeof AdminAppointmentsRoute
+  AdminAppointmentsRoute: typeof AdminAppointmentsRouteWithChildren
   AdminBookingsRoute: typeof AdminBookingsRoute
   AdminWebsiteRoute: typeof AdminWebsiteRouteWithChildren
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
-  AdminAppointmentsRoute: AdminAppointmentsRoute,
+  AdminAppointmentsRoute: AdminAppointmentsRouteWithChildren,
   AdminBookingsRoute: AdminBookingsRoute,
   AdminWebsiteRoute: AdminWebsiteRouteWithChildren,
   AdminIndexRoute: AdminIndexRoute,
