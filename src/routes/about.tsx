@@ -63,10 +63,29 @@ function AboutPage() {
   return (
     <>
       {/* Hero */}
-      <section className="relative bg-brand-tint">
-        <div className="mx-auto max-w-6xl px-4 pb-28 pt-14 sm:px-6 sm:pb-32 sm:pt-20">
+      <section className="relative overflow-hidden bg-brand-tint">
+        {/* Full-bleed image covering the right side, fading into the background */}
+        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[52%] md:block lg:w-[58%]">
+          <img
+            src={aboutHero.url}
+            alt="Students together outside a Brachtia Homes residence"
+            className="h-full w-full object-cover"
+          />
+          {/* fade the image's left edge into the brand-tint background */}
+          <div
+            aria-hidden
+            className="absolute inset-0 bg-gradient-to-r from-brand-tint via-brand-tint/55 to-transparent"
+          />
+          {/* soft fade at the bottom where the stats bar meets it */}
+          <div
+            aria-hidden
+            className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-brand-tint to-transparent"
+          />
+        </div>
+
+        <div className="relative mx-auto max-w-6xl px-4 pb-28 pt-14 sm:px-6 sm:pb-32 sm:pt-20">
           <div className="grid gap-10 md:grid-cols-[1.05fr_1fr] md:items-center">
-            <div>
+            <div className="md:pr-2 lg:pr-8">
               <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-brand">
                 About Brachtia Homes
               </p>
@@ -92,13 +111,14 @@ function AboutPage() {
               </Button>
             </div>
 
-            <img
-              src={aboutHero.url}
-              alt="Students together outside a Brachtia Homes residence"
-              width={1600}
-              height={1200}
-              className="aspect-[5/4] w-full rounded-[2.5rem] object-cover shadow-lift"
-            />
+            {/* Mobile: keep the image as a rounded card */}
+            <div className="md:hidden">
+              <img
+                src={aboutHero.url}
+                alt="Students together outside a Brachtia Homes residence"
+                className="aspect-[5/4] w-full rounded-[2.5rem] object-cover shadow-lift"
+              />
+            </div>
           </div>
         </div>
 
