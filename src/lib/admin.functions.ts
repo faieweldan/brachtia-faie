@@ -150,7 +150,29 @@ export const saveAppointmentType = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const deleteAppointmentType = createServerFn({ method: "POST" })
+  .inputValidator((data: { id: string }) => data)
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    const { error } = await supabase.from("appointment_types").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/** Lightweight residence list for pickers. */
+export const listResidenceOptions = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const supabase = await admin();
+    const { data, error } = await supabase
+      .from("residences")
+      .select("id,slug,name")
+      .order("sort_order");
+    if (error) throw new Error(error.message);
+    return (data ?? []) as { id: string; slug: string; name: string }[];
+  });
+
 /* ---------------- Residences ---------------- */
+
 
 export const listResidences = createServerFn({ method: "GET" })
   .handler(async () => {
