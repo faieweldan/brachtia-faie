@@ -65,6 +65,7 @@ const EDITABLE_KEYS = [
   "utilities_note",
   "inside_apartment",
   "apartment_footnote",
+  "icon_overrides",
   "coords",
   "waze_url",
   "nearby_universities",
