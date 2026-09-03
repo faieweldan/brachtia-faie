@@ -41,3 +41,16 @@ For every public route: unique title (<60 chars), description (<160), `og:title`
 - Sitemap as `src/routes/sitemap[.]xml.ts` returning XML; residence entries derived from the existing `properties` data, no new database access.
 - No `lastmod` values unless a real per-page timestamp exists.
 - No visual/layout redesign — only alt text and small factual copy blocks change on screen.
+
+## 5. Admin portal exposure
+
+`/admin` currently has no login (removed at your request) and `ssr: false`. It is already `noindex`.
+
+This plan hardens crawler exposure only:
+- `Disallow: /admin` in robots.txt, `noindex, nofollow` on every admin route, excluded from sitemap, and no links to it from public pages.
+
+Important: that hides `/admin` from search engines but anyone who types the URL can still open it. Locking it down for real needs an access gate — options if you want one:
+- **Passcode gate** — a single shared password stored as a backend secret, verified server-side. Quick, no accounts.
+- **Staff login** — email/password accounts plus an admin role table with server-side checks (strongest, matches the database rules already in place).
+
+Say which you want and I'll fold it in; otherwise the plan ships crawler-level protection only.
