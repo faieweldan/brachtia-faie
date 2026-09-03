@@ -62,78 +62,71 @@ const differences = [
 function AboutPage() {
   return (
     <>
-      {/* Hero */}
-      <section className="bg-brand-tint px-4 pt-16 sm:px-6 sm:pt-24">
-        <div className="mx-auto grid max-w-6xl items-center gap-12 md:grid-cols-[1.1fr_1fr] md:gap-16">
-          {/* Copy */}
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-brand">
-              About Brachtia Homes
-            </p>
-            <h1 className="mt-3 text-4xl font-extrabold leading-[1.08] tracking-tight text-brand-deep sm:text-5xl">
-              Designed for students.
-              <span className="block">Trusted by parents and universities.</span>
-            </h1>
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground">
-              For over 17 years, Brachtia Homes has been helping local and international students
-              find safe, well-managed accommodation and feel at home while studying in Malaysia.
-            </p>
-            <p className="mt-3 max-w-xl text-base leading-relaxed text-muted-foreground">
-              As an appointed off-campus accommodation provider for universities and education
-              institutions, we support students beyond finding a room — from arrival and check-in
-              to everyday living.
-            </p>
-            <Button
-              asChild
-              size="lg"
-              className="mt-8 h-13 rounded-full px-7 text-base font-bold"
-            >
-              <Link to="/properties">Explore our residences</Link>
-            </Button>
-          </div>
+      {/* Hero — image full-size on the right of the card, fading into the left (copy) side */}
+      <section className="bg-brand-tint px-4 pt-16 pb-10 sm:px-6 sm:pt-24 sm:pb-14">
+        <div className="mx-auto max-w-6xl">
+          <div className="grid overflow-hidden rounded-[2.5rem] bg-card shadow-lift md:grid-cols-2">
+            {/* Copy */}
+            <div className="p-8 sm:p-12 lg:p-16">
+              <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-brand">
+                About Brachtia Homes
+              </p>
+              <h1 className="mt-3 text-4xl font-extrabold leading-[1.08] tracking-tight text-brand-deep sm:text-5xl">
+                Designed for students.
+                <span className="block">Trusted by parents and universities.</span>
+              </h1>
+              <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground">
+                For over 17 years, Brachtia Homes has been helping local and international students
+                find safe, well-managed accommodation and feel at home while studying in Malaysia.
+              </p>
+              <p className="mt-3 max-w-xl text-base leading-relaxed text-muted-foreground">
+                As an appointed off-campus accommodation provider for universities and education
+                institutions, we support students beyond finding a room — from arrival and check-in
+                to everyday living.
+              </p>
+              <Button
+                asChild
+                size="lg"
+                className="mt-8 h-13 rounded-full px-7 text-base font-bold"
+              >
+                <Link to="/properties">Explore our residences</Link>
+              </Button>
+            </div>
 
-          {/* Desktop photo — edges feather into the beige background (gentle on the right where the last student stands) */}
-          <div className="relative hidden md:block">
-            <div
-              aria-hidden
-              className="absolute -inset-10 rounded-[3rem] bg-brand-soft/40 blur-3xl"
-            />
-            <img
-              src={aboutHero.url}
-              alt="Students together outside a Brachtia Homes residence"
-              className="relative aspect-[16/9] w-full object-cover object-center"
-              style={{
-                maskImage:
-                  "linear-gradient(to right, transparent, #000 6%, #000 97%, transparent), linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent)",
-                maskComposite: "intersect",
-                WebkitMaskImage:
-                  "linear-gradient(to right, transparent, #000 6%, #000 97%, transparent), linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent)",
-                WebkitMaskComposite: "source-in",
-              }}
-            />
-          </div>
+            {/* Desktop image — fills the right column, left edge dissolves into the copy side */}
+            <div className="relative hidden md:block">
+              <img
+                src={aboutHero.url}
+                alt="Students together outside a Brachtia Homes residence"
+                className="absolute inset-0 h-full w-full object-cover object-center"
+                style={{
+                  maskImage: "linear-gradient(to right, transparent, #000 28%)",
+                  WebkitMaskImage:
+                    "linear-gradient(to right, transparent, #000 28%)",
+                }}
+              />
+            </div>
 
-          {/* Mobile photo */}
-          <div className="md:hidden">
-            <img
-              src={aboutHero.url}
-              alt="Students together outside a Brachtia Homes residence"
-              className="aspect-[16/9] w-full object-cover object-center"
-              style={{
-                maskImage:
-                  "linear-gradient(to right, transparent, #000 6%, #000 97%, transparent), linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent)",
-                maskComposite: "intersect",
-                WebkitMaskImage:
-                  "linear-gradient(to right, transparent, #000 6%, #000 97%, transparent), linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent)",
-                WebkitMaskComposite: "source-in",
-              }}
-            />
+            {/* Mobile image — top and bottom edges dissolve into the card */}
+            <div className="md:hidden">
+              <img
+                src={aboutHero.url}
+                alt="Students together outside a Brachtia Homes residence"
+                className="h-72 w-full object-cover object-center sm:h-96"
+                style={{
+                  maskImage:
+                    "linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent)",
+                  WebkitMaskImage:
+                    "linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent)",
+                }}
+              />
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Stats bar */}
-      <div className="bg-brand-tint px-4 pb-12 pt-10 sm:px-6 sm:pb-16 sm:pt-2">
+      {/* Stats bar — sits between the hero (first section) and university partners (second section) */}
+      <div className="bg-brand-tint px-4 pb-12 pt-4 sm:px-6 sm:pb-16">
         <div className="mx-auto grid max-w-5xl grid-cols-2 gap-px overflow-hidden rounded-3xl bg-border shadow-lift sm:grid-cols-4">
           {stats.map((s) => (
             <div key={s.label} className="bg-card px-6 py-7 text-center">
