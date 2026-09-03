@@ -133,7 +133,7 @@ function AboutPage() {
       </section>
 
       {/* Stats bar */}
-      <div className="bg-brand-tint px-4 pb-12 pt-2 sm:px-6 sm:pb-16">
+      <div className="bg-brand-tint px-4 pb-12 pt-10 sm:px-6 sm:pb-16 sm:pt-2">
         <div className="mx-auto grid max-w-5xl grid-cols-2 gap-px overflow-hidden rounded-3xl bg-border shadow-lift sm:grid-cols-4">
           {stats.map((s) => (
             <div key={s.label} className="bg-card px-6 py-7 text-center">
