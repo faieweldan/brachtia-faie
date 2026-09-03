@@ -199,7 +199,7 @@ function PropertyPage() {
           <div className="overflow-hidden rounded-3xl">
             <img
               src={property.heroImage}
-              alt={property.name}
+              alt={`${property.name} student accommodation in ${property.location}`}
               width={1600}
               height={1200}
               className="h-64 w-full object-cover sm:h-[30rem]"
