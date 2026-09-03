@@ -65,7 +65,16 @@ function AdminLayout() {
             );
           })}
         </nav>
+        <button
+          type="button"
+          onClick={handleLock}
+          className="mt-auto flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <Lock className="size-4" />
+          Lock portal
+        </button>
       </aside>
+
 
 
       <div className="flex min-w-0 flex-1 flex-col">
