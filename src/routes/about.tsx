@@ -92,32 +92,47 @@ function AboutPage() {
             </Button>
           </div>
 
-          {/* Desktop photo — feathered into the beige background */}
+          {/* Desktop photo — edges feather into the beige background */}
           <div className="relative hidden md:block">
             <div
               aria-hidden
               className="absolute -inset-8 rounded-[3rem] bg-brand-soft/40 blur-3xl"
             />
-            <img
-              src={aboutHero.url}
-              alt="Students together outside a Brachtia Homes residence"
-              className="relative aspect-[16/9] w-full rounded-[1.75rem] object-cover object-center shadow-lift"
-              style={{
-                WebkitMaskImage:
-                  "radial-gradient(115% 125% at 50% 50%, #000 76%, transparent 100%)",
-                maskImage:
-                  "radial-gradient(115% 125% at 50% 50%, #000 76%, transparent 100%)",
-              }}
-            />
+            <div className="relative overflow-hidden rounded-[1.75rem] shadow-lift">
+              <img
+                src={aboutHero.url}
+                alt="Students together outside a Brachtia Homes residence"
+                className="aspect-[16/9] w-full object-cover object-center"
+              />
+              {/* beige vignette so the photo dissolves into the background */}
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 rounded-[1.75rem]"
+                style={{
+                  background:
+                    "radial-gradient(100% 100% at 50% 50%, transparent 70%, var(--brand-tint) 100%)",
+                }}
+              />
+            </div>
           </div>
 
           {/* Mobile photo */}
           <div className="md:hidden">
-            <img
-              src={aboutHero.url}
-              alt="Students together outside a Brachtia Homes residence"
-              className="aspect-[16/10] w-full rounded-[1.75rem] object-cover object-center shadow-lift"
-            />
+            <div className="relative overflow-hidden rounded-[1.5rem] shadow-lift">
+              <img
+                src={aboutHero.url}
+                alt="Students together outside a Brachtia Homes residence"
+                className="aspect-[16/9] w-full object-cover object-center"
+              />
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 rounded-[1.5rem]"
+                style={{
+                  background:
+                    "radial-gradient(100% 100% at 50% 50%, transparent 70%, var(--brand-tint) 100%)",
+                }}
+              />
+            </div>
           </div>
         </div>
       </section>
