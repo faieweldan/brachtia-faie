@@ -96,17 +96,17 @@ function AboutPage() {
           <div className="relative hidden md:block">
             <div
               aria-hidden
-              className="absolute -inset-6 rounded-[2.5rem] bg-brand-soft/30 blur-2xl"
+              className="absolute -inset-8 rounded-[3rem] bg-brand-soft/40 blur-3xl"
             />
             <img
               src={aboutHero.url}
               alt="Students together outside a Brachtia Homes residence"
-              className="relative aspect-[16/10] w-full rounded-[1.75rem] object-cover object-center shadow-lift"
+              className="relative aspect-[16/9] w-full rounded-[1.75rem] object-cover object-center shadow-lift"
               style={{
                 WebkitMaskImage:
-                  "radial-gradient(120% 120% at 50% 50%, #000 72%, transparent 100%)",
+                  "radial-gradient(115% 125% at 50% 50%, #000 76%, transparent 100%)",
                 maskImage:
-                  "radial-gradient(120% 120% at 50% 50%, #000 72%, transparent 100%)",
+                  "radial-gradient(115% 125% at 50% 50%, #000 76%, transparent 100%)",
               }}
             />
           </div>
@@ -116,7 +116,7 @@ function AboutPage() {
             <img
               src={aboutHero.url}
               alt="Students together outside a Brachtia Homes residence"
-              className="aspect-[5/4] w-full rounded-[2.5rem] object-cover shadow-lift"
+              className="aspect-[16/10] w-full rounded-[1.75rem] object-cover object-center shadow-lift"
             />
           </div>
         </div>
