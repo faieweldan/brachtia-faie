@@ -92,7 +92,7 @@ function AboutPage() {
             </Button>
           </div>
 
-          {/* Desktop photo — all four edges feather into the beige background */}
+          {/* Desktop photo — edges feather into the beige background (gentle on the right where the last student stands) */}
           <div className="relative hidden md:block">
             <div
               aria-hidden
@@ -104,10 +104,10 @@ function AboutPage() {
               className="relative aspect-[16/9] w-full object-cover object-center"
               style={{
                 maskImage:
-                  "linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 10%, #000 90%, transparent)",
+                  "linear-gradient(to right, transparent, #000 6%, #000 97%, transparent), linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent)",
                 maskComposite: "intersect",
                 WebkitMaskImage:
-                  "linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 10%, #000 90%, transparent)",
+                  "linear-gradient(to right, transparent, #000 6%, #000 97%, transparent), linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent)",
                 WebkitMaskComposite: "source-in",
               }}
             />
@@ -121,10 +121,10 @@ function AboutPage() {
               className="aspect-[16/9] w-full object-cover object-center"
               style={{
                 maskImage:
-                  "linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 10%, #000 90%, transparent)",
+                  "linear-gradient(to right, transparent, #000 6%, #000 97%, transparent), linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent)",
                 maskComposite: "intersect",
                 WebkitMaskImage:
-                  "linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 10%, #000 90%, transparent)",
+                  "linear-gradient(to right, transparent, #000 6%, #000 97%, transparent), linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent)",
                 WebkitMaskComposite: "source-in",
               }}
             />
