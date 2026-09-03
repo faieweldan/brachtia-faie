@@ -111,7 +111,7 @@ function AboutPage() {
       </section>
 
       {/* Stats bar — sits between the hero (first section) and university partners (second section) */}
-      <div className="bg-background px-4 py-12 sm:px-6 sm:py-14">
+      <div className="bg-background px-4 py-6 sm:px-6 sm:py-8">
         <div className="mx-auto grid max-w-5xl grid-cols-2 gap-px overflow-hidden rounded-3xl bg-border shadow-lift sm:grid-cols-4">
           {stats.map((s) => (
             <div key={s.label} className="bg-card px-6 py-7 text-center">
