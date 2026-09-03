@@ -63,28 +63,23 @@ function AboutPage() {
   return (
     <>
       {/* Hero */}
-      <section className="relative overflow-hidden bg-brand-tint">
+      <section className="relative bg-brand-tint">
         {/* Full-bleed image covering the right side, fading into the background */}
-        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[52%] md:block lg:w-[58%]">
+        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[48%] overflow-hidden md:block lg:w-[50%]">
           <img
             src={aboutHero.url}
             alt="Students together outside a Brachtia Homes residence"
             className="h-full w-full object-cover"
           />
-          {/* fade the image's left edge into the brand-tint background */}
+          {/* narrow fade only on the left edge so the image stays visible */}
           <div
             aria-hidden
-            className="absolute inset-0 bg-gradient-to-r from-brand-tint via-brand-tint/55 to-transparent"
-          />
-          {/* soft fade at the bottom where the stats bar meets it */}
-          <div
-            aria-hidden
-            className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-brand-tint to-transparent"
+            className="absolute inset-0 bg-gradient-to-r from-brand-tint via-brand-tint/30 to-transparent md:from-brand-tint md:via-brand-tint/10"
           />
         </div>
 
-        <div className="relative mx-auto max-w-6xl px-4 pb-28 pt-14 sm:px-6 sm:pb-32 sm:pt-20">
-          <div className="grid gap-10 md:grid-cols-[1.05fr_1fr] md:items-center">
+        <div className="relative mx-auto max-w-6xl px-4 pt-14 sm:px-6 sm:pt-20">
+          <div className="grid gap-10 md:grid-cols-[1.1fr_1fr] md:items-center">
             <div className="md:pr-2 lg:pr-8">
               <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-brand">
                 About Brachtia Homes
@@ -121,21 +116,21 @@ function AboutPage() {
             </div>
           </div>
         </div>
-
-        {/* Stats bar overlapping the hero edge */}
-        <div className="absolute inset-x-0 bottom-0 translate-y-1/2 px-4 sm:px-6">
-          <div className="mx-auto grid max-w-5xl grid-cols-2 gap-px overflow-hidden rounded-3xl bg-border shadow-lift sm:grid-cols-4">
-            {stats.map((s) => (
-              <div key={s.label} className="bg-card px-4 py-6 text-center">
-                <p className="text-2xl font-extrabold tracking-tight text-brand sm:text-3xl">
-                  {s.value}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">{s.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
       </section>
+
+      {/* Stats bar overlapping the hero edge */}
+      <div className="relative -mt-12 px-4 sm:-mt-14 sm:px-6">
+        <div className="mx-auto grid max-w-5xl grid-cols-2 gap-px overflow-hidden rounded-3xl bg-border shadow-lift sm:grid-cols-4">
+          {stats.map((s) => (
+            <div key={s.label} className="bg-card px-4 py-6 text-center">
+              <p className="text-2xl font-extrabold tracking-tight text-brand sm:text-3xl">
+                {s.value}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">{s.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* University partners */}
       <section className="bg-background pb-14 pt-24 sm:pb-20 sm:pt-28">
