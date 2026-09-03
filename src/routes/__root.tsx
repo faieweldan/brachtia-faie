@@ -17,7 +17,9 @@ import Footer from "@/components/site/Footer";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { fetchSiteData } from "@/lib/site-data.functions";
-import { setSiteData } from "@/data/properties";
+import { setSiteData, company } from "@/data/properties";
+import { SITE_URL, ORGANIZATION_ID } from "@/lib/seo";
+
 
 
 function NotFoundComponent() {
