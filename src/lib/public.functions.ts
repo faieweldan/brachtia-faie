@@ -161,14 +161,21 @@ export const bookAppointment = createServerFn({ method: "POST" })
       .eq("slug", data.residenceSlug)
       .maybeSingle();
 
+    const typeSlug = data.mode === "virtual" ? "viewing-virtual" : "viewing-in-person";
+    const { data: type } = await supabaseAdmin
+      .from("appointment_types")
+      .select("duration_minutes")
+      .eq("slug", typeSlug)
+      .maybeSingle();
+
     const { error } = await supabaseAdmin.from("appointments").insert({
-      type_slug: data.mode === "virtual" ? "viewing-virtual" : "viewing-in-person",
+      type_slug: typeSlug,
       residence_id: (residence?.id as string | undefined) ?? null,
       residence_slug: data.residenceSlug,
       residence_name: (residence?.name as string | undefined) ?? data.residenceName,
       mode: data.mode,
       starts_at: data.startsAt,
-      duration_minutes: 30,
+      duration_minutes: (type?.duration_minutes as number | undefined) ?? 30,
       status: "pending",
       full_name: data.fullName,
       email: data.email,
@@ -182,6 +189,7 @@ export const bookAppointment = createServerFn({ method: "POST" })
       enquiry_status: data.enquiryStatus,
       notes: data.notes,
     });
+
 
     if (error) {
       console.error("appointment insert failed", error);
