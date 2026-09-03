@@ -161,6 +161,7 @@ export type Database = {
           residence_id: string | null
           slot_minutes: number
           start_time: string
+          type_slug: string
           weekday: number
         }
         Insert: {
@@ -174,6 +175,7 @@ export type Database = {
           residence_id?: string | null
           slot_minutes?: number
           start_time?: string
+          type_slug?: string
           weekday: number
         }
         Update: {
@@ -187,6 +189,7 @@ export type Database = {
           residence_id?: string | null
           slot_minutes?: number
           start_time?: string
+          type_slug?: string
           weekday?: number
         }
         Relationships: [
