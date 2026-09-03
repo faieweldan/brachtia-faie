@@ -1,0 +1,1 @@
+ALTER TABLE public.availability_rules ADD COLUMN IF NOT EXISTS type_slug text NOT NULL DEFAULT '';
