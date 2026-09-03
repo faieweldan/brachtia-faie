@@ -268,16 +268,22 @@ function ResidenceEditor() {
                   label="Building facilities"
                   items={form.building_facilities ?? []}
                   onChange={(v) => set("building_facilities", v)}
+                  icons={(form.icon_overrides as Record<string, string>) ?? {}}
+                  onIconsChange={(v) => set("icon_overrides", v)}
                 />
                 <StringList
                   label="Included in your stay"
                   items={form.included_in_stay ?? []}
                   onChange={(v) => set("included_in_stay", v)}
+                  icons={(form.icon_overrides as Record<string, string>) ?? {}}
+                  onIconsChange={(v) => set("icon_overrides", v)}
                 />
                 <StringList
                   label="Inside your apartment"
                   items={form.inside_apartment ?? []}
                   onChange={(v) => set("inside_apartment", v)}
+                  icons={(form.icon_overrides as Record<string, string>) ?? {}}
+                  onIconsChange={(v) => set("icon_overrides", v)}
                 />
                 <div className="space-y-4">
                   <AreaField
