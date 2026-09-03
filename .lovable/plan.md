@@ -42,15 +42,15 @@ For every public route: unique title (<60 chars), description (<160), `og:title`
 - No `lastmod` values unless a real per-page timestamp exists.
 - No visual/layout redesign — only alt text and small factual copy blocks change on screen.
 
-## 5. Admin portal exposure
+## 5. Lock down the admin portal
 
-`/admin` currently has no login (removed at your request) and `ssr: false`. It is already `noindex`.
+`/admin` currently has no login and anyone with the URL can open it. Adding a single shared passcode gate.
 
-This plan hardens crawler exposure only:
-- `Disallow: /admin` in robots.txt, `noindex, nofollow` on every admin route, excluded from sitemap, and no links to it from public pages.
+- Store the passcode as a server-side secret (value `29091970`) plus a separate random session secret — never in client code or the browser bundle.
+- New `/admin/unlock` page with a passcode field. The code is checked inside a server function with a timing-safe comparison; success sets an encrypted, http-only session cookie (7-day expiry).
+- Every `/admin` route checks that cookie before rendering; without it the visitor is redirected to `/admin/unlock`.
+- A "Lock" button in the admin sidebar clears the session.
+- Crawler side: `Disallow: /admin` in robots.txt, `noindex, nofollow` on admin routes, excluded from the sitemap, and no public links to it.
 
-Important: that hides `/admin` from search engines but anyone who types the URL can still open it. Locking it down for real needs an access gate — options if you want one:
-- **Passcode gate** — a single shared password stored as a backend secret, verified server-side. Quick, no accounts.
-- **Staff login** — email/password accounts plus an admin role table with server-side checks (strongest, matches the database rules already in place).
+Note: a shared passcode is a gate, not per-person accounts — anyone with the code gets in and it can only be changed globally. Staff logins with roles can replace it later if you want.
 
-Say which you want and I'll fold it in; otherwise the plan ships crawler-level protection only.
