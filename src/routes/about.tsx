@@ -92,25 +92,24 @@ function AboutPage() {
             </Button>
           </div>
 
-          {/* Desktop photo — edges feather into the beige background */}
+          {/* Desktop photo — edges dissolve into the beige background */}
           <div className="relative hidden md:block">
             <div
               aria-hidden
-              className="absolute -inset-8 rounded-[3rem] bg-brand-soft/40 blur-3xl"
+              className="absolute -inset-10 rounded-[3rem] bg-brand-soft/40 blur-3xl"
             />
-            <div className="relative overflow-hidden rounded-[1.75rem] shadow-lift">
+            <div className="relative">
               <img
                 src={aboutHero.url}
                 alt="Students together outside a Brachtia Homes residence"
                 className="aspect-[16/9] w-full object-cover object-center"
               />
-              {/* beige vignette so the photo dissolves into the background */}
               <div
                 aria-hidden
-                className="pointer-events-none absolute inset-0 rounded-[1.75rem]"
+                className="pointer-events-none absolute inset-0"
                 style={{
                   background:
-                    "radial-gradient(100% 100% at 50% 50%, transparent 70%, var(--brand-tint) 100%)",
+                    "radial-gradient(100% 100% at 50% 50%, transparent 55%, var(--brand-tint) 90%)",
                 }}
               />
             </div>
@@ -118,7 +117,7 @@ function AboutPage() {
 
           {/* Mobile photo */}
           <div className="md:hidden">
-            <div className="relative overflow-hidden rounded-[1.5rem] shadow-lift">
+            <div className="relative">
               <img
                 src={aboutHero.url}
                 alt="Students together outside a Brachtia Homes residence"
@@ -126,10 +125,10 @@ function AboutPage() {
               />
               <div
                 aria-hidden
-                className="pointer-events-none absolute inset-0 rounded-[1.5rem]"
+                className="pointer-events-none absolute inset-0"
                 style={{
                   background:
-                    "radial-gradient(100% 100% at 50% 50%, transparent 70%, var(--brand-tint) 100%)",
+                    "radial-gradient(100% 100% at 50% 50%, transparent 55%, var(--brand-tint) 90%)",
                 }}
               />
             </div>
