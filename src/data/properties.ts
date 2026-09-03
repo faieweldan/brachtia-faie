@@ -128,6 +128,8 @@ export type Property = {
   utilitiesNote: string;
   insideApartment: string[];
   apartmentFootnote?: string;
+  /** Optional per-item icon overrides, keyed by the item's label */
+  iconOverrides?: Record<string, string>;
   coords: { lat: number; lng: number };
   nearbyUniversities: PlaceNearby[];
   pointsOfInterest: PlaceNearby[];

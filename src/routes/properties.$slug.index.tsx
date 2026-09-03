@@ -285,18 +285,21 @@ function PropertyPage() {
               <AmenitySection
                 title="Building Facilities & Amenities"
                 items={property.buildingFacilities}
+                iconOverrides={property.iconOverrides}
                 iconMode="facility"
               />
               <AmenitySection
                 title="Included in Your Stay"
                 items={property.includedInStay}
                 note={property.utilitiesNote}
+                iconOverrides={property.iconOverrides}
                 iconMode="facility"
               />
               <AmenitySection
                 title="Inside Your Apartment"
                 items={property.insideApartment}
                 footnote={property.apartmentFootnote}
+                iconOverrides={property.iconOverrides}
                 iconMode="facility"
               />
             </div>
