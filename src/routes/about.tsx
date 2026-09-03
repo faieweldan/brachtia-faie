@@ -65,7 +65,7 @@ function AboutPage() {
       {/* Hero */}
       <section className="relative bg-brand-tint">
         {/* Full-bleed image covering the right side, fading into the background */}
-        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[48%] overflow-hidden md:block lg:w-[50%]">
+        <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[46%] overflow-hidden md:block">
           <img
             src={aboutHero.url}
             alt="Students together outside a Brachtia Homes residence"
@@ -74,7 +74,7 @@ function AboutPage() {
           {/* narrow fade only on the left edge so the image stays visible */}
           <div
             aria-hidden
-            className="absolute inset-0 bg-gradient-to-r from-brand-tint via-brand-tint/30 to-transparent md:from-brand-tint md:via-brand-tint/10"
+            className="absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-brand-tint to-transparent md:w-16"
           />
         </div>
 
