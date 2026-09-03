@@ -118,8 +118,8 @@ function AboutPage() {
         </div>
       </section>
 
-      {/* Stats bar overlapping the hero edge */}
-      <div className="relative -mt-12 px-4 sm:-mt-14 sm:px-6">
+      {/* Stats bar */}
+      <div className="relative px-4 pt-10 sm:px-6 sm:pt-12">
         <div className="mx-auto grid max-w-5xl grid-cols-2 gap-px overflow-hidden rounded-3xl bg-border shadow-lift sm:grid-cols-4">
           {stats.map((s) => (
             <div key={s.label} className="bg-card px-4 py-6 text-center">
