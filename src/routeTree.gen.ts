@@ -15,6 +15,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AdminUnlockRouteImport } from './routes/admin-unlock'
 import { Route as BookViewingRouteImport } from './routes/book-viewing'
 import { Route as ContactRouteImport } from './routes/contact'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAppointmentsRouteImport } from './routes/admin.appointments'
 import { Route as AdminBookingsRouteImport } from './routes/admin.bookings'
@@ -54,6 +55,11 @@ const BookViewingRoute = BookViewingRouteImport.update({
 const ContactRoute = ContactRouteImport.update({
   id: '/contact',
   path: '/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
@@ -116,6 +122,7 @@ export interface FileRoutesByFullPath {
   '/admin-unlock': typeof AdminUnlockRoute
   '/book-viewing': typeof BookViewingRoute
   '/contact': typeof ContactRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/website': typeof AdminWebsiteRouteWithChildren
@@ -133,6 +140,7 @@ export interface FileRoutesByTo {
   '/admin-unlock': typeof AdminUnlockRoute
   '/book-viewing': typeof BookViewingRoute
   '/contact': typeof ContactRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin': typeof AdminIndexRoute
@@ -151,6 +159,7 @@ export interface FileRoutesById {
   '/admin-unlock': typeof AdminUnlockRoute
   '/book-viewing': typeof BookViewingRoute
   '/contact': typeof ContactRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/website': typeof AdminWebsiteRouteWithChildren
@@ -171,6 +180,7 @@ export interface FileRouteTypes {
     | '/admin-unlock'
     | '/book-viewing'
     | '/contact'
+    | '/sitemap.xml'
     | '/admin/appointments'
     | '/admin/bookings'
     | '/admin/website'
@@ -188,6 +198,7 @@ export interface FileRouteTypes {
     | '/admin-unlock'
     | '/book-viewing'
     | '/contact'
+    | '/sitemap.xml'
     | '/admin/appointments'
     | '/admin/bookings'
     | '/admin'
@@ -205,6 +216,7 @@ export interface FileRouteTypes {
     | '/admin-unlock'
     | '/book-viewing'
     | '/contact'
+    | '/sitemap.xml'
     | '/admin/appointments'
     | '/admin/bookings'
     | '/admin/website'
@@ -224,6 +236,7 @@ export interface RootRouteChildren {
   AdminUnlockRoute: typeof AdminUnlockRoute
   BookViewingRoute: typeof BookViewingRoute
   ContactRoute: typeof ContactRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   PropertiesIndexRoute: typeof PropertiesIndexRoute
   PropertiesSlugIndexRoute: typeof PropertiesSlugIndexRoute
   ApiPublicPhotoSplatRoute: typeof ApiPublicPhotoSplatRoute
@@ -271,6 +284,13 @@ declare module '@tanstack/react-router' {
       path: '/contact'
       fullPath: '/contact'
       preLoaderRoute: typeof ContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/': {
@@ -385,6 +405,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminUnlockRoute: AdminUnlockRoute,
   BookViewingRoute: BookViewingRoute,
   ContactRoute: ContactRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   PropertiesIndexRoute: PropertiesIndexRoute,
   PropertiesSlugIndexRoute: PropertiesSlugIndexRoute,
   ApiPublicPhotoSplatRoute: ApiPublicPhotoSplatRoute,
