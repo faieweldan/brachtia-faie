@@ -17,7 +17,9 @@ import Footer from "@/components/site/Footer";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { fetchSiteData } from "@/lib/site-data.functions";
-import { setSiteData } from "@/data/properties";
+import { setSiteData, company } from "@/data/properties";
+import { SITE_URL, ORGANIZATION_ID } from "@/lib/seo";
+
 
 
 function NotFoundComponent() {
@@ -102,8 +104,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "Fully furnished off-campus student rooms and apartments in Cyberjaya with 24/7 support and flexible stays.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:site_name", content: "Brachtia Homes" },
+      { property: "og:locale", content: "en_MY" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {
@@ -119,6 +122,45 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
 
     ],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@graph": [
+            {
+              "@type": "Organization",
+              "@id": ORGANIZATION_ID,
+              name: company.name,
+              legalName: company.legalName,
+              url: SITE_URL,
+              email: company.email,
+              telephone: company.phones,
+              slogan: company.tagline,
+              logo: `${SITE_URL}/favicon.ico`,
+              address: {
+                "@type": "PostalAddress",
+                streetAddress:
+                  "Level 15 D'Pulze, Lingkaran Cyber Point Timur, Cyber 12",
+                addressLocality: "Cyberjaya",
+                addressRegion: "Selangor",
+                postalCode: "63000",
+                addressCountry: "MY",
+              },
+            },
+            {
+              "@type": "WebSite",
+              "@id": `${SITE_URL}/#website`,
+              url: SITE_URL,
+              name: company.name,
+              publisher: { "@id": ORGANIZATION_ID },
+              inLanguage: "en-MY",
+            },
+          ],
+        }),
+      },
+    ],
+
   }),
   shellComponent: RootShell,
   component: RootComponent,

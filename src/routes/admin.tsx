@@ -1,17 +1,24 @@
-import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { CalendarDays, Globe, Inbox, LayoutDashboard } from "lucide-react";
+import { createFileRoute, Link, Outlet, redirect, useRouter, useRouterState } from "@tanstack/react-router";
+import { CalendarDays, Globe, Inbox, LayoutDashboard, Lock } from "lucide-react";
+
+import { isAdminUnlocked, lockAdmin } from "@/lib/admin-gate.functions";
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
+  beforeLoad: async () => {
+    const { unlocked } = await isAdminUnlocked();
+    if (!unlocked) throw redirect({ to: "/admin-unlock" });
+  },
   head: () => ({
     meta: [
       { title: "Admin | Brachtia Homes" },
       { name: "description", content: "Brachtia Homes staff portal." },
-      { name: "robots", content: "noindex" },
+      { name: "robots", content: "noindex, nofollow" },
     ],
   }),
   component: AdminLayout,
 });
+
 
 
 const NAV: { to: string; label: string; icon: typeof Inbox; exact?: boolean }[] = [
@@ -25,6 +32,14 @@ const NAV: { to: string; label: string; icon: typeof Inbox; exact?: boolean }[] 
 
 function AdminLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const router = useRouter();
+
+  async function handleLock() {
+    await lockAdmin();
+    await router.navigate({ to: "/admin-unlock", replace: true });
+  }
+
+
 
 
   return (
@@ -50,7 +65,16 @@ function AdminLayout() {
             );
           })}
         </nav>
+        <button
+          type="button"
+          onClick={handleLock}
+          className="mt-auto flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <Lock className="size-4" />
+          Lock portal
+        </button>
       </aside>
+
 
 
       <div className="flex min-w-0 flex-1 flex-col">

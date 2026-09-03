@@ -1,8 +1,12 @@
 User-agent: Googlebot
 Allow: /
+Disallow: /admin
+Disallow: /admin-unlock
 
 User-agent: Bingbot
 Allow: /
+Disallow: /admin
+Disallow: /admin-unlock
 
 User-agent: Twitterbot
 Allow: /
@@ -12,3 +16,7 @@ Allow: /
 
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /admin-unlock
+
+Sitemap: https://brachtiahomes.com/sitemap.xml

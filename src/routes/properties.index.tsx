@@ -2,10 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import PropertyCard from "@/components/site/PropertyCard";
 import CtaBand from "@/components/site/CtaBand";
 import { properties } from "@/data/properties";
+import { SITE_URL } from "@/lib/seo";
 
 const title = "Student Properties in Cyberjaya | Brachtia Homes";
 const description =
   "Browse Brachtia Homes student accommodation in Cyberjaya — The Arc shared units and Solstice Residence private apartments, with live room availability and pricing.";
+const canonical = `${SITE_URL}/properties`;
 
 export const Route = createFileRoute("/properties/")({
   head: () => ({
@@ -14,10 +16,15 @@ export const Route = createFileRoute("/properties/")({
       { name: "description", content: description },
       { property: "og:title", content: title },
       { property: "og:description", content: description },
+      { property: "og:type", content: "website" },
+      { property: "og:url", content: canonical },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
+    links: [{ rel: "canonical", href: canonical }],
   }),
   component: PropertiesPage,
 });
+
 
 function PropertiesPage() {
   return (

@@ -13,6 +13,8 @@ import {
 import { toast } from "sonner";
 
 import { company, properties, whatsappUrl } from "@/data/properties";
+import { SITE_URL } from "@/lib/seo";
+
 import { fetchDaySlots, bookAppointment } from "@/lib/public.functions";
 import { formatSlot } from "@/lib/slots";
 import { Button } from "@/components/ui/button";
@@ -54,6 +56,7 @@ const leadSchema = z.object({
 const title = "Book a Viewing | Brachtia Homes Student Accommodation";
 const description =
   "Pick a date and time to view our Cyberjaya student residences in person or over a live video tour. Instant slot selection, confirmed within 24 hours.";
+const canonical = `${SITE_URL}/book-viewing`;
 
 export const Route = createFileRoute("/book-viewing")({
   validateSearch: (search: Record<string, unknown>): { property?: string } =>
@@ -64,10 +67,15 @@ export const Route = createFileRoute("/book-viewing")({
       { name: "description", content: description },
       { property: "og:title", content: title },
       { property: "og:description", content: description },
+      { property: "og:type", content: "website" },
+      { property: "og:url", content: canonical },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
+    links: [{ rel: "canonical", href: canonical }],
   }),
   component: BookViewingPage,
 });
+
 
 type Mode = "in_person" | "virtual";
 
