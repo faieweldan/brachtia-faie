@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 const title = "Contact Brachtia Homes | Cyberjaya Student Housing Team";
 const description =
   "Talk to the Brachtia Homes student team about rooms, viewings and move-in support in Cyberjaya. WhatsApp, call or email us — we reply fast.";
+const canonical = `${SITE_URL}/contact`;
 
 export const Route = createFileRoute("/contact")({
   head: () => ({
@@ -18,10 +19,38 @@ export const Route = createFileRoute("/contact")({
       { name: "description", content: description },
       { property: "og:title", content: title },
       { property: "og:description", content: description },
+      { property: "og:type", content: "website" },
+      { property: "og:url", content: canonical },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+    links: [{ rel: "canonical", href: canonical }],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "LocalBusiness",
+          "@id": `${SITE_URL}/#localbusiness`,
+          name: company.name,
+          url: canonical,
+          email: company.email,
+          telephone: company.phones,
+          address: {
+            "@type": "PostalAddress",
+            streetAddress: "Level 15 D'Pulze, Lingkaran Cyber Point Timur, Cyber 12",
+            addressLocality: "Cyberjaya",
+            addressRegion: "Selangor",
+            postalCode: "63000",
+            addressCountry: "MY",
+          },
+          areaServed: "Cyberjaya, Selangor, Malaysia",
+        }),
+      },
     ],
   }),
   component: ContactPage,
 });
+
 
 function ContactPage() {
   return (
