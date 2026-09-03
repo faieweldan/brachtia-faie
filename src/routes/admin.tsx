@@ -1,17 +1,24 @@
-import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { CalendarDays, Globe, Inbox, LayoutDashboard } from "lucide-react";
+import { createFileRoute, Link, Outlet, redirect, useRouter, useRouterState } from "@tanstack/react-router";
+import { CalendarDays, Globe, Inbox, LayoutDashboard, Lock } from "lucide-react";
+
+import { isAdminUnlocked, lockAdmin } from "@/lib/admin-gate.functions";
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
+  beforeLoad: async () => {
+    const { unlocked } = await isAdminUnlocked();
+    if (!unlocked) throw redirect({ to: "/admin-unlock" });
+  },
   head: () => ({
     meta: [
       { title: "Admin | Brachtia Homes" },
       { name: "description", content: "Brachtia Homes staff portal." },
-      { name: "robots", content: "noindex" },
+      { name: "robots", content: "noindex, nofollow" },
     ],
   }),
   component: AdminLayout,
 });
+
 
 
 const NAV: { to: string; label: string; icon: typeof Inbox; exact?: boolean }[] = [
