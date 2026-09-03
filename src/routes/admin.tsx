@@ -32,6 +32,14 @@ const NAV: { to: string; label: string; icon: typeof Inbox; exact?: boolean }[] 
 
 function AdminLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const router = useRouter();
+
+  async function handleLock() {
+    await lockAdmin();
+    await router.navigate({ to: "/admin-unlock", replace: true });
+  }
+
+
 
 
   return (
