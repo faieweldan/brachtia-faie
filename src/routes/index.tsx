@@ -12,6 +12,8 @@ import {
   Star,
 } from "lucide-react";
 import heroAsset from "@/assets/hero-cover.png.asset.json";
+import { SITE_URL, absoluteUrl } from "@/lib/seo";
+
 import parentsImageAsset from "@/assets/parents-support.jpg.asset.json";
 const parentsImage = parentsImageAsset.url;
 import { Button } from "@/components/ui/button";
