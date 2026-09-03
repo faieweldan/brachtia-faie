@@ -232,9 +232,7 @@ export default function RoomDetailDialog({
             )}
             <Button asChild variant="outline" size="lg" className="flex-1">
               <a
-                href={whatsappUrl(
-                  `Hi Brachtia Homes, I'd like to check availability for ${room.name} at ${property.name}.`,
-                )}
+                href="https://wa.me/60123306815?text=Hi+I+would+like+to+learn+more+about+Brachtia+Homes+before+choosing+my+residence&utm_source=chatgpt.com"
                 target="_blank"
                 rel="noreferrer"
               >
