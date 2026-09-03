@@ -133,7 +133,7 @@ function AboutPage() {
       </div>
 
       {/* University partners */}
-      <section className="bg-background pb-14 pt-24 sm:pb-20 sm:pt-28">
+      <section className="bg-background pb-14 pt-16 sm:pb-20 sm:pt-20">
         <div className="mx-auto max-w-6xl px-4 text-center sm:px-6">
           <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-brand">
             Our university partners
