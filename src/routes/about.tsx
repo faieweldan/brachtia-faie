@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CalendarCheck, HeartHandshake, LifeBuoy, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import heroStudents from "@/assets/hero-students.jpg";
+import aboutHero from "@/assets/about-hero.jpg.asset.json";
 import humanSide from "@/assets/parents-support.jpg";
 
 const title = "About Brachtia Homes | Student Accommodation in Malaysia";
@@ -93,7 +93,7 @@ function AboutPage() {
             </div>
 
             <img
-              src={heroStudents}
+              src={aboutHero.url}
               alt="Students together outside a Brachtia Homes residence"
               width={1600}
               height={1200}
