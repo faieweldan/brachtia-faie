@@ -13,6 +13,8 @@ import {
 import { toast } from "sonner";
 
 import { company, properties, whatsappUrl } from "@/data/properties";
+import { SITE_URL } from "@/lib/seo";
+
 import { fetchDaySlots, bookAppointment } from "@/lib/public.functions";
 import { formatSlot } from "@/lib/slots";
 import { Button } from "@/components/ui/button";
