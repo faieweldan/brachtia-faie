@@ -36,22 +36,108 @@ export const Route = createFileRoute("/properties/$slug/")({
     return { property };
   },
 
-  head: ({ loaderData }) => {
-    const name = loaderData?.property.name ?? "Property";
+  head: ({ loaderData, params }) => {
+    const property = loaderData?.property;
+    const name = property?.name ?? "Property";
     const title = `${name} | Brachtia Homes Student Accommodation`;
     const description =
-      loaderData?.property.summary ?? "Student accommodation in Cyberjaya by Brachtia Homes.";
+      property?.summary ?? "Student accommodation in Cyberjaya by Brachtia Homes.";
+    const canonical = `${SITE_URL}/properties/${params.slug}`;
+    const ogImage = property?.heroImage ? absoluteUrl(property.heroImage) : undefined;
+
+    const rents = property
+      ? getRoomTypes(property.slug)
+          .flatMap((room) =>
+            Object.values(room.rent).flatMap((byOcc) => Object.values(byOcc)),
+          )
+          .filter((value): value is number => typeof value === "number" && value > 0)
+      : [];
+
+    const scripts = property
+      ? [
+          {
+            type: "application/ld+json",
+            children: JSON.stringify({
+              "@context": "https://schema.org",
+              "@graph": [
+                {
+                  "@type": "Apartment",
+                  name: property.name,
+                  description: property.summary,
+                  url: canonical,
+                  ...(ogImage ? { image: ogImage } : {}),
+                  address: {
+                    "@type": "PostalAddress",
+                    addressLocality: "Cyberjaya",
+                    addressRegion: "Selangor",
+                    addressCountry: "MY",
+                  },
+                  geo: {
+                    "@type": "GeoCoordinates",
+                    latitude: property.coords.lat,
+                    longitude: property.coords.lng,
+                  },
+                  amenityFeature: property.buildingFacilities.map((item) => ({
+                    "@type": "LocationFeatureSpecification",
+                    name: item,
+                    value: true,
+                  })),
+                  ...(rents.length
+                    ? {
+                        offers: {
+                          "@type": "AggregateOffer",
+                          priceCurrency: "MYR",
+                          lowPrice: Math.min(...rents),
+                          highPrice: Math.max(...rents),
+                          offerCount: rents.length,
+                          unitText: "MONTH",
+                philosophy: undefined,
+                        },
+                      }
+                    : {}),
+                },
+                {
+                  "@type": "BreadcrumbList",
+                  itemListElement: [
+                    { "@type": "ListItem", position: 1, name: "Home", item: SITE_URL },
+                    {
+                      "@type": "ListItem",
+                      position: 2,
+                      name: "Properties",
+                      item: `${SITE_URL}/properties`,
+                    },
+                    { "@type": "ListItem", position: 3, name: property.name, item: canonical },
+                  ],
+                },
+              ],
+            }),
+          },
+        ]
+      : [];
+
     return {
       meta: [
         { title },
         { name: "description", content: description },
         { property: "og:title", content: title },
         { property: "og:description", content: description },
+        { property: "og:type", content: "product" },
+        { property: "og:url", content: canonical },
+        ...(ogImage
+          ? [
+              { property: "og:image", content: ogImage },
+              { name: "twitter:image", content: ogImage },
+            ]
+          : []),
+        { name: "twitter:card", content: "summary_large_image" },
       ],
+      links: [{ rel: "canonical", href: canonical }],
+      scripts,
     };
   },
   component: PropertyPage,
 });
+
 
 
 function plusMonths(iso: string, months: number) {
