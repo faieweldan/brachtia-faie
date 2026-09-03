@@ -22,6 +22,7 @@ import { Route as AdminBookingsRouteImport } from './routes/admin.bookings'
 import { Route as AdminWebsiteRouteImport } from './routes/admin.website'
 import { Route as PropertiesIndexRouteImport } from './routes/properties.index'
 import { Route as AdminAppointmentsIndexRouteImport } from './routes/admin.appointments.index'
+import { Route as AdminAppointmentsSettingsRouteImport } from './routes/admin.appointments.settings'
 import { Route as AdminWebsiteIndexRouteImport } from './routes/admin.website.index'
 import { Route as PropertiesSlugIndexRouteImport } from './routes/properties.$slug.index'
 import { Route as AdminWebsiteResidencesIndexRouteImport } from './routes/admin.website.residences.index'
@@ -93,6 +94,12 @@ const AdminAppointmentsIndexRoute = AdminAppointmentsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminAppointmentsRoute,
 } as any)
+const AdminAppointmentsSettingsRoute =
+  AdminAppointmentsSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => AdminAppointmentsRoute,
+  } as any)
 const AdminWebsiteIndexRoute = AdminWebsiteIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -134,6 +141,7 @@ export interface FileRoutesByFullPath {
   '/admin/website': typeof AdminWebsiteRouteWithChildren
   '/admin/': typeof AdminIndexRoute
   '/properties/': typeof PropertiesIndexRoute
+  '/admin/appointments/settings': typeof AdminAppointmentsSettingsRoute
   '/admin/appointments/': typeof AdminAppointmentsIndexRoute
   '/admin/website/': typeof AdminWebsiteIndexRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
@@ -151,6 +159,7 @@ export interface FileRoutesByTo {
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin': typeof AdminIndexRoute
   '/properties': typeof PropertiesIndexRoute
+  '/admin/appointments/settings': typeof AdminAppointmentsSettingsRoute
   '/admin/appointments': typeof AdminAppointmentsIndexRoute
   '/admin/website': typeof AdminWebsiteIndexRoute
   '/properties/$slug': typeof PropertiesSlugIndexRoute
@@ -172,6 +181,7 @@ export interface FileRoutesById {
   '/admin/website': typeof AdminWebsiteRouteWithChildren
   '/admin/': typeof AdminIndexRoute
   '/properties/': typeof PropertiesIndexRoute
+  '/admin/appointments/settings': typeof AdminAppointmentsSettingsRoute
   '/admin/appointments/': typeof AdminAppointmentsIndexRoute
   '/admin/website/': typeof AdminWebsiteIndexRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
@@ -194,6 +204,7 @@ export interface FileRouteTypes {
     | '/admin/website'
     | '/admin/'
     | '/properties/'
+    | '/admin/appointments/settings'
     | '/admin/appointments/'
     | '/admin/website/'
     | '/properties/$slug/'
@@ -211,6 +222,7 @@ export interface FileRouteTypes {
     | '/admin/bookings'
     | '/admin'
     | '/properties'
+    | '/admin/appointments/settings'
     | '/admin/appointments'
     | '/admin/website'
     | '/properties/$slug'
@@ -231,6 +243,7 @@ export interface FileRouteTypes {
     | '/admin/website'
     | '/admin/'
     | '/properties/'
+    | '/admin/appointments/settings'
     | '/admin/appointments/'
     | '/admin/website/'
     | '/properties/$slug/'
@@ -345,6 +358,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAppointmentsIndexRouteImport
       parentRoute: typeof AdminAppointmentsRoute
     }
+    '/admin/appointments/settings': {
+      id: '/admin/appointments/settings'
+      path: '/settings'
+      fullPath: '/admin/appointments/settings'
+      preLoaderRoute: typeof AdminAppointmentsSettingsRouteImport
+      parentRoute: typeof AdminAppointmentsRoute
+    }
     '/admin/website/': {
       id: '/admin/website/'
       path: '/'
@@ -384,10 +404,12 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminAppointmentsRouteChildren {
+  AdminAppointmentsSettingsRoute: typeof AdminAppointmentsSettingsRoute
   AdminAppointmentsIndexRoute: typeof AdminAppointmentsIndexRoute
 }
 
 const AdminAppointmentsRouteChildren: AdminAppointmentsRouteChildren = {
+  AdminAppointmentsSettingsRoute: AdminAppointmentsSettingsRoute,
   AdminAppointmentsIndexRoute: AdminAppointmentsIndexRoute,
 }
 
