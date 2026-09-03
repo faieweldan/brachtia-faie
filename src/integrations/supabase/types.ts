@@ -339,6 +339,7 @@ export type Database = {
           fee_config: Json
           gallery: Json
           hero_image: string
+          icon_overrides: Json
           id: string
           included_in_stay: Json
           inside_apartment: Json
@@ -371,6 +372,7 @@ export type Database = {
           fee_config?: Json
           gallery?: Json
           hero_image?: string
+          icon_overrides?: Json
           id?: string
           included_in_stay?: Json
           inside_apartment?: Json
@@ -403,6 +405,7 @@ export type Database = {
           fee_config?: Json
           gallery?: Json
           hero_image?: string
+          icon_overrides?: Json
           id?: string
           included_in_stay?: Json
           inside_apartment?: Json

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import IconPicker from "@/components/admin/IconPicker";
 
 export function Section({
   id,
@@ -114,6 +115,8 @@ export function StringList({
   placeholder,
   multiline = false,
   addLabel = "Add item",
+  icons,
+  onIconsChange,
 }: {
   label: string;
   items: string[];
@@ -121,11 +124,33 @@ export function StringList({
   placeholder?: string;
   multiline?: boolean;
   addLabel?: string;
+  /** Enables a per-item icon picker; map of item text -> icon key */
+  icons?: Record<string, string>;
+  onIconsChange?: (next: Record<string, string>) => void;
 }) {
+  const showIcons = Boolean(icons && onIconsChange);
+
+  const setIcon = (item: string, key: string | undefined) => {
+    if (!onIconsChange) return;
+    const next = { ...(icons ?? {}) };
+    if (key) next[item] = key;
+    else delete next[item];
+    onIconsChange(next);
+  };
+
   const set = (i: number, v: string) => {
+    const prev = items[i] ?? "";
     const next = [...items];
     next[i] = v;
     onChange(next);
+    // Keep the icon attached to the item when its text is edited
+    if (onIconsChange && icons && prev !== v && icons[prev]) {
+      const map = { ...icons };
+      const key = map[prev]!;
+      delete map[prev];
+      if (v) map[v] = key;
+      onIconsChange(map);
+    }
   };
   const move = (i: number, dir: -1 | 1) => {
     const j = i + dir;
@@ -145,6 +170,9 @@ export function StringList({
       ) : null}
       {items.map((item, i) => (
         <div key={i} className="flex items-start gap-2">
+          {showIcons ? (
+            <IconPicker label={item} value={icons?.[item]} onChange={(key) => setIcon(item, key)} />
+          ) : null}
           {multiline ? (
             <Textarea
               rows={2}

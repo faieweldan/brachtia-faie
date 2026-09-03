@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
-import { facilityIcon } from "@/lib/facility-icons";
+import { facilityIcon, type IconOverrides } from "@/lib/facility-icons";
 
 interface AmenitySectionProps {
   title: string;
@@ -8,6 +8,7 @@ interface AmenitySectionProps {
   note?: string | undefined;
   footnote?: string | undefined;
   iconMode?: "check" | "facility";
+  iconOverrides?: IconOverrides | undefined;
   defaultOpen?: boolean;
   collapseThreshold?: number;
 }
@@ -20,6 +21,7 @@ export default function AmenitySection({
   note,
   footnote,
   iconMode = "check",
+  iconOverrides,
   defaultOpen = false,
   collapseThreshold = DEFAULT_VISIBLE,
 }: AmenitySectionProps) {
@@ -45,7 +47,7 @@ export default function AmenitySection({
 
       <ul className="mt-4 grid gap-x-10 gap-y-3 sm:grid-cols-2">
         {visibleItems.map((item) => {
-          const Icon = iconMode === "facility" ? facilityIcon(item) : Check;
+          const Icon = iconMode === "facility" ? facilityIcon(item, iconOverrides) : Check;
           return (
             <li key={item} className="flex items-start gap-4">
               <Icon className="mt-0.5 size-5 shrink-0 stroke-[1.5] text-brand" />
