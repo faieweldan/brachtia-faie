@@ -19,6 +19,7 @@ import {
   type Occupancy,
 } from "@/data/properties";
 import { fetchSiteData } from "@/lib/site-data.functions";
+import { SITE_URL, absoluteUrl } from "@/lib/seo";
 
 import { Button } from "@/components/ui/button";
 import AmenitySection from "@/components/site/AmenitySection";
@@ -91,7 +92,6 @@ export const Route = createFileRoute("/properties/$slug/")({
                           highPrice: Math.max(...rents),
                           offerCount: rents.length,
                           unitText: "MONTH",
-                philosophy: undefined,
                         },
                       }
                     : {}),
