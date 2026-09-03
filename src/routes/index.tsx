@@ -60,7 +60,7 @@ const perks = [
   {
     icon: GraduationCap,
     title: "Close to University",
-    text: "Conveniently located residences with easy access to campus.",
+    text: "Conveniently located residences with easy access and free shuttle to campus.",
   },
   {
     icon: Sofa,
