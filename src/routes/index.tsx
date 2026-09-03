@@ -26,6 +26,7 @@ import { reviewSummary } from "@/data/reviews";
 const title = "Student Accommodation in Cyberjaya | Brachtia Homes";
 const description =
   "Student living, made simple. Comfortable, well-managed student accommodation in Cyberjaya with clear pricing and support from enquiry to move-in.";
+const ogImage = absoluteUrl(heroAsset.url);
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -35,11 +36,16 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: title },
       { property: "og:description", content: description },
       { property: "og:type", content: "website" },
+      { property: "og:url", content: SITE_URL },
+      { property: "og:image", content: ogImage },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:image", content: ogImage },
     ],
+    links: [{ rel: "canonical", href: SITE_URL }],
   }),
   component: Home,
 });
+
 
 const perks = [
   {
