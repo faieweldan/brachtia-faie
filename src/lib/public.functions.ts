@@ -96,11 +96,20 @@ export const fetchDaySlots = createServerFn({ method: "GET" })
     );
     if (dayBlocked) return { slots: [] as string[] };
 
+    const typeSlug = data.mode === "virtual" ? "viewing-virtual" : "viewing-in-person";
+
     const applicable = (rules ?? []).filter(
       (r) =>
         (r.residence_id === null || r.residence_id === residenceId) &&
-        (r.mode === "any" || r.mode === data.mode),
+        (r.mode === "any" || r.mode === data.mode) &&
+        (!r.type_slug || r.type_slug === typeSlug),
     );
+
+    const { data: type } = await supabaseAdmin
+      .from("appointment_types")
+      .select("duration_minutes")
+      .eq("slug", typeSlug)
+      .maybeSingle();
 
     const dayStart = new Date(`${data.date}T00:00:00+08:00`).toISOString();
     const dayEnd = new Date(`${data.date}T23:59:59+08:00`).toISOString();
@@ -112,9 +121,15 @@ export const fetchDaySlots = createServerFn({ method: "GET" })
       .neq("status", "cancelled");
 
     return {
-      slots: buildSlots(data.date, applicable, (booked ?? []).map((b) => b.starts_at as string)),
+      slots: buildSlots(
+        data.date,
+        applicable,
+        (booked ?? []).map((b) => b.starts_at as string),
+        (type?.duration_minutes as number | undefined) ?? undefined,
+      ),
     };
   });
+
 
 const appointmentSchema = z.object({
   mode: z.enum(["in_person", "virtual"]),
