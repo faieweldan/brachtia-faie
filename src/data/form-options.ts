@@ -2,7 +2,6 @@ export const UNIVERSITIES = [
   "MMU",
   "HWUM",
   "UoC",
-  "UniMY",
   "Lim Kok Wing",
   "City University",
   "Other",
