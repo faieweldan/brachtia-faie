@@ -33,11 +33,13 @@ export function formatSlot(iso: string) {
 /**
  * Expands weekly availability rules into bookable ISO timestamps for one day,
  * skipping slots already at capacity and slots in the past.
+ * `durationMinutes` overrides the rule's slot length (per appointment type).
  */
 export function buildSlots(
   date: string,
   rules: AvailabilityRule[],
   bookedISO: string[] = [],
+  durationMinutes?: number,
 ): string[] {
   const counts = new Map<string, number>();
   for (const iso of bookedISO) counts.set(iso, (counts.get(iso) ?? 0) + 1);
@@ -46,9 +48,10 @@ export function buildSlots(
   const out = new Set<string>();
 
   for (const rule of rules) {
-    const step = Math.max(10, (rule.slot_minutes || 30) + (rule.buffer_minutes ?? 0));
+    const length = durationMinutes || rule.slot_minutes || 30;
+    const step = Math.max(10, length + (rule.buffer_minutes ?? 0));
     const end = toMinutes(rule.end_time);
-    for (let t = toMinutes(rule.start_time); t + (rule.slot_minutes || 30) <= end; t += step) {
+    for (let t = toMinutes(rule.start_time); t + length <= end; t += step) {
       const iso = slotISO(date, t);
       if (new Date(iso).getTime() <= now) continue;
       if ((counts.get(iso) ?? 0) >= (rule.capacity || 1)) continue;
@@ -58,3 +61,4 @@ export function buildSlots(
 
   return Array.from(out).sort();
 }
+
