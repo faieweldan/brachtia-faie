@@ -2,7 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { CalendarCheck, HeartHandshake, LifeBuoy, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import aboutHero from "@/assets/about-hero.jpg.asset.json";
-import humanSide from "@/assets/parents-support.jpg";
+import humanSideAsset from "@/assets/parents-support.jpg.asset.json";
+const humanSide = humanSideAsset.url;
 
 const title = "About Brachtia Homes | Student Accommodation in Malaysia";
 const description =
