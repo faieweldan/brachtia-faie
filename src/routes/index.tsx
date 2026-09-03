@@ -12,7 +12,8 @@ import {
   Star,
 } from "lucide-react";
 import heroAsset from "@/assets/hero-cover.png.asset.json";
-import parentsImage from "@/assets/parents-support.jpg";
+import parentsImageAsset from "@/assets/parents-support.jpg.asset.json";
+const parentsImage = parentsImageAsset.url;
 import { Button } from "@/components/ui/button";
 import PropertyCard from "@/components/site/PropertyCard";
 import Reviews from "@/components/site/Reviews";
