@@ -28,6 +28,8 @@ import CtaBand from "@/components/site/CtaBand";
 import EnquiryDialog from "@/components/site/EnquiryDialog";
 import RoomPriceTable from "@/components/site/RoomPriceTable";
 import StayCalculator from "@/components/site/StayCalculator";
+import MobileCtaBar from "@/components/site/MobileCtaBar";
+
 
 export const Route = createFileRoute("/properties/$slug/")({
   loader: async ({ params }) => {
@@ -265,9 +267,9 @@ function PropertyPage() {
 
       <section className="mx-auto mt-8 max-w-[88rem] px-4 sm:px-6">
         <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_27rem] xl:grid-cols-[minmax(0,1fr)_31rem]">
-          <div className="space-y-12">
+          <div className="space-y-10 sm:space-y-12">
             <div>
-              <h1 className="text-3xl font-bold text-brand-deep sm:text-4xl">
+              <h1 className="text-2xl font-bold text-brand-deep sm:text-4xl">
                 {property.name}
               </h1>
               <p className="mt-2 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -280,6 +282,7 @@ function PropertyPage() {
                 </p>
               ))}
             </div>
+
 
             <div className="space-y-6">
               <AmenitySection
@@ -306,7 +309,7 @@ function PropertyPage() {
 
 
 
-            <div id="rooms">
+            <div id="rooms" className="scroll-mt-24">
               <h2 className="text-2xl font-bold text-brand-deep">Rooms & pricing</h2>
               <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
                 Set your move-in date, filter by what you need, then click a room to see photos and
@@ -351,7 +354,7 @@ function PropertyPage() {
 
 
             {rooms.length > 0 && (
-              <div id="stay-calculator">
+              <div id="stay-calculator" className="scroll-mt-24">
               <StayCalculator
                 property={property}
                 rooms={rooms}
@@ -410,6 +413,18 @@ function PropertyPage() {
           message={`Hi Brachtia Homes, I'd like to book a viewing at ${property.name}.`}
         />
       </div>
+
+      {rooms.length > 0 && (
+        <>
+          <div className="h-24 md:hidden" aria-hidden />
+          <MobileCtaBar
+            label="See your move-in cost"
+            hint="Pick a room and rate to price your stay"
+            message={`Hi Brachtia Homes, I'd like to check availability at ${property.name}.`}
+          />
+        </>
+      )}
     </>
   );
+
 }

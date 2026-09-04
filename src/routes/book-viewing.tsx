@@ -181,14 +181,17 @@ function BookViewingPage() {
       </p>
 
       {showAvailabilityNudge ? (
-        <div className="mt-6 grid gap-4 rounded-2xl border border-brand/30 bg-brand-tint/50 p-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <div className="mt-6 grid gap-3 rounded-2xl border border-brand/30 bg-brand-tint/50 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-4 sm:p-5">
           <div className="min-w-0">
             <p className="text-sm font-semibold text-brand-deep">
               Checked room availability and pricing yet?
             </p>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 hidden text-sm text-muted-foreground sm:block">
               Most students pick a room type first — then we tailor the viewing to the rooms you
               actually want. It only takes a minute.
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground sm:hidden">
+              Pick a room type first and we'll tailor the viewing.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -208,10 +211,12 @@ function BookViewingPage() {
         </div>
       ) : null}
 
+
       <div className="mt-8 grid gap-6 lg:grid-cols-[1.15fr_1fr]">
         {/* Left: choices */}
-        <div className="space-y-6 rounded-3xl border border-border/70 bg-card p-6 shadow-card">
-          <div className="grid gap-2 sm:grid-cols-2">
+        <div className="space-y-6 rounded-3xl border border-border/70 bg-card p-4 shadow-card sm:p-6">
+          <div className="grid grid-cols-2 gap-2">
+
             {(
               [
                 { value: "in_person", label: "In person", icon: MapPin, hint: "At the residence" },
@@ -222,17 +227,18 @@ function BookViewingPage() {
                 key={o.value}
                 type="button"
                 onClick={() => setMode(o.value)}
-                className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-colors ${
+                className={`flex items-start gap-2.5 rounded-2xl border p-3 text-left transition-colors sm:gap-3 sm:p-4 ${
                   mode === o.value
                     ? "border-brand bg-brand-tint/60"
                     : "border-border hover:border-brand/40"
                 }`}
               >
-                <o.icon className="mt-0.5 size-5 text-brand" />
-                <span>
+                <o.icon className="mt-0.5 size-5 shrink-0 text-brand" />
+                <span className="min-w-0">
                   <span className="block text-sm font-semibold text-brand-deep">{o.label}</span>
-                  <span className="block text-xs text-muted-foreground">{o.hint}</span>
+                  <span className="block text-xs leading-snug text-muted-foreground">{o.hint}</span>
                 </span>
+
               </button>
             ))}
           </div>
@@ -268,7 +274,7 @@ function BookViewingPage() {
         </div>
 
         {/* Right: slots + details */}
-        <div className="space-y-6 rounded-3xl border border-border/70 bg-card p-6 shadow-card">
+        <div className="space-y-6 rounded-3xl border border-border/70 bg-card p-4 shadow-card sm:p-6">
           <div>
             <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-muted-foreground">
               Available times

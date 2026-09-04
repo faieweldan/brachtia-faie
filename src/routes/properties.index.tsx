@@ -32,11 +32,12 @@ function PropertiesPage() {
   return (
     <>
       <section className="border-b border-border bg-secondary/50">
-        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-16">
+        <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-16">
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand">Properties</p>
-          <h1 className="mt-2 text-4xl font-bold tracking-tight text-brand-deep">
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-brand-deep sm:text-4xl">
             Student accommodation in Cyberjaya
           </h1>
+
           <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
             Two managed residences, both minutes from campus and public transport. Pick a property
             to see photos, facilities, room pricing and what's available right now.

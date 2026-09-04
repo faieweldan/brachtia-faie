@@ -149,7 +149,7 @@ function ContactPage() {
       </div>
 
       {/* Contact methods — single, clean strip */}
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <a
           href={whatsappUrl("Hi Brachtia Homes, I'd like to get in touch.")}
           target="_blank"

@@ -67,11 +67,13 @@ export default function RoomPriceTable({
   function fareTile(room: RoomType, occ: Occupancy) {
     const price = room.occupancies.includes(occ) ? room.rent[term][occ] : null;
     const active = selectedRoomId === room.id && selectedOccupancy === occ;
+    const occLabel = occ === "single" ? "Single" : "Twin sharing";
 
     if (price == null) {
       return (
-        <div className="flex h-14 flex-col items-center justify-center rounded-xl border border-dashed border-border/70 px-2 text-center text-xs text-muted-foreground">
-          —
+        <div className="flex h-14 flex-col items-center justify-center rounded-xl border border-dashed border-border/70 px-2 text-center text-[11px] leading-tight text-muted-foreground">
+          <span className="md:hidden">{occLabel}</span>
+          <span>Not available</span>
         </div>
       );
     }
@@ -80,33 +82,44 @@ export default function RoomPriceTable({
       <button
         type="button"
         aria-pressed={active}
+        aria-label={`${occLabel} ${formatRM(price)} per month`}
         onClick={(e) => {
           e.stopPropagation();
           onSelect(room, occ);
         }}
-        className={`flex h-14 w-full items-center justify-center rounded-xl border px-3 text-center transition-all ${
+        className={`flex h-14 w-full flex-col items-center justify-center rounded-xl border px-2 text-center transition-all md:flex-row md:px-3 ${
           active
             ? "border-brand-deep bg-brand-deep text-primary-foreground shadow-sm"
             : "border-border bg-card hover:border-brand hover:shadow-sm"
         }`}
       >
         <span
-          className={`text-base font-extrabold tabular-nums ${
-            active ? "text-primary-foreground" : "text-brand-deep"
-          }`}
-        >
-          {formatRM(price)}
-        </span>
-        <span
-          className={`ml-1 text-xs font-semibold ${
+          className={`text-[10px] font-semibold uppercase tracking-wide md:hidden ${
             active ? "text-primary-foreground/80" : "text-muted-foreground"
           }`}
         >
-          /mo
+          {occLabel}
+        </span>
+        <span className="flex items-baseline gap-1">
+          <span
+            className={`text-base font-extrabold tabular-nums ${
+              active ? "text-primary-foreground" : "text-brand-deep"
+            }`}
+          >
+            {formatRM(price)}
+          </span>
+          <span
+            className={`text-xs font-semibold ${
+              active ? "text-primary-foreground/80" : "text-muted-foreground"
+            }`}
+          >
+            /mo
+          </span>
         </span>
       </button>
     );
   }
+
 
   return (
     <div>
@@ -154,22 +167,31 @@ export default function RoomPriceTable({
         </div>
 
 
-        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3 border-t border-border/60 pt-4">
-          <span className="text-sm font-bold text-brand-deep">Filter</span>
-          {options.map((o) => {
-            const checked = picks.includes(o.token);
-            return (
-              <label
-                key={o.token}
-                className="flex cursor-pointer items-center gap-2 text-sm font-medium text-foreground"
-              >
-                <Checkbox checked={checked} onCheckedChange={() => toggle(o.token)} />
-                {o.label}
-              </label>
-            );
-          })}
+        <div className="mt-4 border-t border-border/60 pt-4">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <span className="text-sm font-bold text-brand-deep">Filter</span>
+            {options.map((o) => {
+              const checked = picks.includes(o.token);
+              return (
+                <button
+                  key={o.token}
+                  type="button"
+                  aria-pressed={checked}
+                  onClick={() => toggle(o.token)}
+                  className={`inline-flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-sm font-medium transition-colors ${
+                    checked
+                      ? "border-brand bg-brand-tint text-brand-deep"
+                      : "border-border bg-card text-foreground hover:border-brand/50"
+                  }`}
+                >
+                  <Checkbox checked={checked} className="pointer-events-none" tabIndex={-1} />
+                  {o.label}
+                </button>
+              );
+            })}
+          </div>
 
-          <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground sm:mt-2">
             <span>
               {visible.length} of {rooms.length} room types
             </span>
@@ -184,6 +206,7 @@ export default function RoomPriceTable({
             )}
           </div>
         </div>
+
       </div>
 
       {/* Tables */}
@@ -220,7 +243,7 @@ export default function RoomPriceTable({
                     <li
                       key={room.id}
                       onClick={() => setDetailRoom(room)}
-                      className={`group grid cursor-pointer grid-cols-1 items-center gap-4 border-t border-border/70 px-5 py-4 transition-colors md:grid-cols-[minmax(0,2.8fr)_minmax(0,1fr)_8.5rem_8.5rem] ${
+                      className={`group grid cursor-pointer grid-cols-1 items-center gap-3 border-t border-border/70 px-4 py-3.5 transition-colors sm:px-5 md:grid-cols-[minmax(0,2.8fr)_minmax(0,1fr)_8.5rem_8.5rem] md:gap-4 md:py-4 ${
                         selected ? "bg-brand-tint/60" : "hover:bg-muted/40"
                       }`}
                     >
@@ -240,12 +263,15 @@ export default function RoomPriceTable({
                           </span>
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate font-semibold leading-snug text-brand-deep">{room.name}</p>
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-brand underline-offset-2 group-hover:underline">
+                          <p className="font-semibold leading-snug text-brand-deep md:truncate">
+                            {room.name}
+                          </p>
+                          <span className="mt-0.5 inline-flex items-center gap-1 text-xs font-semibold text-brand underline-offset-2 group-hover:underline">
                             View details <ChevronRight className="size-3" />
                           </span>
                         </div>
                       </div>
+
 
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                         {room.sizeLabel && (

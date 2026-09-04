@@ -89,7 +89,7 @@ function AboutPage() {
             <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-brand">
               About Brachtia Homes
             </p>
-            <h1 className="mt-3 text-4xl font-extrabold leading-[1.08] tracking-tight text-brand-deep sm:text-5xl">
+            <h1 className="mt-3 text-3xl font-extrabold leading-[1.1] tracking-tight text-brand-deep sm:text-5xl">
               Designed for students. Trusted by parents and universities.
             </h1>
             <p className="mt-6 text-base leading-relaxed text-muted-foreground">
