@@ -227,17 +227,18 @@ function BookViewingPage() {
                 key={o.value}
                 type="button"
                 onClick={() => setMode(o.value)}
-                className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition-colors ${
+                className={`flex items-start gap-2.5 rounded-2xl border p-3 text-left transition-colors sm:gap-3 sm:p-4 ${
                   mode === o.value
                     ? "border-brand bg-brand-tint/60"
                     : "border-border hover:border-brand/40"
                 }`}
               >
-                <o.icon className="mt-0.5 size-5 text-brand" />
-                <span>
+                <o.icon className="mt-0.5 size-5 shrink-0 text-brand" />
+                <span className="min-w-0">
                   <span className="block text-sm font-semibold text-brand-deep">{o.label}</span>
-                  <span className="block text-xs text-muted-foreground">{o.hint}</span>
+                  <span className="block text-xs leading-snug text-muted-foreground">{o.hint}</span>
                 </span>
+
               </button>
             ))}
           </div>
