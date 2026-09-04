@@ -25,7 +25,18 @@ export const Route = createFileRoute("/admin/bookings")({
   component: BookingsPage,
 });
 
-const STATUSES = ["new", "contacted", "reserved", "closed"] as const;
+const STATUSES = [
+  { value: "open", label: "Open" },
+  { value: "room_reserved", label: "Room reserved" },
+  { value: "viewing_scheduled", label: "Viewing scheduled" },
+  { value: "awaiting_fee", label: "Awaiting booking fee" },
+  { value: "booked", label: "Booked" },
+  { value: "closed", label: "Closed" },
+] as const;
+
+const STATUS_LABEL = (v: string) => STATUSES.find((s) => s.value === v)?.label ?? v;
+
+const CLOSE_REASONS = ["Lost to competitor", "No response", "Budget", "Other"];
 
 const money = (n: number) =>
   `RM ${Number(n || 0).toLocaleString("en-MY", { maximumFractionDigits: 0 })}`;
