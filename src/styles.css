@@ -261,6 +261,53 @@
 }
 
 
+/* ---------------------------------------------------------------
+   Admin portal palette — white canvas, deep green → emerald accent,
+   light grey surfaces, light beige warm accent. Scoped to .admin-ui
+   so the public site keeps its own tokens.
+   --------------------------------------------------------------- */
+.admin-ui {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.22 0.02 165);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.02 165);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.02 165);
+
+  --primary: oklch(0.32 0.062 165);
+  --primary-foreground: oklch(0.99 0.004 165);
+  --secondary: oklch(0.975 0.002 250);
+  --secondary-foreground: oklch(0.3 0.02 165);
+  --muted: oklch(0.975 0.002 250);
+  --muted-foreground: oklch(0.53 0.012 250);
+  --accent: oklch(0.945 0.014 82);
+  --accent-foreground: oklch(0.32 0.03 82);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0.006 95);
+
+  --border: oklch(0.922 0.003 250);
+  --input: oklch(0.9 0.004 250);
+  --ring: oklch(0.62 0.11 165);
+
+  --brand: oklch(0.5 0.1 165);
+  --brand-soft: oklch(0.945 0.014 82);
+  --brand-tint: oklch(0.945 0.014 82);
+  --brand-deep: oklch(0.3 0.06 165);
+  --accent-warm: oklch(0.945 0.014 82);
+  --accent-warm-foreground: oklch(0.32 0.03 82);
+
+  /* admin-only extras */
+  --admin-emerald: oklch(0.7 0.115 164);
+  --admin-beige: oklch(0.945 0.014 82);
+  --admin-rail: linear-gradient(180deg, oklch(0.3 0.06 165), oklch(0.25 0.05 168));
+  --admin-gradient: linear-gradient(135deg, oklch(0.32 0.062 165), oklch(0.55 0.105 164));
+}
+
+@theme inline {
+  --color-admin-emerald: var(--admin-emerald);
+  --color-admin-beige: var(--admin-beige);
+}
+
 /* Admin portal: tighter, less pill-shaped controls */
 .admin-ui input,
 .admin-ui textarea,
@@ -272,3 +319,11 @@
 .admin-ui select {
   height: 2.25rem;
 }
+
+.admin-rail {
+  background-image: var(--admin-rail);
+}
+.admin-gradient {
+  background-image: var(--admin-gradient);
+}
+
