@@ -112,7 +112,6 @@ function ContactPage() {
                     <Phone className="mt-0.5 size-4 shrink-0 text-brand" />
                     <span>
                       {company.phones.join(" · ")}
-                      <span className="block">Office {company.office}</span>
                     </span>
                   </li>
                   <li className="flex items-start gap-2.5">

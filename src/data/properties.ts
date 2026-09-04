@@ -1031,9 +1031,8 @@ export const company = {
   registration: "202304003086 (LLP0037045-LGN)",
   tagline: "Where You Belong",
   email: "contact@brachtiahomes.com",
-  phones: ["+6012-950 5670", "+6012-226 6815", "+6012-330 6815"],
-  office: "+603 832 0813",
-  whatsapp: "60129505670",
+  phones: ["+6012-330 6815"],
+  whatsapp: "60123306815",
   address:
     "Level 15 D'Pulze, Lingkaran Cyber Point Timur, Cyber 12, 63000 Cyberjaya, Selangor",
   bookingFee: "RM500",

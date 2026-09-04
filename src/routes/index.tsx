@@ -136,7 +136,7 @@ function Home() {
                   </a>
                 </Button>
                 <Button asChild size="lg" variant="outline" className="h-13 rounded-full border-2 px-8 text-base">
-                  <a href="https://wa.me/60123306815?text=Hi+I+would+like+to+learn+more+about+Brachtia+Homes+before+choosing+my+residence&utm_source=chatgpt.com" target="_blank" rel="noopener noreferrer">WhatsApp Us</a>
+                  <a href="https://wa.me/60123306815?text=Hi+I+would+like+to+learn+more+about+Brachtia+Homes+before+choosing+my+residence" target="_blank" rel="noopener noreferrer">WhatsApp Us</a>
                 </Button>
               </div>
 
