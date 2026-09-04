@@ -12,7 +12,7 @@ import {
   Star,
 } from "lucide-react";
 import heroAsset from "@/assets/hero-cover.png.asset.json";
-import { SITE_URL, absoluteUrl } from "@/lib/seo";
+import { SITE_URL, SOCIAL_IMAGE } from "@/lib/seo";
 
 import parentsImageAsset from "@/assets/parents-support.jpg.asset.json";
 const parentsImage = parentsImageAsset.url;
@@ -28,7 +28,7 @@ import { reviewSummary } from "@/data/reviews";
 const title = "Student Accommodation in Cyberjaya | Brachtia Homes";
 const description =
   "Student living, made simple. Comfortable, well-managed student accommodation in Cyberjaya with clear pricing and support from enquiry to move-in.";
-const ogImage = absoluteUrl(heroAsset.url);
+const ogImage = SOCIAL_IMAGE;
 
 export const Route = createFileRoute("/")({
   head: () => ({

@@ -13,7 +13,7 @@ import {
 import { toast } from "sonner";
 
 import { company, properties, whatsappUrl } from "@/data/properties";
-import { SITE_URL } from "@/lib/seo";
+import { SITE_URL, SOCIAL_IMAGE } from "@/lib/seo";
 
 import { fetchDaySlots, bookAppointment } from "@/lib/public.functions";
 import { formatSlot } from "@/lib/slots";
@@ -69,7 +69,9 @@ export const Route = createFileRoute("/book-viewing")({
       { property: "og:description", content: description },
       { property: "og:type", content: "website" },
       { property: "og:url", content: canonical },
+      { property: "og:image", content: SOCIAL_IMAGE },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:image", content: SOCIAL_IMAGE },
     ],
     links: [{ rel: "canonical", href: canonical }],
   }),

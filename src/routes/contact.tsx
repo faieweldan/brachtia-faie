@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 import { toast } from "sonner";
 import { company, whatsappUrl } from "@/data/properties";
-import { SITE_URL } from "@/lib/seo";
+import { SITE_URL, SOCIAL_IMAGE } from "@/lib/seo";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +23,9 @@ export const Route = createFileRoute("/contact")({
       { property: "og:description", content: description },
       { property: "og:type", content: "website" },
       { property: "og:url", content: canonical },
+      { property: "og:image", content: SOCIAL_IMAGE },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:image", content: SOCIAL_IMAGE },
     ],
     links: [{ rel: "canonical", href: canonical }],
     scripts: [

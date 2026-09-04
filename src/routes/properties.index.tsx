@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import PropertyCard from "@/components/site/PropertyCard";
 import CtaBand from "@/components/site/CtaBand";
 import { properties } from "@/data/properties";
-import { SITE_URL } from "@/lib/seo";
+import { SITE_URL, SOCIAL_IMAGE } from "@/lib/seo";
 
 const title = "Student Properties in Cyberjaya | Brachtia Homes";
 const description =
@@ -18,7 +18,9 @@ export const Route = createFileRoute("/properties/")({
       { property: "og:description", content: description },
       { property: "og:type", content: "website" },
       { property: "og:url", content: canonical },
+      { property: "og:image", content: SOCIAL_IMAGE },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:image", content: SOCIAL_IMAGE },
     ],
     links: [{ rel: "canonical", href: canonical }],
   }),

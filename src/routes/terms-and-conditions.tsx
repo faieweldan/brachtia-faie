@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { SITE_URL } from "@/lib/seo";
+import { SITE_URL, SOCIAL_IMAGE } from "@/lib/seo";
 import { company } from "@/data/properties";
 
 export const Route = createFileRoute("/terms-and-conditions")({
@@ -19,7 +19,9 @@ export const Route = createFileRoute("/terms-and-conditions")({
       },
       { property: "og:url", content: `${SITE_URL}/terms-and-conditions` },
       { property: "og:type", content: "website" },
+      { property: "og:image", content: SOCIAL_IMAGE },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:image", content: SOCIAL_IMAGE },
     ],
     links: [
       { rel: "canonical", href: `${SITE_URL}/terms-and-conditions` },
