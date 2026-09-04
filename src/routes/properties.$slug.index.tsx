@@ -352,7 +352,7 @@ function PropertyPage() {
 
 
             {rooms.length > 0 && (
-              <div id="stay-calculator">
+              <div id="stay-calculator" className="scroll-mt-24">
               <StayCalculator
                 property={property}
                 rooms={rooms}
