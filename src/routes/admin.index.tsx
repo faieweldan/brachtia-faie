@@ -4,6 +4,15 @@ import { CalendarDays, Inbox } from "lucide-react";
 
 import { adminOverview } from "@/lib/admin.functions";
 import { formatSlot } from "@/lib/slots";
+import { useOps } from "@/lib/ops-store";
+
+const TASK_LABEL: Record<string, string> = {
+  agreement: "Agreements",
+  checkin: "Check-ins",
+  stamping: "Stamping",
+  payment: "Payments",
+  hold: "Room holds",
+};
 
 export const Route = createFileRoute("/admin/")({
   component: Dashboard,
