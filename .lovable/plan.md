@@ -1,0 +1,99 @@
+# Homes & Residents modules (front-end design only)
+
+Two new admin modules plus the glue that connects Bookings → Homes → Residents. This pass is **UI only**: everything runs on realistic in-memory demo data (modelled on the Arc spreadsheet you shared), no database tables, no server functions. Once the flow feels right, we wire it to the backend.
+
+## Navigation
+
+Sidebar becomes: Dashboard, Bookings, Homes, Residents, Appointment Manager, Website. Each new module has sub-tabs, same style as the Website tab.
+
+- **Homes** — Inventory, Availability, Unit setup
+- **Residents** — Residents, Tenancies, Payments & AR, Tasks
+
+## 1. Homes module
+
+### Inventory (default)
+Three-level tree: Residence → Unit → Room → Bed, matching your sheet.
+
+- Filter bar: residence, block/floor, unit type (4-bed / 3-bed / studio), room letter, occupancy (single/twin), gender, status, availability date range.
+- Table columns: Unit ID, Unit no., Room, Bed, Occupancy, Status pill, Resident name, University, Nationality, Tenancy start/end, Rent.
+- Colour-coded status pills reproducing your sheet: **Vacant** (amber), **Held** (blue), **Booked** (violet), **Active** (green), **Notice / Expiring** (red when end date is near).
+- Row actions: Hold bed, Assign resident, Open unit, View history.
+- Expand a unit row to see all rooms/beds inside it in one glance.
+
+### Availability search
+The "find me a bed" screen admin uses when an enquiry arrives: pick residence, move-in date, lease length, occupancy and gender, and get a card/list of matching beds with rent, available-from date and a **Reserve (Hold)** button. Holding asks for who it's for (link to an enquiry) and a hold-expiry date, then flips the bed to Held.
+
+### Unit setup
+Add/edit units: residence, unit number, block/floor, unit type (4-bedroom / 3-bedroom / studio), gender designation, and a bed configuration builder — each room gets a letter (A/B/C/D), occupancy single or twin, and bed slots generate automatically (Twin 1 / Twin 2). A **"Rent as whole unit"** toggle collapses the unit into a single rentable entity with its own rate.
+
+## 2. Bookings ↔ Homes link
+
+The Bookings pipeline gets the status ladder you specified, as a kanban-style toolbar plus per-enquiry drawer:
+
+```text
+New Enquiry → Open → Room Reserved → Viewing Scheduled
+   → Awaiting Booking Fee → Booked (Closed)
+   → Closed (reason required)
+```
+
+The enquiry drawer gains a stepper with these actions in order:
+1. **Reserve room** — opens the Homes availability picker inline; the chosen Room/Bed ID is stamped on the enquiry.
+2. **Schedule viewing** — links to an appointment (existing linking UI), marks viewing complete.
+3. **Generate invoice** — reuses the website stay calculator inputs (room, occupancy, dates, term, add-ons) and produces a booking invoice preview with a download button.
+4. **Record booking fee** — payment proof upload + amount/date/method; room flips to Booked.
+5. **Create resident profile** — prompt/CTA that opens the resident form pre-filled from the enquiry; on save the enquiry closes as Booked and a resident record appears in Residents.
+6. **Close with reason** — reason picker (lost to competitor, no response, budget, other).
+
+## 3. Residents module
+
+### Residents list
+Search + filters (residence, university, status, intake). Columns: name, student ID, residence/unit/room/bed, university, tenancy dates, tenancy status, AR balance.
+
+### Resident profile (tabbed detail page)
+Fields taken from your application form:
+
+- **Personal** — full name (as passport/NRIC), email, mobile, DOB, nationality, passport/NRIC no., gender, marital status, race, religion.
+- **Academic** — university, level of study, course, student ID, expected graduation year.
+- **Housing & health** — preferred/assigned residence-unit-room-bed, occupancy, move-in date, lease months, medical conditions (yes/no + detail).
+- **Emergency contact** — name, relationship, mobile, email, address, postcode, state, country.
+- **Payment** — preferred method, payment schedule (bi-monthly / quarterly / semi-annual / full term), payer name, relationship, mobile, email.
+- **Documents** — passport photo, offer letter, passport/NRIC, signed declaration, tenancy agreement, stamped TA, payment proofs, receipts. Each row: file, uploaded date, status, view/replace.
+- **Portal access** — placeholder card showing invite status and a "Send portal invite" button (non-functional for now).
+
+A completeness meter shows which required fields are still blank — this is the gate that creates the tenancy record.
+
+### Tenancies
+One row per tenancy: resident, unit/room/bed, start/end, rent, payment schedule, agreement status.
+
+Agreement lifecycle shown as a progress strip:
+```text
+Draft generated → Admin review & sign → Sent to student → Student signed
+   → Check-in scheduled → Checked in → Stamped
+```
+- **Generate agreement** — from the PDF template uploaded in Settings; shows a preview panel and a Regenerate button.
+- **Pre-check-in checklist** — Prepare key card, Clean & set up room, Resident card application; each tickable with assignee and date.
+- **Check-in day** — mark complete, upload remaining payment proof, generate receipts (booking fee receipt and full payment receipt).
+- **Stamping task** — auto-created after check-in, closes when the stamped TA page is uploaded.
+
+### Payments & AR
+- **Due this month** view: every tenant's next instalment derived from their payment schedule — resident, unit, period covered, amount, due date, days overdue, status (Due / Paid / Overdue / Partial).
+- Record payment dialog: amount, date, method, reference, proof upload → generates a receipt preview.
+- Ledger per resident: invoices, payments, balance.
+- Summary cards: billed this month, collected, outstanding, overdue count.
+
+### Tasks
+A single list of the tasks the flow generates (review & sign agreement, pre-check-in checklist, stamp TA, chase overdue payment), each with type, resident, due date and a link into the relevant screen. The admin dashboard gets an "Action needed" card summarising open tasks.
+
+## Supporting elements suggested
+
+- **Settings sub-tab under Residents** for document templates: tenancy agreement PDF, invoice and receipt templates, booking fee amount, hold duration default.
+- **Global search** in the admin header — jump to a unit, room, resident or enquiry by name/ID.
+- Shared status-pill and document-upload-row components so Homes, Bookings and Residents look identical.
+
+## Technical notes
+
+- Routes: `admin.homes.tsx` (+ `.index`, `.availability`, `.units`), `admin.residents.tsx` (+ `.index`, `.$id`, `.tenancies`, `.payments`, `.tasks`, `.settings`). Sub-tab shell copies `admin.website.tsx`.
+- Demo data in `src/lib/demo/inventory.ts` and `src/lib/demo/residents.ts`, typed, seeded from the Arc spreadsheet sample so screens look real. State held in React (module-level store) so holds/assignments made in one screen show up in another during a session.
+- Reuses existing shadcn primitives, `src/components/admin/fields.tsx`, `ImageUploader`, sonner toasts and the `.admin-ui` palette. New shared components: `StatusPill`, `DocumentRow`, `ChecklistCard`, `AvailabilityPicker`, `StageStepper`.
+- Invoice/receipt/agreement previews render as on-screen documents built from the existing quote-PDF styling; PDF generation reuses `src/lib/quote-pdf.ts` patterns where practical, otherwise shows a preview with a disabled download until the backend pass.
+- No migrations, no server functions, no changes to the public site in this pass.
