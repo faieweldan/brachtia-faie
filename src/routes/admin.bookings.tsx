@@ -128,19 +128,19 @@ function BookingsPage() {
             className="pl-9"
           />
         </div>
-        <div className="flex gap-1">
-          {["all", ...STATUSES].map((s) => (
+        <div className="flex flex-wrap gap-1">
+          {[{ value: "all", label: "All" }, ...STATUSES].map((s) => (
             <button
-              key={s}
+              key={s.value}
               type="button"
-              onClick={() => setStatus(s)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
-                status === s
+              onClick={() => setStatus(s.value)}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                status === s.value
                   ? "bg-brand-deep text-primary-foreground"
                   : "bg-muted text-muted-foreground hover:text-foreground"
               }`}
             >
-              {s}
+              {s.label}
             </button>
           ))}
         </div>
@@ -183,11 +183,11 @@ function BookingsPage() {
               <select
                 value={r.status}
                 onChange={(e) => mutate.mutate({ id: r.id, status: e.target.value })}
-                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs capitalize"
+                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
               >
                 {STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
+                  <option key={s.value} value={s.value}>
+                    {s.label}
                   </option>
                 ))}
               </select>
