@@ -6,7 +6,6 @@ export const Route = createFileRoute("/admin/homes")({
 
 const SUB_TABS = [
   { to: "/admin/homes", label: "Inventory", exact: true },
-  { to: "/admin/homes/availability", label: "Availability" },
   { to: "/admin/homes/units", label: "Unit setup" },
 ];
 
