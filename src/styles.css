@@ -327,3 +327,9 @@
   background-image: var(--admin-gradient);
 }
 
+
+/* Admin primary actions carry the deep green → emerald gradient */
+.admin-ui .bg-primary,
+.admin-ui .bg-brand-deep {
+  background-image: var(--admin-gradient);
+}
