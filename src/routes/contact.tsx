@@ -161,7 +161,7 @@ function ContactPage() {
           </span>
           <span className="min-w-0">
             <span className="block text-xs text-muted-foreground">WhatsApp</span>
-            <span className="block truncate text-sm font-semibold text-brand-deep">
+            <span className="block text-xs font-semibold text-brand-deep">
               {primaryPhone}
             </span>
           </span>
@@ -175,7 +175,7 @@ function ContactPage() {
           </span>
           <span className="min-w-0">
             <span className="block text-xs text-muted-foreground">Email</span>
-            <span className="block break-all text-sm font-semibold text-brand-deep">
+            <span className="block break-all text-xs font-semibold text-brand-deep">
               {company.email}
             </span>
           </span>
@@ -189,7 +189,7 @@ function ContactPage() {
           </span>
           <span className="min-w-0">
             <span className="block text-xs text-muted-foreground">Call</span>
-            <span className="block truncate text-sm font-semibold text-brand-deep">
+            <span className="block text-xs font-semibold text-brand-deep">
               {primaryPhone}
             </span>
           </span>
@@ -200,7 +200,7 @@ function ContactPage() {
           </span>
           <span className="min-w-0">
             <span className="block text-xs text-muted-foreground">Office</span>
-            <span className="block text-sm font-semibold text-brand-deep">
+            <span className="block text-xs font-semibold text-brand-deep">
               Cyberjaya, Selangor
             </span>
           </span>
