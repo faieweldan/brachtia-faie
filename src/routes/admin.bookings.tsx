@@ -56,6 +56,24 @@ function BookingsPage() {
   const [open, setOpen] = useState<any>(null);
   const [linkQuery, setLinkQuery] = useState("");
   const [downloading, setDownloading] = useState(false);
+  const [closeReason, setCloseReason] = useState("");
+  const navigate = useNavigate();
+
+  function createResident(row: any) {
+    const resident = blankResident({
+      enquiryId: row.id,
+      fullName: row.full_name ?? "",
+      email: row.email ?? "",
+      mobile: row.phone ?? "",
+      nationality: row.nationality ?? "",
+      gender: row.gender ?? "",
+      university: row.university ?? "",
+    });
+    saveResidentRecord(resident);
+    toast.success("Resident profile created");
+    setOpen(null);
+    void navigate({ to: "/admin/residents/$id", params: { id: resident.id } });
+  }
 
   const { data = [], isLoading } = useQuery({
     queryKey: ["admin", "enquiries"],
