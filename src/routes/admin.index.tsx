@@ -28,7 +28,7 @@ function Dashboard() {
           className="rounded-2xl border border-border bg-card p-5 transition-colors hover:border-brand/40"
         >
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Inbox className="size-4" /> New enquiries
+            <Inbox className="size-4" /> Open enquiries
           </p>
           <p className="mt-2 text-3xl font-bold text-brand-deep">
             {isLoading ? "—" : ((data as any)?.newEnquiries ?? 0)}
