@@ -15,6 +15,8 @@ import { SITE_URL, SOCIAL_IMAGE } from "@/lib/seo";
 
 import { Button } from "@/components/ui/button";
 
+const primaryPhone = company.phones[0] ?? "+6012-330 6815";
+
 const title = "Contact Brachtia Homes | Student Housing Partnerships in Cyberjaya";
 const description =
   "Partner with Brachtia Homes — universities, property developers, agents, homeowners, students, parents and Cyberjaya businesses. Reach us on WhatsApp, call or email.";
