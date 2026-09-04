@@ -2,25 +2,30 @@
 
 Step one of a section-by-section admin redesign. This pass changes only colour, surface and border values — no layout, copy or logic changes. The public site is untouched.
 
-## The new palette
+## The palette (Soft Green Gradient)
 
-- **Background: white.** The admin canvas becomes plain white instead of the current grey wash, so content panels read as content, not as cards floating on grey.
-- **Dark green (brand) for intent.** Used for the active nav item, headings, primary buttons, focus rings and selected states. One green, used sparingly, so the eye always knows where the action is.
-- **Light beige as the only accent.** Soft warm tints replace grey for hover states, table header rows, subtle panel fills, badges and the sidebar background. Beige carries "quiet surface"; green carries "this matters".
-- **Hairline borders** in a warm light tone, so separation comes from thin lines and whitespace rather than heavy rounded boxes and shadows.
-- Text: near-black warm neutral for body, muted warm grey for secondary labels — improving contrast against white.
+- **Canvas: white.** Content sits on plain white, not a grey wash.
+- **Deep green `#0B3A2E` → emerald `#3FB68B`** as a gradient, used on the sidebar rail and primary buttons; solid deep green for headings and active states, emerald for positive/chart accents.
+- **Light grey `#F7F8F9`** for secondary surfaces: table header rows, hover states, inset panels.
+- **Light beige `#F1EBE1`** as a sparing warm accent: badges, selected chips, subtle highlight blocks.
+- **Hairline borders** in a light neutral, so separation comes from thin lines and whitespace rather than heavy shadows.
 
-Net effect: a calm white workspace, green only where you can act, beige only where things are grouped. Less colour noise, less to scan.
+## Look and feel
+
+- **Sidebar: solid dark green rail** (subtle vertical gradient), white text, active item as a lighter translucent block — the reference's anchored left rail, white content area.
+- Mobile top nav picks up the same dark green treatment.
+- One green for action, grey for structure, beige for gentle emphasis — so nothing competes for attention.
 
 ## Scope of this pass
 
-Applies everywhere inside the admin portal: sidebar and mobile nav bar, dashboard cards, appointments (list, calendar, settings), bookings, website/residences list and editor, the unlock screen, and shared admin field/uploader components.
+Sidebar and mobile nav, dashboard cards, appointments (list, calendar, settings), bookings, website/residences list and editor, the unlock screen, and shared admin field/uploader components.
 
-Not in this pass (coming in later sections): spacing, layout, table structure, navigation reorganisation, component-by-component polish.
+Not in this pass (later sections): spacing, layout, table structure, navigation reorganisation, per-screen polish.
 
 ## Technical notes
 
-- Define an admin-scoped token override block in `src/styles.css` under `.admin-ui` — remapping `--background`, `--card`, `--muted`, `--muted-foreground`, `--accent`, `--border`, `--input`, `--secondary`, `--primary`, `--ring`, plus the beige tint values — so every existing semantic utility (`bg-muted`, `bg-card`, `border-border`, `bg-brand-tint`) picks up the new palette without touching component files. All values in `oklch`, matching the existing convention.
-- The `.admin-ui` class is already on the admin layout root (`src/routes/admin.tsx`) and the unlock screen, so scoping is already in place; the public site keeps its current tokens.
-- Where components hardcode a shade that fights the new palette (e.g. `bg-muted/30` page wash on `src/routes/admin.tsx`, `bg-muted/40` table headers), adjust those few class usages to the semantic token instead.
+- Add an admin-scoped token override block in `src/styles.css` under `.admin-ui`, remapping `--background`, `--card`, `--muted`, `--muted-foreground`, `--accent`, `--border`, `--input`, `--secondary`, `--primary`, `--ring`, `--brand`, `--brand-deep`, `--brand-tint`, plus new `--admin-gradient` and sidebar tokens. All values in `oklch`. Existing utilities (`bg-muted`, `bg-card`, `border-border`, `bg-brand-tint`) then pick up the new palette without touching most component files.
+- `.admin-ui` is already on the admin layout root (`src/routes/admin.tsx`) and the unlock screen, so scoping is in place; the public site keeps its tokens.
+- `src/routes/admin.tsx`: sidebar and mobile header switch to the dark green gradient surface with light foreground/active classes; page wash `bg-muted/30` becomes white.
+- Adjust the few hardcoded shades that fight the new palette (e.g. `bg-muted/40` table headers in the residence editor, `bg-muted` chips in bookings/appointments) to the semantic tokens.
 - Verify with a typecheck and screenshots of each admin route at desktop and mobile widths.
