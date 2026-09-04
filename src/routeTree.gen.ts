@@ -21,10 +21,20 @@ import { Route as TermsAndConditionsRouteImport } from './routes/terms-and-condi
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAppointmentsRouteImport } from './routes/admin.appointments'
 import { Route as AdminBookingsRouteImport } from './routes/admin.bookings'
+import { Route as AdminHomesRouteImport } from './routes/admin.homes'
+import { Route as AdminResidentsRouteImport } from './routes/admin.residents'
+import { Route as AdminTasksRouteImport } from './routes/admin.tasks'
 import { Route as AdminWebsiteRouteImport } from './routes/admin.website'
 import { Route as PropertiesIndexRouteImport } from './routes/properties.index'
 import { Route as AdminAppointmentsIndexRouteImport } from './routes/admin.appointments.index'
 import { Route as AdminAppointmentsSettingsRouteImport } from './routes/admin.appointments.settings'
+import { Route as AdminHomesIndexRouteImport } from './routes/admin.homes.index'
+import { Route as AdminHomesAvailabilityRouteImport } from './routes/admin.homes.availability'
+import { Route as AdminHomesUnitsRouteImport } from './routes/admin.homes.units'
+import { Route as AdminResidentsIndexRouteImport } from './routes/admin.residents.index'
+import { Route as AdminResidentsIdRouteImport } from './routes/admin.residents.$id'
+import { Route as AdminResidentsPaymentsRouteImport } from './routes/admin.residents.payments'
+import { Route as AdminResidentsTenanciesRouteImport } from './routes/admin.residents.tenancies'
 import { Route as AdminWebsiteIndexRouteImport } from './routes/admin.website.index'
 import { Route as PropertiesSlugIndexRouteImport } from './routes/properties.$slug.index'
 import { Route as AdminWebsiteResidencesIndexRouteImport } from './routes/admin.website.residences.index'
@@ -91,6 +101,21 @@ const AdminBookingsRoute = AdminBookingsRouteImport.update({
   path: '/bookings',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminHomesRoute = AdminHomesRouteImport.update({
+  id: '/homes',
+  path: '/homes',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminResidentsRoute = AdminResidentsRouteImport.update({
+  id: '/residents',
+  path: '/residents',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminTasksRoute = AdminTasksRouteImport.update({
+  id: '/tasks',
+  path: '/tasks',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminWebsiteRoute = AdminWebsiteRouteImport.update({
   id: '/website',
   path: '/website',
@@ -112,6 +137,41 @@ const AdminAppointmentsSettingsRoute =
     path: '/settings',
     getParentRoute: () => AdminAppointmentsRoute,
   } as any)
+const AdminHomesIndexRoute = AdminHomesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminHomesRoute,
+} as any)
+const AdminHomesAvailabilityRoute = AdminHomesAvailabilityRouteImport.update({
+  id: '/availability',
+  path: '/availability',
+  getParentRoute: () => AdminHomesRoute,
+} as any)
+const AdminHomesUnitsRoute = AdminHomesUnitsRouteImport.update({
+  id: '/units',
+  path: '/units',
+  getParentRoute: () => AdminHomesRoute,
+} as any)
+const AdminResidentsIndexRoute = AdminResidentsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminResidentsRoute,
+} as any)
+const AdminResidentsIdRoute = AdminResidentsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AdminResidentsRoute,
+} as any)
+const AdminResidentsPaymentsRoute = AdminResidentsPaymentsRouteImport.update({
+  id: '/payments',
+  path: '/payments',
+  getParentRoute: () => AdminResidentsRoute,
+} as any)
+const AdminResidentsTenanciesRoute = AdminResidentsTenanciesRouteImport.update({
+  id: '/tenancies',
+  path: '/tenancies',
+  getParentRoute: () => AdminResidentsRoute,
+} as any)
 const AdminWebsiteIndexRoute = AdminWebsiteIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -152,11 +212,21 @@ export interface FileRoutesByFullPath {
   '/terms-and-conditions': typeof TermsAndConditionsRoute
   '/admin/appointments': typeof AdminAppointmentsRouteWithChildren
   '/admin/bookings': typeof AdminBookingsRoute
+  '/admin/homes': typeof AdminHomesRouteWithChildren
+  '/admin/residents': typeof AdminResidentsRouteWithChildren
+  '/admin/tasks': typeof AdminTasksRoute
   '/admin/website': typeof AdminWebsiteRouteWithChildren
   '/admin/': typeof AdminIndexRoute
   '/properties/': typeof PropertiesIndexRoute
   '/admin/appointments/settings': typeof AdminAppointmentsSettingsRoute
+  '/admin/homes/availability': typeof AdminHomesAvailabilityRoute
+  '/admin/homes/units': typeof AdminHomesUnitsRoute
+  '/admin/residents/$id': typeof AdminResidentsIdRoute
+  '/admin/residents/payments': typeof AdminResidentsPaymentsRoute
+  '/admin/residents/tenancies': typeof AdminResidentsTenanciesRoute
   '/admin/appointments/': typeof AdminAppointmentsIndexRoute
+  '/admin/homes/': typeof AdminHomesIndexRoute
+  '/admin/residents/': typeof AdminResidentsIndexRoute
   '/admin/website/': typeof AdminWebsiteIndexRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
   '/admin/website/residences/$id': typeof AdminWebsiteResidencesIdRoute
@@ -173,10 +243,18 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
   '/admin/bookings': typeof AdminBookingsRoute
+  '/admin/tasks': typeof AdminTasksRoute
   '/admin': typeof AdminIndexRoute
   '/properties': typeof PropertiesIndexRoute
   '/admin/appointments/settings': typeof AdminAppointmentsSettingsRoute
+  '/admin/homes/availability': typeof AdminHomesAvailabilityRoute
+  '/admin/homes/units': typeof AdminHomesUnitsRoute
+  '/admin/residents/$id': typeof AdminResidentsIdRoute
+  '/admin/residents/payments': typeof AdminResidentsPaymentsRoute
+  '/admin/residents/tenancies': typeof AdminResidentsTenanciesRoute
   '/admin/appointments': typeof AdminAppointmentsIndexRoute
+  '/admin/homes': typeof AdminHomesIndexRoute
+  '/admin/residents': typeof AdminResidentsIndexRoute
   '/admin/website': typeof AdminWebsiteIndexRoute
   '/properties/$slug': typeof PropertiesSlugIndexRoute
   '/admin/website/residences/$id': typeof AdminWebsiteResidencesIdRoute
@@ -196,11 +274,21 @@ export interface FileRoutesById {
   '/terms-and-conditions': typeof TermsAndConditionsRoute
   '/admin/appointments': typeof AdminAppointmentsRouteWithChildren
   '/admin/bookings': typeof AdminBookingsRoute
+  '/admin/homes': typeof AdminHomesRouteWithChildren
+  '/admin/residents': typeof AdminResidentsRouteWithChildren
+  '/admin/tasks': typeof AdminTasksRoute
   '/admin/website': typeof AdminWebsiteRouteWithChildren
   '/admin/': typeof AdminIndexRoute
   '/properties/': typeof PropertiesIndexRoute
   '/admin/appointments/settings': typeof AdminAppointmentsSettingsRoute
+  '/admin/homes/availability': typeof AdminHomesAvailabilityRoute
+  '/admin/homes/units': typeof AdminHomesUnitsRoute
+  '/admin/residents/$id': typeof AdminResidentsIdRoute
+  '/admin/residents/payments': typeof AdminResidentsPaymentsRoute
+  '/admin/residents/tenancies': typeof AdminResidentsTenanciesRoute
   '/admin/appointments/': typeof AdminAppointmentsIndexRoute
+  '/admin/homes/': typeof AdminHomesIndexRoute
+  '/admin/residents/': typeof AdminResidentsIndexRoute
   '/admin/website/': typeof AdminWebsiteIndexRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
   '/admin/website/residences/$id': typeof AdminWebsiteResidencesIdRoute
@@ -221,11 +309,21 @@ export interface FileRouteTypes {
     | '/terms-and-conditions'
     | '/admin/appointments'
     | '/admin/bookings'
+    | '/admin/homes'
+    | '/admin/residents'
+    | '/admin/tasks'
     | '/admin/website'
     | '/admin/'
     | '/properties/'
     | '/admin/appointments/settings'
+    | '/admin/homes/availability'
+    | '/admin/homes/units'
+    | '/admin/residents/$id'
+    | '/admin/residents/payments'
+    | '/admin/residents/tenancies'
     | '/admin/appointments/'
+    | '/admin/homes/'
+    | '/admin/residents/'
     | '/admin/website/'
     | '/properties/$slug/'
     | '/admin/website/residences/$id'
@@ -242,10 +340,18 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/terms-and-conditions'
     | '/admin/bookings'
+    | '/admin/tasks'
     | '/admin'
     | '/properties'
     | '/admin/appointments/settings'
+    | '/admin/homes/availability'
+    | '/admin/homes/units'
+    | '/admin/residents/$id'
+    | '/admin/residents/payments'
+    | '/admin/residents/tenancies'
     | '/admin/appointments'
+    | '/admin/homes'
+    | '/admin/residents'
     | '/admin/website'
     | '/properties/$slug'
     | '/admin/website/residences/$id'
@@ -264,11 +370,21 @@ export interface FileRouteTypes {
     | '/terms-and-conditions'
     | '/admin/appointments'
     | '/admin/bookings'
+    | '/admin/homes'
+    | '/admin/residents'
+    | '/admin/tasks'
     | '/admin/website'
     | '/admin/'
     | '/properties/'
     | '/admin/appointments/settings'
+    | '/admin/homes/availability'
+    | '/admin/homes/units'
+    | '/admin/residents/$id'
+    | '/admin/residents/payments'
+    | '/admin/residents/tenancies'
     | '/admin/appointments/'
+    | '/admin/homes/'
+    | '/admin/residents/'
     | '/admin/website/'
     | '/properties/$slug/'
     | '/admin/website/residences/$id'
@@ -377,6 +493,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminBookingsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/homes': {
+      id: '/admin/homes'
+      path: '/homes'
+      fullPath: '/admin/homes'
+      preLoaderRoute: typeof AdminHomesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/residents': {
+      id: '/admin/residents'
+      path: '/residents'
+      fullPath: '/admin/residents'
+      preLoaderRoute: typeof AdminResidentsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/tasks': {
+      id: '/admin/tasks'
+      path: '/tasks'
+      fullPath: '/admin/tasks'
+      preLoaderRoute: typeof AdminTasksRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/website': {
       id: '/admin/website'
       path: '/website'
@@ -404,6 +541,55 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/appointments/settings'
       preLoaderRoute: typeof AdminAppointmentsSettingsRouteImport
       parentRoute: typeof AdminAppointmentsRoute
+    }
+    '/admin/homes/': {
+      id: '/admin/homes/'
+      path: '/'
+      fullPath: '/admin/homes/'
+      preLoaderRoute: typeof AdminHomesIndexRouteImport
+      parentRoute: typeof AdminHomesRoute
+    }
+    '/admin/homes/availability': {
+      id: '/admin/homes/availability'
+      path: '/availability'
+      fullPath: '/admin/homes/availability'
+      preLoaderRoute: typeof AdminHomesAvailabilityRouteImport
+      parentRoute: typeof AdminHomesRoute
+    }
+    '/admin/homes/units': {
+      id: '/admin/homes/units'
+      path: '/units'
+      fullPath: '/admin/homes/units'
+      preLoaderRoute: typeof AdminHomesUnitsRouteImport
+      parentRoute: typeof AdminHomesRoute
+    }
+    '/admin/residents/': {
+      id: '/admin/residents/'
+      path: '/'
+      fullPath: '/admin/residents/'
+      preLoaderRoute: typeof AdminResidentsIndexRouteImport
+      parentRoute: typeof AdminResidentsRoute
+    }
+    '/admin/residents/$id': {
+      id: '/admin/residents/$id'
+      path: '/$id'
+      fullPath: '/admin/residents/$id'
+      preLoaderRoute: typeof AdminResidentsIdRouteImport
+      parentRoute: typeof AdminResidentsRoute
+    }
+    '/admin/residents/payments': {
+      id: '/admin/residents/payments'
+      path: '/payments'
+      fullPath: '/admin/residents/payments'
+      preLoaderRoute: typeof AdminResidentsPaymentsRouteImport
+      parentRoute: typeof AdminResidentsRoute
+    }
+    '/admin/residents/tenancies': {
+      id: '/admin/residents/tenancies'
+      path: '/tenancies'
+      fullPath: '/admin/residents/tenancies'
+      preLoaderRoute: typeof AdminResidentsTenanciesRouteImport
+      parentRoute: typeof AdminResidentsRoute
     }
     '/admin/website/': {
       id: '/admin/website/'
@@ -456,6 +642,40 @@ const AdminAppointmentsRouteChildren: AdminAppointmentsRouteChildren = {
 const AdminAppointmentsRouteWithChildren =
   AdminAppointmentsRoute._addFileChildren(AdminAppointmentsRouteChildren)
 
+interface AdminHomesRouteChildren {
+  AdminHomesAvailabilityRoute: typeof AdminHomesAvailabilityRoute
+  AdminHomesUnitsRoute: typeof AdminHomesUnitsRoute
+  AdminHomesIndexRoute: typeof AdminHomesIndexRoute
+}
+
+const AdminHomesRouteChildren: AdminHomesRouteChildren = {
+  AdminHomesAvailabilityRoute: AdminHomesAvailabilityRoute,
+  AdminHomesUnitsRoute: AdminHomesUnitsRoute,
+  AdminHomesIndexRoute: AdminHomesIndexRoute,
+}
+
+const AdminHomesRouteWithChildren = AdminHomesRoute._addFileChildren(
+  AdminHomesRouteChildren,
+)
+
+interface AdminResidentsRouteChildren {
+  AdminResidentsIdRoute: typeof AdminResidentsIdRoute
+  AdminResidentsPaymentsRoute: typeof AdminResidentsPaymentsRoute
+  AdminResidentsTenanciesRoute: typeof AdminResidentsTenanciesRoute
+  AdminResidentsIndexRoute: typeof AdminResidentsIndexRoute
+}
+
+const AdminResidentsRouteChildren: AdminResidentsRouteChildren = {
+  AdminResidentsIdRoute: AdminResidentsIdRoute,
+  AdminResidentsPaymentsRoute: AdminResidentsPaymentsRoute,
+  AdminResidentsTenanciesRoute: AdminResidentsTenanciesRoute,
+  AdminResidentsIndexRoute: AdminResidentsIndexRoute,
+}
+
+const AdminResidentsRouteWithChildren = AdminResidentsRoute._addFileChildren(
+  AdminResidentsRouteChildren,
+)
+
 interface AdminWebsiteRouteChildren {
   AdminWebsiteIndexRoute: typeof AdminWebsiteIndexRoute
   AdminWebsiteResidencesIdRoute: typeof AdminWebsiteResidencesIdRoute
@@ -475,6 +695,9 @@ const AdminWebsiteRouteWithChildren = AdminWebsiteRoute._addFileChildren(
 interface AdminRouteChildren {
   AdminAppointmentsRoute: typeof AdminAppointmentsRouteWithChildren
   AdminBookingsRoute: typeof AdminBookingsRoute
+  AdminHomesRoute: typeof AdminHomesRouteWithChildren
+  AdminResidentsRoute: typeof AdminResidentsRouteWithChildren
+  AdminTasksRoute: typeof AdminTasksRoute
   AdminWebsiteRoute: typeof AdminWebsiteRouteWithChildren
   AdminIndexRoute: typeof AdminIndexRoute
 }
@@ -482,6 +705,9 @@ interface AdminRouteChildren {
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAppointmentsRoute: AdminAppointmentsRouteWithChildren,
   AdminBookingsRoute: AdminBookingsRoute,
+  AdminHomesRoute: AdminHomesRouteWithChildren,
+  AdminResidentsRoute: AdminResidentsRouteWithChildren,
+  AdminTasksRoute: AdminTasksRoute,
   AdminWebsiteRoute: AdminWebsiteRouteWithChildren,
   AdminIndexRoute: AdminIndexRoute,
 }
