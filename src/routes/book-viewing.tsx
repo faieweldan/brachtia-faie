@@ -214,8 +214,9 @@ function BookViewingPage() {
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1.15fr_1fr]">
         {/* Left: choices */}
-        <div className="space-y-6 rounded-3xl border border-border/70 bg-card p-6 shadow-card">
-          <div className="grid gap-2 sm:grid-cols-2">
+        <div className="space-y-6 rounded-3xl border border-border/70 bg-card p-4 shadow-card sm:p-6">
+          <div className="grid grid-cols-2 gap-2">
+
             {(
               [
                 { value: "in_person", label: "In person", icon: MapPin, hint: "At the residence" },
