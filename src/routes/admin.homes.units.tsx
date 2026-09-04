@@ -242,11 +242,11 @@ function UnitSetupPage() {
             <input
               ref={fileRef}
               type="file"
-              accept=".csv,text/csv"
+              accept=".xlsx,.xls"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f) void importCsv(f);
+                if (f) void importWorkbook(f);
                 e.target.value = "";
               }}
             />
