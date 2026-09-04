@@ -15,6 +15,8 @@ import { SITE_URL, SOCIAL_IMAGE } from "@/lib/seo";
 
 import { Button } from "@/components/ui/button";
 
+const primaryPhone = company.phones[0] ?? "+6012-330 6815";
+
 const title = "Contact Brachtia Homes | Student Housing Partnerships in Cyberjaya";
 const description =
   "Partner with Brachtia Homes — universities, property developers, agents, homeowners, students, parents and Cyberjaya businesses. Reach us on WhatsApp, call or email.";
@@ -159,8 +161,8 @@ function ContactPage() {
           </span>
           <span className="min-w-0">
             <span className="block text-xs text-muted-foreground">WhatsApp</span>
-            <span className="block truncate text-sm font-semibold text-brand-deep">
-              {company.phones[0]}
+            <span className="block text-xs font-semibold text-brand-deep">
+              {primaryPhone}
             </span>
           </span>
         </a>
@@ -173,13 +175,13 @@ function ContactPage() {
           </span>
           <span className="min-w-0">
             <span className="block text-xs text-muted-foreground">Email</span>
-            <span className="block truncate text-sm font-semibold text-brand-deep">
+            <span className="block break-all text-xs font-semibold text-brand-deep">
               {company.email}
             </span>
           </span>
         </a>
         <a
-          href={`tel:${company.phones[0].replace(/[^+\d]/g, "")}`}
+          href={`tel:${primaryPhone.replace(/[^+\d]/g, "")}`}
           className="group flex items-center gap-3 rounded-2xl border border-border/70 bg-card p-4 transition hover:border-brand/40 hover:shadow-sm"
         >
           <span className="flex size-10 items-center justify-center rounded-xl bg-brand-soft text-brand-deep">
@@ -187,8 +189,8 @@ function ContactPage() {
           </span>
           <span className="min-w-0">
             <span className="block text-xs text-muted-foreground">Call</span>
-            <span className="block truncate text-sm font-semibold text-brand-deep">
-              {company.phones[0]}
+            <span className="block text-xs font-semibold text-brand-deep">
+              {primaryPhone}
             </span>
           </span>
         </a>
@@ -198,7 +200,7 @@ function ContactPage() {
           </span>
           <span className="min-w-0">
             <span className="block text-xs text-muted-foreground">Office</span>
-            <span className="block text-sm font-semibold text-brand-deep">
+            <span className="block text-xs font-semibold text-brand-deep">
               Cyberjaya, Selangor
             </span>
           </span>
