@@ -307,7 +307,7 @@ function PropertyPage() {
 
 
 
-            <div id="rooms">
+            <div id="rooms" className="scroll-mt-24">
               <h2 className="text-2xl font-bold text-brand-deep">Rooms & pricing</h2>
               <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
                 Set your move-in date, filter by what you need, then click a room to see photos and
