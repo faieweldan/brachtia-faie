@@ -44,7 +44,7 @@ function AdminUnlock() {
   }
 
   return (
-    <div className="admin-ui flex min-h-screen items-center justify-center bg-muted/30 px-4">
+    <div className="admin-ui flex min-h-screen items-center justify-center bg-background px-4">
       <form
         onSubmit={onSubmit}
         className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 shadow-sm"

@@ -307,7 +307,7 @@ function BookingsPage() {
                       ))
                   )}
 
-                  <div className="space-y-2 rounded-lg bg-muted/40 p-3">
+                  <div className="space-y-2 rounded-lg bg-muted p-3">
                     <p className="text-xs font-medium text-foreground">Tag a viewing</p>
                     <Input
                       value={linkQuery}
