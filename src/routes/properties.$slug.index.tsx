@@ -28,6 +28,8 @@ import CtaBand from "@/components/site/CtaBand";
 import EnquiryDialog from "@/components/site/EnquiryDialog";
 import RoomPriceTable from "@/components/site/RoomPriceTable";
 import StayCalculator from "@/components/site/StayCalculator";
+import MobileCtaBar from "@/components/site/MobileCtaBar";
+
 
 export const Route = createFileRoute("/properties/$slug/")({
   loader: async ({ params }) => {
