@@ -67,11 +67,13 @@ export default function RoomPriceTable({
   function fareTile(room: RoomType, occ: Occupancy) {
     const price = room.occupancies.includes(occ) ? room.rent[term][occ] : null;
     const active = selectedRoomId === room.id && selectedOccupancy === occ;
+    const occLabel = occ === "single" ? "Single" : "Twin sharing";
 
     if (price == null) {
       return (
-        <div className="flex h-14 flex-col items-center justify-center rounded-xl border border-dashed border-border/70 px-2 text-center text-xs text-muted-foreground">
-          —
+        <div className="flex h-14 flex-col items-center justify-center rounded-xl border border-dashed border-border/70 px-2 text-center text-[11px] leading-tight text-muted-foreground">
+          <span className="md:hidden">{occLabel}</span>
+          <span>Not available</span>
         </div>
       );
     }
@@ -80,33 +82,44 @@ export default function RoomPriceTable({
       <button
         type="button"
         aria-pressed={active}
+        aria-label={`${occLabel} ${formatRM(price)} per month`}
         onClick={(e) => {
           e.stopPropagation();
           onSelect(room, occ);
         }}
-        className={`flex h-14 w-full items-center justify-center rounded-xl border px-3 text-center transition-all ${
+        className={`flex h-14 w-full flex-col items-center justify-center rounded-xl border px-2 text-center transition-all md:flex-row md:px-3 ${
           active
             ? "border-brand-deep bg-brand-deep text-primary-foreground shadow-sm"
             : "border-border bg-card hover:border-brand hover:shadow-sm"
         }`}
       >
         <span
-          className={`text-base font-extrabold tabular-nums ${
-            active ? "text-primary-foreground" : "text-brand-deep"
-          }`}
-        >
-          {formatRM(price)}
-        </span>
-        <span
-          className={`ml-1 text-xs font-semibold ${
+          className={`text-[10px] font-semibold uppercase tracking-wide md:hidden ${
             active ? "text-primary-foreground/80" : "text-muted-foreground"
           }`}
         >
-          /mo
+          {occLabel}
+        </span>
+        <span className="flex items-baseline gap-1">
+          <span
+            className={`text-base font-extrabold tabular-nums ${
+              active ? "text-primary-foreground" : "text-brand-deep"
+            }`}
+          >
+            {formatRM(price)}
+          </span>
+          <span
+            className={`text-xs font-semibold ${
+              active ? "text-primary-foreground/80" : "text-muted-foreground"
+            }`}
+          >
+            /mo
+          </span>
         </span>
       </button>
     );
   }
+
 
   return (
     <div>
