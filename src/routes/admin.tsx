@@ -43,9 +43,9 @@ function AdminLayout() {
 
 
   return (
-    <div className="admin-ui flex min-h-screen bg-muted/30">
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-card p-4 md:flex">
-        <p className="px-2 text-sm font-bold text-brand-deep">Brachtia Admin</p>
+    <div className="admin-ui flex min-h-screen bg-background">
+      <aside className="admin-rail hidden w-60 shrink-0 flex-col p-4 text-white/70 md:flex">
+        <p className="px-2 text-sm font-bold text-white">Brachtia Admin</p>
         <nav className="mt-6 space-y-1">
           {NAV.map((item) => {
             const active = item.exact ? pathname === item.to : pathname.startsWith(item.to);
@@ -55,8 +55,8 @@ function AdminLayout() {
                 to={item.to as never}
                 className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                   active
-                    ? "bg-brand-tint text-brand-deep"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    ? "bg-white/12 text-white"
+                    : "text-white/65 hover:bg-white/8 hover:text-white"
                 }`}
               >
                 <item.icon className="size-4" />
@@ -68,7 +68,7 @@ function AdminLayout() {
         <button
           type="button"
           onClick={handleLock}
-          className="mt-auto flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="mt-auto flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-white/60 transition-colors hover:bg-white/8 hover:text-white"
         >
           <Lock className="size-4" />
           Lock portal
@@ -78,17 +78,23 @@ function AdminLayout() {
 
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-2 overflow-x-auto border-b border-border bg-card px-4 py-2 md:hidden">
-          {NAV.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to as never}
-              className="whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
-            >
-              {item.label}
-            </Link>
-          ))}
+        <header className="admin-rail flex items-center gap-2 overflow-x-auto px-4 py-2 md:hidden">
+          {NAV.map((item) => {
+            const active = item.exact ? pathname === item.to : pathname.startsWith(item.to);
+            return (
+              <Link
+                key={item.to}
+                to={item.to as never}
+                className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                  active ? "bg-white/15 text-white" : "text-white/65 hover:bg-white/10"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </header>
+
         <main className="min-w-0 flex-1 p-4 sm:p-8">
           <Outlet />
         </main>

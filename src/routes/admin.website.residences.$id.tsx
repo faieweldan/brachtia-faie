@@ -416,7 +416,7 @@ function ResidenceEditor() {
 
               {/* Fee table */}
               <div className="overflow-hidden rounded-md border border-border">
-                <div className="grid grid-cols-[1.6fr_1fr_1fr] items-center gap-2 border-b border-border bg-muted/40 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <div className="grid grid-cols-[1.6fr_1fr_1fr] items-center gap-2 border-b border-border bg-muted px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                   <span>Fee</span>
                   <span>12-month</span>
                   <span>Short-term</span>
