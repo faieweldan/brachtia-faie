@@ -14,18 +14,18 @@ export type Bed = {
   id: string;
   label: string; // "Single" | "Twin 1" | "Twin 2"
   status: BedStatus;
-  residentId?: string;
-  residentName?: string;
-  studentId?: string;
-  university?: string;
-  nationality?: string;
-  gender?: string;
-  tenancyStart?: string;
-  tenancyEnd?: string;
-  rent?: number;
-  holdFor?: string;
-  holdUntil?: string;
-  enquiryId?: string;
+  residentId?: string | undefined;
+  residentName?: string | undefined;
+  studentId?: string | undefined;
+  university?: string | undefined;
+  nationality?: string | undefined;
+  gender?: string | undefined;
+  tenancyStart?: string | undefined;
+  tenancyEnd?: string | undefined;
+  rent?: number | undefined;
+  holdFor?: string | undefined;
+  holdUntil?: string | undefined;
+  enquiryId?: string | undefined;
 };
 
 export type UnitRoom = {
@@ -57,14 +57,14 @@ export type Unit = {
 export type ResidentDoc = {
   key: string;
   label: string;
-  fileName?: string;
-  uploadedAt?: string;
+  fileName?: string | undefined;
+  uploadedAt?: string | undefined;
 };
 
 export type Resident = {
   id: string;
   createdAt: string;
-  enquiryId?: string;
+  enquiryId?: string | undefined;
   // personal
   fullName: string;
   email: string;
@@ -83,9 +83,9 @@ export type Resident = {
   studentId: string;
   graduationYear: string;
   // housing & health
-  unitId?: string;
-  roomId?: string;
-  bedId?: string;
+  unitId?: string | undefined;
+  roomId?: string | undefined;
+  bedId?: string | undefined;
   occupancy: string;
   moveIn: string;
   leaseMonths: string;
@@ -124,34 +124,34 @@ export type TenancyStage =
 export type Tenancy = {
   id: string;
   residentId: string;
-  unitId?: string;
-  roomId?: string;
-  bedId?: string;
+  unitId?: string | undefined;
+  roomId?: string | undefined;
+  bedId?: string | undefined;
   start: string;
   end: string;
   rent: number;
   schedule: string;
   stage: TenancyStage;
   checkinDate: string;
-  checklist: { key: string; label: string; done: boolean; date?: string }[];
-  agreementFile?: string;
-  stampedFile?: string;
+  checklist: { key: string; label: string; done: boolean; date?: string }[] | undefined;
+  agreementFile?: string | undefined;
+  stampedFile?: string | undefined;
 };
 
 export type Payment = {
   id: string;
   residentId: string;
-  tenancyId?: string;
+  tenancyId?: string | undefined;
   kind: "booking_fee" | "deposit" | "rent" | "other";
   label: string;
   periodFrom: string;
   periodTo: string;
   amount: number;
   dueDate: string;
-  paidDate?: string;
-  method?: string;
-  reference?: string;
-  proofFile?: string;
+  paidDate?: string | undefined;
+  method?: string | undefined;
+  reference?: string | undefined;
+  proofFile?: string | undefined;
   status: "due" | "paid" | "partial" | "overdue";
 };
 
@@ -160,10 +160,10 @@ export type Task = {
   type: "agreement" | "checkin" | "stamping" | "payment" | "hold";
   title: string;
   refLabel: string;
-  refId?: string;
+  refId?: string | undefined;
   dueDate: string;
   status: "open" | "done";
-  link?: string;
+  link?: string | undefined;
 };
 
 export type OpsState = {
@@ -172,7 +172,7 @@ export type OpsState = {
   tenancies: Tenancy[];
   payments: Payment[];
   tasks: Task[];
-  taTemplate?: { fileName: string; uploadedAt: string };
+  taTemplate?: { fileName: string; uploadedAt: string } | undefined;
 };
 
 const EMPTY: OpsState = {
