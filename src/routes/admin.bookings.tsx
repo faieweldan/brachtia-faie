@@ -1,8 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Download, Link2, Mail, Phone, Search, X } from "lucide-react";
 import { toast } from "sonner";
+
+import { StageStepper } from "@/components/admin/ops-ui";
+import { blankResident, saveResidentRecord } from "@/lib/ops-store";
 
 import {
   listEnquiries,
@@ -25,7 +28,18 @@ export const Route = createFileRoute("/admin/bookings")({
   component: BookingsPage,
 });
 
-const STATUSES = ["new", "contacted", "reserved", "closed"] as const;
+const STATUSES = [
+  { value: "open", label: "Open" },
+  { value: "room_reserved", label: "Room reserved" },
+  { value: "viewing_scheduled", label: "Viewing scheduled" },
+  { value: "awaiting_fee", label: "Awaiting booking fee" },
+  { value: "booked", label: "Booked" },
+  { value: "closed", label: "Closed" },
+] as const;
+
+const STATUS_LABEL = (v: string) => STATUSES.find((s) => s.value === v)?.label ?? v;
+
+const CLOSE_REASONS = ["Lost to competitor", "No response", "Budget", "Other"];
 
 const money = (n: number) =>
   `RM ${Number(n || 0).toLocaleString("en-MY", { maximumFractionDigits: 0 })}`;
@@ -42,6 +56,24 @@ function BookingsPage() {
   const [open, setOpen] = useState<any>(null);
   const [linkQuery, setLinkQuery] = useState("");
   const [downloading, setDownloading] = useState(false);
+  const [closeReason, setCloseReason] = useState("");
+  const navigate = useNavigate();
+
+  function createResident(row: any) {
+    const resident = blankResident({
+      enquiryId: row.id,
+      fullName: row.full_name ?? "",
+      email: row.email ?? "",
+      mobile: row.phone ?? "",
+      nationality: row.nationality ?? "",
+      gender: row.gender ?? "",
+      university: row.university ?? "",
+    });
+    saveResidentRecord(resident);
+    toast.success("Resident profile created");
+    setOpen(null);
+    void navigate({ to: "/admin/residents/$id", params: { id: resident.id } });
+  }
 
   const { data = [], isLoading } = useQuery({
     queryKey: ["admin", "enquiries"],
@@ -117,19 +149,19 @@ function BookingsPage() {
             className="pl-9"
           />
         </div>
-        <div className="flex gap-1">
-          {["all", ...STATUSES].map((s) => (
+        <div className="flex flex-wrap gap-1">
+          {[{ value: "all", label: "All" }, ...STATUSES].map((s) => (
             <button
-              key={s}
+              key={s.value}
               type="button"
-              onClick={() => setStatus(s)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
-                status === s
+              onClick={() => setStatus(s.value)}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                status === s.value
                   ? "bg-brand-deep text-primary-foreground"
                   : "bg-muted text-muted-foreground hover:text-foreground"
               }`}
             >
-              {s}
+              {s.label}
             </button>
           ))}
         </div>
@@ -172,11 +204,11 @@ function BookingsPage() {
               <select
                 value={r.status}
                 onChange={(e) => mutate.mutate({ id: r.id, status: e.target.value })}
-                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs capitalize"
+                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
               >
                 {STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
+                  <option key={s.value} value={s.value}>
+                    {s.label}
                   </option>
                 ))}
               </select>
@@ -199,6 +231,79 @@ function BookingsPage() {
                 </p>
               </DialogHeader>
               <div className="space-y-4 text-sm">
+                <div className="rounded-xl border border-border p-3">
+                  <p className="mb-2 text-xs font-semibold text-brand-deep">Pipeline</p>
+                  <StageStepper
+                    stages={STATUSES.map((s) => ({ key: s.value, label: s.label }))}
+                    current={open.status}
+                  />
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button asChild size="sm" variant="outline">
+                      <Link to="/admin/homes/availability">1. Reserve room</Link>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => mutate.mutate({ id: open.id, status: "viewing_scheduled" })}
+                    >
+                      2. Viewing scheduled
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!hasSnapshot(open) || downloading}
+                      onClick={() => {
+                        void downloadQuote(open);
+                        mutate.mutate({ id: open.id, status: "awaiting_fee" });
+                      }}
+                    >
+                      3. Generate invoice
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => mutate.mutate({ id: open.id, status: "booked" })}
+                    >
+                      4. Booking fee received
+                    </Button>
+                    <Button size="sm" onClick={() => createResident(open)}>
+                      5. Create resident profile
+                    </Button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <select
+                      value={closeReason}
+                      onChange={(e) => setCloseReason(e.target.value)}
+                      className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                    >
+                      <option value="">Close reason…</option>
+                      {CLOSE_REASONS.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        if (!closeReason) {
+                          toast.error("Pick a reason to close this enquiry");
+                          return;
+                        }
+                        mutate.mutate({
+                          id: open.id,
+                          status: "closed",
+                          adminNotes: `${open.admin_notes ? `${open.admin_notes}\n` : ""}Closed: ${closeReason}`,
+                        });
+                        setCloseReason("");
+                      }}
+                    >
+                      Close enquiry
+                    </Button>
+                  </div>
+                </div>
+
                 <div className="flex flex-wrap gap-2">
                   <Button asChild size="sm" variant="outline">
                     <a href={`mailto:${open.email}`}>

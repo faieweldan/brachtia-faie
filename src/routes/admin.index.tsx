@@ -4,6 +4,15 @@ import { CalendarDays, Inbox } from "lucide-react";
 
 import { adminOverview } from "@/lib/admin.functions";
 import { formatSlot } from "@/lib/slots";
+import { useOps } from "@/lib/ops-store";
+
+const TASK_LABEL: Record<string, string> = {
+  agreement: "Agreements",
+  checkin: "Check-ins",
+  stamping: "Stamping",
+  payment: "Payments",
+  hold: "Room holds",
+};
 
 export const Route = createFileRoute("/admin/")({
   component: Dashboard,
@@ -14,6 +23,12 @@ function Dashboard() {
     queryKey: ["admin", "overview"],
     queryFn: () => adminOverview(),
   });
+  const ops = useOps();
+  const openTasks = ops.tasks.filter((t) => t.status === "open");
+  const byType = openTasks.reduce<Record<string, number>>((acc, t) => {
+    acc[t.type] = (acc[t.type] ?? 0) + 1;
+    return acc;
+  }, {});
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -28,7 +43,7 @@ function Dashboard() {
           className="rounded-2xl border border-border bg-card p-5 transition-colors hover:border-brand/40"
         >
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Inbox className="size-4" /> New enquiries
+            <Inbox className="size-4" /> Open enquiries
           </p>
           <p className="mt-2 text-3xl font-bold text-brand-deep">
             {isLoading ? "—" : ((data as any)?.newEnquiries ?? 0)}
@@ -46,6 +61,31 @@ function Dashboard() {
           </p>
         </Link>
       </div>
+
+      <div className="rounded-2xl border border-border bg-card p-5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-brand-deep">Action needed</h2>
+          <Link to="/admin/tasks" className="text-xs font-medium text-brand hover:underline">
+            View all tasks
+          </Link>
+        </div>
+        {openTasks.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">Nothing outstanding.</p>
+        ) : (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {Object.entries(byType).map(([type, count]) => (
+              <Link
+                key={type}
+                to="/admin/tasks"
+                className="rounded-full border border-border bg-muted px-3 py-1.5 text-xs font-medium text-foreground hover:border-brand/40"
+              >
+                {TASK_LABEL[type] ?? type} · {count}
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
 
       <div className="rounded-2xl border border-border bg-card p-5">
         <h2 className="text-sm font-semibold text-brand-deep">Next appointments</h2>
