@@ -167,22 +167,31 @@ export default function RoomPriceTable({
         </div>
 
 
-        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3 border-t border-border/60 pt-4">
-          <span className="text-sm font-bold text-brand-deep">Filter</span>
-          {options.map((o) => {
-            const checked = picks.includes(o.token);
-            return (
-              <label
-                key={o.token}
-                className="flex cursor-pointer items-center gap-2 text-sm font-medium text-foreground"
-              >
-                <Checkbox checked={checked} onCheckedChange={() => toggle(o.token)} />
-                {o.label}
-              </label>
-            );
-          })}
+        <div className="mt-4 border-t border-border/60 pt-4">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <span className="text-sm font-bold text-brand-deep">Filter</span>
+            {options.map((o) => {
+              const checked = picks.includes(o.token);
+              return (
+                <button
+                  key={o.token}
+                  type="button"
+                  aria-pressed={checked}
+                  onClick={() => toggle(o.token)}
+                  className={`inline-flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-sm font-medium transition-colors ${
+                    checked
+                      ? "border-brand bg-brand-tint text-brand-deep"
+                      : "border-border bg-card text-foreground hover:border-brand/50"
+                  }`}
+                >
+                  <Checkbox checked={checked} className="pointer-events-none" tabIndex={-1} />
+                  {o.label}
+                </button>
+              );
+            })}
+          </div>
 
-          <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground sm:mt-2">
             <span>
               {visible.length} of {rooms.length} room types
             </span>
@@ -197,6 +206,7 @@ export default function RoomPriceTable({
             )}
           </div>
         </div>
+
       </div>
 
       {/* Tables */}
