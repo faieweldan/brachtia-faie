@@ -52,8 +52,19 @@ export default function Footer() {
           </ul>
         </div>
       </div>
-      <div className="border-t border-primary-foreground/10 py-5 text-center text-xs text-primary-foreground/50">
-        © {new Date().getFullYear()} {company.legalName}. All rights reserved.
+      <div className="flex flex-col items-center gap-2 border-t border-primary-foreground/10 py-5 text-center text-xs text-primary-foreground/50 sm:flex-row sm:justify-center sm:gap-4">
+        <span>
+          © {new Date().getFullYear()} {company.legalName}. All rights reserved.
+        </span>
+        <span className="hidden sm:inline">·</span>
+        <div className="flex gap-4">
+          <Link to="/privacy-policy" className="hover:text-primary-foreground">
+            Privacy Policy
+          </Link>
+          <Link to="/terms-and-conditions" className="hover:text-primary-foreground">
+            Terms & Conditions
+          </Link>
+        </div>
       </div>
     </footer>
   );
