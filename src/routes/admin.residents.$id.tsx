@@ -162,8 +162,8 @@ function ResidentProfilePage() {
             ) : null}
           </div>
           {tenancy ? (
-            <Button asChild size="sm" variant="outline">
-              <Link to="/admin/residents/tenancies">View tenancy</Link>
+            <Button size="sm" variant="outline" onClick={() => setTab("tenancy")}>
+              View tenancy
             </Button>
           ) : (
             <Button size="sm" disabled={pct < 100} onClick={startTenancy}>
@@ -173,7 +173,15 @@ function ResidentProfilePage() {
         </div>
       </Panel>
 
-      <Tabs defaultValue="personal">
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsTrigger value="tenancy">Tenancy</TabsTrigger>
+          <TabsTrigger value="payments">Payments</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="profile" className="mt-4">
+          <Tabs defaultValue="personal">
         <TabsList className="flex-wrap">
           <TabsTrigger value="personal">Personal</TabsTrigger>
           <TabsTrigger value="academic">Academic</TabsTrigger>
@@ -183,6 +191,7 @@ function ResidentProfilePage() {
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="portal">Portal access</TabsTrigger>
         </TabsList>
+
 
         <TabsContent value="personal" className="mt-4">
           <Panel>
