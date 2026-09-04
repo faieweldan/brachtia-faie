@@ -243,7 +243,7 @@ export default function RoomPriceTable({
                     <li
                       key={room.id}
                       onClick={() => setDetailRoom(room)}
-                      className={`group grid cursor-pointer grid-cols-1 items-center gap-4 border-t border-border/70 px-5 py-4 transition-colors md:grid-cols-[minmax(0,2.8fr)_minmax(0,1fr)_8.5rem_8.5rem] ${
+                      className={`group grid cursor-pointer grid-cols-1 items-center gap-3 border-t border-border/70 px-4 py-3.5 transition-colors sm:px-5 md:grid-cols-[minmax(0,2.8fr)_minmax(0,1fr)_8.5rem_8.5rem] md:gap-4 md:py-4 ${
                         selected ? "bg-brand-tint/60" : "hover:bg-muted/40"
                       }`}
                     >
@@ -263,12 +263,15 @@ export default function RoomPriceTable({
                           </span>
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate font-semibold leading-snug text-brand-deep">{room.name}</p>
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-brand underline-offset-2 group-hover:underline">
+                          <p className="font-semibold leading-snug text-brand-deep md:truncate">
+                            {room.name}
+                          </p>
+                          <span className="mt-0.5 inline-flex items-center gap-1 text-xs font-semibold text-brand underline-offset-2 group-hover:underline">
                             View details <ChevronRight className="size-3" />
                           </span>
                         </div>
                       </div>
+
 
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                         {room.sizeLabel && (
