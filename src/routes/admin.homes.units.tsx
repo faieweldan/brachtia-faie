@@ -257,7 +257,7 @@ function UnitSetupPage() {
           <EmptyState
             icon={Building2}
             title="No units yet"
-            hint="Add a unit or bulk upload with the CSV template. Rooms, beds and rent fill in automatically from the unit type."
+            hint="Add a unit or bulk upload with the Excel template. Rooms, beds and rent fill in automatically from the unit type."
           />
         ) : (
           <div className="divide-y divide-border">
