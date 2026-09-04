@@ -265,9 +265,9 @@ function PropertyPage() {
 
       <section className="mx-auto mt-8 max-w-[88rem] px-4 sm:px-6">
         <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_27rem] xl:grid-cols-[minmax(0,1fr)_31rem]">
-          <div className="space-y-12">
+          <div className="space-y-10 sm:space-y-12">
             <div>
-              <h1 className="text-3xl font-bold text-brand-deep sm:text-4xl">
+              <h1 className="text-2xl font-bold text-brand-deep sm:text-4xl">
                 {property.name}
               </h1>
               <p className="mt-2 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -280,6 +280,7 @@ function PropertyPage() {
                 </p>
               ))}
             </div>
+
 
             <div className="space-y-6">
               <AmenitySection
