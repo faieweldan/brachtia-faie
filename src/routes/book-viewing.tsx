@@ -181,14 +181,17 @@ function BookViewingPage() {
       </p>
 
       {showAvailabilityNudge ? (
-        <div className="mt-6 grid gap-4 rounded-2xl border border-brand/30 bg-brand-tint/50 p-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <div className="mt-6 grid gap-3 rounded-2xl border border-brand/30 bg-brand-tint/50 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-4 sm:p-5">
           <div className="min-w-0">
             <p className="text-sm font-semibold text-brand-deep">
               Checked room availability and pricing yet?
             </p>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 hidden text-sm text-muted-foreground sm:block">
               Most students pick a room type first — then we tailor the viewing to the rooms you
               actually want. It only takes a minute.
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground sm:hidden">
+              Pick a room type first and we'll tailor the viewing.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -207,6 +210,7 @@ function BookViewingPage() {
           </div>
         </div>
       ) : null}
+
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1.15fr_1fr]">
         {/* Left: choices */}
