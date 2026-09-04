@@ -38,6 +38,7 @@ function ResidentProfilePage() {
   const { residents, units, tenancies } = useOps();
   const stored = residents.find((r) => r.id === id);
   const [form, setForm] = useState<Resident | null>(stored ?? null);
+  const [tab, setTab] = useState("profile");
 
   useEffect(() => {
     if (stored && !form) setForm(stored);
