@@ -320,16 +320,33 @@
   height: 2.25rem;
 }
 
+/* Admin side rail: layered green gradient with a frosted-glass finish */
 .admin-rail {
-  background-image: var(--admin-rail);
+  position: relative;
+  isolation: isolate;
+  background-color: oklch(0.27 0.055 167);
+  background-image:
+    radial-gradient(120% 60% at 0% 0%, oklch(0.55 0.105 164 / 0.55), transparent 60%),
+    radial-gradient(90% 55% at 100% 100%, oklch(0.62 0.1 178 / 0.35), transparent 65%),
+    var(--admin-rail);
+  backdrop-filter: blur(18px) saturate(140%);
+  border-right: 1px solid oklch(1 0 0 / 0.1);
 }
+.admin-rail::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: linear-gradient(
+    160deg,
+    oklch(1 0 0 / 0.14),
+    oklch(1 0 0 / 0.02) 45%,
+    oklch(0 0 0 / 0.12)
+  );
+  pointer-events: none;
+}
+
 .admin-gradient {
   background-image: var(--admin-gradient);
 }
 
-
-/* Admin primary actions carry the deep green → emerald gradient */
-.admin-ui .bg-primary,
-.admin-ui .bg-brand-deep {
-  background-image: var(--admin-gradient);
-}
