@@ -53,13 +53,10 @@ function AdminLayout() {
               <Link
                 key={item.to}
                 to={item.to as never}
-                className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  active
-                    ? "bg-admin-emerald text-[#0B3A2E]"
-                    : "text-white/70 hover:bg-white/10 hover:text-white"
-                }`}
-
+                data-active={active}
+                className="admin-nav-item flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium"
               >
+
                 <item.icon className="size-4" />
                 {item.label}
               </Link>
@@ -86,11 +83,10 @@ function AdminLayout() {
               <Link
                 key={item.to}
                 to={item.to as never}
-                className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                  active ? "bg-admin-emerald text-[#0B3A2E]" : "text-white/70 hover:bg-white/10"
-                }`}
-
+                data-active={active}
+                className="admin-nav-item whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium"
               >
+
                 {item.label}
               </Link>
             );
