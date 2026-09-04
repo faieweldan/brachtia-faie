@@ -23,6 +23,12 @@ function Dashboard() {
     queryKey: ["admin", "overview"],
     queryFn: () => adminOverview(),
   });
+  const ops = useOps();
+  const openTasks = ops.tasks.filter((t) => t.status === "open");
+  const byType = openTasks.reduce<Record<string, number>>((acc, t) => {
+    acc[t.type] = (acc[t.type] ?? 0) + 1;
+    return acc;
+  }, {});
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
