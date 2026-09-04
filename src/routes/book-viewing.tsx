@@ -152,7 +152,7 @@ function BookViewingPage() {
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Button asChild variant="outline" size="lg" className="rounded-full">
             <a
-              href="https://wa.me/60123306815?text=Hi+I+would+like+to+learn+more+about+Brachtia+Homes+before+choosing+my+residence&utm_source=chatgpt.com"
+              href="https://wa.me/60123306815?text=Hi+I+would+like+to+learn+more+about+Brachtia+Homes+before+choosing+my+residence"
               target="_blank"
               rel="noreferrer"
             >
