@@ -175,7 +175,7 @@ function ContactPage() {
           </span>
           <span className="min-w-0">
             <span className="block text-xs text-muted-foreground">Email</span>
-            <span className="block truncate text-sm font-semibold text-brand-deep">
+            <span className="block break-all text-sm font-semibold text-brand-deep">
               {company.email}
             </span>
           </span>
