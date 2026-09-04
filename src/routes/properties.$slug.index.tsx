@@ -411,6 +411,18 @@ function PropertyPage() {
           message={`Hi Brachtia Homes, I'd like to book a viewing at ${property.name}.`}
         />
       </div>
+
+      {rooms.length > 0 && (
+        <>
+          <div className="h-24 md:hidden" aria-hidden />
+          <MobileCtaBar
+            label="See your move-in cost"
+            hint="Pick a room and rate to price your stay"
+            message={`Hi Brachtia Homes, I'd like to check availability at ${property.name}.`}
+          />
+        </>
+      )}
     </>
   );
+
 }
