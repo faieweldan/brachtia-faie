@@ -15,7 +15,9 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AdminUnlockRouteImport } from './routes/admin-unlock'
 import { Route as BookViewingRouteImport } from './routes/book-viewing'
 import { Route as ContactRouteImport } from './routes/contact'
+import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as TermsAndConditionsRouteImport } from './routes/terms-and-conditions'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAppointmentsRouteImport } from './routes/admin.appointments'
 import { Route as AdminBookingsRouteImport } from './routes/admin.bookings'
@@ -59,9 +61,19 @@ const ContactRoute = ContactRouteImport.update({
   path: '/contact',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacyPolicyRoute = PrivacyPolicyRouteImport.update({
+  id: '/privacy-policy',
+  path: '/privacy-policy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsAndConditionsRoute = TermsAndConditionsRouteImport.update({
+  id: '/terms-and-conditions',
+  path: '/terms-and-conditions',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
@@ -135,7 +147,9 @@ export interface FileRoutesByFullPath {
   '/admin-unlock': typeof AdminUnlockRoute
   '/book-viewing': typeof BookViewingRoute
   '/contact': typeof ContactRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/terms-and-conditions': typeof TermsAndConditionsRoute
   '/admin/appointments': typeof AdminAppointmentsRouteWithChildren
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/website': typeof AdminWebsiteRouteWithChildren
@@ -155,7 +169,9 @@ export interface FileRoutesByTo {
   '/admin-unlock': typeof AdminUnlockRoute
   '/book-viewing': typeof BookViewingRoute
   '/contact': typeof ContactRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/terms-and-conditions': typeof TermsAndConditionsRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin': typeof AdminIndexRoute
   '/properties': typeof PropertiesIndexRoute
@@ -175,7 +191,9 @@ export interface FileRoutesById {
   '/admin-unlock': typeof AdminUnlockRoute
   '/book-viewing': typeof BookViewingRoute
   '/contact': typeof ContactRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/terms-and-conditions': typeof TermsAndConditionsRoute
   '/admin/appointments': typeof AdminAppointmentsRouteWithChildren
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/website': typeof AdminWebsiteRouteWithChildren
@@ -198,7 +216,9 @@ export interface FileRouteTypes {
     | '/admin-unlock'
     | '/book-viewing'
     | '/contact'
+    | '/privacy-policy'
     | '/sitemap.xml'
+    | '/terms-and-conditions'
     | '/admin/appointments'
     | '/admin/bookings'
     | '/admin/website'
@@ -218,7 +238,9 @@ export interface FileRouteTypes {
     | '/admin-unlock'
     | '/book-viewing'
     | '/contact'
+    | '/privacy-policy'
     | '/sitemap.xml'
+    | '/terms-and-conditions'
     | '/admin/bookings'
     | '/admin'
     | '/properties'
@@ -237,7 +259,9 @@ export interface FileRouteTypes {
     | '/admin-unlock'
     | '/book-viewing'
     | '/contact'
+    | '/privacy-policy'
     | '/sitemap.xml'
+    | '/terms-and-conditions'
     | '/admin/appointments'
     | '/admin/bookings'
     | '/admin/website'
@@ -259,7 +283,9 @@ export interface RootRouteChildren {
   AdminUnlockRoute: typeof AdminUnlockRoute
   BookViewingRoute: typeof BookViewingRoute
   ContactRoute: typeof ContactRoute
+  PrivacyPolicyRoute: typeof PrivacyPolicyRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  TermsAndConditionsRoute: typeof TermsAndConditionsRoute
   PropertiesIndexRoute: typeof PropertiesIndexRoute
   PropertiesSlugIndexRoute: typeof PropertiesSlugIndexRoute
   ApiPublicPhotoSplatRoute: typeof ApiPublicPhotoSplatRoute
@@ -309,11 +335,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContactRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/privacy-policy': {
+      id: '/privacy-policy'
+      path: '/privacy-policy'
+      fullPath: '/privacy-policy'
+      preLoaderRoute: typeof PrivacyPolicyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sitemap.xml': {
       id: '/sitemap.xml'
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms-and-conditions': {
+      id: '/terms-and-conditions'
+      path: '/terms-and-conditions'
+      fullPath: '/terms-and-conditions'
+      preLoaderRoute: typeof TermsAndConditionsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/': {
@@ -455,7 +495,9 @@ const rootRouteChildren: RootRouteChildren = {
   AdminUnlockRoute: AdminUnlockRoute,
   BookViewingRoute: BookViewingRoute,
   ContactRoute: ContactRoute,
+  PrivacyPolicyRoute: PrivacyPolicyRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  TermsAndConditionsRoute: TermsAndConditionsRoute,
   PropertiesIndexRoute: PropertiesIndexRoute,
   PropertiesSlugIndexRoute: PropertiesSlugIndexRoute,
   ApiPublicPhotoSplatRoute: ApiPublicPhotoSplatRoute,
