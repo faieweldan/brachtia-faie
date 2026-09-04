@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { DocumentRow, EmptyState, Panel, Select, Text } from "@/components/admin/ops-ui";
+import { TenancyCard } from "@/components/admin/TenancyCard";
+import { ResidentPayments } from "@/components/admin/ResidentPayments";
 import {
   DOC_TYPES,
   GENDERS,
@@ -36,6 +38,7 @@ function ResidentProfilePage() {
   const { residents, units, tenancies } = useOps();
   const stored = residents.find((r) => r.id === id);
   const [form, setForm] = useState<Resident | null>(stored ?? null);
+  const [tab, setTab] = useState("profile");
 
   useEffect(() => {
     if (stored && !form) setForm(stored);
@@ -106,10 +109,10 @@ function ResidentProfilePage() {
       refLabel: form.fullName || "Resident",
       refId: t.id,
       dueDate: form.moveIn,
-      link: "/admin/residents/tenancies",
+      link: `/admin/residents/${form.id}`,
     });
     toast.success("Tenancy created");
-    void navigate({ to: "/admin/residents/tenancies" });
+    setTab("tenancy");
   }
 
   return (
@@ -159,8 +162,8 @@ function ResidentProfilePage() {
             ) : null}
           </div>
           {tenancy ? (
-            <Button asChild size="sm" variant="outline">
-              <Link to="/admin/residents/tenancies">View tenancy</Link>
+            <Button size="sm" variant="outline" onClick={() => setTab("tenancy")}>
+              View tenancy
             </Button>
           ) : (
             <Button size="sm" disabled={pct < 100} onClick={startTenancy}>
@@ -170,7 +173,15 @@ function ResidentProfilePage() {
         </div>
       </Panel>
 
-      <Tabs defaultValue="personal">
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsTrigger value="tenancy">Tenancy</TabsTrigger>
+          <TabsTrigger value="payments">Payments</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="profile" className="mt-4">
+          <Tabs defaultValue="personal">
         <TabsList className="flex-wrap">
           <TabsTrigger value="personal">Personal</TabsTrigger>
           <TabsTrigger value="academic">Academic</TabsTrigger>
@@ -180,6 +191,7 @@ function ResidentProfilePage() {
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="portal">Portal access</TabsTrigger>
         </TabsList>
+
 
         <TabsContent value="personal" className="mt-4">
           <Panel>
@@ -336,6 +348,30 @@ function ResidentProfilePage() {
               </Button>
             </div>
           </Panel>
+        </TabsContent>
+          </Tabs>
+        </TabsContent>
+
+        <TabsContent value="tenancy" className="mt-4">
+          <Panel title="Tenancy" description="Agreement lifecycle, dates and pre-check-in checklist.">
+            {tenancy ? (
+              <TenancyCard tenancy={tenancy} residentName={form.fullName} link={`/admin/residents/${form.id}`} />
+            ) : (
+              <EmptyState
+                title="No tenancy yet"
+                hint="Complete the required profile fields, then create the tenancy to start the agreement."
+                action={
+                  <Button size="sm" disabled={pct < 100} onClick={startTenancy}>
+                    Create tenancy
+                  </Button>
+                }
+              />
+            )}
+          </Panel>
+        </TabsContent>
+
+        <TabsContent value="payments" className="mt-4">
+          <ResidentPayments residentId={form.id} />
         </TabsContent>
       </Tabs>
     </div>
