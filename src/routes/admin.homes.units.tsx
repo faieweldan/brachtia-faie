@@ -136,29 +136,43 @@ function UnitSetupPage() {
   }
 
   function downloadTemplate() {
-    const csv = [TEMPLATE_HEADERS, ...TEMPLATE_ROWS].join("\n");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    const sheet = XLSX.utils.aoa_to_sheet([TEMPLATE_HEADERS, ...TEMPLATE_ROWS]);
+    sheet["!cols"] = [{ wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 16 }, { wch: 12 }];
+    for (let c = 0; c < TEMPLATE_HEADERS.length; c += 1) {
+      const cell = sheet[XLSX.utils.encode_cell({ r: 0, c })];
+      if (cell) cell.s = { font: { bold: true } };
+    }
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, sheet, "Units");
+    const out = XLSX.write(book, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
+    const url = URL.createObjectURL(
+      new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+    );
     const a = document.createElement("a");
     a.href = url;
-    a.download = "brachtia-units-template.csv";
+    a.download = "brachtia-units-template.xlsx";
     a.click();
     URL.revokeObjectURL(url);
   }
 
-  async function importCsv(file: File) {
-    const text = await file.text();
-    const lines = text.split(/\r?\n/).filter((l) => l.trim());
-    if (lines.length < 2) {
+  async function importWorkbook(file: File) {
+    const book = XLSX.read(await file.arrayBuffer(), { type: "array" });
+    const sheetName = book.SheetNames[0];
+    const sheet = sheetName ? book.Sheets[sheetName] : undefined;
+    const raw: any[] = sheet ? XLSX.utils.sheet_to_json(sheet, { defval: "" }) : [];
+    const rows = raw.map((r) => {
+      const out: Record<string, string> = {};
+      for (const [k, v] of Object.entries(r)) out[String(k).trim().toLowerCase()] = String(v ?? "").trim();
+      return out;
+    });
+    if (!rows.length) {
       toast.error("That file has no rows");
       return;
     }
-    const head = lines[0]!.split(",").map((h) => h.trim().toLowerCase());
-    const col = (row: string[], key: string) => (row[head.indexOf(key)] ?? "").trim();
 
-    const groups = new Map<string, string[][]>();
-    for (const line of lines.slice(1)) {
-      const row = line.split(",");
-      const key = `${col(row, "residence")}|${col(row, "unit_no")}`;
+    const groups = new Map<string, Record<string, string>[]>();
+    for (const row of rows) {
+      const key = `${row["residence"] ?? ""}|${row["unit_no"] ?? ""}`;
       groups.set(key, [...(groups.get(key) ?? []), row]);
     }
 
@@ -166,9 +180,9 @@ function UnitSetupPage() {
     let skipped = 0;
     let index = units.length;
 
-    for (const rows of groups.values()) {
-      const first = rows[0]!;
-      const residenceName = col(first, "residence");
+    for (const group of groups.values()) {
+      const first = group[0]!;
+      const residenceName = first["residence"] ?? "";
       const res = residences.find(
         (r) => String(r.name).toLowerCase() === residenceName.toLowerCase(),
       );
@@ -177,25 +191,24 @@ function UnitSetupPage() {
         continue;
       }
       const list = roomTypes.filter((r) => r.residence_id === res.id);
-      const unitType = col(first, "unit_type");
+      const unitType = first["unit_type"] ?? "";
       const unit = blankUnit(`U${String(++index).padStart(3, "0")}`);
       unit.residenceId = res.id;
       unit.residenceName = res.name;
       unit.residenceSlug = res.slug ?? "";
-      unit.unitNo = col(first, "unit_no");
+      unit.unitNo = first["unit_no"] ?? "";
       unit.unitType = unitType;
-      unit.rooms = rows.map((row, i) => {
-        const letter = col(row, "room_letter") || LETTERS[i] || String(i + 1);
-        const code = col(row, "room_type_code");
+      unit.rooms = group.map((row, i) => {
+        const letter = row["room_letter"] || LETTERS[i] || String(i + 1);
+        const code = row["room_type_code"] ?? "";
         const info = typeInfo(list, code);
-        const occRaw = col(row, "occupancy").toLowerCase();
+        const occRaw = (row["occupancy"] ?? "").toLowerCase();
         const occ: "single" | "twin" = occRaw === "twin" ? "twin" : occRaw === "single" ? "single" : info.occ;
-        const rentRaw = Number(col(row, "rent"));
         return {
           ...blankRoom(letter),
           roomTypeCode: info.rt?.code ?? code,
           occupancy: occ,
-          rent: Number.isFinite(rentRaw) && rentRaw > 0 ? rentRaw : info.rent,
+          rent: info.rent,
           beds: bedsFor(occ),
         };
       });
