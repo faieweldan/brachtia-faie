@@ -55,9 +55,10 @@ function AdminLayout() {
                 to={item.to as never}
                 className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                   active
-                    ? "bg-white/12 text-white"
-                    : "text-white/65 hover:bg-white/8 hover:text-white"
+                    ? "bg-admin-emerald text-[#0B3A2E]"
+                    : "text-white/70 hover:bg-white/10 hover:text-white"
                 }`}
+
               >
                 <item.icon className="size-4" />
                 {item.label}
@@ -86,8 +87,9 @@ function AdminLayout() {
                 key={item.to}
                 to={item.to as never}
                 className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                  active ? "bg-white/15 text-white" : "text-white/65 hover:bg-white/10"
+                  active ? "bg-admin-emerald text-[#0B3A2E]" : "text-white/70 hover:bg-white/10"
                 }`}
+
               >
                 {item.label}
               </Link>
