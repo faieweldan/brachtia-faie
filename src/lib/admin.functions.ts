@@ -13,7 +13,7 @@ export const adminOverview = createServerFn({ method: "GET" })
     const supabase = await admin();
     const nowISO = new Date().toISOString();
     const [enq, appt, upcoming] = await Promise.all([
-      supabase.from("enquiries").select("id", { count: "exact", head: true }).eq("status", "new"),
+      supabase.from("enquiries").select("id", { count: "exact", head: true }).eq("status", "open"),
       supabase
         .from("appointments")
         .select("id", { count: "exact", head: true })
