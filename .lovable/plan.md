@@ -1,13 +1,15 @@
 # Homes & Residents modules (front-end design only)
 
-Two new admin modules plus the glue that connects Bookings → Homes → Residents. This pass is **UI only**: everything runs on realistic in-memory demo data (modelled on the Arc spreadsheet you shared), no database tables, no server functions. Once the flow feels right, we wire it to the backend.
+Two new modules (plus a small Tasks module and a Settings tab) and the glue that connects Bookings → Homes → Residents. This pass is **UI only**: no database tables, no server functions, and **no seeded demo rows** — every list starts empty with a clear "add your first…" empty state so you can enter your own data to test.
 
 ## Navigation
 
-Sidebar becomes: Dashboard, Bookings, Homes, Residents, Appointment Manager, Website. Each new module has sub-tabs, same style as the Website tab.
+Sidebar becomes: Dashboard, Bookings, Homes, Residents, Tasks, Appointment Manager, Website, Settings. Modules with sub-tabs use the same style as the Website tab.
 
 - **Homes** — Inventory, Availability, Unit setup
-- **Residents** — Residents, Tenancies, Payments & AR, Tasks
+- **Residents** — Residents, Tenancies, Payments & AR
+- **Tasks** — single list, no sub-tabs
+- **Settings** — Documents (Tenancy Agreement template)
 
 ## 1. Homes module
 
@@ -24,7 +26,14 @@ Three-level tree: Residence → Unit → Room → Bed, matching your sheet.
 The "find me a bed" screen admin uses when an enquiry arrives: pick residence, move-in date, lease length, occupancy and gender, and get a card/list of matching beds with rent, available-from date and a **Reserve (Hold)** button. Holding asks for who it's for (link to an enquiry) and a hold-expiry date, then flips the bed to Held.
 
 ### Unit setup
-Add/edit units: residence, unit number, block/floor, unit type (4-bedroom / 3-bedroom / studio), gender designation, and a bed configuration builder — each room gets a letter (A/B/C/D), occupancy single or twin, and bed slots generate automatically (Twin 1 / Twin 2). A **"Rent as whole unit"** toggle collapses the unit into a single rentable entity with its own rate.
+Add/edit units, driven by what's already configured in the **Website** module:
+
+- Residence dropdown = the residences in Website → Residences.
+- Room type dropdown = the room types defined on that residence (Room A/B/C/D etc.), so codes, occupancies and rates stay in one place.
+- Invoice/quote pricing pulls the same rates the public stay calculator uses — nothing is re-entered here.
+- Unit-level fields: unit number, block/floor, unit type (4-bedroom / 3-bedroom / studio), gender designation.
+- Bed configuration builder: each room gets a letter and an occupancy (single/twin); bed slots generate automatically (Twin 1 / Twin 2). A **"Rent as whole unit"** toggle collapses the unit into a single rentable entity with its own rate.
+
 
 ## 2. Bookings ↔ Homes link
 
