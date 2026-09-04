@@ -37,10 +37,10 @@ Add/edit units, driven by what's already configured in the **Website** module:
 
 ## 2. Bookings ↔ Homes link
 
-The Bookings pipeline gets the status ladder you specified, as a kanban-style toolbar plus per-enquiry drawer:
+Every new enquiry lands as **Open**. The pipeline ladder, shown as a kanban-style toolbar plus a per-enquiry drawer:
 
 ```text
-New Enquiry → Open → Room Reserved → Viewing Scheduled
+Open → Room Reserved → Viewing Scheduled
    → Awaiting Booking Fee → Booked (Closed)
    → Closed (reason required)
 ```
