@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { DocumentRow, EmptyState, Panel, Select, Text } from "@/components/admin/ops-ui";
+import { TenancyCard } from "@/components/admin/TenancyCard";
+import { ResidentPayments } from "@/components/admin/ResidentPayments";
 import {
   DOC_TYPES,
   GENDERS,
