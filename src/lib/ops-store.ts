@@ -133,7 +133,7 @@ export type Tenancy = {
   schedule: string;
   stage: TenancyStage;
   checkinDate: string;
-  checklist: { key: string; label: string; done: boolean; date?: string }[] | undefined;
+  checklist: { key: string; label: string; done: boolean; date?: string | undefined }[];
   agreementFile?: string | undefined;
   stampedFile?: string | undefined;
 };
