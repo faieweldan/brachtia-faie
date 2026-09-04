@@ -349,6 +349,30 @@ function ResidentProfilePage() {
             </div>
           </Panel>
         </TabsContent>
+          </Tabs>
+        </TabsContent>
+
+        <TabsContent value="tenancy" className="mt-4">
+          <Panel title="Tenancy" description="Agreement lifecycle, dates and pre-check-in checklist.">
+            {tenancy ? (
+              <TenancyCard tenancy={tenancy} residentName={form.fullName} link={`/admin/residents/${form.id}`} />
+            ) : (
+              <EmptyState
+                title="No tenancy yet"
+                hint="Complete the required profile fields, then create the tenancy to start the agreement."
+                action={
+                  <Button size="sm" disabled={pct < 100} onClick={startTenancy}>
+                    Create tenancy
+                  </Button>
+                }
+              />
+            )}
+          </Panel>
+        </TabsContent>
+
+        <TabsContent value="payments" className="mt-4">
+          <ResidentPayments residentId={form.id} />
+        </TabsContent>
       </Tabs>
     </div>
   );
