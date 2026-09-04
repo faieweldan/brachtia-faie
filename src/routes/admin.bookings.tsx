@@ -210,6 +210,79 @@ function BookingsPage() {
                 </p>
               </DialogHeader>
               <div className="space-y-4 text-sm">
+                <div className="rounded-xl border border-border p-3">
+                  <p className="mb-2 text-xs font-semibold text-brand-deep">Pipeline</p>
+                  <StageStepper
+                    stages={STATUSES.map((s) => ({ key: s.value, label: s.label }))}
+                    current={open.status}
+                  />
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button asChild size="sm" variant="outline">
+                      <Link to="/admin/homes/availability">1. Reserve room</Link>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => mutate.mutate({ id: open.id, status: "viewing_scheduled" })}
+                    >
+                      2. Viewing scheduled
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!hasSnapshot(open) || downloading}
+                      onClick={() => {
+                        void downloadQuote(open);
+                        mutate.mutate({ id: open.id, status: "awaiting_fee" });
+                      }}
+                    >
+                      3. Generate invoice
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => mutate.mutate({ id: open.id, status: "booked" })}
+                    >
+                      4. Booking fee received
+                    </Button>
+                    <Button size="sm" onClick={() => createResident(open)}>
+                      5. Create resident profile
+                    </Button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <select
+                      value={closeReason}
+                      onChange={(e) => setCloseReason(e.target.value)}
+                      className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                    >
+                      <option value="">Close reason…</option>
+                      {CLOSE_REASONS.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        if (!closeReason) {
+                          toast.error("Pick a reason to close this enquiry");
+                          return;
+                        }
+                        mutate.mutate({
+                          id: open.id,
+                          status: "closed",
+                          adminNotes: `${open.admin_notes ? `${open.admin_notes}\n` : ""}Closed: ${closeReason}`,
+                        });
+                        setCloseReason("");
+                      }}
+                    >
+                      Close enquiry
+                    </Button>
+                  </div>
+                </div>
+
                 <div className="flex flex-wrap gap-2">
                   <Button asChild size="sm" variant="outline">
                     <a href={`mailto:${open.email}`}>
