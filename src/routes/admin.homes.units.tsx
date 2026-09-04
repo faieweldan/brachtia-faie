@@ -32,12 +32,12 @@ export const Route = createFileRoute("/admin/homes/units")({
 
 const LETTERS = ["A", "B", "C", "D", "E", "F"];
 
-const TEMPLATE_HEADERS = "residence,unit_no,unit_type,room_letter,room_type_code,occupancy,rent";
+const TEMPLATE_HEADERS = ["residence", "unit_no", "unit_type", "room_letter", "room_type_code", "occupancy"];
 const TEMPLATE_ROWS = [
-  "The Arc Cyberjaya,A-12-10,4-bedroom,A,A,twin,1050",
-  "The Arc Cyberjaya,A-12-10,4-bedroom,B,B,single,850",
-  "The Arc Cyberjaya,A-12-10,4-bedroom,C,C,single,750",
-  "The Arc Cyberjaya,A-12-10,4-bedroom,D,D,single,750",
+  ["The Arc Cyberjaya", "A-12-10", "4-bedroom", "A", "A", "twin"],
+  ["The Arc Cyberjaya", "A-12-10", "4-bedroom", "B", "B", "single"],
+  ["The Arc Cyberjaya", "A-12-10", "4-bedroom", "C", "C", "single"],
+  ["The Arc Cyberjaya", "A-12-10", "4-bedroom", "D", "D", "single"],
 ];
 
 function blankUnit(code: string): Unit {
