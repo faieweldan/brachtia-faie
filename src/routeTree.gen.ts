@@ -23,6 +23,7 @@ import { Route as AdminAppointmentsRouteImport } from './routes/admin.appointmen
 import { Route as AdminBookingsRouteImport } from './routes/admin.bookings'
 import { Route as AdminHomesRouteImport } from './routes/admin.homes'
 import { Route as AdminResidentsRouteImport } from './routes/admin.residents'
+import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminTasksRouteImport } from './routes/admin.tasks'
 import { Route as AdminWebsiteRouteImport } from './routes/admin.website'
 import { Route as PropertiesIndexRouteImport } from './routes/properties.index'
@@ -109,6 +110,11 @@ const AdminHomesRoute = AdminHomesRouteImport.update({
 const AdminResidentsRoute = AdminResidentsRouteImport.update({
   id: '/residents',
   path: '/residents',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSettingsRoute = AdminSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminTasksRoute = AdminTasksRouteImport.update({
@@ -214,6 +220,7 @@ export interface FileRoutesByFullPath {
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/homes': typeof AdminHomesRouteWithChildren
   '/admin/residents': typeof AdminResidentsRouteWithChildren
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/tasks': typeof AdminTasksRoute
   '/admin/website': typeof AdminWebsiteRouteWithChildren
   '/admin/': typeof AdminIndexRoute
@@ -243,6 +250,7 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/terms-and-conditions': typeof TermsAndConditionsRoute
   '/admin/bookings': typeof AdminBookingsRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/tasks': typeof AdminTasksRoute
   '/admin': typeof AdminIndexRoute
   '/properties': typeof PropertiesIndexRoute
@@ -276,6 +284,7 @@ export interface FileRoutesById {
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/homes': typeof AdminHomesRouteWithChildren
   '/admin/residents': typeof AdminResidentsRouteWithChildren
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/tasks': typeof AdminTasksRoute
   '/admin/website': typeof AdminWebsiteRouteWithChildren
   '/admin/': typeof AdminIndexRoute
@@ -311,6 +320,7 @@ export interface FileRouteTypes {
     | '/admin/bookings'
     | '/admin/homes'
     | '/admin/residents'
+    | '/admin/settings'
     | '/admin/tasks'
     | '/admin/website'
     | '/admin/'
@@ -340,6 +350,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/terms-and-conditions'
     | '/admin/bookings'
+    | '/admin/settings'
     | '/admin/tasks'
     | '/admin'
     | '/properties'
@@ -372,6 +383,7 @@ export interface FileRouteTypes {
     | '/admin/bookings'
     | '/admin/homes'
     | '/admin/residents'
+    | '/admin/settings'
     | '/admin/tasks'
     | '/admin/website'
     | '/admin/'
@@ -505,6 +517,13 @@ declare module '@tanstack/react-router' {
       path: '/residents'
       fullPath: '/admin/residents'
       preLoaderRoute: typeof AdminResidentsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/settings': {
+      id: '/admin/settings'
+      path: '/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AdminSettingsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/tasks': {
@@ -697,6 +716,7 @@ interface AdminRouteChildren {
   AdminBookingsRoute: typeof AdminBookingsRoute
   AdminHomesRoute: typeof AdminHomesRouteWithChildren
   AdminResidentsRoute: typeof AdminResidentsRouteWithChildren
+  AdminSettingsRoute: typeof AdminSettingsRoute
   AdminTasksRoute: typeof AdminTasksRoute
   AdminWebsiteRoute: typeof AdminWebsiteRouteWithChildren
   AdminIndexRoute: typeof AdminIndexRoute
@@ -707,6 +727,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminBookingsRoute: AdminBookingsRoute,
   AdminHomesRoute: AdminHomesRouteWithChildren,
   AdminResidentsRoute: AdminResidentsRouteWithChildren,
+  AdminSettingsRoute: AdminSettingsRoute,
   AdminTasksRoute: AdminTasksRoute,
   AdminWebsiteRoute: AdminWebsiteRouteWithChildren,
   AdminIndexRoute: AdminIndexRoute,

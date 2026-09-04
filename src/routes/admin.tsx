@@ -1,5 +1,15 @@
 import { createFileRoute, Link, Outlet, redirect, useRouter, useRouterState } from "@tanstack/react-router";
-import { CalendarDays, Globe, Inbox, LayoutDashboard, Lock } from "lucide-react";
+import {
+  Building2,
+  CalendarDays,
+  CheckSquare,
+  Globe,
+  Inbox,
+  LayoutDashboard,
+  Lock,
+  Settings,
+  Users,
+} from "lucide-react";
 
 import { isAdminUnlocked, lockAdmin } from "@/lib/admin-gate.functions";
 
@@ -23,9 +33,13 @@ export const Route = createFileRoute("/admin")({
 
 const NAV: { to: string; label: string; icon: typeof Inbox; exact?: boolean }[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
-  { to: "/admin/appointments", label: "Appointment Manager", icon: CalendarDays },
   { to: "/admin/bookings", label: "Bookings", icon: Inbox },
+  { to: "/admin/homes", label: "Homes", icon: Building2 },
+  { to: "/admin/residents", label: "Residents", icon: Users },
+  { to: "/admin/tasks", label: "Tasks", icon: CheckSquare },
+  { to: "/admin/appointments", label: "Appointment Manager", icon: CalendarDays },
   { to: "/admin/website", label: "Website", icon: Globe },
+  { to: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
 
