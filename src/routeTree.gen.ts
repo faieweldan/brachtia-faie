@@ -30,7 +30,6 @@ import { Route as PropertiesIndexRouteImport } from './routes/properties.index'
 import { Route as AdminAppointmentsIndexRouteImport } from './routes/admin.appointments.index'
 import { Route as AdminAppointmentsSettingsRouteImport } from './routes/admin.appointments.settings'
 import { Route as AdminHomesIndexRouteImport } from './routes/admin.homes.index'
-import { Route as AdminHomesAvailabilityRouteImport } from './routes/admin.homes.availability'
 import { Route as AdminHomesUnitsRouteImport } from './routes/admin.homes.units'
 import { Route as AdminResidentsIndexRouteImport } from './routes/admin.residents.index'
 import { Route as AdminResidentsIdRouteImport } from './routes/admin.residents.$id'
@@ -148,11 +147,6 @@ const AdminHomesIndexRoute = AdminHomesIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminHomesRoute,
 } as any)
-const AdminHomesAvailabilityRoute = AdminHomesAvailabilityRouteImport.update({
-  id: '/availability',
-  path: '/availability',
-  getParentRoute: () => AdminHomesRoute,
-} as any)
 const AdminHomesUnitsRoute = AdminHomesUnitsRouteImport.update({
   id: '/units',
   path: '/units',
@@ -226,7 +220,6 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AdminIndexRoute
   '/properties/': typeof PropertiesIndexRoute
   '/admin/appointments/settings': typeof AdminAppointmentsSettingsRoute
-  '/admin/homes/availability': typeof AdminHomesAvailabilityRoute
   '/admin/homes/units': typeof AdminHomesUnitsRoute
   '/admin/residents/$id': typeof AdminResidentsIdRoute
   '/admin/residents/payments': typeof AdminResidentsPaymentsRoute
@@ -255,7 +248,6 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminIndexRoute
   '/properties': typeof PropertiesIndexRoute
   '/admin/appointments/settings': typeof AdminAppointmentsSettingsRoute
-  '/admin/homes/availability': typeof AdminHomesAvailabilityRoute
   '/admin/homes/units': typeof AdminHomesUnitsRoute
   '/admin/residents/$id': typeof AdminResidentsIdRoute
   '/admin/residents/payments': typeof AdminResidentsPaymentsRoute
@@ -290,7 +282,6 @@ export interface FileRoutesById {
   '/admin/': typeof AdminIndexRoute
   '/properties/': typeof PropertiesIndexRoute
   '/admin/appointments/settings': typeof AdminAppointmentsSettingsRoute
-  '/admin/homes/availability': typeof AdminHomesAvailabilityRoute
   '/admin/homes/units': typeof AdminHomesUnitsRoute
   '/admin/residents/$id': typeof AdminResidentsIdRoute
   '/admin/residents/payments': typeof AdminResidentsPaymentsRoute
@@ -326,7 +317,6 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/properties/'
     | '/admin/appointments/settings'
-    | '/admin/homes/availability'
     | '/admin/homes/units'
     | '/admin/residents/$id'
     | '/admin/residents/payments'
@@ -355,7 +345,6 @@ export interface FileRouteTypes {
     | '/admin'
     | '/properties'
     | '/admin/appointments/settings'
-    | '/admin/homes/availability'
     | '/admin/homes/units'
     | '/admin/residents/$id'
     | '/admin/residents/payments'
@@ -389,7 +378,6 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/properties/'
     | '/admin/appointments/settings'
-    | '/admin/homes/availability'
     | '/admin/homes/units'
     | '/admin/residents/$id'
     | '/admin/residents/payments'
@@ -568,13 +556,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminHomesIndexRouteImport
       parentRoute: typeof AdminHomesRoute
     }
-    '/admin/homes/availability': {
-      id: '/admin/homes/availability'
-      path: '/availability'
-      fullPath: '/admin/homes/availability'
-      preLoaderRoute: typeof AdminHomesAvailabilityRouteImport
-      parentRoute: typeof AdminHomesRoute
-    }
     '/admin/homes/units': {
       id: '/admin/homes/units'
       path: '/units'
@@ -662,13 +643,11 @@ const AdminAppointmentsRouteWithChildren =
   AdminAppointmentsRoute._addFileChildren(AdminAppointmentsRouteChildren)
 
 interface AdminHomesRouteChildren {
-  AdminHomesAvailabilityRoute: typeof AdminHomesAvailabilityRoute
   AdminHomesUnitsRoute: typeof AdminHomesUnitsRoute
   AdminHomesIndexRoute: typeof AdminHomesIndexRoute
 }
 
 const AdminHomesRouteChildren: AdminHomesRouteChildren = {
-  AdminHomesAvailabilityRoute: AdminHomesAvailabilityRoute,
   AdminHomesUnitsRoute: AdminHomesUnitsRoute,
   AdminHomesIndexRoute: AdminHomesIndexRoute,
 }

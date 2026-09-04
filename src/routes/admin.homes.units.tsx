@@ -333,17 +333,25 @@ function UnitSetupPage() {
                 <p className="text-xs text-muted-foreground">Choose a unit type to generate rooms.</p>
               ) : null}
               {draft.rooms.map((room) => (
-                <div key={room.id} className="grid gap-3 rounded-xl border border-border p-3 sm:grid-cols-3">
+                <div key={room.id} className="rounded-xl border border-border p-3">
+                  <div className="mb-3 flex items-center gap-2">
+                    <span className="inline-flex size-7 items-center justify-center rounded-lg bg-muted text-xs font-semibold text-brand-deep">
+                      {room.letter}
+                    </span>
+                    <p className="text-sm font-medium text-brand-deep">Room {room.letter}</p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
                   <Select
-                    label="Room"
+                    label="Room type"
                     value={room.roomTypeCode}
                     onChange={(v) => applyRoomType(room.id, v)}
                     options={typesForResidence.map((t) => ({
                       value: t.code,
-                      label: `Room ${room.letter} · ${t.name}`,
+                      label: t.name,
                     }))}
-                    placeholder={typesForResidence.length ? `Room ${room.letter}` : "No room types set up"}
+                    placeholder={typesForResidence.length ? "Select room type" : "No room types set up"}
                   />
+
                   <Select
                     label="Occupancy"
                     value={room.occupancy}
@@ -367,7 +375,9 @@ function UnitSetupPage() {
                   <p className="text-xs text-muted-foreground sm:col-span-3">
                     Beds: {room.beds.map((b) => b.label).join(", ")}
                   </p>
+                  </div>
                 </div>
+
               ))}
             </div>
           ) : null}
