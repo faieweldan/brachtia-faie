@@ -200,9 +200,10 @@ function Home() {
             </div>
           </div>
 
-          <p className="mt-14 text-sm text-muted-foreground sm:mt-16">
+          <p className="mt-12 text-sm text-muted-foreground sm:mt-16">
             Student accommodation for local and international students studying in Cyberjaya.
           </p>
+
         </div>
       </section>
 
