@@ -1,13 +1,15 @@
 # Homes & Residents modules (front-end design only)
 
-Two new admin modules plus the glue that connects Bookings → Homes → Residents. This pass is **UI only**: everything runs on realistic in-memory demo data (modelled on the Arc spreadsheet you shared), no database tables, no server functions. Once the flow feels right, we wire it to the backend.
+Two new modules (plus a small Tasks module and a Settings tab) and the glue that connects Bookings → Homes → Residents. This pass is **UI only**: no database tables, no server functions, and **no seeded demo rows** — every list starts empty with a clear "add your first…" empty state so you can enter your own data to test.
 
 ## Navigation
 
-Sidebar becomes: Dashboard, Bookings, Homes, Residents, Appointment Manager, Website. Each new module has sub-tabs, same style as the Website tab.
+Sidebar becomes: Dashboard, Bookings, Homes, Residents, Tasks, Appointment Manager, Website, Settings. Modules with sub-tabs use the same style as the Website tab.
 
 - **Homes** — Inventory, Availability, Unit setup
-- **Residents** — Residents, Tenancies, Payments & AR, Tasks
+- **Residents** — Residents, Tenancies, Payments & AR
+- **Tasks** — single list, no sub-tabs
+- **Settings** — Documents (Tenancy Agreement template)
 
 ## 1. Homes module
 
@@ -24,14 +26,21 @@ Three-level tree: Residence → Unit → Room → Bed, matching your sheet.
 The "find me a bed" screen admin uses when an enquiry arrives: pick residence, move-in date, lease length, occupancy and gender, and get a card/list of matching beds with rent, available-from date and a **Reserve (Hold)** button. Holding asks for who it's for (link to an enquiry) and a hold-expiry date, then flips the bed to Held.
 
 ### Unit setup
-Add/edit units: residence, unit number, block/floor, unit type (4-bedroom / 3-bedroom / studio), gender designation, and a bed configuration builder — each room gets a letter (A/B/C/D), occupancy single or twin, and bed slots generate automatically (Twin 1 / Twin 2). A **"Rent as whole unit"** toggle collapses the unit into a single rentable entity with its own rate.
+Add/edit units, driven by what's already configured in the **Website** module:
+
+- Residence dropdown = the residences in Website → Residences.
+- Room type dropdown = the room types defined on that residence (Room A/B/C/D etc.), so codes, occupancies and rates stay in one place.
+- Invoice/quote pricing pulls the same rates the public stay calculator uses — nothing is re-entered here.
+- Unit-level fields: unit number, block/floor, unit type (4-bedroom / 3-bedroom / studio), gender designation.
+- Bed configuration builder: each room gets a letter and an occupancy (single/twin); bed slots generate automatically (Twin 1 / Twin 2). A **"Rent as whole unit"** toggle collapses the unit into a single rentable entity with its own rate.
+
 
 ## 2. Bookings ↔ Homes link
 
-The Bookings pipeline gets the status ladder you specified, as a kanban-style toolbar plus per-enquiry drawer:
+Every new enquiry lands as **Open**. The pipeline ladder, shown as a kanban-style toolbar plus a per-enquiry drawer:
 
 ```text
-New Enquiry → Open → Room Reserved → Viewing Scheduled
+Open → Room Reserved → Viewing Scheduled
    → Awaiting Booking Fee → Booked (Closed)
    → Closed (reason required)
 ```
@@ -81,19 +90,30 @@ Draft generated → Admin review & sign → Sent to student → Student signed
 - Ledger per resident: invoices, payments, balance.
 - Summary cards: billed this month, collected, outstanding, overdue count.
 
-### Tasks
-A single list of the tasks the flow generates (review & sign agreement, pre-check-in checklist, stamp TA, chase overdue payment), each with type, resident, due date and a link into the relevant screen. The admin dashboard gets an "Action needed" card summarising open tasks.
+## 4. Tasks module (own sidebar item)
+
+A standalone list of system-generated tasks so admin never has to dig into a resident to find work: review & sign agreement, pre-check-in checklist, stamp TA, chase overdue payment, hold expiring.
+
+- Columns: task, type, related resident / enquiry / unit, due date, status (Open / Done), and a jump link into the screen that resolves it.
+- Filters: type, status, overdue only. Tick to complete.
+- The admin dashboard gets an "Action needed" card counting open tasks by type.
+
+## 5. Settings tab
+
+New global **Settings** sidebar item, marked *coming soon* apart from one working-looking card:
+
+- **Tenancy Agreement template** — upload/replace a PDF template, with a mock 1-page placeholder TA shown in the preview panel until you supply the real one. Merge-field hints listed alongside (resident name, unit, dates, rent, schedule).
 
 ## Supporting elements suggested
 
-- **Settings sub-tab under Residents** for document templates: tenancy agreement PDF, invoice and receipt templates, booking fee amount, hold duration default.
 - **Global search** in the admin header — jump to a unit, room, resident or enquiry by name/ID.
 - Shared status-pill and document-upload-row components so Homes, Bookings and Residents look identical.
 
 ## Technical notes
 
-- Routes: `admin.homes.tsx` (+ `.index`, `.availability`, `.units`), `admin.residents.tsx` (+ `.index`, `.$id`, `.tenancies`, `.payments`, `.tasks`, `.settings`). Sub-tab shell copies `admin.website.tsx`.
-- Demo data in `src/lib/demo/inventory.ts` and `src/lib/demo/residents.ts`, typed, seeded from the Arc spreadsheet sample so screens look real. State held in React (module-level store) so holds/assignments made in one screen show up in another during a session.
-- Reuses existing shadcn primitives, `src/components/admin/fields.tsx`, `ImageUploader`, sonner toasts and the `.admin-ui` palette. New shared components: `StatusPill`, `DocumentRow`, `ChecklistCard`, `AvailabilityPicker`, `StageStepper`.
-- Invoice/receipt/agreement previews render as on-screen documents built from the existing quote-PDF styling; PDF generation reuses `src/lib/quote-pdf.ts` patterns where practical, otherwise shows a preview with a disabled download until the backend pass.
+- Routes: `admin.homes.tsx` (+ `.index`, `.availability`, `.units`), `admin.residents.tsx` (+ `.index`, `.$id`, `.tenancies`, `.payments`), `admin.tasks.tsx`, `admin.settings.tsx`. Sub-tab shells copy `admin.website.tsx`.
+- Types + an empty in-memory store in `src/lib/inventory-store.ts` and `src/lib/residents-store.ts` — **no seed rows**; entries created during a session persist across screens so the flow can be walked end to end.
+- Residence and room-type pickers in Unit setup read the existing Website data (`listResidences` from `src/lib/admin.functions.ts`), and invoice pricing reuses the public stay-calculator rate logic, so nothing is duplicated.
+- Reuses existing shadcn primitives, `src/components/admin/fields.tsx`, `ImageUploader`, sonner toasts and the `.admin-ui` palette. New shared components: `StatusPill`, `DocumentRow`, `ChecklistCard`, `AvailabilityPicker`, `StageStepper`, `EmptyState`.
+- Invoice/receipt/agreement previews render as on-screen documents built from the existing quote-PDF styling; PDF generation follows `src/lib/quote-pdf.ts` patterns where practical.
 - No migrations, no server functions, no changes to the public site in this pass.
