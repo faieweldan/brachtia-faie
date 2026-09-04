@@ -140,18 +140,19 @@ function Home() {
                 </Button>
               </div>
 
-              <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-4 border-t border-border/70 pt-6">
+              <div className="mt-10 grid grid-cols-3 gap-4 border-t border-border/70 pt-6 sm:flex sm:flex-wrap sm:gap-x-8 sm:gap-y-4">
                 {[
                   { value: "17+", label: "Years managing homes" },
                   { value: "20+", label: "Nationalities hosted" },
                   { value: "24/7", label: "Support & security" },
                 ].map((s) => (
                   <div key={s.label} className="min-w-0">
-                    <p className="text-2xl font-extrabold tracking-tight text-brand-deep">{s.value}</p>
-                    <p className="mt-0.5 text-xs font-medium text-muted-foreground">{s.label}</p>
+                    <p className="text-xl font-extrabold tracking-tight text-brand-deep sm:text-2xl">{s.value}</p>
+                    <p className="mt-0.5 text-[11px] font-medium leading-snug text-muted-foreground sm:text-xs">{s.label}</p>
                   </div>
                 ))}
               </div>
+
             </div>
 
             {/* Image */}
