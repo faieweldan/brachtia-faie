@@ -108,10 +108,10 @@ function ResidentProfilePage() {
       refLabel: form.fullName || "Resident",
       refId: t.id,
       dueDate: form.moveIn,
-      link: "/admin/residents/tenancies",
+      link: `/admin/residents/${form.id}`,
     });
     toast.success("Tenancy created");
-    void navigate({ to: "/admin/residents/tenancies" });
+    setTab("tenancy");
   }
 
   return (
