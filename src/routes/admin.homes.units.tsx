@@ -375,7 +375,9 @@ function UnitSetupPage() {
                   <p className="text-xs text-muted-foreground sm:col-span-3">
                     Beds: {room.beds.map((b) => b.label).join(", ")}
                   </p>
+                  </div>
                 </div>
+
               ))}
             </div>
           ) : null}
