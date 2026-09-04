@@ -1,8 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Download, Link2, Mail, Phone, Search, X } from "lucide-react";
 import { toast } from "sonner";
+
+import { StageStepper } from "@/components/admin/ops-ui";
+import { blankResident, saveResidentRecord } from "@/lib/ops-store";
 
 import {
   listEnquiries,
