@@ -239,7 +239,7 @@ function BookingsPage() {
                   />
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button asChild size="sm" variant="outline">
-                      <Link to="/admin/homes/availability">1. Reserve room</Link>
+                      <Link to="/admin/homes">1. Reserve room</Link>
                     </Button>
                     <Button
                       size="sm"

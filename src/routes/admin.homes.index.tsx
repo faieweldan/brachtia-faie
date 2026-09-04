@@ -234,7 +234,7 @@ function InventoryPage() {
                           <td className="px-4 py-2 text-right">
                             {bed.status === "vacant" ? (
                               <Button asChild size="sm" variant="outline">
-                                <Link to="/admin/homes/availability">Hold</Link>
+                                <Link to="/admin/homes">Hold</Link>
                               </Button>
                             ) : (
                               <Button
