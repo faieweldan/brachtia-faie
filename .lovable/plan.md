@@ -90,19 +90,30 @@ Draft generated → Admin review & sign → Sent to student → Student signed
 - Ledger per resident: invoices, payments, balance.
 - Summary cards: billed this month, collected, outstanding, overdue count.
 
-### Tasks
-A single list of the tasks the flow generates (review & sign agreement, pre-check-in checklist, stamp TA, chase overdue payment), each with type, resident, due date and a link into the relevant screen. The admin dashboard gets an "Action needed" card summarising open tasks.
+## 4. Tasks module (own sidebar item)
+
+A standalone list of system-generated tasks so admin never has to dig into a resident to find work: review & sign agreement, pre-check-in checklist, stamp TA, chase overdue payment, hold expiring.
+
+- Columns: task, type, related resident / enquiry / unit, due date, status (Open / Done), and a jump link into the screen that resolves it.
+- Filters: type, status, overdue only. Tick to complete.
+- The admin dashboard gets an "Action needed" card counting open tasks by type.
+
+## 5. Settings tab
+
+New global **Settings** sidebar item, marked *coming soon* apart from one working-looking card:
+
+- **Tenancy Agreement template** — upload/replace a PDF template, with a mock 1-page placeholder TA shown in the preview panel until you supply the real one. Merge-field hints listed alongside (resident name, unit, dates, rent, schedule).
 
 ## Supporting elements suggested
 
-- **Settings sub-tab under Residents** for document templates: tenancy agreement PDF, invoice and receipt templates, booking fee amount, hold duration default.
 - **Global search** in the admin header — jump to a unit, room, resident or enquiry by name/ID.
 - Shared status-pill and document-upload-row components so Homes, Bookings and Residents look identical.
 
 ## Technical notes
 
-- Routes: `admin.homes.tsx` (+ `.index`, `.availability`, `.units`), `admin.residents.tsx` (+ `.index`, `.$id`, `.tenancies`, `.payments`, `.tasks`, `.settings`). Sub-tab shell copies `admin.website.tsx`.
-- Demo data in `src/lib/demo/inventory.ts` and `src/lib/demo/residents.ts`, typed, seeded from the Arc spreadsheet sample so screens look real. State held in React (module-level store) so holds/assignments made in one screen show up in another during a session.
-- Reuses existing shadcn primitives, `src/components/admin/fields.tsx`, `ImageUploader`, sonner toasts and the `.admin-ui` palette. New shared components: `StatusPill`, `DocumentRow`, `ChecklistCard`, `AvailabilityPicker`, `StageStepper`.
-- Invoice/receipt/agreement previews render as on-screen documents built from the existing quote-PDF styling; PDF generation reuses `src/lib/quote-pdf.ts` patterns where practical, otherwise shows a preview with a disabled download until the backend pass.
+- Routes: `admin.homes.tsx` (+ `.index`, `.availability`, `.units`), `admin.residents.tsx` (+ `.index`, `.$id`, `.tenancies`, `.payments`), `admin.tasks.tsx`, `admin.settings.tsx`. Sub-tab shells copy `admin.website.tsx`.
+- Types + an empty in-memory store in `src/lib/inventory-store.ts` and `src/lib/residents-store.ts` — **no seed rows**; entries created during a session persist across screens so the flow can be walked end to end.
+- Residence and room-type pickers in Unit setup read the existing Website data (`listResidences` from `src/lib/admin.functions.ts`), and invoice pricing reuses the public stay-calculator rate logic, so nothing is duplicated.
+- Reuses existing shadcn primitives, `src/components/admin/fields.tsx`, `ImageUploader`, sonner toasts and the `.admin-ui` palette. New shared components: `StatusPill`, `DocumentRow`, `ChecklistCard`, `AvailabilityPicker`, `StageStepper`, `EmptyState`.
+- Invoice/receipt/agreement previews render as on-screen documents built from the existing quote-PDF styling; PDF generation follows `src/lib/quote-pdf.ts` patterns where practical.
 - No migrations, no server functions, no changes to the public site in this pass.
