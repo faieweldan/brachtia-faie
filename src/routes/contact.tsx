@@ -181,7 +181,7 @@ function ContactPage() {
           </span>
         </a>
         <a
-          href={`tel:${primaryPhone}.replace(/[^+\d]/g, "")}`}
+          href={`tel:${primaryPhone.replace(/[^+\d]/g, "")}`}
           className="group flex items-center gap-3 rounded-2xl border border-border/70 bg-card p-4 transition hover:border-brand/40 hover:shadow-sm"
         >
           <span className="flex size-10 items-center justify-center rounded-xl bg-brand-soft text-brand-deep">
