@@ -1,13 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Mail, MapPin, MessageCircle, Phone } from "lucide-react";
-import { toast } from "sonner";
 import { company, whatsappUrl } from "@/data/properties";
 import { SITE_URL, SOCIAL_IMAGE } from "@/lib/seo";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 
 const title = "Contact Brachtia Homes | Cyberjaya Student Housing Team";
 const description =
@@ -65,39 +61,11 @@ function ContactPage() {
           </h1>
           <p className="mt-3 max-w-2xl text-muted-foreground">
             Our student team is available 24/7 for residents and replies to new enquiries within a
-            few hours.
+            few hours. The fastest way to reach us is WhatsApp — send us a message and we'll get
+            straight back to you.
           </p>
 
           <div className="mt-8 grid gap-8 lg:grid-cols-2">
-            <form
-              className="space-y-5 rounded-3xl border border-border/70 bg-card p-6"
-              onSubmit={(e) => {
-                e.preventDefault();
-                toast.success("Message sent", { description: "We'll get back to you shortly." });
-                (e.target as HTMLFormElement).reset();
-              }}
-            >
-              <div className="space-y-2">
-                <Label htmlFor="name">Full name</Label>
-                <Input id="name" name="name" required placeholder="Your name" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" name="email" type="email" required placeholder="you@email.com" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone / WhatsApp</Label>
-                <Input id="phone" name="phone" placeholder="+60..." />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="message">Message</Label>
-                <Textarea id="message" name="message" rows={5} required placeholder="How can we help?" />
-              </div>
-              <Button type="submit" size="lg" className="w-full sm:w-auto">
-                Send message
-              </Button>
-            </form>
-
             <div className="space-y-4">
               <div className="rounded-3xl border border-border/70 bg-card p-6">
                 <h2 className="text-lg font-bold text-brand-deep">
@@ -137,6 +105,26 @@ function ContactPage() {
                   warden line on WhatsApp any time, day or night.
                 </p>
               </div>
+            </div>
+
+            <div className="flex flex-col justify-center rounded-3xl bg-brand-soft p-8 sm:p-12">
+              <MessageCircle className="size-10 text-brand-deep" />
+              <h2 className="mt-4 text-2xl font-bold text-brand-deep">
+                Message us on WhatsApp
+              </h2>
+              <p className="mt-3 text-sm text-brand-deep/80">
+                For room availability, pricing, viewings or anything else — chat with our team on
+                WhatsApp and we'll reply within a few hours.
+              </p>
+              <Button asChild className="mt-6 w-full sm:w-auto" size="lg">
+                <a
+                  href={whatsappUrl("Hi Brachtia Homes, I have a question about student housing.")}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <MessageCircle className="size-4" /> Chat on WhatsApp
+                </a>
+              </Button>
             </div>
           </div>
         </section>
