@@ -63,6 +63,31 @@ function Dashboard() {
       </div>
 
       <div className="rounded-2xl border border-border bg-card p-5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-brand-deep">Action needed</h2>
+          <Link to="/admin/tasks" className="text-xs font-medium text-brand hover:underline">
+            View all tasks
+          </Link>
+        </div>
+        {openTasks.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">Nothing outstanding.</p>
+        ) : (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {Object.entries(byType).map(([type, count]) => (
+              <Link
+                key={type}
+                to="/admin/tasks"
+                className="rounded-full border border-border bg-muted px-3 py-1.5 text-xs font-medium text-foreground hover:border-brand/40"
+              >
+                {TASK_LABEL[type] ?? type} · {count}
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
+
+      <div className="rounded-2xl border border-border bg-card p-5">
         <h2 className="text-sm font-semibold text-brand-deep">Next appointments</h2>
         <div className="mt-3 divide-y divide-border text-sm">
           {((data as any)?.upcoming ?? []).length === 0 ? (
