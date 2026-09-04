@@ -162,7 +162,7 @@ function ContactPage() {
           <span className="min-w-0">
             <span className="block text-xs text-muted-foreground">WhatsApp</span>
             <span className="block truncate text-sm font-semibold text-brand-deep">
-              {company.phones[0]}
+              {primaryPhone}
             </span>
           </span>
         </a>
@@ -181,7 +181,7 @@ function ContactPage() {
           </span>
         </a>
         <a
-          href={`tel:${company.phones[0].replace(/[^+\d]/g, "")}`}
+          href={`tel:${primaryPhone}.replace(/[^+\d]/g, "")}`}
           className="group flex items-center gap-3 rounded-2xl border border-border/70 bg-card p-4 transition hover:border-brand/40 hover:shadow-sm"
         >
           <span className="flex size-10 items-center justify-center rounded-xl bg-brand-soft text-brand-deep">
@@ -190,7 +190,7 @@ function ContactPage() {
           <span className="min-w-0">
             <span className="block text-xs text-muted-foreground">Call</span>
             <span className="block truncate text-sm font-semibold text-brand-deep">
-              {company.phones[0]}
+              {primaryPhone}
             </span>
           </span>
         </a>
