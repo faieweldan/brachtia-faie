@@ -87,8 +87,9 @@ function AdminLayout() {
                 key={item.to}
                 to={item.to as never}
                 className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                  active ? "bg-white/15 text-white" : "text-white/65 hover:bg-white/10"
+                  active ? "bg-admin-emerald text-[#0B3A2E]" : "text-white/70 hover:bg-white/10"
                 }`}
+
               >
                 {item.label}
               </Link>
