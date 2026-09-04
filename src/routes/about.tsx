@@ -3,14 +3,14 @@ import { CalendarCheck, HeartHandshake, LifeBuoy, ShieldCheck } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import aboutHero from "@/assets/about-hero.jpg.asset.json";
 import humanSideAsset from "@/assets/parents-support.jpg.asset.json";
-import { SITE_URL, absoluteUrl } from "@/lib/seo";
+import { SITE_URL, SOCIAL_IMAGE } from "@/lib/seo";
 const humanSide = humanSideAsset.url;
 
 const title = "About Brachtia Homes | Student Accommodation in Malaysia";
 const description =
   "For over 17 years, Brachtia Homes has helped local and international students find safe, well-managed accommodation in Malaysia — appointed by leading universities.";
 const canonical = `${SITE_URL}/about`;
-const ogImage = absoluteUrl(aboutHero.url);
+const ogImage = SOCIAL_IMAGE;
 
 export const Route = createFileRoute("/about")({
   head: () => ({
