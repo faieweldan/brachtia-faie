@@ -274,7 +274,7 @@ function BookViewingPage() {
         </div>
 
         {/* Right: slots + details */}
-        <div className="space-y-6 rounded-3xl border border-border/70 bg-card p-6 shadow-card">
+        <div className="space-y-6 rounded-3xl border border-border/70 bg-card p-4 shadow-card sm:p-6">
           <div>
             <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-muted-foreground">
               Available times
