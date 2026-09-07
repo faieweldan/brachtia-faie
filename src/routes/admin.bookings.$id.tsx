@@ -243,8 +243,15 @@ function BookingDetail() {
     }
   }
 
-  function assignRoom(b: BedRow) {
-    updateBed(b.bed.id, {
+  function assignRoom(c: Candidate) {
+    const b = c.row;
+    let bedId = b.bed.id;
+    if (c.convert) {
+      convertRoomOccupancy(b.room.id, "twin");
+      // the preserved first bed keeps its id and becomes "Twin 1"
+      bedId = b.room.beds[0]?.id ?? b.bed.id;
+    }
+    updateBed(bedId, {
       enquiryId: id,
       status: "held",
       holdFor: r.full_name,
@@ -254,35 +261,80 @@ function BookingDetail() {
       nationality: r.nationality || undefined,
     });
     advance.mutate({ to: "room_reserved" });
-    toast.success(`Room ${b.unit.unitNo} · ${b.room.letter} reserved`);
+    toast.success(
+      c.convert
+        ? `${b.unit.unitNo} · Room ${b.room.letter} reconfigured to Twin — 1 of 2 reserved`
+        : `Room ${b.unit.unitNo} · ${b.room.letter} reserved`,
+    );
     setShowPicker(false);
+    setOpenUnitId(null);
   }
 
   function clearRoom() {
     if (!assignedBed) return;
+    const { room } = assignedBed;
     updateBed(assignedBed.bed.id, {
       enquiryId: undefined,
       status: "vacant",
       holdFor: undefined,
       holdUntil: undefined,
     });
+    // revert an auto-converted twin back to single when nobody else is in it
+    if (room.occupancy === "twin" && room.beds.every((b) => b.id === assignedBed.bed.id || b.status === "vacant")) {
+      convertRoomOccupancy(room.id, "single");
+    }
     toast.success("Room released");
   }
 
-  // Vacant room picker candidates
-  const vacant = beds.filter(
-    (b) => b.bed.status === "vacant" && !b.bed.enquiryId,
-  );
-  const roomTypeLetters = Array.from(new Set(beds.map((b) => b.room.letter))).sort();
-  const occOptions = ["single", "twin"];
-  const filteredVacant = vacant.filter((b) => {
-    if (filterRes && b.unit.residenceSlug !== filterRes) return false;
-    if (filterRoom && b.room.letter !== filterRoom) return false;
-    if (filterOcc && b.room.occupancy !== filterOcc) return false;
+  const wantedOcc = (r.occupancy || "single") as string;
+  const studentGender = (r.gender || "").toLowerCase();
+
+  const candidates: Candidate[] = [];
+  for (const b of beds) {
+    const roomBeds = b.room.beds;
+    const bedFree = bedFreeForPeriod(b.bed, r.move_in, r.move_out);
+    const roomEmpty = roomBeds.every((x) => bedFreeForPeriod(x, r.move_in, r.move_out));
+    const unitEmpty = b.unit.rooms.every((rm) =>
+      rm.beds.every((x) => bedFreeForPeriod(x, r.move_in, r.move_out)),
+    );
+
+    if (showAllRooms) {
+      if (!bedFree) continue;
+      if (roomBeds[0]?.id !== b.bed.id && b.room.occupancy === "single") continue;
+      candidates.push({ row: b, convert: false });
+      continue;
+    }
+
+    if (!bedFree) continue;
+    // one entry per room: only consider the first free bed of the room
+    const firstFree = roomBeds.find((x) => bedFreeForPeriod(x, r.move_in, r.move_out));
+    if (firstFree?.id !== b.bed.id) continue;
+
+    if (r.residence_slug && b.unit.residenceSlug !== r.residence_slug) continue;
+    if (r.room_code && b.room.roomTypeCode && b.room.roomTypeCode !== r.room_code) continue;
+
+    const unitGender = (b.unit.gender || "any").toLowerCase();
+    if (unitGender !== "any" && studentGender && unitGender !== studentGender) continue;
+
+    if (wantedOcc === "unit") {
+      if (!unitEmpty) continue;
+      candidates.push({ row: b, convert: false });
+    } else if (wantedOcc === "twin") {
+      if (b.room.occupancy === "twin") candidates.push({ row: b, convert: false });
+      else if (roomEmpty) candidates.push({ row: b, convert: true });
+    } else {
+      if (b.room.occupancy === "single") candidates.push({ row: b, convert: false });
+    }
+  }
+
+  const matches = candidates.filter((c) => {
     const q = roomSearch.trim().toLowerCase();
     if (!q) return true;
-    return `${b.unit.unitNo} ${b.room.letter} ${b.bed.label}`.toLowerCase().includes(q);
+    return `${c.row.unit.unitNo} ${c.row.room.letter} ${c.row.unit.residenceName}`
+      .toLowerCase()
+      .includes(q);
   });
+
 
   const SHARING_SHORT: Record<string, string> = { single: "Single", twin: "Twin", unit: "Whole unit" };
 
