@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 import { StageStepper } from "@/components/admin/ops-ui";
 import { blankResident, saveResidentRecord, useOps, allBeds } from "@/lib/ops-store";
-import { STAFF, SHARING_LABEL } from "@/data/form-options";
+import { STAFF, SHARING_LABEL, universityAbbr } from "@/data/form-options";
 import {
   ACTIONS,
   SLA_TONE,
