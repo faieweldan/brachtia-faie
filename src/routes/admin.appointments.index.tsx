@@ -15,7 +15,12 @@ import { formatSlot } from "@/lib/slots";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ENQUIRY_STATUS, HEARD_ABOUT } from "@/data/form-options";
+import {
+  ENQUIRY_STATUS,
+  HEARD_ABOUT,
+  SHARING_LABEL,
+  SHARING_PREFERENCES,
+} from "@/data/form-options";
 import {
   Dialog,
 
@@ -46,6 +51,10 @@ function emptyForm() {
     id: undefined as string | undefined,
     type_slug: "viewing-in-person",
     residence_slug: "",
+    residence_slugs: [] as string[],
+    move_in: "",
+    move_out: "",
+    sharing_preference: "",
     mode: "in_person",
     date: now.toLocaleDateString("en-CA", { timeZone: "Asia/Kuala_Lumpur" }),
     time: "10:00",
@@ -126,7 +135,12 @@ function AppointmentsPage() {
       appointments.filter((a) => {
         if (typeFilter !== "all" && a.type_slug !== typeFilter) return false;
         if (statusFilter !== "all" && a.status !== statusFilter) return false;
-        if (residenceFilter !== "all" && a.residence_slug !== residenceFilter) return false;
+        if (residenceFilter !== "all") {
+          const slugs: string[] = (a.residence_slugs ?? []).length
+            ? a.residence_slugs
+            : [a.residence_slug];
+          if (!slugs.includes(residenceFilter)) return false;
+        }
         const day = localDate(a.starts_at);
         if (from && day < from) return false;
         if (to && day > to) return false;
@@ -145,6 +159,14 @@ function AppointmentsPage() {
       id: a.id,
       type_slug: a.type_slug ?? "viewing-in-person",
       residence_slug: a.residence_slug ?? "",
+      residence_slugs: ((a.residence_slugs ?? []) as string[]).length
+        ? (a.residence_slugs as string[])
+        : a.residence_slug
+          ? [a.residence_slug as string]
+          : [],
+      move_in: a.move_in ?? "",
+      move_out: a.move_out ?? "",
+      sharing_preference: a.sharing_preference ?? "",
       mode: a.mode ?? "in_person",
       date: localDate(a.starts_at),
       time: d.toLocaleTimeString("en-GB", {
@@ -175,15 +197,29 @@ function AppointmentsPage() {
       toast.error("Add a name");
       return;
     }
-    const residence = (residences as any[]).find((r) => r.slug === form.residence_slug);
+    const slugs = form.residence_slugs.length
+      ? form.residence_slugs
+      : form.residence_slug
+        ? [form.residence_slug]
+        : [];
+    const primarySlug = slugs[0] ?? "";
+    const residence = (residences as any[]).find((r) => r.slug === primarySlug);
+    const names = slugs.map(
+      (s) => (residences as any[]).find((r) => r.slug === s)?.name ?? s,
+    );
     const startsAt = new Date(`${form.date}T${form.time}:00+08:00`).toISOString();
     save.mutate({
       ...(form.id ? { id: form.id } : {}),
       values: {
         type_slug: form.type_slug,
         residence_id: residence?.id ?? null,
-        residence_slug: form.residence_slug,
+        residence_slug: primarySlug,
         residence_name: residence?.name ?? "",
+        residence_slugs: slugs,
+        residence_names: names,
+        move_in: form.move_in || null,
+        move_out: form.move_out || null,
+        sharing_preference: form.sharing_preference,
         mode: form.mode,
         starts_at: startsAt,
         duration_minutes: Number(form.duration_minutes) || 30,
@@ -340,8 +376,25 @@ function AppointmentsPage() {
                     </p>
                     <p>
                       {type?.name ?? a.type_slug}
-                      {a.residence_name ? ` · ${a.residence_name}` : ""}
+                      {(a.residence_names ?? []).length
+                        ? ` · ${(a.residence_names as string[]).join(", ")}`
+                        : a.residence_name
+                          ? ` · ${a.residence_name}`
+                          : ""}
                     </p>
+                    {a.move_in || a.move_out || a.sharing_preference ? (
+                      <p>
+                        {[
+                          a.move_in ? `Move-in ${a.move_in}` : "",
+                          a.move_out ? `Move-out ${a.move_out}` : "",
+                          a.sharing_preference
+                            ? (SHARING_LABEL[a.sharing_preference] ?? a.sharing_preference)
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    ) : null}
                     {a.enquiry_id && enquiryById.get(a.enquiry_id) ? (
                       <p className="mt-1 inline-flex rounded-full bg-brand-tint px-2 py-0.5 text-[11px] font-semibold text-brand-deep">
                         Enquiry {enquiryById.get(a.enquiry_id).reference} ·{" "}
@@ -417,17 +470,55 @@ function AppointmentsPage() {
                   ))}
                 </select>
               </label>
+              <div className="space-y-1 text-xs font-medium text-muted-foreground">
+                Residences
+                <div className="grid gap-1 rounded-md border border-input p-2">
+                  {(residences as any[]).map((r) => (
+                    <label key={r.slug} className="flex items-center gap-2 text-sm text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={form.residence_slugs.includes(r.slug)}
+                        onChange={(e) =>
+                          setField(
+                            "residence_slugs",
+                            e.target.checked
+                              ? [...form.residence_slugs, r.slug]
+                              : form.residence_slugs.filter((s) => s !== r.slug),
+                          )
+                        }
+                      />
+                      {r.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
               <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                Residence
+                Move-in date
+                <Input
+                  type="date"
+                  value={form.move_in}
+                  onChange={(e) => setField("move_in", e.target.value)}
+                />
+              </label>
+              <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                Move-out date
+                <Input
+                  type="date"
+                  value={form.move_out}
+                  onChange={(e) => setField("move_out", e.target.value)}
+                />
+              </label>
+              <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                Room sharing preference
                 <select
                   className={`${selectClass} w-full`}
-                  value={form.residence_slug}
-                  onChange={(e) => setField("residence_slug", e.target.value)}
+                  value={form.sharing_preference}
+                  onChange={(e) => setField("sharing_preference", e.target.value)}
                 >
                   <option value="">—</option>
-                  {(residences as any[]).map((r) => (
-                    <option key={r.slug} value={r.slug}>
-                      {r.name}
+                  {SHARING_PREFERENCES.map((s) => (
+                    <option key={s.value} value={s.value}>
+                      {s.label}
                     </option>
                   ))}
                 </select>
