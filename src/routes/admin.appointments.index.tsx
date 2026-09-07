@@ -542,8 +542,8 @@ function AppointmentsPage() {
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
-            className="h-9 w-56 pl-8"
-            placeholder="Search name or ID…"
+            className="h-9 w-64 pl-8"
+            placeholder="Search name, email, booking or resident ID…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
