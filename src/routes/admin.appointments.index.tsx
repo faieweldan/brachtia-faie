@@ -240,7 +240,15 @@ function AppointmentsPage() {
         if (search.trim()) {
           const q = search.trim().toLowerCase();
           const ref = a.enquiry_id ? (enquiryById.get(a.enquiry_id)?.reference ?? "") : "";
-          const hay = [a.full_name, a.email, a.phone, ref, a.resident_id]
+          const hay = [
+            a.full_name,
+            a.email,
+            a.phone,
+            ref,
+            a.enquiry_id,
+            a.resident_id,
+            a.resident_id ? `resident ${a.resident_id}` : "",
+          ]
             .filter(Boolean)
             .join(" ")
             .toLowerCase();
