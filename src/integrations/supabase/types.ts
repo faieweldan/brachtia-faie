@@ -65,12 +65,17 @@ export type Database = {
           id: string
           intake: string
           mode: string
+          move_in: string | null
+          move_out: string | null
           nationality: string
           notes: string
           phone: string
           residence_id: string | null
           residence_name: string
+          residence_names: string[]
           residence_slug: string
+          residence_slugs: string[]
+          sharing_preference: string
           source: string
           starts_at: string
           status: string
@@ -92,12 +97,17 @@ export type Database = {
           id?: string
           intake?: string
           mode?: string
+          move_in?: string | null
+          move_out?: string | null
           nationality?: string
           notes?: string
           phone?: string
           residence_id?: string | null
           residence_name?: string
+          residence_names?: string[]
           residence_slug?: string
+          residence_slugs?: string[]
+          sharing_preference?: string
           source?: string
           starts_at: string
           status?: string
@@ -119,12 +129,17 @@ export type Database = {
           id?: string
           intake?: string
           mode?: string
+          move_in?: string | null
+          move_out?: string | null
           nationality?: string
           notes?: string
           phone?: string
           residence_id?: string | null
           residence_name?: string
+          residence_names?: string[]
           residence_slug?: string
+          residence_slugs?: string[]
+          sharing_preference?: string
           source?: string
           starts_at?: string
           status?: string
