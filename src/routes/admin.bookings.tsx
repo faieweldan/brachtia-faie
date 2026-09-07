@@ -566,7 +566,7 @@ function BookingsPage() {
                     ["Monthly rent", money(open.monthly_rent)],
                     ["First payment", money(open.first_payment)],
                     ["Add-ons", (open.addons ?? []).join(", ") || "—"],
-                    ["University", open.university || "—"],
+                    ["University", universityAbbr(open.university) || "—"],
                     ["Intake", open.intake || "—"],
                     ["Nationality", open.nationality || "—"],
                     ["Gender", open.gender || "—"],
