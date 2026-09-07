@@ -57,7 +57,7 @@ function hasSnapshot(row: any) {
   return Boolean(q && q.property && q.room && q.quote);
 }
 
-type SortKey = "student" | "move_in" | "stage" | "staff" | "sla";
+type SortKey = "quote_id" | "student" | "move_in" | "stage" | "staff" | "sla";
 
 function BookingsPage() {
   const queryClient = useQueryClient();
