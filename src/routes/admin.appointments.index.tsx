@@ -711,7 +711,7 @@ function AppointmentsPage() {
             <>
               <DialogHeader className="space-y-1">
                 <DialogTitle className="flex flex-wrap items-center gap-2 text-lg">
-                  {form.id ? "Appointment Details" : "New Appointment"}
+                  {form.id ? (form.full_name || "Appointment Details") : "New Appointment"}
                   {form.id ? (
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
