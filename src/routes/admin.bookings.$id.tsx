@@ -282,15 +282,6 @@ function BookingDetail() {
     void navigate({ to: "/admin/residents/$id", params: { id: resident.id } });
   }
 
-  function copyBookingLink(r: any) {
-    const url = new URL("/book-viewing", window.location.origin);
-    url.searchParams.set("residence", r.residence_slug ?? "");
-    url.searchParams.set("name", r.full_name ?? "");
-    url.searchParams.set("email", r.email ?? "");
-    url.searchParams.set("phone", r.phone ?? "");
-    void navigator.clipboard.writeText(url.toString());
-    toast.success("Booking link copied");
-  }
 
   function viewingEndISO(v: any) {
     return new Date(
