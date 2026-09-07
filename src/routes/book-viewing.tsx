@@ -35,6 +35,7 @@ import {
   ENQUIRY_STATUS,
   GENDERS,
   HEARD_ABOUT,
+  SHARING_PREFERENCES,
   UNIVERSITIES,
   intakeMonths,
 } from "@/data/form-options";
@@ -91,7 +92,11 @@ function BookViewingPage() {
   const { property } = Route.useSearch();
   const [mode, setMode] = useState<Mode>("in_person");
   const [showAvailabilityNudge, setShowAvailabilityNudge] = useState(true);
-  const [slug, setSlug] = useState(property ?? properties[0]?.slug ?? "");
+  const [slugs, setSlugs] = useState<string[]>(() => {
+    const first = property ?? properties[0]?.slug ?? "";
+    return first ? [first] : [];
+  });
+  const slug = slugs[0] ?? "";
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [slot, setSlot] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -104,6 +109,11 @@ function BookViewingPage() {
   const [universityOther, setUniversityOther] = useState("");
   const [heardChoice, setHeardChoice] = useState("");
   const [heardOther, setHeardOther] = useState("");
+  const [enquiryStatus, setEnquiryStatus] = useState("");
+  const [moveIn, setMoveIn] = useState("");
+  const [moveOut, setMoveOut] = useState("");
+  const [sharing, setSharing] = useState("");
+  const needsStayDetails = enquiryStatus === "viewing_first";
 
   const intakes = useMemo(() => intakeMonths(), []);
   const nationality = nationalityIso ? (countryByIso(nationalityIso)?.name ?? "") : "";
@@ -244,19 +254,38 @@ function BookViewingPage() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="residence">Residence</Label>
-            <select
-              id="residence"
-              value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
-            >
-              {properties.map((p) => (
-                <option key={p.slug} value={p.slug}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+            <Label>Residences you'd like to see</Label>
+            <p className="text-xs text-muted-foreground">
+              Pick one or more — times shown are for {residence?.name ?? "your first choice"}.
+            </p>
+            <div className="grid gap-2">
+              {properties.map((p) => {
+                const checked = slugs.includes(p.slug);
+                return (
+                  <label
+                    key={p.slug}
+                    className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm transition-colors ${
+                      checked ? "border-brand bg-brand-tint/50" : "border-border hover:border-brand/40"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-[var(--brand)]"
+                      checked={checked}
+                      onChange={(e) =>
+                        setSlugs((prev) =>
+                          e.target.checked
+                            ? [...prev, p.slug]
+                            : prev.filter((s) => s !== p.slug),
+                        )
+                      }
+                    />
+                    <span className="font-medium text-brand-deep">{p.name}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <FieldError msg={errors['residences']} />
           </div>
 
           <div className="space-y-2">
@@ -492,7 +521,54 @@ function BookViewingPage() {
                   label="Have you already submitted an availability enquiry?"
                   options={ENQUIRY_STATUS}
                   error={errors['enquiryStatus']}
+                  value={enquiryStatus}
+                  onChange={setEnquiryStatus}
                 />
+
+                {needsStayDetails ? (
+                  <div className="grid gap-4 rounded-2xl border border-brand/25 bg-brand-tint/40 p-4">
+                    <p className="text-xs text-muted-foreground">
+                      Tell us roughly when you'd move in and the room setup you have in mind, so we
+                      show you the right rooms.
+                    </p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="bv-movein">Move-in date</Label>
+                        <input
+                          id="bv-movein"
+                          type="date"
+                          className={fieldClass}
+                          value={moveIn}
+                          onChange={(e) => setMoveIn(e.target.value)}
+                          data-invalid={errors['moveIn'] ? "true" : undefined}
+                        />
+                        <FieldError msg={errors['moveIn']} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="bv-moveout">Move-out date</Label>
+                        <input
+                          id="bv-moveout"
+                          type="date"
+                          className={fieldClass}
+                          value={moveOut}
+                          onChange={(e) => setMoveOut(e.target.value)}
+                          data-invalid={errors['moveOut'] ? "true" : undefined}
+                        />
+                        <FieldError msg={errors['moveOut']} />
+                      </div>
+                    </div>
+                    <SelectField
+                      id="bv-sharing"
+                      name="sharingPreference"
+                      label="Room sharing preference"
+                      options={SHARING_PREFERENCES}
+                      error={errors['sharingPreference']}
+                      value={sharing}
+                      onChange={setSharing}
+                    />
+                  </div>
+                ) : null}
+
 
                 <div className="space-y-1.5">
                   <Label htmlFor="bv-heard">How did you hear about us?</Label>

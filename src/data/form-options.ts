@@ -23,6 +23,16 @@ export const ENQUIRY_STATUS = [
 
 export const GENDERS = ["Female", "Male", "Prefer not to say"];
 
+export const SHARING_PREFERENCES = [
+  { value: "single", label: "Single room" },
+  { value: "twin", label: "Twin sharing" },
+  { value: "unit", label: "Whole unit" },
+];
+
+export const SHARING_LABEL: Record<string, string> = Object.fromEntries(
+  SHARING_PREFERENCES.map((s) => [s.value, s.label]),
+);
+
 export function intakeMonths(count = 18) {
   const now = new Date();
   return Array.from({ length: count }, (_, i) => {
