@@ -350,8 +350,10 @@ function BookingDetail() {
 
   function runPrimary(action: ActionKey) {
     switch (action) {
-      case "check_availability":
       case "schedule_viewing":
+        openViewingPanel(null);
+        return;
+      case "check_availability":
       case "complete_viewing":
         void navigate({ to: "/admin/appointments" });
         return;
