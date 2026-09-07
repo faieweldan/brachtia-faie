@@ -117,10 +117,10 @@ function BookingDetail() {
   const [downloading, setDownloading] = useState(false);
   const [closeReason, setCloseReason] = useState("");
   const [roomSearch, setRoomSearch] = useState("");
-  const [filterRes, setFilterRes] = useState("");
-  const [filterRoom, setFilterRoom] = useState("");
-  const [filterOcc, setFilterOcc] = useState("");
+  const [showAllRooms, setShowAllRooms] = useState(false);
+  const [openUnitId, setOpenUnitId] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
+
 
   const { data: row, isLoading } = useQuery({
     queryKey: ["admin", "enquiry", id],
