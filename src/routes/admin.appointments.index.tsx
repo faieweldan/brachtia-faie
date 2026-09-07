@@ -448,17 +448,55 @@ function AppointmentsPage() {
                   ))}
                 </select>
               </label>
+              <div className="space-y-1 text-xs font-medium text-muted-foreground">
+                Residences
+                <div className="grid gap-1 rounded-md border border-input p-2">
+                  {(residences as any[]).map((r) => (
+                    <label key={r.slug} className="flex items-center gap-2 text-sm text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={form.residence_slugs.includes(r.slug)}
+                        onChange={(e) =>
+                          setField(
+                            "residence_slugs",
+                            e.target.checked
+                              ? [...form.residence_slugs, r.slug]
+                              : form.residence_slugs.filter((s) => s !== r.slug),
+                          )
+                        }
+                      />
+                      {r.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
               <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                Residence
+                Move-in date
+                <Input
+                  type="date"
+                  value={form.move_in}
+                  onChange={(e) => setField("move_in", e.target.value)}
+                />
+              </label>
+              <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                Move-out date
+                <Input
+                  type="date"
+                  value={form.move_out}
+                  onChange={(e) => setField("move_out", e.target.value)}
+                />
+              </label>
+              <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                Room sharing preference
                 <select
                   className={`${selectClass} w-full`}
-                  value={form.residence_slug}
-                  onChange={(e) => setField("residence_slug", e.target.value)}
+                  value={form.sharing_preference}
+                  onChange={(e) => setField("sharing_preference", e.target.value)}
                 >
                   <option value="">—</option>
-                  {(residences as any[]).map((r) => (
-                    <option key={r.slug} value={r.slug}>
-                      {r.name}
+                  {SHARING_PREFERENCES.map((s) => (
+                    <option key={s.value} value={s.value}>
+                      {s.label}
                     </option>
                   ))}
                 </select>
