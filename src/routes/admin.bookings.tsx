@@ -57,7 +57,7 @@ function hasSnapshot(row: any) {
   return Boolean(q && q.property && q.room && q.quote);
 }
 
-type SortKey = "student" | "move_in" | "stage" | "staff" | "sla";
+type SortKey = "quote_id" | "student" | "move_in" | "stage" | "staff" | "sla";
 
 function BookingsPage() {
   const queryClient = useQueryClient();
@@ -68,7 +68,7 @@ function BookingsPage() {
   const [stageFilter, setStageFilter] = useState("all");
   const [staffFilter, setStaffFilter] = useState("all");
   const [actionFilter, setActionFilter] = useState("all");
-  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "sla", dir: 1 });
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "quote_id", dir: -1 });
   const [open, setOpen] = useState<any>(null);
   const [downloading, setDownloading] = useState(false);
   const [closeReason, setCloseReason] = useState("");
@@ -219,6 +219,12 @@ function BookingsPage() {
     .sort((a, b) => {
       const dir = sort.dir;
       switch (sort.key) {
+        case "quote_id":
+          return (
+            dir *
+            ((a.row.created_at ? new Date(a.row.created_at).getTime() : 0) -
+              (b.row.created_at ? new Date(b.row.created_at).getTime() : 0))
+          );
         case "student":
           return dir * String(a.row.full_name).localeCompare(String(b.row.full_name));
         case "move_in":
@@ -338,8 +344,9 @@ function BookingsPage() {
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-border bg-card">
-        <div className="min-w-[1000px]">
-          <div className="grid grid-cols-[1.1fr_1.3fr_0.7fr_0.9fr_0.9fr_0.9fr_0.7fr_1.1fr] gap-3 border-b border-border px-4 py-2.5 text-[11px] font-semibold text-muted-foreground">
+        <div className="min-w-[1100px]">
+          <div className="grid grid-cols-[1fr_1.1fr_1.3fr_0.7fr_0.9fr_0.9fr_0.9fr_0.7fr_1.1fr] gap-3 border-b border-border px-4 py-2.5 text-[11px] font-semibold text-muted-foreground">
+            <SortHead label="Quote ID" sortKey="quote_id" />
             <SortHead label="Student" sortKey="student" />
             <span className="uppercase tracking-wide">Requirements</span>
             <SortHead label="Move-in" sortKey="move_in" />
@@ -362,8 +369,20 @@ function BookingsPage() {
                 tabIndex={0}
                 onClick={() => setOpen(r)}
                 onKeyDown={(e) => e.key === "Enter" && setOpen(r)}
-                className="grid cursor-pointer grid-cols-[1.1fr_1.3fr_0.7fr_0.9fr_0.9fr_0.9fr_0.7fr_1.1fr] items-center gap-3 border-b border-border px-4 py-3 text-sm transition-colors last:border-0 hover:bg-muted/60"
+                className="grid cursor-pointer grid-cols-[1fr_1.1fr_1.3fr_0.7fr_0.9fr_0.9fr_0.9fr_0.7fr_1.1fr] items-center gap-3 border-b border-border px-4 py-3 text-sm transition-colors last:border-0 hover:bg-muted/60"
               >
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-semibold text-brand-deep">{r.reference || "—"}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {r.created_at
+                      ? new Date(r.created_at).toLocaleDateString("en-MY", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })
+                      : "—"}
+                  </p>
+                </div>
                 <div className="min-w-0">
                   <p className="flex items-center gap-1.5 truncate font-medium text-foreground">
                     <span className="truncate">{r.full_name}</span>
@@ -379,7 +398,6 @@ function BookingsPage() {
                       </span>
                     ) : null}
                   </p>
-                  <p className="truncate text-[11px] font-semibold text-brand-deep">{r.reference}</p>
                 </div>
                 <p className="truncate text-xs text-muted-foreground">{requirements(r)}</p>
                 <p className="text-xs text-foreground">{shortDate(r.move_in)}</p>
