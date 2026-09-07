@@ -248,19 +248,38 @@ function BookViewingPage() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="residence">Residence</Label>
-            <select
-              id="residence"
-              value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
-            >
-              {properties.map((p) => (
-                <option key={p.slug} value={p.slug}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+            <Label>Residences you'd like to see</Label>
+            <p className="text-xs text-muted-foreground">
+              Pick one or more — times shown are for {residence?.name ?? "your first choice"}.
+            </p>
+            <div className="grid gap-2">
+              {properties.map((p) => {
+                const checked = slugs.includes(p.slug);
+                return (
+                  <label
+                    key={p.slug}
+                    className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm transition-colors ${
+                      checked ? "border-brand bg-brand-tint/50" : "border-border hover:border-brand/40"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-[var(--brand)]"
+                      checked={checked}
+                      onChange={(e) =>
+                        setSlugs((prev) =>
+                          e.target.checked
+                            ? [...prev, p.slug]
+                            : prev.filter((s) => s !== p.slug),
+                        )
+                      }
+                    />
+                    <span className="font-medium text-brand-deep">{p.name}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <FieldError msg={errors['residences']} />
           </div>
 
           <div className="space-y-2">
