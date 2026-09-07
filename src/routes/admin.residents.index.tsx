@@ -37,7 +37,7 @@ function ResidentsListPage() {
   );
 
   const rows = residents.filter((r) => {
-    if (university && r.university !== university) return false;
+    if (university && universityAbbr(r.university) !== university) return false;
     if (residence) {
       const placed = findBed(units, r.bedId);
       if (placed?.unit.residenceName !== residence) return false;
