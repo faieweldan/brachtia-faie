@@ -307,9 +307,24 @@ function BookingDetail() {
     if (showAllRooms) {
       if (!bedFree) continue;
       if (roomBeds[0]?.id !== b.bed.id && b.room.occupancy === "single") continue;
-      candidates.push({ row: b, convert: false });
+      // honour the student's sharing preference even in override mode
+      let convert = false;
+      let blocked: string | undefined;
+      if (wantedOcc === "twin") {
+        if (b.room.occupancy === "single") {
+          if (roomEmpty) convert = true;
+          else blocked = "Single room already occupied — change the sharing preference to Single first";
+        }
+      } else if (wantedOcc === "single") {
+        if (b.room.occupancy === "twin")
+          blocked = "Twin room — change the sharing preference to Twin first";
+      } else if (wantedOcc === "unit" && !unitEmpty) {
+        blocked = "Unit not fully empty — change the sharing preference first";
+      }
+      candidates.push({ row: b, convert, blocked });
       continue;
     }
+
 
     if (!bedFree) continue;
     // one entry per room: only consider the first free bed of the room
