@@ -376,8 +376,25 @@ function AppointmentsPage() {
                     </p>
                     <p>
                       {type?.name ?? a.type_slug}
-                      {a.residence_name ? ` · ${a.residence_name}` : ""}
+                      {(a.residence_names ?? []).length
+                        ? ` · ${(a.residence_names as string[]).join(", ")}`
+                        : a.residence_name
+                          ? ` · ${a.residence_name}`
+                          : ""}
                     </p>
+                    {a.move_in || a.move_out || a.sharing_preference ? (
+                      <p>
+                        {[
+                          a.move_in ? `Move-in ${a.move_in}` : "",
+                          a.move_out ? `Move-out ${a.move_out}` : "",
+                          a.sharing_preference
+                            ? (SHARING_LABEL[a.sharing_preference] ?? a.sharing_preference)
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    ) : null}
                     {a.enquiry_id && enquiryById.get(a.enquiry_id) ? (
                       <p className="mt-1 inline-flex rounded-full bg-brand-tint px-2 py-0.5 text-[11px] font-semibold text-brand-deep">
                         Enquiry {enquiryById.get(a.enquiry_id).reference} ·{" "}
