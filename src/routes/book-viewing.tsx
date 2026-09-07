@@ -520,7 +520,54 @@ function BookViewingPage() {
                   label="Have you already submitted an availability enquiry?"
                   options={ENQUIRY_STATUS}
                   error={errors['enquiryStatus']}
+                  value={enquiryStatus}
+                  onChange={setEnquiryStatus}
                 />
+
+                {needsStayDetails ? (
+                  <div className="grid gap-4 rounded-2xl border border-brand/25 bg-brand-tint/40 p-4">
+                    <p className="text-xs text-muted-foreground">
+                      Tell us roughly when you'd move in and the room setup you have in mind, so we
+                      show you the right rooms.
+                    </p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="bv-movein">Move-in date</Label>
+                        <input
+                          id="bv-movein"
+                          type="date"
+                          className={fieldClass}
+                          value={moveIn}
+                          onChange={(e) => setMoveIn(e.target.value)}
+                          data-invalid={errors['moveIn'] ? "true" : undefined}
+                        />
+                        <FieldError msg={errors['moveIn']} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="bv-moveout">Move-out date</Label>
+                        <input
+                          id="bv-moveout"
+                          type="date"
+                          className={fieldClass}
+                          value={moveOut}
+                          onChange={(e) => setMoveOut(e.target.value)}
+                          data-invalid={errors['moveOut'] ? "true" : undefined}
+                        />
+                        <FieldError msg={errors['moveOut']} />
+                      </div>
+                    </div>
+                    <SelectField
+                      id="bv-sharing"
+                      name="sharingPreference"
+                      label="Room sharing preference"
+                      options={SHARING_PREFERENCES}
+                      error={errors['sharingPreference']}
+                      value={sharing}
+                      onChange={setSharing}
+                    />
+                  </div>
+                ) : null}
+
 
                 <div className="space-y-1.5">
                   <Label htmlFor="bv-heard">How did you hear about us?</Label>
