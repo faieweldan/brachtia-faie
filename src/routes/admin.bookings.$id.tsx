@@ -292,6 +292,62 @@ function BookingDetail() {
     toast.success("Booking link copied");
   }
 
+  function viewingEndISO(v: any) {
+    return new Date(
+      new Date(v.starts_at).getTime() + (v.duration_minutes ?? 30) * 60000,
+    ).toISOString();
+  }
+
+  function openViewingPanel(v: any | null) {
+    setViewingPanel(true);
+    setVSlot(v ? (v.starts_at as string) : null);
+    setVDate(v ? new Date(v.starts_at) : undefined);
+    setVMode(v?.mode === "virtual" ? "virtual" : "in_person");
+    setVStaff(v?.assigned_staff ?? "");
+  }
+
+  function copyViewingMessage(v: any) {
+    const when = new Date(v.starts_at).toLocaleDateString("en-MY", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+    const text = `Hi ${r.full_name ?? ""}, your viewing is confirmed for ${when} at ${formatSlot(
+      v.starts_at,
+    )} (${v.mode === "virtual" ? "virtual tour" : "in person"}) at ${
+      v.residence_name || r.residence_name || "our residence"
+    }. Booking ID: ${r.reference ?? ""}. See you then! — Brachtia Homes`;
+    void navigator.clipboard.writeText(text);
+    toast.success("Message copied");
+  }
+
+  function addToCalendar(v: any) {
+    const stamp = (iso: string) => iso.replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    const ics = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//Brachtia Homes//Viewing//EN",
+      "BEGIN:VEVENT",
+      `UID:${v.id}@brachtiahomes.com`,
+      `DTSTAMP:${stamp(new Date().toISOString())}`,
+      `DTSTART:${stamp(new Date(v.starts_at).toISOString())}`,
+      `DTEND:${stamp(viewingEndISO(v))}`,
+      `SUMMARY:Viewing — ${r.full_name ?? ""} (${r.reference ?? ""})`,
+      `LOCATION:${v.residence_name || r.residence_name || ""}`,
+      `DESCRIPTION:${v.mode === "virtual" ? "Virtual tour" : "In person"}`,
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n");
+    const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `viewing-${r.reference ?? v.id}.ics`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+
   function runPrimary(action: ActionKey) {
     switch (action) {
       case "check_availability":
