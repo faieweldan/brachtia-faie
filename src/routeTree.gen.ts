@@ -27,6 +27,7 @@ import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminTasksRouteImport } from './routes/admin.tasks'
 import { Route as AdminWebsiteRouteImport } from './routes/admin.website'
 import { Route as PropertiesIndexRouteImport } from './routes/properties.index'
+import { Route as ViewingTokenRouteImport } from './routes/viewing.$token'
 import { Route as AdminAppointmentsIndexRouteImport } from './routes/admin.appointments.index'
 import { Route as AdminAppointmentsSettingsRouteImport } from './routes/admin.appointments.settings'
 import { Route as AdminBookingsIndexRouteImport } from './routes/admin.bookings.index'
@@ -133,6 +134,11 @@ const PropertiesIndexRoute = PropertiesIndexRouteImport.update({
   path: '/properties/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ViewingTokenRoute = ViewingTokenRouteImport.update({
+  id: '/viewing/$token',
+  path: '/viewing/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminAppointmentsIndexRoute = AdminAppointmentsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -229,6 +235,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/tasks': typeof AdminTasksRoute
   '/admin/website': typeof AdminWebsiteRouteWithChildren
+  '/viewing/$token': typeof ViewingTokenRoute
   '/admin/': typeof AdminIndexRoute
   '/properties/': typeof PropertiesIndexRoute
   '/admin/appointments/settings': typeof AdminAppointmentsSettingsRoute
@@ -258,6 +265,7 @@ export interface FileRoutesByTo {
   '/terms-and-conditions': typeof TermsAndConditionsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/tasks': typeof AdminTasksRoute
+  '/viewing/$token': typeof ViewingTokenRoute
   '/admin': typeof AdminIndexRoute
   '/properties': typeof PropertiesIndexRoute
   '/admin/appointments/settings': typeof AdminAppointmentsSettingsRoute
@@ -294,6 +302,7 @@ export interface FileRoutesById {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/tasks': typeof AdminTasksRoute
   '/admin/website': typeof AdminWebsiteRouteWithChildren
+  '/viewing/$token': typeof ViewingTokenRoute
   '/admin/': typeof AdminIndexRoute
   '/properties/': typeof PropertiesIndexRoute
   '/admin/appointments/settings': typeof AdminAppointmentsSettingsRoute
@@ -331,6 +340,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/tasks'
     | '/admin/website'
+    | '/viewing/$token'
     | '/admin/'
     | '/properties/'
     | '/admin/appointments/settings'
@@ -360,6 +370,7 @@ export interface FileRouteTypes {
     | '/terms-and-conditions'
     | '/admin/settings'
     | '/admin/tasks'
+    | '/viewing/$token'
     | '/admin'
     | '/properties'
     | '/admin/appointments/settings'
@@ -395,6 +406,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/tasks'
     | '/admin/website'
+    | '/viewing/$token'
     | '/admin/'
     | '/properties/'
     | '/admin/appointments/settings'
@@ -424,6 +436,7 @@ export interface RootRouteChildren {
   PrivacyPolicyRoute: typeof PrivacyPolicyRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TermsAndConditionsRoute: typeof TermsAndConditionsRoute
+  ViewingTokenRoute: typeof ViewingTokenRoute
   PropertiesIndexRoute: typeof PropertiesIndexRoute
   PropertiesSlugIndexRoute: typeof PropertiesSlugIndexRoute
   ApiPublicPhotoSplatRoute: typeof ApiPublicPhotoSplatRoute
@@ -555,6 +568,13 @@ declare module '@tanstack/react-router' {
       path: '/properties'
       fullPath: '/properties/'
       preLoaderRoute: typeof PropertiesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/viewing/$token': {
+      id: '/viewing/$token'
+      path: '/viewing/$token'
+      fullPath: '/viewing/$token'
+      preLoaderRoute: typeof ViewingTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/appointments/': {
@@ -774,6 +794,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyPolicyRoute: PrivacyPolicyRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TermsAndConditionsRoute: TermsAndConditionsRoute,
+  ViewingTokenRoute: ViewingTokenRoute,
   PropertiesIndexRoute: PropertiesIndexRoute,
   PropertiesSlugIndexRoute: PropertiesSlugIndexRoute,
   ApiPublicPhotoSplatRoute: ApiPublicPhotoSplatRoute,

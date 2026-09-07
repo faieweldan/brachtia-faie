@@ -50,10 +50,15 @@ import {
   listResidenceOptions,
   updateEnquiry,
   advanceEnquiryStage,
+  bookViewingForEnquiry,
+  cancelViewing,
+  generateViewingToken,
 } from "@/lib/admin.functions";
+import { fetchDaySlots } from "@/lib/public.functions";
 import { formatSlot } from "@/lib/slots";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Calendar as DayPicker } from "@/components/ui/calendar";
 import { Textarea } from "@/components/ui/textarea";
 
 export const Route = createFileRoute("/admin/bookings/$id")({
@@ -168,8 +173,72 @@ function BookingDetail() {
     .filter((a) => a.enquiry_id === id && a.status !== "cancelled")
     .sort((x, y) => new Date(x.starts_at).getTime() - new Date(y.starts_at).getTime())[0];
 
+  /* ----- viewing scheduling ----- */
+  const [viewingPanel, setViewingPanel] = useState(false);
+  const [vDate, setVDate] = useState<Date | undefined>(undefined);
+  const [vSlot, setVSlot] = useState<string | null>(null);
+  const [vMode, setVMode] = useState<"in_person" | "virtual">("in_person");
+  const [vStaff, setVStaff] = useState("");
+
+  const todayDate = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
+  const vISO = vDate
+    ? `${vDate.getFullYear()}-${String(vDate.getMonth() + 1).padStart(2, "0")}-${String(
+        vDate.getDate(),
+      ).padStart(2, "0")}`
+    : "";
+
+  const slotsQuery = useQuery({
+    queryKey: ["slots", row?.residence_slug ?? "", vMode, vISO],
+    enabled: Boolean(vISO && viewingPanel),
+    queryFn: () =>
+      fetchDaySlots({
+        data: { residenceSlug: (row?.residence_slug as string) ?? "", mode: vMode, date: vISO },
+      }),
+  });
+  const vSlots = slotsQuery.data?.slots ?? [];
+
+  const bookView = useMutation({
+    mutationFn: (input: {
+      startsAt: string;
+      mode: "in_person" | "virtual";
+      assignedStaff?: string;
+      appointmentId?: string;
+    }) => bookViewingForEnquiry({ data: { enquiryId: id, ...input } }),
+    onSuccess: () => {
+      toast.success("Viewing confirmed");
+      setViewingPanel(false);
+      void queryClient.invalidateQueries({ queryKey: ["admin"] });
+    },
+    onError: () => toast.error("Could not book the viewing"),
+  });
+
+  const cancelView = useMutation({
+    mutationFn: (appointmentId: string) => cancelViewing({ data: { appointmentId } }),
+    onSuccess: () => {
+      toast.success("Viewing cancelled");
+      void queryClient.invalidateQueries({ queryKey: ["admin"] });
+    },
+    onError: () => toast.error("Could not cancel the viewing"),
+  });
+
+  const linkGen = useMutation({
+    mutationFn: () => generateViewingToken({ data: { enquiryId: id } }),
+    onSuccess: (res) => {
+      const url = `${window.location.origin}/viewing/${(res as any).token}`;
+      void navigator.clipboard.writeText(url);
+      toast.success("Booking link copied");
+    },
+    onError: () => toast.error("Could not create the link"),
+  });
+
   const next = row ? nextActionFor(row, viewing?.starts_at) : null;
   const sla = next ? slaText(next.due) : null;
+
 
   if (isLoading || !row) {
     return (
@@ -213,20 +282,69 @@ function BookingDetail() {
     void navigate({ to: "/admin/residents/$id", params: { id: resident.id } });
   }
 
-  function copyBookingLink(r: any) {
-    const url = new URL("/book-viewing", window.location.origin);
-    url.searchParams.set("residence", r.residence_slug ?? "");
-    url.searchParams.set("name", r.full_name ?? "");
-    url.searchParams.set("email", r.email ?? "");
-    url.searchParams.set("phone", r.phone ?? "");
-    void navigator.clipboard.writeText(url.toString());
-    toast.success("Booking link copied");
+
+  function viewingEndISO(v: any) {
+    return new Date(
+      new Date(v.starts_at).getTime() + (v.duration_minutes ?? 30) * 60000,
+    ).toISOString();
   }
+
+  function openViewingPanel(v: any | null) {
+    setViewingPanel(true);
+    setVSlot(v ? (v.starts_at as string) : null);
+    setVDate(v ? new Date(v.starts_at) : undefined);
+    setVMode(v?.mode === "virtual" ? "virtual" : "in_person");
+    setVStaff(v?.assigned_staff ?? "");
+  }
+
+  function copyViewingMessage(v: any) {
+    const when = new Date(v.starts_at).toLocaleDateString("en-MY", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+    const text = `Hi ${r.full_name ?? ""}, your viewing is confirmed for ${when} at ${formatSlot(
+      v.starts_at,
+    )} (${v.mode === "virtual" ? "virtual tour" : "in person"}) at ${
+      v.residence_name || r.residence_name || "our residence"
+    }. Booking ID: ${r.reference ?? ""}. See you then! — Brachtia Homes`;
+    void navigator.clipboard.writeText(text);
+    toast.success("Message copied");
+  }
+
+  function addToCalendar(v: any) {
+    const stamp = (iso: string) => iso.replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    const ics = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//Brachtia Homes//Viewing//EN",
+      "BEGIN:VEVENT",
+      `UID:${v.id}@brachtiahomes.com`,
+      `DTSTAMP:${stamp(new Date().toISOString())}`,
+      `DTSTART:${stamp(new Date(v.starts_at).toISOString())}`,
+      `DTEND:${stamp(viewingEndISO(v))}`,
+      `SUMMARY:Viewing — ${r.full_name ?? ""} (${r.reference ?? ""})`,
+      `LOCATION:${v.residence_name || r.residence_name || ""}`,
+      `DESCRIPTION:${v.mode === "virtual" ? "Virtual tour" : "In person"}`,
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n");
+    const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `viewing-${r.reference ?? v.id}.ics`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
 
   function runPrimary(action: ActionKey) {
     switch (action) {
-      case "check_availability":
       case "schedule_viewing":
+        openViewingPanel(null);
+        return;
+      case "check_availability":
       case "complete_viewing":
         void navigate({ to: "/admin/appointments" });
         return;
@@ -652,40 +770,177 @@ function BookingDetail() {
 
           {/* Viewing */}
           <Card title="Viewing">
-            <div className="flex items-center justify-between">
-              {viewing ? (
-                <div className="flex items-center gap-3">
-                  <Calendar className="size-5 text-brand-deep" />
+            {viewing && !viewingPanel ? (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <Calendar className="size-5 text-brand-deep" />
+                    <div>
+                      <p className="font-medium text-foreground">
+                        {new Date(viewing.starts_at).toLocaleDateString("en-MY", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}{" "}
+                        · {formatSlot(viewing.starts_at)} – {formatSlot(viewingEndISO(viewing))}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {viewing.residence_name || row.residence_name || "—"} ·{" "}
+                        {viewing.mode === "virtual" ? "Virtual tour" : "In person"}
+                      </p>
+                      {viewing.assigned_staff ? (
+                        <p className="text-xs text-muted-foreground">
+                          Assigned: {viewing.assigned_staff}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-brand-tint px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-brand-deep">
+                    {viewing.status}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => copyViewingMessage(viewing)}>
+                    Copy Message
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => addToCalendar(viewing)}>
+                    Add to Calendar
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => openViewingPanel(viewing)}>
+                    Reschedule
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-destructive"
+                    onClick={() => {
+                      if (confirm("Cancel this viewing?")) cancelView.mutate(viewing.id);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : viewingPanel ? (
+              <div className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)]">
                   <div>
-                    <p className="font-medium text-foreground">
-                      {new Date(viewing.starts_at).toLocaleDateString("en-MY", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}{" "}
-                      · {formatSlot(viewing.starts_at)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {viewing.mode === "virtual" ? "Virtual tour" : "In person"} · {viewing.status}
-                    </p>
+                    <p className="mb-1 text-xs font-semibold text-muted-foreground">Date</p>
+                    <div className="rounded-lg border border-border p-1">
+                      <DayPicker
+                        mode="single"
+                        selected={vDate}
+                        onSelect={setVDate}
+                        disabled={{ before: todayDate }}
+                        className="pointer-events-auto"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="mb-1 text-xs font-semibold text-muted-foreground">Mode</p>
+                      <select
+                        value={vMode}
+                        onChange={(e) => setVMode(e.target.value as "in_person" | "virtual")}
+                        className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      >
+                        <option value="in_person">In person</option>
+                        <option value="virtual">Virtual tour</option>
+                      </select>
+                    </div>
+                    <div>
+                      <p className="mb-1 text-xs font-semibold text-muted-foreground">
+                        Available times
+                      </p>
+                      {!vISO ? (
+                        <p className="text-sm text-muted-foreground">Pick a date first.</p>
+                      ) : slotsQuery.isLoading ? (
+                        <p className="text-sm text-muted-foreground">Loading times…</p>
+                      ) : vSlots.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          No times available on this date.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-2">
+                          {vSlots.map((s) => (
+                            <button
+                              key={s}
+                              type="button"
+                              onClick={() => setVSlot(s)}
+                              className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors ${
+                                vSlot === s
+                                  ? "border-brand bg-brand text-white"
+                                  : "border-border hover:border-brand/50"
+                              }`}
+                            >
+                              {formatSlot(s)}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <p className="mb-1 text-xs font-semibold text-muted-foreground">
+                        Assigned staff
+                      </p>
+                      <select
+                        value={vStaff}
+                        onChange={(e) => setVStaff(e.target.value)}
+                        className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      >
+                        <option value="">Unassigned</option>
+                        {STAFF.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
-              ) : (
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => setViewingPanel(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={!vSlot || bookView.isPending}
+                    onClick={() =>
+                      bookView.mutate({
+                        startsAt: vSlot as string,
+                        mode: vMode,
+                        assignedStaff: vStaff,
+                        ...(viewing ? { appointmentId: viewing.id as string } : {}),
+                      })
+                    }
+                  >
+                    Confirm Viewing
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3 text-muted-foreground">
                   <Calendar className="size-5" />
                   <p className="text-sm">No viewing scheduled yet</p>
                 </div>
-              )}
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" onClick={() => navigate({ to: "/admin/appointments" })}>
-                  Book a Time
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => copyBookingLink(row)}>
-                  <Link2 className="size-4" /> Booking Link
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => openViewingPanel(null)}>
+                    Book a Time
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={linkGen.isPending}
+                    onClick={() => linkGen.mutate()}
+                  >
+                    <Link2 className="size-4" /> Generate Booking Link
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
           </Card>
+
 
           {/* Documents */}
           <Card title="Documents">
@@ -781,7 +1036,13 @@ function BookingDetail() {
                   <Button size="sm" className="w-full" onClick={() => runPrimary(next.action)}>
                     {next.label} <ArrowRight className="size-4" />
                   </Button>
-                  <Button size="sm" variant="outline" className="w-full" onClick={() => copyBookingLink(row)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    disabled={linkGen.isPending}
+                    onClick={() => linkGen.mutate()}
+                  >
                     <Link2 className="size-4" /> Generate Booking Link
                   </Button>
                 </div>

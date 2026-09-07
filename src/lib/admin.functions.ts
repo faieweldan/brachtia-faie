@@ -361,3 +361,72 @@ export const linkAppointmentToEnquiry = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+/* ---------------- Viewings ---------------- */
+
+export const bookViewingForEnquiry = createServerFn({ method: "POST" })
+  .inputValidator(
+    (data: {
+      enquiryId: string;
+      startsAt: string;
+      mode: "in_person" | "virtual";
+      assignedStaff?: string;
+      appointmentId?: string;
+    }) => data,
+  )
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    const { data: enquiry, error } = await supabase
+      .from("enquiries")
+      .select("*")
+      .eq("id", data.enquiryId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!enquiry) throw new Error("Booking not found");
+
+    const { upsertViewing } = await import("@/lib/viewings.server");
+    const id = await upsertViewing({
+      enquiry,
+      startsAt: data.startsAt,
+      mode: data.mode,
+      ...(data.assignedStaff !== undefined ? { assignedStaff: data.assignedStaff } : {}),
+      ...(data.appointmentId ? { appointmentId: data.appointmentId } : {}),
+    });
+    return { ok: true, id };
+  });
+
+export const cancelViewing = createServerFn({ method: "POST" })
+  .inputValidator((data: { appointmentId: string }) => data)
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    const { error } = await supabase
+      .from("appointments")
+      .update({ status: "cancelled", updated_at: new Date().toISOString() } as any)
+      .eq("id", data.appointmentId);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/** Creates (or reuses) the student's self-service viewing link. */
+export const generateViewingToken = createServerFn({ method: "POST" })
+  .inputValidator((data: { enquiryId: string; regenerate?: boolean }) => data)
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    const { data: row, error } = await supabase
+      .from("enquiries")
+      .select("viewing_token")
+      .eq("id", data.enquiryId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    const existing = (row as any)?.viewing_token as string | null | undefined;
+    if (existing && !data.regenerate) return { token: existing };
+
+    const { makeViewingToken } = await import("@/lib/viewings.server");
+    const token = makeViewingToken();
+    const { error: upErr } = await supabase
+      .from("enquiries")
+      .update({ viewing_token: token, updated_at: new Date().toISOString() } as any)
+      .eq("id", data.enquiryId);
+    if (upErr) throw new Error(upErr.message);
+    return { token };
+  });
