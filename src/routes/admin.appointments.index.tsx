@@ -192,6 +192,40 @@ function AppointmentsPage() {
     [appointments, typeFilter, statusFilter, residenceFilter, from, to, search],
   );
 
+  const sorted = useMemo(() => {
+    const val = (a: any): string => {
+      switch (sort.key) {
+        case "person":
+          return (a.full_name ?? "").toLowerCase();
+        case "type":
+          return (typeBySlug.get(a.type_slug)?.name ?? a.type_slug ?? "").toLowerCase();
+        case "residence":
+          return (
+            ((a.residence_names ?? []).length
+              ? (a.residence_names as string[]).join(", ")
+              : a.residence_name || "") as string
+          ).toLowerCase();
+        case "assigned":
+          return (a.assigned_staff ?? "").toLowerCase();
+        case "status":
+          return (STATUS_LABEL[a.status] ?? a.status ?? "").toLowerCase();
+        default:
+          return a.starts_at ?? "";
+      }
+    };
+    return [...filtered].sort((a, b) => {
+      const x = val(a);
+      const y = val(b);
+      if (x === y) return (a.starts_at ?? "").localeCompare(b.starts_at ?? "");
+      return x < y ? -sort.dir : sort.dir;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, sort]);
+
+  function toggleSort(key: SortKey) {
+    setSort((s) => (s.key === key ? { key, dir: s.dir === 1 ? -1 : 1 } : { key, dir: 1 }));
+  }
+
   /* ---- slot loading for reschedule / new ---- */
   useEffect(() => {
     if (!form || !rescheduling) return;
