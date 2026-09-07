@@ -91,7 +91,11 @@ function BookViewingPage() {
   const { property } = Route.useSearch();
   const [mode, setMode] = useState<Mode>("in_person");
   const [showAvailabilityNudge, setShowAvailabilityNudge] = useState(true);
-  const [slug, setSlug] = useState(property ?? properties[0]?.slug ?? "");
+  const [slugs, setSlugs] = useState<string[]>(() => {
+    const first = property ?? properties[0]?.slug ?? "";
+    return first ? [first] : [];
+  });
+  const slug = slugs[0] ?? "";
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [slot, setSlot] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
