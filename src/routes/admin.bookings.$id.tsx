@@ -366,6 +366,8 @@ function BookingDetail() {
     ["email", "Email", "text"],
     ["nationality", "Nationality", "text"],
     ["university", "University", "text"],
+    ["intake", "Intake", "text"],
+    ["heard_about", "Heard about us", "heard"],
   ] as const;
 
   const stayFields = [
@@ -377,7 +379,6 @@ function BookingDetail() {
     ["term", "Term", "term"],
     ["monthly_rent", "Monthly rent (RM)", "number"],
     ["first_payment", "First payment (RM)", "number"],
-    ["intake", "Intake", "text"],
   ] as const;
 
   return (
