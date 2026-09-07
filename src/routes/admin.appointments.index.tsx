@@ -1,7 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
+import {
+  Building2,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  Flag,
+  GraduationCap,
+  Info,
+  Link2,
+  Luggage,
+  Mail,
+  MessageCircle,
+  Phone,
+  Plus,
+  Search,
+  User,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
