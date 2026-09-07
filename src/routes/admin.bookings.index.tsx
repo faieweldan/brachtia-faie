@@ -90,8 +90,8 @@ function BookingsTable() {
   const counters = [
     { label: "New enquiries", value: decorated.filter((d) => d.row.status === "open").length },
     {
-      label: "Need availability check",
-      value: decorated.filter((d) => d.next.action === "check_availability").length,
+      label: "Overdue actions",
+      value: decorated.filter((d) => d.sla.tone === "over").length,
     },
     {
       label: "Viewings upcoming",
@@ -159,9 +159,13 @@ function BookingsTable() {
   }
 
   const SHARING_SHORT: Record<string, string> = { single: "Single", twin: "Twin", unit: "Whole unit" };
-  const requirements = (r: any) =>
-    [universityAbbr(r.university), SHARING_SHORT[r.occupancy] ?? r.occupancy, r.room_name].filter(Boolean).join(" · ") ||
-    "—";
+  const requirements = (r: any) => {
+    const line1 = [universityAbbr(r.university), SHARING_SHORT[r.occupancy] ?? r.occupancy]
+      .filter(Boolean)
+      .join(" · ");
+    const line2 = r.room_name || "";
+    return { line1: line1 || "—", line2 };
+  };
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
