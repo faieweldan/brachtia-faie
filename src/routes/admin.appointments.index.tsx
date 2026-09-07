@@ -35,7 +35,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar as DayPicker } from "@/components/ui/calendar";
-import { STAFF, SHARING_LABEL, SHARING_PREFERENCES } from "@/data/form-options";
+import {
+  STAFF,
+  SHARING_LABEL,
+  SHARING_PREFERENCES,
+  UNIVERSITIES,
+  GENDERS,
+  HEARD_ABOUT,
+  ENQUIRY_STATUS,
+} from "@/data/form-options";
 import {
   Dialog,
   DialogContent,
@@ -70,6 +78,35 @@ const STATUS_PILL: Record<string, string> = {
 
 const selectClass =
   "h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-brand/30";
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block space-y-1">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function ReadValue({ children, icon }: { children?: React.ReactNode; icon?: React.ReactNode }) {
+  const empty = children === null || children === undefined || children === "";
+  return (
+    <span className="flex items-center gap-1.5 text-sm text-foreground">
+      {!empty && icon ? <span className="text-muted-foreground">{icon}</span> : null}
+      {empty ? <span className="text-muted-foreground">—</span> : children}
+    </span>
+  );
+}
+
+function formatPhone(raw: string) {
+  const p = (raw || "").trim();
+  if (!p) return "";
+  if (p.startsWith("+")) return p;
+  if (p.startsWith("0")) return `+60 ${p.slice(1)}`;
+  return `+60 ${p}`;
+}
 
 function localDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Kuala_Lumpur" });
@@ -109,6 +146,12 @@ function emptyForm() {
     email: "",
     phone: "",
     university: "",
+    nationality: "",
+    intake: "",
+    gender: "",
+    heard_about: "",
+    heard_about_other: "",
+    enquiry_status: "",
     notes: "",
     admin_notes: "",
     enquiry_id: "" as string,
@@ -234,7 +277,15 @@ function AppointmentsPage() {
         if (search.trim()) {
           const q = search.trim().toLowerCase();
           const ref = a.enquiry_id ? (enquiryById.get(a.enquiry_id)?.reference ?? "") : "";
-          const hay = [a.full_name, a.email, a.phone, ref, a.resident_id]
+          const hay = [
+            a.full_name,
+            a.email,
+            a.phone,
+            ref,
+            a.enquiry_id,
+            a.resident_id,
+            a.resident_id ? `resident ${a.resident_id}` : "",
+          ]
             .filter(Boolean)
             .join(" ")
             .toLowerCase();
@@ -339,6 +390,12 @@ function AppointmentsPage() {
       email: a.email ?? "",
       phone: a.phone ?? "",
       university: a.university ?? "",
+      nationality: a.nationality ?? "",
+      intake: a.intake ?? "",
+      gender: a.gender ?? "",
+      heard_about: a.heard_about ?? "",
+      heard_about_other: a.heard_about_other ?? "",
+      enquiry_status: a.enquiry_status ?? "",
       notes: a.notes ?? "",
       admin_notes: a.admin_notes ?? "",
       enquiry_id: a.enquiry_id ?? "",
@@ -405,6 +462,12 @@ function AppointmentsPage() {
         email: form.email,
         phone: form.phone,
         university: form.university,
+        nationality: form.nationality,
+        intake: form.intake,
+        gender: form.gender,
+        heard_about: form.heard_about,
+        heard_about_other: form.heard_about_other,
+        enquiry_status: form.enquiry_status,
         notes: form.notes,
         admin_notes: form.admin_notes,
         enquiry_id: form.enquiry_id || null,
@@ -516,8 +579,8 @@ function AppointmentsPage() {
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
-            className="h-9 w-56 pl-8"
-            placeholder="Search name or ID…"
+            className="h-9 w-64 pl-8"
+            placeholder="Search name, email, booking or resident ID…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -1082,62 +1145,175 @@ function AppointmentsPage() {
                           </Link>
                         ) : null}
                       </header>
-                      <div className="p-4">
+                      <div className="space-y-4 p-4">
                         {readOnly ? (
-                          <div className="flex items-start gap-3">
+                          <div className="flex items-center gap-3">
                             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-tint text-sm font-semibold text-brand-deep">
                               {initials}
                             </span>
-                            <div className="space-y-1">
-                              <p className="text-base font-semibold text-foreground">
-                                {form.full_name || "—"}
-                              </p>
-                              <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                                {form.phone ? (
-                                  <span className="flex items-center gap-1.5">
-                                    <Phone className="h-3.5 w-3.5" />
-                                    {form.phone}
-                                  </span>
-                                ) : null}
-                                {form.email ? (
-                                  <span className="flex items-center gap-1.5">
-                                    <Mail className="h-3.5 w-3.5" />
-                                    {form.email}
-                                  </span>
-                                ) : null}
-                              </p>
-                              {form.university ? (
-                                <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                                  <GraduationCap className="h-3.5 w-3.5" />
-                                  {form.university}
-                                </p>
-                              ) : null}
-                            </div>
+                            <p className="text-base font-semibold text-foreground">
+                              {form.full_name || "—"}
+                            </p>
                           </div>
-                        ) : (
-                          <div className="grid gap-2 sm:grid-cols-2">
+                        ) : null}
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <Field label="Full Name">
+                            {readOnly ? (
+                              <ReadValue>{form.full_name}</ReadValue>
+                            ) : (
+                              <Input
+                                value={form.full_name}
+                                onChange={(e) => setField("full_name", e.target.value)}
+                              />
+                            )}
+                          </Field>
+                          <Field label="Mobile Number">
+                            {readOnly ? (
+                              <ReadValue icon={<Phone className="h-3.5 w-3.5" />}>
+                                {formatPhone(form.phone)}
+                              </ReadValue>
+                            ) : (
+                              <Input
+                                placeholder="+60 12 345 6789"
+                                value={form.phone}
+                                onChange={(e) => setField("phone", e.target.value)}
+                              />
+                            )}
+                          </Field>
+                          <Field label="Email">
+                            {readOnly ? (
+                              <ReadValue icon={<Mail className="h-3.5 w-3.5" />}>
+                                {form.email}
+                              </ReadValue>
+                            ) : (
+                              <Input
+                                type="email"
+                                value={form.email}
+                                onChange={(e) => setField("email", e.target.value)}
+                              />
+                            )}
+                          </Field>
+                          <Field label="University">
+                            {readOnly ? (
+                              <ReadValue icon={<GraduationCap className="h-3.5 w-3.5" />}>
+                                {form.university}
+                              </ReadValue>
+                            ) : (
+                              <select
+                                className={`${selectClass} w-full`}
+                                value={form.university}
+                                onChange={(e) => setField("university", e.target.value)}
+                              >
+                                <option value="">—</option>
+                                {UNIVERSITIES.map((u) => (
+                                  <option key={u} value={u}>
+                                    {u}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </Field>
+                          <Field label="Nationality">
+                            {readOnly ? (
+                              <ReadValue>{form.nationality}</ReadValue>
+                            ) : (
+                              <Input
+                                value={form.nationality}
+                                onChange={(e) => setField("nationality", e.target.value)}
+                              />
+                            )}
+                          </Field>
+                          <Field label="Intake">
+                            {readOnly ? (
+                              <ReadValue>{form.intake}</ReadValue>
+                            ) : (
+                              <Input
+                                placeholder="e.g. September 2026"
+                                value={form.intake}
+                                onChange={(e) => setField("intake", e.target.value)}
+                              />
+                            )}
+                          </Field>
+                          <Field label="Gender">
+                            {readOnly ? (
+                              <ReadValue>{form.gender}</ReadValue>
+                            ) : (
+                              <select
+                                className={`${selectClass} w-full`}
+                                value={form.gender}
+                                onChange={(e) => setField("gender", e.target.value)}
+                              >
+                                <option value="">—</option>
+                                {GENDERS.map((g) => (
+                                  <option key={g} value={g}>
+                                    {g}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </Field>
+                        </div>
+                      </div>
+                    </section>
+
+                    {/* Enquiry source */}
+                    <section className="overflow-hidden rounded-xl border border-border">
+                      <header className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5 text-sm font-semibold text-foreground">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        Enquiry Details
+                      </header>
+                      <div className="grid gap-3 p-4 sm:grid-cols-2">
+                        <Field label="Already submitted an availability enquiry?">
+                          {readOnly ? (
+                            <ReadValue>
+                              {ENQUIRY_STATUS.find((s) => s.value === form.enquiry_status)?.label ??
+                                form.enquiry_status}
+                            </ReadValue>
+                          ) : (
+                            <select
+                              className={`${selectClass} w-full`}
+                              value={form.enquiry_status}
+                              onChange={(e) => setField("enquiry_status", e.target.value)}
+                            >
+                              <option value="">—</option>
+                              {ENQUIRY_STATUS.map((s) => (
+                                <option key={s.value} value={s.value}>
+                                  {s.label}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </Field>
+                        <Field label="How did you hear about us?">
+                          {readOnly ? (
+                            <ReadValue>
+                              {[form.heard_about, form.heard_about_other]
+                                .filter(Boolean)
+                                .join(" — ")}
+                            </ReadValue>
+                          ) : (
+                            <select
+                              className={`${selectClass} w-full`}
+                              value={form.heard_about}
+                              onChange={(e) => setField("heard_about", e.target.value)}
+                            >
+                              <option value="">—</option>
+                              {HEARD_ABOUT.map((h) => (
+                                <option key={h} value={h}>
+                                  {h}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </Field>
+                        {!readOnly && form.heard_about === "Other" ? (
+                          <Field label="Tell us more">
                             <Input
-                              placeholder="Full name"
-                              value={form.full_name}
-                              onChange={(e) => setField("full_name", e.target.value)}
+                              value={form.heard_about_other}
+                              onChange={(e) => setField("heard_about_other", e.target.value)}
                             />
-                            <Input
-                              placeholder="Phone"
-                              value={form.phone}
-                              onChange={(e) => setField("phone", e.target.value)}
-                            />
-                            <Input
-                              placeholder="Email"
-                              value={form.email}
-                              onChange={(e) => setField("email", e.target.value)}
-                            />
-                            <Input
-                              placeholder="University"
-                              value={form.university}
-                              onChange={(e) => setField("university", e.target.value)}
-                            />
-                          </div>
-                        )}
+                          </Field>
+                        ) : null}
                       </div>
                     </section>
 
