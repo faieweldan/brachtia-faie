@@ -853,7 +853,10 @@ function EditableCard({
 
   function startEdit() {
     const d: Record<string, string> = {};
-    for (const [k] of fields) d[k] = String(row[k] ?? "");
+    for (const [k, , kind] of fields) {
+      d[k] = String(row[k] ?? "");
+      if (kind === "heard") d[`${k}_other`] = String(row[`${k}_other`] ?? "");
+    }
     setDraft(d);
     onEdit();
   }
@@ -861,6 +864,14 @@ function EditableCard({
   function save() {
     for (const [k] of fields) {
       if (draft[k] !== String(row[k] ?? "")) onSaveField(k, draft[k]);
+    }
+    // save the paired "Other" free-text for heard fields
+    for (const [k, , kind] of fields) {
+      if (kind === "heard") {
+        const otherKey = `${k}_other`;
+        if ((draft[otherKey] ?? "") !== String(row[otherKey] ?? ""))
+          onSaveField(otherKey, draft[otherKey] ?? "");
+      }
     }
     onSave();
   }
