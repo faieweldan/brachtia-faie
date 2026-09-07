@@ -124,7 +124,7 @@ function ResidentsListPage() {
                             ? `${placed.unit.unitNo} · Room ${placed.room.letter} · ${placed.bed.label}`
                             : "Unassigned"}
                         </td>
-                        <td className="px-3 py-2 text-muted-foreground">{r.university || "—"}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{universityAbbr(r.university) || "—"}</td>
                         <td className="px-3 py-2 text-muted-foreground">
                           {tenancy ? `${fmtDate(tenancy.start)} → ${fmtDate(tenancy.end)}` : "—"}
                         </td>
