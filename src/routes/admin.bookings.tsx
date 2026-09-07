@@ -344,8 +344,9 @@ function BookingsPage() {
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-border bg-card">
-        <div className="min-w-[1000px]">
-          <div className="grid grid-cols-[1.1fr_1.3fr_0.7fr_0.9fr_0.9fr_0.9fr_0.7fr_1.1fr] gap-3 border-b border-border px-4 py-2.5 text-[11px] font-semibold text-muted-foreground">
+        <div className="min-w-[1100px]">
+          <div className="grid grid-cols-[1fr_1.1fr_1.3fr_0.7fr_0.9fr_0.9fr_0.9fr_0.7fr_1.1fr] gap-3 border-b border-border px-4 py-2.5 text-[11px] font-semibold text-muted-foreground">
+            <SortHead label="Quote ID" sortKey="quote_id" />
             <SortHead label="Student" sortKey="student" />
             <span className="uppercase tracking-wide">Requirements</span>
             <SortHead label="Move-in" sortKey="move_in" />
