@@ -384,6 +384,13 @@ function BookViewingPage() {
                     mode,
                     residenceSlug: slug,
                     residenceName: residence?.name ?? "",
+                    residenceSlugs: slugs,
+                    residenceNames: slugs.map(
+                      (s) => properties.find((p) => p.slug === s)?.name ?? s,
+                    ),
+                    moveIn: needsStayDetails ? moveIn : "",
+                    moveOut: needsStayDetails ? moveOut : "",
+                    sharingPreference: needsStayDetails ? sharing : "",
                     startsAt: slot,
                     fullName: lead.name,
                     email: lead.email,
