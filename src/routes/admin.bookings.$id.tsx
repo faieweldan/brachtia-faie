@@ -636,9 +636,10 @@ function BookingDetail() {
                                   </div>
                                 ))}
                               </div>
-                              <Button size="sm" onClick={() => assignRoom(c)}>
-                                Select Room {b.room.letter}
+                              <Button size="sm" disabled={!!c.blocked} onClick={() => assignRoom(c)}>
+                                {c.blocked ? c.blocked : `Select Room ${b.room.letter}`}
                               </Button>
+
                             </div>
                           ) : null}
                         </div>
