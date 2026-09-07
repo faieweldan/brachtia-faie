@@ -63,6 +63,7 @@ export type Database = {
           gender: string
           heard_about: string
           heard_about_other: string
+          history: Json
           id: string
           intake: string
           mode: string
@@ -76,6 +77,7 @@ export type Database = {
           residence_names: string[]
           residence_slug: string
           residence_slugs: string[]
+          resident_id: string
           sharing_preference: string
           source: string
           starts_at: string
@@ -96,6 +98,7 @@ export type Database = {
           gender?: string
           heard_about?: string
           heard_about_other?: string
+          history?: Json
           id?: string
           intake?: string
           mode?: string
@@ -109,6 +112,7 @@ export type Database = {
           residence_names?: string[]
           residence_slug?: string
           residence_slugs?: string[]
+          resident_id?: string
           sharing_preference?: string
           source?: string
           starts_at: string
@@ -129,6 +133,7 @@ export type Database = {
           gender?: string
           heard_about?: string
           heard_about_other?: string
+          history?: Json
           id?: string
           intake?: string
           mode?: string
@@ -142,6 +147,7 @@ export type Database = {
           residence_names?: string[]
           residence_slug?: string
           residence_slugs?: string[]
+          resident_id?: string
           sharing_preference?: string
           source?: string
           starts_at?: string
