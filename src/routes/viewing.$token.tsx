@@ -36,7 +36,7 @@ function toISODate(d: Date) {
   ).padStart(2, "0")}`;
 }
 
-function Row({ label, value }: { label: string; value?: string | null }) {
+function Row({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div>
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
