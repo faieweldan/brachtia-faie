@@ -192,9 +192,10 @@ function SettingsPage() {
     mutationFn: (input: {
       blockedOn: string;
       reason: string;
-      startTime?: string;
-      endTime?: string;
+      startTime?: string | undefined;
+      endTime?: string | undefined;
     }) => saveBlockedDate({ data: input }),
+
     onSuccess: () => {
       toast.success("Block added");
       refresh();
