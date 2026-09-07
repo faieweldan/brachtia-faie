@@ -15,7 +15,12 @@ import { formatSlot } from "@/lib/slots";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ENQUIRY_STATUS, HEARD_ABOUT } from "@/data/form-options";
+import {
+  ENQUIRY_STATUS,
+  HEARD_ABOUT,
+  SHARING_LABEL,
+  SHARING_PREFERENCES,
+} from "@/data/form-options";
 import {
   Dialog,
 
