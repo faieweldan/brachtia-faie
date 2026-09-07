@@ -141,6 +141,7 @@ function AppointmentsPage() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [residenceFilter, setResidenceFilter] = useState("all");
+  const [staffFilter, setStaffFilter] = useState("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "datetime", dir: 1 });
@@ -205,6 +206,11 @@ function AppointmentsPage() {
             : [a.residence_slug];
           if (!slugs.includes(residenceFilter)) return false;
         }
+        if (staffFilter !== "all") {
+          if (staffFilter === "unassigned") {
+            if (a.assigned_staff) return false;
+          } else if (a.assigned_staff !== staffFilter) return false;
+        }
         const day = localDate(a.starts_at);
         if (from && day < from) return false;
         if (to && day > to) return false;
@@ -220,7 +226,7 @@ function AppointmentsPage() {
         return true;
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [appointments, typeFilter, statusFilter, residenceFilter, from, to, search],
+    [appointments, typeFilter, statusFilter, residenceFilter, staffFilter, from, to, search],
   );
 
   const sorted = useMemo(() => {
@@ -537,6 +543,20 @@ function AppointmentsPage() {
               {STATUS_LABEL[s]}
             </option>
           ))}
+        </select>
+
+        <select
+          className={selectClass}
+          value={staffFilter}
+          onChange={(e) => setStaffFilter(e.target.value)}
+        >
+          <option value="all">All staff</option>
+          {STAFF.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+          <option value="unassigned">Unassigned</option>
         </select>
 
         {view === "list" ? (
