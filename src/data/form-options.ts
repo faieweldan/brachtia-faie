@@ -1,11 +1,30 @@
-export const UNIVERSITIES = [
-  "MMU",
-  "HWUM",
-  "UoC",
-  "Lim Kok Wing",
-  "City University",
-  "Other",
-];
+export const UNIVERSITIES = ["MMU", "HWUM", "UoC", "LKW", "CU", "Other"];
+
+// Map any stored university value (abbreviation or full name) to its short form.
+const UNIVERSITY_ABBR: Record<string, string> = {
+  MMU: "MMU",
+  "Multimedia University": "MMU",
+  HWUM: "HWUM",
+  "Heriot-Watt University Malaysia": "HWUM",
+  "Heriot-Watt University": "HWUM",
+  "Heriot-Watt": "HWUM",
+  UoC: "UoC",
+  "University of Cyberjaya": "UoC",
+  LKW: "LKW",
+  "Lim Kok Wing": "LKW",
+  Limkokwing: "LKW",
+  "Limkokwing University": "LKW",
+  CU: "CU",
+  "City University": "CU",
+  "City University Malaysia": "CU",
+};
+
+export function universityAbbr(value?: string | null): string {
+  if (!value) return "";
+  const v = value.trim();
+  if (v === "Other") return "Other";
+  return UNIVERSITY_ABBR[v] ?? v;
+}
 
 export const HEARD_ABOUT = [
   "University",
