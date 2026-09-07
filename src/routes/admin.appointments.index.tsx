@@ -79,6 +79,35 @@ const STATUS_PILL: Record<string, string> = {
 const selectClass =
   "h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-brand/30";
 
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block space-y-1">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function ReadValue({ children, icon }: { children?: React.ReactNode; icon?: React.ReactNode }) {
+  const empty = children === null || children === undefined || children === "";
+  return (
+    <span className="flex items-center gap-1.5 text-sm text-foreground">
+      {!empty && icon ? <span className="text-muted-foreground">{icon}</span> : null}
+      {empty ? <span className="text-muted-foreground">—</span> : children}
+    </span>
+  );
+}
+
+function formatPhone(raw: string) {
+  const p = (raw || "").trim();
+  if (!p) return "";
+  if (p.startsWith("+")) return p;
+  if (p.startsWith("0")) return `+60 ${p.slice(1)}`;
+  return `+60 ${p}`;
+}
+
 function localDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Kuala_Lumpur" });
 }
