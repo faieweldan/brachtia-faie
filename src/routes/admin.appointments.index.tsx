@@ -545,7 +545,20 @@ function AppointmentsPage() {
           ))}
         </select>
 
-        {view === "list" ? (
+        <select
+          className={selectClass}
+          value={staffFilter}
+          onChange={(e) => setStaffFilter(e.target.value)}
+        >
+          <option value="all">All staff</option>
+          {STAFF.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+          <option value="unassigned">Unassigned</option>
+        </select>
+
           <div className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-input bg-background px-2 py-1">
             <span className="text-[11px] font-medium text-muted-foreground">Date range</span>
             <input
