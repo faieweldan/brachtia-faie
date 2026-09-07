@@ -360,9 +360,19 @@ function BookingsPage() {
                 className="grid cursor-pointer grid-cols-[1.1fr_1.3fr_0.7fr_0.9fr_0.9fr_0.9fr_0.7fr_1.1fr] items-center gap-3 border-b border-border px-4 py-3 text-sm transition-colors last:border-0 hover:bg-muted/60"
               >
                 <div className="min-w-0">
-                  <p className="truncate font-medium text-foreground">
-                    {r.full_name}
-                    {r.gender ? ` · ${String(r.gender).charAt(0).toUpperCase()}` : ""}
+                  <p className="flex items-center gap-1.5 truncate font-medium text-foreground">
+                    <span className="truncate">{r.full_name}</span>
+                    {r.gender ? (
+                      <span
+                        className={`inline-flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                          r.gender.charAt(0).toUpperCase() === "M"
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-pink-100 text-pink-700"
+                        }`}
+                      >
+                        {r.gender.charAt(0).toUpperCase()}
+                      </span>
+                    ) : null}
                   </p>
                   <p className="truncate text-[11px] font-semibold text-brand-deep">{r.reference}</p>
                 </div>
