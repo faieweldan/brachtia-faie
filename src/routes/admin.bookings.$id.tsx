@@ -487,14 +487,6 @@ function BookingDetail() {
             extra={[
               ["Stay duration", monthsBetween(row.move_in, row.move_out)],
               ["Add-ons", ((r.addons as any[]) ?? []).join(", ") || "—"],
-              [
-                "Heard about us",
-                row.heard_about
-                  ? row.heard_about === "Other" && row.heard_about_other
-                    ? `Other — ${row.heard_about_other}`
-                    : row.heard_about
-                  : "—",
-              ],
             ]}
           />
 
