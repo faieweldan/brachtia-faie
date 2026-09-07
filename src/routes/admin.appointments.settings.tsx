@@ -173,6 +173,8 @@ function SettingsPage() {
     mutationFn: (input: {
       group: number;
       ranges: { weekday: number; start_time: string; end_time: string }[];
+      validFrom?: string | null;
+      validTo?: string | null;
     }) => saveAvailabilityGrid({ data: input }),
     onSuccess: () => {
       toast.success("Availability saved");
@@ -217,12 +219,34 @@ function SettingsPage() {
 
   const [groups, setGroups] = useState<number[]>([1]);
   const [grids, setGrids] = useState<Record<number, Grid>>({ 1: emptyGrid() });
+  const [dates, setDates] = useState<Record<number, { from: string; to: string }>>({});
 
   useEffect(() => {
     const next: Record<number, Grid> = {};
-    for (const g of savedGroups) next[g] = gridFromRules(rules, g);
+    const nextDates: Record<number, { from: string; to: string }> = {};
+    for (const g of savedGroups) {
+      next[g] = gridFromRules(rules, g);
+      const rule = rules.find((r: any) => (r.capacity_group ?? 1) === g);
+      nextDates[g] = {
+        from: rule?.valid_from ? String(rule.valid_from).slice(0, 10) : "",
+        to: rule?.valid_to ? String(rule.valid_to).slice(0, 10) : "",
+      };
+    }
     setGrids(next);
+    setDates(nextDates);
     setGroups(savedGroups);
+  }, [rules, savedGroups]);
+
+  /* Drop extra capacities whose applicable period has passed. */
+  useEffect(() => {
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kuala_Lumpur" });
+    for (const g of savedGroups) {
+      if (g === 1) continue;
+      const rule = rules.find((r: any) => (r.capacity_group ?? 1) === g);
+      const to = rule?.valid_to ? String(rule.valid_to).slice(0, 10) : "";
+      if (to && to < today) groupDel.mutate(g);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rules, savedGroups]);
 
   const setGrid = (group: number, grid: Grid) => setGrids((prev) => ({ ...prev, [group]: grid }));
@@ -234,7 +258,13 @@ function SettingsPage() {
         .filter((r) => r.start && r.end && r.start < r.end)
         .map((r) => ({ weekday: Number(weekday), start_time: r.start, end_time: r.end })),
     );
-    gridMut.mutate({ group, ranges });
+    const range = dates[group] ?? { from: "", to: "" };
+    gridMut.mutate({
+      group,
+      ranges,
+      validFrom: group === 1 ? null : range.from || null,
+      validTo: group === 1 ? null : range.to || null,
+    });
   };
 
   const addCapacity = () => {
@@ -268,7 +298,7 @@ function SettingsPage() {
     <div className="space-y-6">
       {/* 1. Appointment types */}
       <section className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="text-sm font-semibold text-brand-deep">1. Appointment Types</h2>
+        <h2 className="text-sm font-semibold text-brand-deep">Appointment Types</h2>
         <p className="mt-1 text-xs italic text-muted-foreground">
           Manage appointment types and how long each appointment takes.
         </p>
@@ -352,7 +382,7 @@ function SettingsPage() {
 
       {/* 2. Weekly availability */}
       <section className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="text-sm font-semibold text-brand-deep">2. Weekly Availability</h2>
+        <h2 className="text-sm font-semibold text-brand-deep">Weekly Availability</h2>
         <p className="mt-1 text-xs italic text-muted-foreground">
           Set the standard days and times appointments can be scheduled. Add more than one range a
           day to exclude breaks such as lunch.
@@ -365,7 +395,7 @@ function SettingsPage() {
 
       {/* 3. Booking capacity */}
       <section className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="text-sm font-semibold text-brand-deep">3. Booking Capacity</h2>
+        <h2 className="text-sm font-semibold text-brand-deep">Booking Capacity</h2>
         <p className="mt-1 text-xs italic text-muted-foreground">
           Add capacity when more than one appointment can take place at the same time.
         </p>
@@ -385,6 +415,44 @@ function SettingsPage() {
                   Remove
                 </Button>
               </div>
+              <div className="mt-3 flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Applies from
+                  </label>
+                  <Input
+                    type="date"
+                    className="mt-1 h-9 w-[160px]"
+                    value={dates[group]?.from ?? ""}
+                    onChange={(e) =>
+                      setDates((prev) => ({
+                        ...prev,
+                        [group]: { from: e.target.value, to: prev[group]?.to ?? "" },
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Until
+                  </label>
+                  <Input
+                    type="date"
+                    className="mt-1 h-9 w-[160px]"
+                    value={dates[group]?.to ?? ""}
+                    onChange={(e) =>
+                      setDates((prev) => ({
+                        ...prev,
+                        [group]: { from: prev[group]?.from ?? "", to: e.target.value },
+                      }))
+                    }
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Leave empty to apply with no end date. Removed automatically once the end date has
+                  passed.
+                </p>
+              </div>
               <AvailabilityGrid
                 grid={grids[group] ?? emptyGrid()}
                 onChange={(g) => setGrid(group, g)}
@@ -403,7 +471,7 @@ function SettingsPage() {
 
       {/* 4. Blocked dates & times */}
       <section className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="text-sm font-semibold text-brand-deep">4. Blocked Dates &amp; Times</h2>
+        <h2 className="text-sm font-semibold text-brand-deep">Blocked Dates &amp; Times</h2>
         <p className="mt-1 text-xs italic text-muted-foreground">
           Block appointments for a full day or a specific time period.
         </p>
