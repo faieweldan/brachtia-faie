@@ -559,6 +559,7 @@ function AppointmentsPage() {
           <option value="unassigned">Unassigned</option>
         </select>
 
+        {view === "list" ? (
           <div className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-input bg-background px-2 py-1">
             <span className="text-[11px] font-medium text-muted-foreground">Date range</span>
             <input
