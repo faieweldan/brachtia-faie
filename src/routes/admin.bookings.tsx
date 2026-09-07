@@ -261,7 +261,7 @@ function BookingsPage() {
   }
 
   const requirements = (r: any) =>
-    [r.university, SHARING_LABEL[r.occupancy] ?? r.occupancy, r.room_name]
+    [universityAbbr(r.university), SHARING_LABEL[r.occupancy] ?? r.occupancy, r.room_name]
       .filter(Boolean)
       .join(" · ") || "—";
 
