@@ -24,8 +24,14 @@ import {
   useOps,
   allBeds,
   updateBed,
+  convertRoomOccupancy,
+  bedFreeForPeriod,
+  fmtDate,
   type BedRow,
 } from "@/lib/ops-store";
+
+type Candidate = { row: BedRow; convert: boolean };
+
 import { STAFF, SHARING_PREFERENCES, GENDERS, universityAbbr } from "@/data/form-options";
 import {
   ACTIONS,
