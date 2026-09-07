@@ -50,10 +50,15 @@ import {
   listResidenceOptions,
   updateEnquiry,
   advanceEnquiryStage,
+  bookViewingForEnquiry,
+  cancelViewing,
+  generateViewingToken,
 } from "@/lib/admin.functions";
+import { fetchDaySlots } from "@/lib/public.functions";
 import { formatSlot } from "@/lib/slots";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Calendar as DayPicker } from "@/components/ui/calendar";
 import { Textarea } from "@/components/ui/textarea";
 
 export const Route = createFileRoute("/admin/bookings/$id")({
