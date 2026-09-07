@@ -260,8 +260,13 @@ function BookingsPage() {
     );
   }
 
+  const SHARING_SHORT: Record<string, string> = {
+    single: "Single",
+    twin: "Twin",
+    unit: "Whole unit",
+  };
   const requirements = (r: any) =>
-    [universityAbbr(r.university), SHARING_LABEL[r.occupancy] ?? r.occupancy, r.room_name]
+    [universityAbbr(r.university), SHARING_SHORT[r.occupancy] ?? r.occupancy, r.room_name]
       .filter(Boolean)
       .join(" · ") || "—";
 
