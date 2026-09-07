@@ -404,7 +404,7 @@ function AppointmentsPage() {
     return <span className="text-muted-foreground">—</span>;
   }
 
-  const cols = "1fr_1.1fr_0.9fr_0.9fr_0.8fr_0.8fr_1.2fr";
+  const gridCols = { gridTemplateColumns: "1fr 1.1fr 0.9fr 0.9fr 0.8fr 0.8fr 1.2fr" };
 
   return (
     <div className="space-y-5">
@@ -514,7 +514,8 @@ function AppointmentsPage() {
         <div className="overflow-x-auto rounded-2xl border border-border bg-card">
           <div className="min-w-[980px]">
             <div
-              className={`grid grid-cols-[${cols}] gap-3 border-b border-border bg-muted/50 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground`}
+              style={gridCols}
+              className="grid gap-3 border-b border-border bg-muted/50 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
             >
               <span>Date &amp; time</span>
               <span>Person</span>
@@ -543,7 +544,8 @@ function AppointmentsPage() {
                     tabIndex={0}
                     onClick={() => openEdit(a)}
                     onKeyDown={(e) => e.key === "Enter" && openEdit(a)}
-                    className={`grid cursor-pointer grid-cols-[${cols}] items-center gap-3 border-b border-border px-4 py-3 text-sm last:border-0 hover:bg-muted/40`}
+                    style={gridCols}
+                    className="grid cursor-pointer items-center gap-3 border-b border-border px-4 py-3 text-sm last:border-0 hover:bg-muted/40"
                   >
                     <div>
                       <p className="font-medium text-foreground">
