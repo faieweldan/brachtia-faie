@@ -168,8 +168,72 @@ function BookingDetail() {
     .filter((a) => a.enquiry_id === id && a.status !== "cancelled")
     .sort((x, y) => new Date(x.starts_at).getTime() - new Date(y.starts_at).getTime())[0];
 
+  /* ----- viewing scheduling ----- */
+  const [viewingPanel, setViewingPanel] = useState(false);
+  const [vDate, setVDate] = useState<Date | undefined>(undefined);
+  const [vSlot, setVSlot] = useState<string | null>(null);
+  const [vMode, setVMode] = useState<"in_person" | "virtual">("in_person");
+  const [vStaff, setVStaff] = useState("");
+
+  const todayDate = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
+  const vISO = vDate
+    ? `${vDate.getFullYear()}-${String(vDate.getMonth() + 1).padStart(2, "0")}-${String(
+        vDate.getDate(),
+      ).padStart(2, "0")}`
+    : "";
+
+  const slotsQuery = useQuery({
+    queryKey: ["slots", row?.residence_slug ?? "", vMode, vISO],
+    enabled: Boolean(vISO && viewingPanel),
+    queryFn: () =>
+      fetchDaySlots({
+        data: { residenceSlug: (row?.residence_slug as string) ?? "", mode: vMode, date: vISO },
+      }),
+  });
+  const vSlots = slotsQuery.data?.slots ?? [];
+
+  const bookView = useMutation({
+    mutationFn: (input: {
+      startsAt: string;
+      mode: "in_person" | "virtual";
+      assignedStaff?: string;
+      appointmentId?: string;
+    }) => bookViewingForEnquiry({ data: { enquiryId: id, ...input } }),
+    onSuccess: () => {
+      toast.success("Viewing confirmed");
+      setViewingPanel(false);
+      void queryClient.invalidateQueries({ queryKey: ["admin"] });
+    },
+    onError: () => toast.error("Could not book the viewing"),
+  });
+
+  const cancelView = useMutation({
+    mutationFn: (appointmentId: string) => cancelViewing({ data: { appointmentId } }),
+    onSuccess: () => {
+      toast.success("Viewing cancelled");
+      void queryClient.invalidateQueries({ queryKey: ["admin"] });
+    },
+    onError: () => toast.error("Could not cancel the viewing"),
+  });
+
+  const linkGen = useMutation({
+    mutationFn: () => generateViewingToken({ data: { enquiryId: id } }),
+    onSuccess: (res) => {
+      const url = `${window.location.origin}/viewing/${(res as any).token}`;
+      void navigator.clipboard.writeText(url);
+      toast.success("Booking link copied");
+    },
+    onError: () => toast.error("Could not create the link"),
+  });
+
   const next = row ? nextActionFor(row, viewing?.starts_at) : null;
   const sla = next ? slaText(next.due) : null;
+
 
   if (isLoading || !row) {
     return (
