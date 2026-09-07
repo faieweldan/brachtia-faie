@@ -253,8 +253,10 @@ export type Database = {
         Row: {
           addons: Json
           admin_notes: string
+          assigned_staff: string
           created_at: string
           email: string
+          fee_received_at: string | null
           first_payment: number
           full_name: string
           gender: string
@@ -262,6 +264,7 @@ export type Database = {
           heard_about_other: string
           id: string
           intake: string
+          invoice_issued_at: string | null
           message: string
           monthly_rent: number
           move_in: string | null
@@ -274,18 +277,23 @@ export type Database = {
           reference: string
           residence_name: string
           residence_slug: string
+          resident_id: string
           room_code: string
           room_name: string
+          stage_changed_at: string | null
           status: string
           term: string
           university: string
           updated_at: string
+          viewing_completed_at: string | null
         }
         Insert: {
           addons?: Json
           admin_notes?: string
+          assigned_staff?: string
           created_at?: string
           email?: string
+          fee_received_at?: string | null
           first_payment?: number
           full_name?: string
           gender?: string
@@ -293,6 +301,7 @@ export type Database = {
           heard_about_other?: string
           id?: string
           intake?: string
+          invoice_issued_at?: string | null
           message?: string
           monthly_rent?: number
           move_in?: string | null
@@ -305,18 +314,23 @@ export type Database = {
           reference?: string
           residence_name?: string
           residence_slug?: string
+          resident_id?: string
           room_code?: string
           room_name?: string
+          stage_changed_at?: string | null
           status?: string
           term?: string
           university?: string
           updated_at?: string
+          viewing_completed_at?: string | null
         }
         Update: {
           addons?: Json
           admin_notes?: string
+          assigned_staff?: string
           created_at?: string
           email?: string
+          fee_received_at?: string | null
           first_payment?: number
           full_name?: string
           gender?: string
@@ -324,6 +338,7 @@ export type Database = {
           heard_about_other?: string
           id?: string
           intake?: string
+          invoice_issued_at?: string | null
           message?: string
           monthly_rent?: number
           move_in?: string | null
@@ -336,12 +351,15 @@ export type Database = {
           reference?: string
           residence_name?: string
           residence_slug?: string
+          resident_id?: string
           room_code?: string
           room_name?: string
+          stage_changed_at?: string | null
           status?: string
           term?: string
           university?: string
           updated_at?: string
+          viewing_completed_at?: string | null
         }
         Relationships: []
       }

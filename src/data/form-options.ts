@@ -23,6 +23,9 @@ export const ENQUIRY_STATUS = [
 
 export const GENDERS = ["Female", "Male", "Prefer not to say"];
 
+export const STAFF = ["Syazwani", "Norfadirah", "Valsala"];
+
+
 export const SHARING_PREFERENCES = [
   { value: "single", label: "Single room" },
   { value: "twin", label: "Twin sharing" },
