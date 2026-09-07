@@ -1043,7 +1043,13 @@ function BookingDetail() {
                   <Button size="sm" className="w-full" onClick={() => runPrimary(next.action)}>
                     {next.label} <ArrowRight className="size-4" />
                   </Button>
-                  <Button size="sm" variant="outline" className="w-full" onClick={() => copyBookingLink(row)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    disabled={linkGen.isPending}
+                    onClick={() => linkGen.mutate()}
+                  >
                     <Link2 className="size-4" /> Generate Booking Link
                   </Button>
                 </div>
