@@ -18,9 +18,9 @@ Stay Details (editable)
 - Residence, occupancy, room preference, move-in, move-out, stay duration (calculated), intake, term, monthly rent, first payment, add-ons, "heard about us", and the student's message.
 - Same inline Edit/Save behaviour.
 
-Room Assignment
-- Room photo, unit and room, occupancy, reserved pill, who reserved it and when — read from the existing room/bed records where a bed is tagged to this booking.
-- Change Room opens the existing room picker; when no room is tagged the card shows an empty state with "Assign room".
+Room Assignment (no room photo, per request)
+- When a room is assigned: summary card showing Residence, Unit/Room, Configuration (single/twin), a RESERVED pill, and "Reserved on <date> by <staff>" footer. A "Change Room" button in the top-right clears the assignment and returns to the picker.
+- When no room is assigned: the card becomes the reference's search-and-pick interface — a "Search vacant rooms" heading with a search input (placeholder "Search Unit / Room ID…"), three filter dropdowns (Residence, Room type, Occupancy), and a results table listing vacant rooms (Room, Configuration, Current Occupancy, Availability) each with a "Select" button that assigns that room to the booking. Vacant rooms come from the ops store beds that are not tagged to any enquiry.
 
 Viewing
 - Shows the linked viewing appointment when one exists (date, time, mode), otherwise "No viewing scheduled yet".
