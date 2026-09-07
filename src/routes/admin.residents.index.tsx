@@ -14,6 +14,7 @@ import {
   saveResidentRecord,
   useOps,
 } from "@/lib/ops-store";
+import { universityAbbr } from "@/data/form-options";
 
 export const Route = createFileRoute("/admin/residents/")({
   component: ResidentsListPage,
