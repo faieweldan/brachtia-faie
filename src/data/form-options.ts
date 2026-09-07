@@ -23,7 +23,13 @@ export function universityAbbr(value?: string | null): string {
   if (!value) return "";
   const v = value.trim();
   if (v === "Other") return "Other";
-  return UNIVERSITY_ABBR[v] ?? v;
+  if (UNIVERSITY_ABBR[v]) return UNIVERSITY_ABBR[v];
+  // Handle stored values like "Multimedia University (MMU)" — use the
+  // parenthetical abbreviation when it is a known short form.
+  const paren = v.match(/\(([A-Za-z]+)\)$/);
+  const abbr = paren ? paren[1] : "";
+  if (abbr && UNIVERSITIES.includes(abbr)) return abbr;
+  return v;
 }
 
 export const HEARD_ABOUT = [
