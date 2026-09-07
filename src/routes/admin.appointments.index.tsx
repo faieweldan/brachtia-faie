@@ -105,6 +105,34 @@ type FormState = ReturnType<typeof emptyForm>;
 
 type SortKey = "datetime" | "person" | "type" | "residence" | "assigned" | "status";
 
+function SortHead({
+  label,
+  sortKey,
+  sort,
+  onSort,
+}: {
+  label: string;
+  sortKey: SortKey;
+  sort: { key: SortKey; dir: 1 | -1 };
+  onSort: (k: SortKey) => void;
+}) {
+  const active = sort.key === sortKey;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(sortKey)}
+      className={`inline-flex items-center gap-1 text-left text-[11px] font-semibold uppercase tracking-wide transition-colors hover:text-brand-deep ${
+        active ? "text-brand-deep" : "text-muted-foreground"
+      }`}
+    >
+      {label}
+      <span aria-hidden className="text-[10px]">
+        {active ? (sort.dir === 1 ? "▲" : "▼") : "↕"}
+      </span>
+    </button>
+  );
+}
+
 function AppointmentsPage() {
   const queryClient = useQueryClient();
   const ops = useOps();
