@@ -483,6 +483,61 @@ function AppointmentsPage() {
                   onChange={(e) => setField("university", e.target.value)}
                 />
               </label>
+              <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                Nationality
+                <Input
+                  value={form.nationality}
+                  onChange={(e) => setField("nationality", e.target.value)}
+                />
+              </label>
+              <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                Intake
+                <Input value={form.intake} onChange={(e) => setField("intake", e.target.value)} />
+              </label>
+              <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                Gender
+                <Input value={form.gender} onChange={(e) => setField("gender", e.target.value)} />
+              </label>
+              <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                Already enquired?
+                <select
+                  className={`${selectClass} w-full`}
+                  value={form.enquiry_status}
+                  onChange={(e) => setField("enquiry_status", e.target.value)}
+                >
+                  <option value="">—</option>
+                  {ENQUIRY_STATUS.map((s) => (
+                    <option key={s.value} value={s.value}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                How did you hear about us?
+                <select
+                  className={`${selectClass} w-full`}
+                  value={form.heard_about}
+                  onChange={(e) => setField("heard_about", e.target.value)}
+                >
+                  <option value="">—</option>
+                  {HEARD_ABOUT.map((h) => (
+                    <option key={h} value={h}>
+                      {h}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {form.heard_about === "Other" ? (
+                <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                  Heard about us — details
+                  <Input
+                    value={form.heard_about_other}
+                    onChange={(e) => setField("heard_about_other", e.target.value)}
+                  />
+                </label>
+              ) : null}
+
               <label className="space-y-1 text-xs font-medium text-muted-foreground sm:col-span-2">
                 Notes
                 <Textarea
