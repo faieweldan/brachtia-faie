@@ -590,10 +590,20 @@ function BookingDetail() {
                                 : b.room.occupancy === "twin"
                                   ? `Twin · ${taken + 1}/2`
                                   : "Single"}
+                              {c.blocked ? (
+                                <span className="block text-[10px] text-amber-600">{c.blocked}</span>
+                              ) : null}
                             </span>
-                            <Button size="sm" variant="ghost" onClick={() => assignRoom(c)}>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={!!c.blocked}
+                              title={c.blocked ?? ""}
+                              onClick={() => assignRoom(c)}
+                            >
                               Select
                             </Button>
+
                           </div>
                           {open ? (
                             <div className="space-y-2 border-t border-border bg-muted/30 px-3 py-3 text-xs">
