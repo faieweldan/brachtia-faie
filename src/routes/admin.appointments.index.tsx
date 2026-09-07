@@ -141,6 +141,7 @@ function AppointmentsPage() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [residenceFilter, setResidenceFilter] = useState("all");
+  const [staffFilter, setStaffFilter] = useState("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "datetime", dir: 1 });
