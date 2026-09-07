@@ -999,7 +999,11 @@ function EditableCard({
                       : "Long term"
                     : kind === "number"
                       ? money(Number(row[k] ?? 0))
-                      : row[k] || "—"
+                      : kind === "heard"
+                        ? row[k] === "Other" && row[`${k}_other`]
+                          ? `Other — ${row[`${k}_other`]}`
+                          : row[k] || "—"
+                        : row[k] || "—"
               }
             />
           ))}
