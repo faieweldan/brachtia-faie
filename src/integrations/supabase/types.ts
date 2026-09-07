@@ -53,6 +53,7 @@ export type Database = {
       appointments: {
         Row: {
           admin_notes: string
+          assigned_staff: string
           created_at: string
           duration_minutes: number
           email: string
@@ -85,6 +86,7 @@ export type Database = {
         }
         Insert: {
           admin_notes?: string
+          assigned_staff?: string
           created_at?: string
           duration_minutes?: number
           email?: string
@@ -117,6 +119,7 @@ export type Database = {
         }
         Update: {
           admin_notes?: string
+          assigned_staff?: string
           created_at?: string
           duration_minutes?: number
           email?: string
@@ -286,6 +289,7 @@ export type Database = {
           university: string
           updated_at: string
           viewing_completed_at: string | null
+          viewing_token: string | null
         }
         Insert: {
           addons?: Json
@@ -323,6 +327,7 @@ export type Database = {
           university?: string
           updated_at?: string
           viewing_completed_at?: string | null
+          viewing_token?: string | null
         }
         Update: {
           addons?: Json
@@ -360,6 +365,7 @@ export type Database = {
           university?: string
           updated_at?: string
           viewing_completed_at?: string | null
+          viewing_token?: string | null
         }
         Relationships: []
       }
