@@ -1,20 +1,19 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   listAppointments,
-  listResidenceOptions,
   saveAppointmentType,
   deleteAppointmentType,
-  saveAvailabilityRule,
-  deleteAvailabilityRule,
+  saveAvailabilityGrid,
+  deleteCapacityGroup,
   saveBlockedDate,
   deleteBlockedDate,
 } from "@/lib/admin.functions";
-import { buildSlots, formatSlot } from "@/lib/slots";
+import { formatTime } from "@/lib/slots";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -24,9 +23,20 @@ export const Route = createFileRoute("/admin/appointments/settings")({
   component: SettingsPage,
 });
 
-const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const selectClass =
-  "h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-brand/30";
+const DAYS = [
+  { index: 1, label: "Monday" },
+  { index: 2, label: "Tuesday" },
+  { index: 3, label: "Wednesday" },
+  { index: 4, label: "Thursday" },
+  { index: 5, label: "Friday" },
+  { index: 6, label: "Saturday" },
+  { index: 0, label: "Sunday" },
+];
+
+const PALETTE = ["#0f5132", "#1f7a5a", "#b45309", "#7c3aed", "#0369a1", "#be123c"];
+
+type Range = { start: string; end: string };
+type Grid = Record<number, Range[]>;
 
 function slugify(name: string) {
   return name
@@ -35,15 +45,108 @@ function slugify(name: string) {
     .replace(/^-|-$/g, "");
 }
 
+function emptyGrid(): Grid {
+  return { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+}
+
+function gridFromRules(rules: any[], group: number): Grid {
+  const grid = emptyGrid();
+  for (const r of rules) {
+    if ((r.capacity_group ?? 1) !== group) continue;
+    grid[r.weekday as number]?.push({
+      start: String(r.start_time).slice(0, 5),
+      end: String(r.end_time).slice(0, 5),
+    });
+  }
+  for (const day of Object.keys(grid))
+    grid[Number(day)]!.sort((a, b) => a.start.localeCompare(b.start));
+  return grid;
+}
+
+function AvailabilityGrid({
+  grid,
+  onChange,
+}: {
+  grid: Grid;
+  onChange: (grid: Grid) => void;
+}) {
+  const update = (weekday: number, ranges: Range[]) => onChange({ ...grid, [weekday]: ranges });
+
+  return (
+    <div className="mt-4 divide-y divide-border">
+      <div className="grid grid-cols-[110px_1fr] gap-3 pb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <span>Day</span>
+        <span>Available hours</span>
+      </div>
+      {DAYS.map((day) => {
+        const ranges = grid[day.index] ?? [];
+        return (
+          <div key={day.index} className="grid grid-cols-[110px_1fr] items-center gap-3 py-2.5">
+            <span className="text-sm text-foreground">{day.label}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              {ranges.length === 0 ? (
+                <span className="text-sm text-muted-foreground">Unavailable</span>
+              ) : (
+                ranges.map((range, i) => (
+                  <span
+                    key={i}
+                    className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs text-foreground"
+                    title={`${formatTime(range.start)} – ${formatTime(range.end)}`}
+                  >
+                    <input
+                      type="time"
+                      value={range.start}
+                      onChange={(e) =>
+                        update(
+                          day.index,
+                          ranges.map((r, j) => (j === i ? { ...r, start: e.target.value } : r)),
+                        )
+                      }
+                      className="bg-transparent text-xs outline-none"
+                    />
+                    <span className="text-muted-foreground">–</span>
+                    <input
+                      type="time"
+                      value={range.end}
+                      onChange={(e) =>
+                        update(
+                          day.index,
+                          ranges.map((r, j) => (j === i ? { ...r, end: e.target.value } : r)),
+                        )
+                      }
+                      className="bg-transparent text-xs outline-none"
+                    />
+                    <button
+                      type="button"
+                      aria-label="Remove hours"
+                      onClick={() => update(day.index, ranges.filter((_, j) => j !== i))}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </span>
+                ))
+              )}
+              <button
+                type="button"
+                onClick={() => update(day.index, [...ranges, { start: "09:00", end: "13:00" }])}
+                className="text-xs font-medium text-brand-deep hover:underline"
+              >
+                + Add hours
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function SettingsPage() {
   const queryClient = useQueryClient();
   const { data } = useQuery({
     queryKey: ["admin", "appointments"],
     queryFn: () => listAppointments(),
-  });
-  const { data: residences = [] } = useQuery({
-    queryKey: ["admin", "residence-options"],
-    queryFn: () => listResidenceOptions(),
   });
 
   const types = ((data as any)?.types ?? []) as any[];
@@ -55,10 +158,7 @@ function SettingsPage() {
   const typeMut = useMutation({
     mutationFn: (input: { id?: string; values: Record<string, unknown> }) =>
       saveAppointmentType({ data: input }),
-    onSuccess: () => {
-      toast.success("Appointment type saved");
-      refresh();
-    },
+    onSuccess: refresh,
     onError: () => toast.error("Could not save appointment type"),
   });
   const typeDel = useMutation({
@@ -69,424 +169,377 @@ function SettingsPage() {
     },
     onError: () => toast.error("Could not remove appointment type"),
   });
-  const ruleMut = useMutation({
-    mutationFn: (input: { id?: string; values: Record<string, unknown> }) =>
-      saveAvailabilityRule({ data: input }),
+  const gridMut = useMutation({
+    mutationFn: (input: {
+      group: number;
+      ranges: { weekday: number; start_time: string; end_time: string }[];
+    }) => saveAvailabilityGrid({ data: input }),
     onSuccess: () => {
       toast.success("Availability saved");
       refresh();
     },
     onError: () => toast.error("Could not save availability"),
   });
-  const ruleDel = useMutation({
-    mutationFn: (id: string) => deleteAvailabilityRule({ data: { id } }),
+  const groupDel = useMutation({
+    mutationFn: (group: number) => deleteCapacityGroup({ data: { group } }),
     onSuccess: () => {
-      toast.success("Rule removed");
+      toast.success("Capacity removed");
       refresh();
     },
-    onError: () => toast.error("Could not remove rule"),
+    onError: () => toast.error("Could not remove capacity"),
   });
   const blockAdd = useMutation({
-    mutationFn: (input: { blockedOn: string; reason: string }) => saveBlockedDate({ data: input }),
+    mutationFn: (input: {
+      blockedOn: string;
+      reason: string;
+      startTime?: string | undefined;
+      endTime?: string | undefined;
+    }) => saveBlockedDate({ data: input }),
+
     onSuccess: () => {
-      toast.success("Date blocked");
+      toast.success("Block added");
       refresh();
     },
-    onError: () => toast.error("Could not block date"),
+    onError: () => toast.error("Could not add block"),
   });
   const blockDel = useMutation({
     mutationFn: (id: string) => deleteBlockedDate({ data: { id } }),
-    onSuccess: () => {
-      toast.success("Block removed");
-      refresh();
-    },
+    onSuccess: refresh,
     onError: () => toast.error("Could not remove block"),
   });
 
-  const [newType, setNewType] = useState({ name: "", duration: 30, color: "#0f5132" });
-  const [newBlock, setNewBlock] = useState({ date: "", reason: "" });
-  const [previewType, setPreviewType] = useState("");
-  const [previewDay, setPreviewDay] = useState(1);
+  /* ---- availability + capacities ---- */
+  const savedGroups = useMemo(() => {
+    const set = new Set<number>([1]);
+    for (const r of rules) set.add(r.capacity_group ?? 1);
+    return Array.from(set).sort((a, b) => a - b);
+  }, [rules]);
 
-  const activePreviewType = previewType || types[0]?.slug || "";
-  const previewDuration =
-    types.find((t) => t.slug === activePreviewType)?.duration_minutes ?? 30;
+  const [groups, setGroups] = useState<number[]>([1]);
+  const [grids, setGrids] = useState<Record<number, Grid>>({ 1: emptyGrid() });
 
-  const previewSlots = useMemo(() => {
-    const applicable = rules.filter(
-      (r) =>
-        r.active &&
-        r.weekday === previewDay &&
-        (!r.type_slug || r.type_slug === activePreviewType),
+  useEffect(() => {
+    const next: Record<number, Grid> = {};
+    for (const g of savedGroups) next[g] = gridFromRules(rules, g);
+    setGrids(next);
+    setGroups(savedGroups);
+  }, [rules, savedGroups]);
+
+  const setGrid = (group: number, grid: Grid) => setGrids((prev) => ({ ...prev, [group]: grid }));
+
+  const saveGroup = (group: number) => {
+    const grid = grids[group] ?? emptyGrid();
+    const ranges = Object.entries(grid).flatMap(([weekday, list]) =>
+      list
+        .filter((r) => r.start && r.end && r.start < r.end)
+        .map((r) => ({ weekday: Number(weekday), start_time: r.start, end_time: r.end })),
     );
-    // Preview on a far-future date so past-time filtering never hides slots.
-    const d = new Date();
-    d.setDate(d.getDate() + ((previewDay - d.getDay() + 7) % 7 || 7));
-    const date = d.toLocaleDateString("en-CA");
-    return buildSlots(date, applicable, [], previewDuration);
-  }, [rules, previewDay, activePreviewType, previewDuration]);
+    gridMut.mutate({ group, ranges });
+  };
+
+  const addCapacity = () => {
+    const next = Math.max(...groups) + 1;
+    setGroups([...groups, next]);
+    setGrids((prev) => ({ ...prev, [next]: emptyGrid() }));
+  };
+
+  const removeCapacity = (group: number) => {
+    setGroups(groups.filter((g) => g !== group));
+    setGrids((prev) => {
+      const copy = { ...prev };
+      delete copy[group];
+      return copy;
+    });
+    if (savedGroups.includes(group)) groupDel.mutate(group);
+  };
+
+  /* ---- new type / new block ---- */
+  const [newType, setNewType] = useState({ name: "", duration: "30" });
+  const [blockOpen, setBlockOpen] = useState(false);
+  const [newBlock, setNewBlock] = useState({
+    date: "",
+    allDay: true,
+    from: "12:00",
+    to: "14:00",
+    reason: "",
+  });
 
   return (
     <div className="space-y-6">
-      {/* Appointment types */}
+      {/* 1. Appointment types */}
       <section className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="text-sm font-semibold text-brand-deep">Appointment types</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Each type has its own duration and colour. Bookable online types appear on the website
-          Book a Viewing page.
+        <h2 className="text-sm font-semibold text-brand-deep">1. Appointment Types</h2>
+        <p className="mt-1 text-xs italic text-muted-foreground">
+          Manage appointment types and how long each appointment takes.
         </p>
 
-        <div className="mt-4 space-y-2">
+        <div className="mt-4 divide-y divide-border">
+          <div className="grid grid-cols-[1fr_140px_40px] gap-3 pb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <span>Appointment type</span>
+            <span>Duration (mins)</span>
+            <span />
+          </div>
           {types.map((t) => (
-            <div
-              key={t.id}
-              className="grid items-center gap-2 rounded-lg border border-border px-3 py-2 md:grid-cols-[1.4fr_auto_auto_auto_auto_auto]"
-            >
+            <div key={t.id} className="grid grid-cols-[1fr_140px_40px] items-center gap-3 py-2">
               <Input
                 defaultValue={t.name}
                 onBlur={(e) =>
+                  e.target.value.trim() &&
                   e.target.value !== t.name &&
-                  typeMut.mutate({ id: t.id, values: { name: e.target.value } })
+                  typeMut.mutate({ id: t.id, values: { name: e.target.value.trim() } })
                 }
               />
-              <input
-                type="color"
-                defaultValue={t.color}
-                onBlur={(e) => typeMut.mutate({ id: t.id, values: { color: e.target.value } })}
-                className="h-9 w-12 cursor-pointer rounded-md border border-input bg-background p-1"
-                title="Colour"
+              <Input
+                type="number"
+                min={5}
+                defaultValue={String(t.duration_minutes)}
+                onBlur={(e) =>
+                  Number(e.target.value) !== t.duration_minutes &&
+                  typeMut.mutate({
+                    id: t.id,
+                    values: { duration_minutes: Number(e.target.value) || 30 },
+                  })
+                }
               />
-              <div className="flex items-center gap-1">
-                <Input
-                  type="number"
-                  className="w-20"
-                  defaultValue={String(t.duration_minutes)}
-                  onBlur={(e) =>
-                    Number(e.target.value) !== t.duration_minutes &&
-                    typeMut.mutate({
-                      id: t.id,
-                      values: { duration_minutes: Number(e.target.value) || 30 },
-                    })
-                  }
-                />
-                <span className="text-xs text-muted-foreground">min</span>
-              </div>
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <input
-                  type="checkbox"
-                  defaultChecked={t.bookable_online}
-                  onChange={(e) =>
-                    typeMut.mutate({ id: t.id, values: { bookable_online: e.target.checked } })
-                  }
-                />
-                Online
-              </label>
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <input
-                  type="checkbox"
-                  defaultChecked={t.active}
-                  onChange={(e) => typeMut.mutate({ id: t.id, values: { active: e.target.checked } })}
-                />
-                Active
-              </label>
-              <Button size="icon" variant="ghost" onClick={() => typeDel.mutate(t.id)}>
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label="Remove appointment type"
+                onClick={() => typeDel.mutate(t.id)}
+              >
                 <Trash2 className="size-4" />
               </Button>
             </div>
           ))}
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-border pt-4">
-          <Input
-            placeholder="New type name"
-            className="w-52"
-            value={newType.name}
-            onChange={(e) => setNewType({ ...newType, name: e.target.value })}
-          />
-          <input
-            type="color"
-            value={newType.color}
-            onChange={(e) => setNewType({ ...newType, color: e.target.value })}
-            className="h-9 w-12 cursor-pointer rounded-md border border-input bg-background p-1"
-          />
-          <Input
-            type="number"
-            className="w-24"
-            value={String(newType.duration)}
-            onChange={(e) => setNewType({ ...newType, duration: Number(e.target.value) })}
-          />
-          <Button
-            size="sm"
-            onClick={() => {
-              if (!newType.name.trim()) return;
-              typeMut.mutate({
-                values: {
-                  slug: slugify(newType.name),
-                  name: newType.name.trim(),
-                  duration_minutes: newType.duration || 30,
-                  color: newType.color,
-                  sort_order: types.length,
-                },
-              });
-              setNewType({ name: "", duration: 30, color: "#0f5132" });
-            }}
-          >
-            <Plus className="mr-1 size-4" />
-            Add type
-          </Button>
-        </div>
-      </section>
-
-      {/* Availability */}
-      <section className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="text-sm font-semibold text-brand-deep">Daily availability</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Opening window per weekday. Slot interval and buffer control spacing; the appointment
-          type&apos;s duration controls how long each booking runs.
-        </p>
-
-        <div className="mt-4 space-y-2">
-          {rules.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No availability configured yet.</p>
-          ) : (
-            rules.map((r) => (
-              <div
-                key={r.id}
-                className="grid items-center gap-2 rounded-lg border border-border px-3 py-2 md:grid-cols-[auto_auto_auto_auto_auto_auto_1fr_auto_auto]"
-              >
-                <select
-                  className={selectClass}
-                  defaultValue={String(r.weekday)}
-                  onChange={(e) =>
-                    ruleMut.mutate({ id: r.id, values: { weekday: Number(e.target.value) } })
-                  }
-                >
-                  {WEEKDAYS.map((d, i) => (
-                    <option key={d} value={i}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
-                <Input
-                  type="time"
-                  className="w-28"
-                  defaultValue={String(r.start_time).slice(0, 5)}
-                  onBlur={(e) => ruleMut.mutate({ id: r.id, values: { start_time: e.target.value } })}
-                />
-                <Input
-                  type="time"
-                  className="w-28"
-                  defaultValue={String(r.end_time).slice(0, 5)}
-                  onBlur={(e) => ruleMut.mutate({ id: r.id, values: { end_time: e.target.value } })}
-                />
-                <div className="flex items-center gap-1">
-                  <Input
-                    type="number"
-                    className="w-20"
-                    defaultValue={String(r.slot_minutes)}
-                    onBlur={(e) =>
-                      ruleMut.mutate({
-                        id: r.id,
-                        values: { slot_minutes: Number(e.target.value) || 30 },
-                      })
-                    }
-                  />
-                  <span className="text-[11px] text-muted-foreground">slot</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Input
-                    type="number"
-                    className="w-20"
-                    defaultValue={String(r.buffer_minutes ?? 0)}
-                    onBlur={(e) =>
-                      ruleMut.mutate({
-                        id: r.id,
-                        values: { buffer_minutes: Number(e.target.value) || 0 },
-                      })
-                    }
-                  />
-                  <span className="text-[11px] text-muted-foreground">buffer</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Input
-                    type="number"
-                    className="w-16"
-                    defaultValue={String(r.capacity)}
-                    onBlur={(e) =>
-                      ruleMut.mutate({ id: r.id, values: { capacity: Number(e.target.value) || 1 } })
-                    }
-                  />
-                  <span className="text-[11px] text-muted-foreground">cap</span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <select
-                    className={selectClass}
-                    defaultValue={r.type_slug ?? ""}
-                    onChange={(e) =>
-                      ruleMut.mutate({ id: r.id, values: { type_slug: e.target.value } })
-                    }
-                  >
-                    <option value="">All types</option>
-                    {types.map((t) => (
-                      <option key={t.slug} value={t.slug}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className={selectClass}
-                    defaultValue={r.residence_id ?? ""}
-                    onChange={(e) =>
-                      ruleMut.mutate({
-                        id: r.id,
-                        values: { residence_id: e.target.value || null },
-                      })
-                    }
-                  >
-                    <option value="">All residences</option>
-                    {(residences as any[]).map((res) => (
-                      <option key={res.id} value={res.id}>
-                        {res.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    defaultChecked={r.active}
-                    onChange={(e) =>
-                      ruleMut.mutate({ id: r.id, values: { active: e.target.checked } })
-                    }
-                  />
-                  Active
-                </label>
-                <Button size="icon" variant="ghost" onClick={() => ruleDel.mutate(r.id)}>
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-            ))
-          )}
+          <div className="grid grid-cols-[1fr_140px_40px] items-center gap-3 py-2">
+            <Input
+              placeholder="New appointment type"
+              value={newType.name}
+              onChange={(e) => setNewType({ ...newType, name: e.target.value })}
+            />
+            <Input
+              type="number"
+              min={5}
+              value={newType.duration}
+              onChange={(e) => setNewType({ ...newType, duration: e.target.value })}
+            />
+            <span />
+          </div>
         </div>
 
         <Button
           size="sm"
           variant="outline"
-          className="mt-4"
-          onClick={() =>
-            ruleMut.mutate({
+          className="mt-3"
+          onClick={() => {
+            if (!newType.name.trim()) return;
+            typeMut.mutate({
               values: {
-                weekday: 1,
-                start_time: "10:00",
-                end_time: "18:00",
-                slot_minutes: 30,
-                buffer_minutes: 0,
-                capacity: 1,
-                mode: "any",
-                type_slug: "",
-                active: true,
+                slug: slugify(newType.name),
+                name: newType.name.trim(),
+                duration_minutes: Number(newType.duration) || 30,
+                color: PALETTE[types.length % PALETTE.length],
+                sort_order: types.length,
               },
-            })
-          }
+            });
+            setNewType({ name: "", duration: "30" });
+          }}
         >
           <Plus className="mr-1 size-4" />
-          Add availability rule
+          Add Appointment Type
         </Button>
       </section>
 
-      {/* Slot preview */}
+      {/* 2. Weekly availability */}
       <section className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="text-sm font-semibold text-brand-deep">Slot preview</h2>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <select
-            className={selectClass}
-            value={activePreviewType}
-            onChange={(e) => setPreviewType(e.target.value)}
-          >
-            {types.map((t) => (
-              <option key={t.slug} value={t.slug}>
-                {t.name} ({t.duration_minutes} min)
-              </option>
-            ))}
-          </select>
-          <select
-            className={selectClass}
-            value={String(previewDay)}
-            onChange={(e) => setPreviewDay(Number(e.target.value))}
-          >
-            {WEEKDAYS.map((d, i) => (
-              <option key={d} value={i}>
-                {d}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {previewSlots.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No slots for this combination.</p>
-          ) : (
-            previewSlots.map((s) => (
-              <span
-                key={s}
-                className="rounded-full bg-brand-tint px-2.5 py-1 text-xs font-medium text-brand-deep"
-              >
-                {formatSlot(s)}
-              </span>
-            ))
-          )}
-        </div>
+        <h2 className="text-sm font-semibold text-brand-deep">2. Weekly Availability</h2>
+        <p className="mt-1 text-xs italic text-muted-foreground">
+          Set the standard days and times appointments can be scheduled. Add more than one range a
+          day to exclude breaks such as lunch.
+        </p>
+        <AvailabilityGrid grid={grids[1] ?? emptyGrid()} onChange={(g) => setGrid(1, g)} />
+        <Button size="sm" className="mt-4" onClick={() => saveGroup(1)}>
+          Save Availability
+        </Button>
       </section>
 
-      {/* Blocked dates */}
+      {/* 3. Booking capacity */}
       <section className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="text-sm font-semibold text-brand-deep">Blocked dates</h2>
-        <div className="mt-3 space-y-2">
+        <h2 className="text-sm font-semibold text-brand-deep">3. Booking Capacity</h2>
+        <p className="mt-1 text-xs italic text-muted-foreground">
+          Add capacity when more than one appointment can take place at the same time.
+        </p>
+
+        <div className="mt-4 rounded-lg border border-border p-3">
+          <p className="text-sm font-medium text-foreground">Capacity 1 — Primary</p>
+          <p className="text-xs text-muted-foreground">Uses the standard Weekly Availability.</p>
+        </div>
+
+        {groups
+          .filter((g) => g > 1)
+          .map((group, i) => (
+            <div key={group} className="mt-4 rounded-lg border border-border p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-foreground">Capacity {i + 2}</p>
+                <Button size="sm" variant="ghost" onClick={() => removeCapacity(group)}>
+                  Remove
+                </Button>
+              </div>
+              <AvailabilityGrid
+                grid={grids[group] ?? emptyGrid()}
+                onChange={(g) => setGrid(group, g)}
+              />
+              <Button size="sm" className="mt-3" onClick={() => saveGroup(group)}>
+                Save Capacity {i + 2}
+              </Button>
+            </div>
+          ))}
+
+        <Button size="sm" variant="outline" className="mt-4" onClick={addCapacity}>
+          <Plus className="mr-1 size-4" />
+          Add Capacity
+        </Button>
+      </section>
+
+      {/* 4. Blocked dates & times */}
+      <section className="rounded-2xl border border-border bg-card p-5">
+        <h2 className="text-sm font-semibold text-brand-deep">4. Blocked Dates &amp; Times</h2>
+        <p className="mt-1 text-xs italic text-muted-foreground">
+          Block appointments for a full day or a specific time period.
+        </p>
+
+        {blockOpen ? (
+          <div className="mt-4 space-y-3 rounded-lg border border-border p-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="text-sm text-foreground">Date</label>
+              <Input
+                type="date"
+                className="w-44"
+                value={newBlock.date}
+                onChange={(e) => setNewBlock({ ...newBlock, date: e.target.value })}
+              />
+              <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <input
+                  type="radio"
+                  checked={newBlock.allDay}
+                  onChange={() => setNewBlock({ ...newBlock, allDay: true })}
+                />
+                Entire day
+              </label>
+              <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <input
+                  type="radio"
+                  checked={!newBlock.allDay}
+                  onChange={() => setNewBlock({ ...newBlock, allDay: false })}
+                />
+                Specific time
+              </label>
+            </div>
+            {!newBlock.allDay ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-foreground">From</span>
+                <Input
+                  type="time"
+                  className="w-32"
+                  value={newBlock.from}
+                  onChange={(e) => setNewBlock({ ...newBlock, from: e.target.value })}
+                />
+                <span className="text-sm text-foreground">To</span>
+                <Input
+                  type="time"
+                  className="w-32"
+                  value={newBlock.to}
+                  onChange={(e) => setNewBlock({ ...newBlock, to: e.target.value })}
+                />
+              </div>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                placeholder="Reason (optional)"
+                className="w-64"
+                value={newBlock.reason}
+                onChange={(e) => setNewBlock({ ...newBlock, reason: e.target.value })}
+              />
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (!newBlock.date) return;
+                  blockAdd.mutate({
+                    blockedOn: newBlock.date,
+                    reason: newBlock.reason,
+                    startTime: newBlock.allDay ? undefined : newBlock.from,
+                    endTime: newBlock.allDay ? undefined : newBlock.to,
+                  });
+                  setNewBlock({
+                    date: "",
+                    allDay: true,
+                    from: "12:00",
+                    to: "14:00",
+                    reason: "",
+                  });
+                  setBlockOpen(false);
+                }}
+              >
+                Add block
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setBlockOpen(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button size="sm" variant="outline" className="mt-4" onClick={() => setBlockOpen(true)}>
+            <Plus className="mr-1 size-4" />
+            Block Date or Time
+          </Button>
+        )}
+
+        <div className="mt-5 divide-y divide-border">
+          <div className="grid grid-cols-[150px_1fr_1fr_40px] gap-3 pb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <span>Date</span>
+            <span>Blocked</span>
+            <span>Reason</span>
+            <span />
+          </div>
           {blocked.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No blocked dates.</p>
+            <p className="py-3 text-sm text-muted-foreground">No blocked dates.</p>
           ) : (
             blocked.map((b) => (
               <div
                 key={b.id}
-                className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
+                className="grid grid-cols-[150px_1fr_1fr_40px] items-center gap-3 py-2 text-sm"
               >
-                <span>
-                  <span className="font-medium text-foreground">{b.blocked_on}</span>
-                  {b.reason ? (
-                    <span className="text-muted-foreground"> · {b.reason}</span>
-                  ) : null}
+                <span className="text-foreground">
+                  {new Date(`${b.blocked_on}T00:00:00`).toLocaleDateString("en-MY", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}
                 </span>
-                <Button size="icon" variant="ghost" onClick={() => blockDel.mutate(b.id)}>
+                <span className="text-muted-foreground">
+                  {b.start_time && b.end_time
+                    ? `${formatTime(String(b.start_time).slice(0, 5))} – ${formatTime(String(b.end_time).slice(0, 5))}`
+                    : "All day"}
+                </span>
+                <span className="text-muted-foreground">{b.reason || "—"}</span>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label="Remove block"
+                  onClick={() => blockDel.mutate(b.id)}
+                >
                   <Trash2 className="size-4" />
                 </Button>
               </div>
             ))
           )}
         </div>
-        <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-border pt-4">
-          <Input
-            type="date"
-            className="w-44"
-            value={newBlock.date}
-            onChange={(e) => setNewBlock({ ...newBlock, date: e.target.value })}
-          />
-          <Input
-            placeholder="Reason (optional)"
-            className="w-56"
-            value={newBlock.reason}
-            onChange={(e) => setNewBlock({ ...newBlock, reason: e.target.value })}
-          />
-          <Button
-            size="sm"
-            onClick={() => {
-              if (!newBlock.date) return;
-              blockAdd.mutate({ blockedOn: newBlock.date, reason: newBlock.reason });
-              setNewBlock({ date: "", reason: "" });
-            }}
-          >
-            <Plus className="mr-1 size-4" />
-            Block date
-          </Button>
-        </div>
+
+        <p className="mt-5 border-t border-border pt-4 text-xs text-muted-foreground">
+          Available slots are calculated from Weekly Availability plus any additional capacity,
+          minus existing appointments and blocked times. The appointment type&apos;s duration
+          decides how much time each booking occupies.
+        </p>
       </section>
     </div>
   );

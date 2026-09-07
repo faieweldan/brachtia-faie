@@ -3,9 +3,16 @@
 export type AvailabilityRule = {
   start_time: string;
   end_time: string;
-  slot_minutes: number;
+  capacity_group?: number;
+  slot_minutes?: number;
   buffer_minutes?: number;
-  capacity: number;
+  capacity?: number;
+};
+
+/** A blocked window; null/empty times mean the whole day. */
+export type BlockedWindow = {
+  start_time?: string | null;
+  end_time?: string | null;
 };
 
 const TZ_OFFSET = "+08:00"; // Malaysia
@@ -30,35 +37,63 @@ export function formatSlot(iso: string) {
   });
 }
 
+/** "09:00" -> "9:00 AM" */
+export function formatTime(time: string) {
+  const mins = toMinutes(time);
+  const h24 = Math.floor(mins / 60);
+  const m = mins % 60;
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${h24 < 12 ? "AM" : "PM"}`;
+}
+
 /**
- * Expands weekly availability rules into bookable ISO timestamps for one day,
- * skipping slots already at capacity and slots in the past.
- * `durationMinutes` overrides the rule's slot length (per appointment type).
+ * Expands availability rules into bookable ISO timestamps for one day.
+ *
+ * Capacity for a start time is the number of rules (across capacity groups)
+ * whose window fully covers it, so adding a second capacity lets two
+ * appointments share the same timeslot while students still see one slot.
+ * Slots in the past, at capacity, or overlapping a blocked window are dropped.
  */
 export function buildSlots(
   date: string,
   rules: AvailabilityRule[],
   bookedISO: string[] = [],
   durationMinutes?: number,
+  blocked: BlockedWindow[] = [],
 ): string[] {
   const counts = new Map<string, number>();
   for (const iso of bookedISO) counts.set(iso, (counts.get(iso) ?? 0) + 1);
 
+  const length = durationMinutes || 30;
   const now = Date.now();
-  const out = new Set<string>();
 
-  for (const rule of rules) {
-    const length = durationMinutes || rule.slot_minutes || 30;
-    const step = Math.max(10, length + (rule.buffer_minutes ?? 0));
-    const end = toMinutes(rule.end_time);
-    for (let t = toMinutes(rule.start_time); t + length <= end; t += step) {
-      const iso = slotISO(date, t);
-      if (new Date(iso).getTime() <= now) continue;
-      if ((counts.get(iso) ?? 0) >= (rule.capacity || 1)) continue;
-      out.add(iso);
-    }
+  const windows = rules.map((r) => ({
+    start: toMinutes(r.start_time),
+    end: toMinutes(r.end_time),
+    buffer: r.buffer_minutes ?? 0,
+  }));
+
+  const blockedWindows = blocked.map((b) => ({
+    start: b.start_time ? toMinutes(String(b.start_time)) : 0,
+    end: b.end_time ? toMinutes(String(b.end_time)) : 24 * 60,
+  }));
+
+  const starts = new Set<number>();
+  for (const w of windows) {
+    const step = Math.max(10, length + w.buffer);
+    for (let t = w.start; t + length <= w.end; t += step) starts.add(t);
   }
 
-  return Array.from(out).sort();
-}
+  const out: string[] = [];
+  for (const t of Array.from(starts).sort((a, b) => a - b)) {
+    const capacity = windows.filter((w) => t >= w.start && t + length <= w.end).length;
+    if (capacity === 0) continue;
+    if (blockedWindows.some((b) => t < b.end && t + length > b.start)) continue;
+    const iso = slotISO(date, t);
+    if (new Date(iso).getTime() <= now) continue;
+    if ((counts.get(iso) ?? 0) >= capacity) continue;
+    out.push(iso);
+  }
 
+  return out;
+}

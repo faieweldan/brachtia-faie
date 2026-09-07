@@ -83,27 +83,19 @@ export const fetchDaySlots = createServerFn({ method: "GET" })
 
     const weekday = new Date(`${data.date}T00:00:00`).getDay();
 
-    const [{ data: residence }, { data: rules }, { data: blocked }] = await Promise.all([
-      supabaseAdmin.from("residences").select("id").eq("slug", data.residenceSlug).maybeSingle(),
+    const [{ data: rules }, { data: blocked }] = await Promise.all([
       supabaseAdmin.from("availability_rules").select("*").eq("weekday", weekday).eq("active", true),
       supabaseAdmin.from("blocked_dates").select("*").eq("blocked_on", data.date),
     ]);
 
-    const residenceId = (residence?.id as string | undefined) ?? null;
-
-    const dayBlocked = (blocked ?? []).some(
-      (b) => b.residence_id === null || b.residence_id === residenceId,
-    );
-    if (dayBlocked) return { slots: [] as string[] };
+    const blockedWindows = (blocked ?? []).map((b) => ({
+      start_time: (b as { start_time?: string | null }).start_time ?? null,
+      end_time: (b as { end_time?: string | null }).end_time ?? null,
+    }));
+    // A full-day block clears the date entirely.
+    if (blockedWindows.some((b) => !b.start_time || !b.end_time)) return { slots: [] as string[] };
 
     const typeSlug = data.mode === "virtual" ? "viewing-virtual" : "viewing-in-person";
-
-    const applicable = (rules ?? []).filter(
-      (r) =>
-        (r.residence_id === null || r.residence_id === residenceId) &&
-        (r.mode === "any" || r.mode === data.mode) &&
-        (!r.type_slug || r.type_slug === typeSlug),
-    );
 
     const { data: type } = await supabaseAdmin
       .from("appointment_types")
@@ -123,11 +115,13 @@ export const fetchDaySlots = createServerFn({ method: "GET" })
     return {
       slots: buildSlots(
         data.date,
-        applicable,
+        rules ?? [],
         (booked ?? []).map((b) => b.starts_at as string),
         (type?.duration_minutes as number | undefined) ?? undefined,
+        blockedWindows,
       ),
     };
+
   });
 
 
