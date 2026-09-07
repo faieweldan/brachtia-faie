@@ -226,7 +226,7 @@ function AppointmentsPage() {
         return true;
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [appointments, typeFilter, statusFilter, residenceFilter, from, to, search],
+    [appointments, typeFilter, statusFilter, residenceFilter, staffFilter, from, to, search],
   );
 
   const sorted = useMemo(() => {
