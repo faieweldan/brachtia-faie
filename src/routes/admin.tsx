@@ -16,7 +16,16 @@ import { isAdminUnlocked, lockAdmin } from "@/lib/admin-gate.functions";
 export const Route = createFileRoute("/admin")({
   ssr: false,
   beforeLoad: async () => {
-    const { unlocked } = await isAdminUnlocked();
+    // The gate check is a network call; a transient failure must not blank the screen.
+    let unlocked = false;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        unlocked = (await isAdminUnlocked()).unlocked;
+        break;
+      } catch {
+        if (attempt === 0) await new Promise((r) => setTimeout(r, 400));
+      }
+    }
     if (!unlocked) throw redirect({ to: "/admin-unlock" });
   },
   head: () => ({
