@@ -207,3 +207,67 @@ export const bookAppointment = createServerFn({ method: "POST" })
     }
     return { ok: true as const };
   });
+
+/* ---------------- Student self-service viewing link ---------------- */
+
+export const getViewingLink = createServerFn({ method: "GET" })
+  .inputValidator((data: { token: string }) => z.object({ token: z.string().min(8).max(64) }).parse(data))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row } = await supabaseAdmin
+      .from("enquiries")
+      .select(
+        "id,reference,full_name,email,phone,university,nationality,gender,intake,residence_slug,residence_name,room_name,occupancy,move_in,move_out",
+      )
+      .eq("viewing_token", data.token)
+      .maybeSingle();
+    if (!row) return { ok: false as const };
+
+    const { data: appt } = await supabaseAdmin
+      .from("appointments")
+      .select("id,starts_at,duration_minutes,mode,status,residence_name")
+      .eq("enquiry_id", (row as any).id)
+      .neq("status", "cancelled")
+      .order("starts_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    return { ok: true as const, booking: row, viewing: appt ?? null };
+  });
+
+export const confirmViewingFromLink = createServerFn({ method: "POST" })
+  .inputValidator((data: { token: string; startsAt: string; mode: "in_person" | "virtual" }) =>
+    z
+      .object({
+        token: z.string().min(8).max(64),
+        startsAt: z.string().min(10).max(40),
+        mode: z.enum(["in_person", "virtual"]),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: enquiry } = await supabaseAdmin
+      .from("enquiries")
+      .select("*")
+      .eq("viewing_token", data.token)
+      .maybeSingle();
+    if (!enquiry) return { ok: false as const };
+
+    const { data: existing } = await supabaseAdmin
+      .from("appointments")
+      .select("id")
+      .eq("enquiry_id", (enquiry as any).id)
+      .neq("status", "cancelled")
+      .limit(1)
+      .maybeSingle();
+
+    const { upsertViewing } = await import("@/lib/viewings.server");
+    await upsertViewing({
+      enquiry,
+      startsAt: data.startsAt,
+      mode: data.mode,
+      ...(existing ? { appointmentId: (existing as any).id as string } : {}),
+    });
+    return { ok: true as const };
+  });
