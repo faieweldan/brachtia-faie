@@ -950,6 +950,29 @@ function EditableCard({
                     </option>
                   ))}
                 </select>
+              ) : kind === "heard" ? (
+                <div className="mt-1 space-y-1">
+                  <select
+                    value={draft[k] ?? ""}
+                    onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
+                    className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  >
+                    <option value="">—</option>
+                    {HEARD_ABOUT.map((h) => (
+                      <option key={h} value={h}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
+                  {draft[k] === "Other" ? (
+                    <Input
+                      value={draft[`${k}_other`] ?? ""}
+                      onChange={(e) => setDraft((d) => ({ ...d, [`${k}_other`]: e.target.value }))}
+                      placeholder="Please specify"
+                      className="h-9"
+                    />
+                  ) : null}
+                </div>
               ) : (
                 <Input
                   type={kind === "date" ? "date" : kind === "number" ? "number" : "text"}
