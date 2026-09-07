@@ -289,7 +289,12 @@ export const deleteCapacityGroup = createServerFn({ method: "POST" })
 
 export const saveBlockedDate = createServerFn({ method: "POST" })
   .inputValidator(
-    (data: { blockedOn: string; reason?: string; startTime?: string; endTime?: string }) => data,
+    (data: {
+      blockedOn: string;
+      reason?: string | undefined;
+      startTime?: string | undefined;
+      endTime?: string | undefined;
+    }) => data,
   )
   .handler(async ({ data }) => {
     const supabase = await admin();
