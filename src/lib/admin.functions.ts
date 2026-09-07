@@ -239,16 +239,70 @@ export const deleteAvailabilityRule = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-export const saveBlockedDate = createServerFn({ method: "POST" })
-  .inputValidator((data: { blockedOn: string; reason?: string }) => data)
+/** Replaces every availability row for one capacity group in a single save. */
+export const saveAvailabilityGrid = createServerFn({ method: "POST" })
+  .inputValidator(
+    (data: {
+      group: number;
+      ranges: { weekday: number; start_time: string; end_time: string }[];
+    }) => data,
+  )
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    const del = await supabase
+      .from("availability_rules")
+      .delete()
+      .eq("capacity_group", data.group);
+    if (del.error) throw new Error(del.error.message);
+    if (data.ranges.length) {
+      const rows = data.ranges.map((r) => ({
+        capacity_group: data.group,
+        weekday: r.weekday,
+        start_time: r.start_time,
+        end_time: r.end_time,
+        slot_minutes: 30,
+        buffer_minutes: 0,
+        capacity: 1,
+        mode: "any",
+        type_slug: "",
+        residence_id: null,
+        active: true,
+      }));
+      const ins = await supabase.from("availability_rules").insert(rows as any);
+      if (ins.error) throw new Error(ins.error.message);
+    }
+    return { ok: true };
+  });
+
+/** Removes an entire additional capacity. */
+export const deleteCapacityGroup = createServerFn({ method: "POST" })
+  .inputValidator((data: { group: number }) => data)
   .handler(async ({ data }) => {
     const supabase = await admin();
     const { error } = await supabase
-      .from("blocked_dates")
-      .insert({ blocked_on: data.blockedOn, reason: data.reason ?? "" } as any);
+      .from("availability_rules")
+      .delete()
+      .eq("capacity_group", data.group);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+export const saveBlockedDate = createServerFn({ method: "POST" })
+  .inputValidator(
+    (data: { blockedOn: string; reason?: string; startTime?: string; endTime?: string }) => data,
+  )
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    const { error } = await supabase.from("blocked_dates").insert({
+      blocked_on: data.blockedOn,
+      reason: data.reason ?? "",
+      start_time: data.startTime || null,
+      end_time: data.endTime || null,
+    } as any);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 
 export const deleteBlockedDate = createServerFn({ method: "POST" })
   .inputValidator((data: { id: string }) => data)
