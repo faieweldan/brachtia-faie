@@ -300,7 +300,47 @@ export function updateBed(bedId: string, patch: BedPatch) {
   }));
 }
 
+/** Switch a room between single and twin, preserving any occupied bed. */
+export function convertRoomOccupancy(roomId: string, occupancy: "single" | "twin") {
+  setState((s) => ({
+    ...s,
+    units: s.units.map((u) => ({
+      ...u,
+      rooms: u.rooms.map((r) => {
+        if (r.id !== roomId || r.occupancy === occupancy) return r;
+        if (occupancy === "twin") {
+          const first = r.beds[0] ?? bedsFor("single")[0]!;
+          return {
+            ...r,
+            occupancy,
+            beds: [
+              { ...first, label: "Twin 1" },
+              { id: uid(), label: "Twin 2", status: "vacant" as BedStatus },
+            ],
+          };
+        }
+        const keep = r.beds.find((b) => b.status !== "vacant") ?? r.beds[0]!;
+        return { ...r, occupancy, beds: [{ ...keep, label: "Single" }] };
+      }),
+    })),
+  }));
+}
+
+/** A bed is usable for a stay when it is free, or its tenancy does not overlap. */
+export function bedFreeForPeriod(bed: Bed, from?: string | null, to?: string | null) {
+  if (bed.enquiryId) return false;
+  if (bed.status === "vacant") return true;
+  if (!bed.tenancyEnd && !bed.tenancyStart) return false;
+  if (!from) return false;
+  const start = new Date(from).getTime();
+  const end = to ? new Date(to).getTime() : start;
+  const bStart = bed.tenancyStart ? new Date(bed.tenancyStart).getTime() : -Infinity;
+  const bEnd = bed.tenancyEnd ? new Date(bed.tenancyEnd).getTime() : Infinity;
+  return end < bStart || start > bEnd;
+}
+
 export type BedRow = {
+
   unit: Unit;
   room: UnitRoom;
   bed: Bed;
