@@ -178,6 +178,7 @@ export type Database = {
           active: boolean
           buffer_minutes: number
           capacity: number
+          capacity_group: number
           created_at: string
           end_time: string
           id: string
@@ -192,6 +193,7 @@ export type Database = {
           active?: boolean
           buffer_minutes?: number
           capacity?: number
+          capacity_group?: number
           created_at?: string
           end_time?: string
           id?: string
@@ -206,6 +208,7 @@ export type Database = {
           active?: boolean
           buffer_minutes?: number
           capacity?: number
+          capacity_group?: number
           created_at?: string
           end_time?: string
           id?: string
@@ -230,23 +233,29 @@ export type Database = {
         Row: {
           blocked_on: string
           created_at: string
+          end_time: string | null
           id: string
           reason: string
           residence_id: string | null
+          start_time: string | null
         }
         Insert: {
           blocked_on: string
           created_at?: string
+          end_time?: string | null
           id?: string
           reason?: string
           residence_id?: string | null
+          start_time?: string | null
         }
         Update: {
           blocked_on?: string
           created_at?: string
+          end_time?: string | null
           id?: string
           reason?: string
           residence_id?: string | null
+          start_time?: string | null
         }
         Relationships: [
           {
