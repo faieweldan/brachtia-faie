@@ -28,7 +28,7 @@ function ResidentsListPage() {
   const [residence, setResidence] = useState("");
 
   const universities = useMemo(
-    () => Array.from(new Set(residents.map((r) => r.university).filter(Boolean))),
+    () => Array.from(new Set(residents.map((r) => universityAbbr(r.university)).filter(Boolean))),
     [residents],
   );
   const residences = useMemo(
