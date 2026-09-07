@@ -7,6 +7,8 @@ export type AvailabilityRule = {
   slot_minutes?: number;
   buffer_minutes?: number;
   capacity?: number;
+  valid_from?: string | null;
+  valid_to?: string | null;
 };
 
 /** A blocked window; null/empty times mean the whole day. */
@@ -67,11 +69,17 @@ export function buildSlots(
   const length = durationMinutes || 30;
   const now = Date.now();
 
-  const windows = rules.map((r) => ({
-    start: toMinutes(r.start_time),
-    end: toMinutes(r.end_time),
-    buffer: r.buffer_minutes ?? 0,
-  }));
+  const windows = rules
+    .filter(
+      (r) =>
+        (!r.valid_from || date >= String(r.valid_from).slice(0, 10)) &&
+        (!r.valid_to || date <= String(r.valid_to).slice(0, 10)),
+    )
+    .map((r) => ({
+      start: toMinutes(r.start_time),
+      end: toMinutes(r.end_time),
+      buffer: r.buffer_minutes ?? 0,
+    }));
 
   const blockedWindows = blocked.map((b) => ({
     start: b.start_time ? toMinutes(String(b.start_time)) : 0,

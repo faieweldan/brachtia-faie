@@ -245,6 +245,8 @@ export const saveAvailabilityGrid = createServerFn({ method: "POST" })
     (data: {
       group: number;
       ranges: { weekday: number; start_time: string; end_time: string }[];
+      validFrom?: string | null;
+      validTo?: string | null;
     }) => data,
   )
   .handler(async ({ data }) => {
@@ -267,6 +269,8 @@ export const saveAvailabilityGrid = createServerFn({ method: "POST" })
         type_slug: "",
         residence_id: null,
         active: true,
+        valid_from: data.validFrom || null,
+        valid_to: data.validTo || null,
       }));
       const ins = await supabase.from("availability_rules").insert(rows as any);
       if (ins.error) throw new Error(ins.error.message);
