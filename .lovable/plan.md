@@ -41,8 +41,9 @@ Assigned: Syazwani
 
 ## Student-facing link page
 
-A new page at `/viewing/<link>`:
-- Shows their name, residence and a short "Pick a time for your viewing" intro — no form fields to re-enter.
+A new page at `/viewing/<link>`, styled exactly like the public Book a Viewing page (same header, layout and calendar/time UI), with one difference: the student's details are shown as static read-only text instead of form fields, and their Booking ID is displayed at the top.
+
+- Summary block: Booking ID, name, email, phone, university, residence, move-in — all read-only.
 - Select date → available times for that date → confirm.
 - Confirmation screen with the date, time, residence and mode. Expired, already-used or unknown links show a friendly message with a WhatsApp contact button.
 
