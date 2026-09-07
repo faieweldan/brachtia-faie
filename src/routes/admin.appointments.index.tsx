@@ -1343,7 +1343,7 @@ function AppointmentsPage() {
                           <p className="text-xs font-medium text-muted-foreground">Move-in</p>
                           {readOnly ? (
                             <p className="rounded-md bg-muted/50 px-3 py-2 text-foreground">
-                              {form.move_in ? longDate(`${form.move_in}T00:00:00+08:00`) : "—"}
+                              {stayMoveIn ? longDate(`${stayMoveIn}T00:00:00+08:00`) : "—"}
                             </p>
                           ) : (
                             <Input
