@@ -45,6 +45,19 @@ export const listEnquiries = createServerFn({ method: "GET" })
     return data ?? [];
   });
 
+export const getEnquiry = createServerFn({ method: "GET" })
+  .inputValidator((data: { id: string }) => data)
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    const { data: row, error } = await supabase
+      .from("enquiries")
+      .select("*")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return row ?? null;
+  });
+
 export const updateEnquiry = createServerFn({ method: "POST" })
   .inputValidator(
     (data: {
@@ -53,6 +66,28 @@ export const updateEnquiry = createServerFn({ method: "POST" })
       adminNotes?: string;
       assignedStaff?: string;
       residentId?: string;
+      // editable student details
+      fullName?: string;
+      email?: string;
+      phone?: string;
+      nationality?: string;
+      university?: string;
+      gender?: string;
+      intake?: string;
+      // editable stay details
+      residenceSlug?: string;
+      residenceName?: string;
+      roomCode?: string;
+      roomName?: string;
+      occupancy?: string;
+      term?: string;
+      moveIn?: string;
+      moveOut?: string;
+      monthlyRent?: number;
+      firstPayment?: number;
+      message?: string;
+      heardAbout?: string;
+      heardAboutOther?: string;
     }) => data,
   )
   .handler(async ({ data }) => {
@@ -65,6 +100,26 @@ export const updateEnquiry = createServerFn({ method: "POST" })
     if (data.adminNotes !== undefined) patch["admin_notes"] = data.adminNotes;
     if (data.assignedStaff !== undefined) patch["assigned_staff"] = data.assignedStaff;
     if (data.residentId !== undefined) patch["resident_id"] = data.residentId;
+    if (data.fullName !== undefined) patch["full_name"] = data.fullName;
+    if (data.email !== undefined) patch["email"] = data.email;
+    if (data.phone !== undefined) patch["phone"] = data.phone;
+    if (data.nationality !== undefined) patch["nationality"] = data.nationality;
+    if (data.university !== undefined) patch["university"] = data.university;
+    if (data.gender !== undefined) patch["gender"] = data.gender;
+    if (data.intake !== undefined) patch["intake"] = data.intake;
+    if (data.residenceSlug !== undefined) patch["residence_slug"] = data.residenceSlug;
+    if (data.residenceName !== undefined) patch["residence_name"] = data.residenceName;
+    if (data.roomCode !== undefined) patch["room_code"] = data.roomCode;
+    if (data.roomName !== undefined) patch["room_name"] = data.roomName;
+    if (data.occupancy !== undefined) patch["occupancy"] = data.occupancy;
+    if (data.term !== undefined) patch["term"] = data.term;
+    if (data.moveIn !== undefined) patch["move_in"] = data.moveIn || null;
+    if (data.moveOut !== undefined) patch["move_out"] = data.moveOut || null;
+    if (data.monthlyRent !== undefined) patch["monthly_rent"] = data.monthlyRent;
+    if (data.firstPayment !== undefined) patch["first_payment"] = data.firstPayment;
+    if (data.message !== undefined) patch["message"] = data.message;
+    if (data.heardAbout !== undefined) patch["heard_about"] = data.heardAbout;
+    if (data.heardAboutOther !== undefined) patch["heard_about_other"] = data.heardAboutOther;
     const { error } = await supabase.from("enquiries").update(patch as any).eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
