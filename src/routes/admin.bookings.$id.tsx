@@ -521,12 +521,7 @@ function BookingDetail() {
                   <p className="text-sm text-muted-foreground">
                     Currently {assignedBed.unit.unitNo} · {assignedBed.room.letter} — pick a different room below.
                   </p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Requested: {row.residence_name || "—"} · {row.room_name || "—"} ·{" "}
-                    {SHARING_SHORT[row.occupancy] ?? row.occupancy}
-                  </p>
-                )}
+                ) : null}
                 <p className="text-sm italic text-muted-foreground">
                   Showing rooms that match the student&apos;s residence, room type, tenancy period,
                   gender and sharing preference.
