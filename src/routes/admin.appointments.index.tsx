@@ -103,6 +103,36 @@ function emptyForm() {
 
 type FormState = ReturnType<typeof emptyForm>;
 
+type SortKey = "datetime" | "person" | "type" | "residence" | "assigned" | "status";
+
+function SortHead({
+  label,
+  sortKey,
+  sort,
+  onSort,
+}: {
+  label: string;
+  sortKey: SortKey;
+  sort: { key: SortKey; dir: 1 | -1 };
+  onSort: (k: SortKey) => void;
+}) {
+  const active = sort.key === sortKey;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(sortKey)}
+      className={`inline-flex items-center gap-1 text-left text-[11px] font-semibold uppercase tracking-wide transition-colors hover:text-brand-deep ${
+        active ? "text-brand-deep" : "text-muted-foreground"
+      }`}
+    >
+      {label}
+      <span aria-hidden className="text-[10px]">
+        {active ? (sort.dir === 1 ? "▲" : "▼") : "↕"}
+      </span>
+    </button>
+  );
+}
+
 function AppointmentsPage() {
   const queryClient = useQueryClient();
   const ops = useOps();
@@ -113,6 +143,7 @@ function AppointmentsPage() {
   const [residenceFilter, setResidenceFilter] = useState("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "datetime", dir: 1 });
   const [month, setMonth] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -191,6 +222,40 @@ function AppointmentsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [appointments, typeFilter, statusFilter, residenceFilter, from, to, search],
   );
+
+  const sorted = useMemo(() => {
+    const val = (a: any): string => {
+      switch (sort.key) {
+        case "person":
+          return (a.full_name ?? "").toLowerCase();
+        case "type":
+          return (typeBySlug.get(a.type_slug)?.name ?? a.type_slug ?? "").toLowerCase();
+        case "residence":
+          return (
+            ((a.residence_names ?? []).length
+              ? (a.residence_names as string[]).join(", ")
+              : a.residence_name || "") as string
+          ).toLowerCase();
+        case "assigned":
+          return (a.assigned_staff ?? "").toLowerCase();
+        case "status":
+          return (STATUS_LABEL[a.status] ?? a.status ?? "").toLowerCase();
+        default:
+          return a.starts_at ?? "";
+      }
+    };
+    return [...filtered].sort((a, b) => {
+      const x = val(a);
+      const y = val(b);
+      if (x === y) return (a.starts_at ?? "").localeCompare(b.starts_at ?? "");
+      return x < y ? -sort.dir : sort.dir;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, sort]);
+
+  function toggleSort(key: SortKey) {
+    setSort((s) => (s.key === key ? { key, dir: s.dir === 1 ? -1 : 1 } : { key, dir: 1 }));
+  }
 
   /* ---- slot loading for reschedule / new ---- */
   useEffect(() => {
@@ -475,39 +540,42 @@ function AppointmentsPage() {
         </select>
 
         {view === "list" ? (
-          <>
+          <div className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-input bg-background px-2 py-1">
+            <span className="text-[11px] font-medium text-muted-foreground">Date range</span>
             <input
               type="date"
-              className={selectClass}
+              aria-label="From date"
+              className="h-7 rounded-md border-0 bg-transparent px-1 text-xs outline-none"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
             />
+            <span className="text-xs text-muted-foreground">–</span>
             <input
               type="date"
-              className={selectClass}
+              aria-label="To date"
+              className="h-7 rounded-md border-0 bg-transparent px-1 text-xs outline-none"
               value={to}
               onChange={(e) => setTo(e.target.value)}
             />
-          </>
+            {from || to ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setFrom("");
+                  setTo("");
+                }}
+                className="text-[11px] font-semibold text-muted-foreground hover:text-brand-deep"
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
         ) : null}
 
         <Button size="sm" className="ml-auto" onClick={openNew}>
           <Plus className="mr-1 size-4" />
           New appointment
         </Button>
-      </div>
-
-      {/* Type legend */}
-      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-        {types.map((t) => (
-          <span key={t.slug} className="inline-flex items-center gap-1.5">
-            <span
-              className="size-2.5 rounded-full"
-              style={{ backgroundColor: t.color || "#64748b" }}
-            />
-            {t.name} · {t.duration_minutes} min
-          </span>
-        ))}
       </div>
 
       {view === "list" ? (
@@ -517,22 +585,22 @@ function AppointmentsPage() {
               style={gridCols}
               className="grid gap-3 border-b border-border bg-muted/50 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
             >
-              <span>Date &amp; time</span>
-              <span>Person</span>
-              <span>Type</span>
-              <span>Residence</span>
-              <span>Assigned</span>
-              <span>Status</span>
+              <SortHead label="Date & time" sortKey="datetime" sort={sort} onSort={toggleSort} />
+              <SortHead label="Person" sortKey="person" sort={sort} onSort={toggleSort} />
+              <SortHead label="Type" sortKey="type" sort={sort} onSort={toggleSort} />
+              <SortHead label="Residence" sortKey="residence" sort={sort} onSort={toggleSort} />
+              <SortHead label="Assigned" sortKey="assigned" sort={sort} onSort={toggleSort} />
+              <SortHead label="Status" sortKey="status" sort={sort} onSort={toggleSort} />
               <span>Linked to</span>
             </div>
             {isLoading ? (
               <p className="p-4 text-sm text-muted-foreground">Loading…</p>
-            ) : filtered.length === 0 ? (
+            ) : sorted.length === 0 ? (
               <p className="p-4 text-sm text-muted-foreground">
                 No appointments match these filters.
               </p>
             ) : (
-              filtered.map((a) => {
+              sorted.map((a) => {
                 const type = typeBySlug.get(a.type_slug);
                 const residence = (a.residence_names ?? []).length
                   ? (a.residence_names as string[]).join(", ")
