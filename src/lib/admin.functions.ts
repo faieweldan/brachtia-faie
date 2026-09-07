@@ -46,16 +46,82 @@ export const listEnquiries = createServerFn({ method: "GET" })
   });
 
 export const updateEnquiry = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string; status?: string; adminNotes?: string }) => data)
+  .inputValidator(
+    (data: {
+      id: string;
+      status?: string;
+      adminNotes?: string;
+      assignedStaff?: string;
+      residentId?: string;
+    }) => data,
+  )
   .handler(async ({ data }) => {
     const supabase = await admin();
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-    if (data.status) patch["status"] = data.status;
+    if (data.status) {
+      patch["status"] = data.status;
+      patch["stage_changed_at"] = new Date().toISOString();
+    }
     if (data.adminNotes !== undefined) patch["admin_notes"] = data.adminNotes;
+    if (data.assignedStaff !== undefined) patch["assigned_staff"] = data.assignedStaff;
+    if (data.residentId !== undefined) patch["resident_id"] = data.residentId;
     const { error } = await supabase.from("enquiries").update(patch as any).eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+/** Moves an enquiry along the pipeline and stamps the matching milestone. */
+export const advanceEnquiryStage = createServerFn({ method: "POST" })
+  .inputValidator(
+    (data: {
+      id: string;
+      to:
+        | "room_reserved"
+        | "viewing_scheduled"
+        | "viewing_completed"
+        | "awaiting_fee"
+        | "booked"
+        | "closed";
+      note?: string;
+      residentId?: string;
+    }) => data,
+  )
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    const now = new Date().toISOString();
+    const patch: Record<string, unknown> = { updated_at: now, stage_changed_at: now };
+
+    switch (data.to) {
+      case "room_reserved":
+        patch["status"] = "room_reserved";
+        break;
+      case "viewing_scheduled":
+        patch["status"] = "viewing_scheduled";
+        break;
+      case "viewing_completed":
+        patch["status"] = "viewing_scheduled";
+        patch["viewing_completed_at"] = now;
+        break;
+      case "awaiting_fee":
+        patch["status"] = "awaiting_fee";
+        patch["invoice_issued_at"] = now;
+        break;
+      case "booked":
+        patch["status"] = "booked";
+        patch["fee_received_at"] = now;
+        break;
+      case "closed":
+        patch["status"] = "closed";
+        break;
+    }
+    if (data.note !== undefined) patch["admin_notes"] = data.note;
+    if (data.residentId !== undefined) patch["resident_id"] = data.residentId;
+
+    const { error } = await supabase.from("enquiries").update(patch as any).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 
 export const listAppointments = createServerFn({ method: "GET" })
   .handler(async () => {
