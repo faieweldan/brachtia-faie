@@ -14,6 +14,7 @@ import {
   saveResidentRecord,
   useOps,
 } from "@/lib/ops-store";
+import { universityAbbr } from "@/data/form-options";
 
 export const Route = createFileRoute("/admin/residents/")({
   component: ResidentsListPage,
@@ -27,7 +28,7 @@ function ResidentsListPage() {
   const [residence, setResidence] = useState("");
 
   const universities = useMemo(
-    () => Array.from(new Set(residents.map((r) => r.university).filter(Boolean))),
+    () => Array.from(new Set(residents.map((r) => universityAbbr(r.university)).filter(Boolean))),
     [residents],
   );
   const residences = useMemo(
@@ -36,7 +37,7 @@ function ResidentsListPage() {
   );
 
   const rows = residents.filter((r) => {
-    if (university && r.university !== university) return false;
+    if (university && universityAbbr(r.university) !== university) return false;
     if (residence) {
       const placed = findBed(units, r.bedId);
       if (placed?.unit.residenceName !== residence) return false;
@@ -123,7 +124,7 @@ function ResidentsListPage() {
                             ? `${placed.unit.unitNo} · Room ${placed.room.letter} · ${placed.bed.label}`
                             : "Unassigned"}
                         </td>
-                        <td className="px-3 py-2 text-muted-foreground">{r.university || "—"}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{universityAbbr(r.university) || "—"}</td>
                         <td className="px-3 py-2 text-muted-foreground">
                           {tenancy ? `${fmtDate(tenancy.start)} → ${fmtDate(tenancy.end)}` : "—"}
                         </td>

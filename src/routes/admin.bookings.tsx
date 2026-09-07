@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 import { StageStepper } from "@/components/admin/ops-ui";
 import { blankResident, saveResidentRecord, useOps, allBeds } from "@/lib/ops-store";
-import { STAFF, SHARING_LABEL } from "@/data/form-options";
+import { STAFF, SHARING_LABEL, universityAbbr } from "@/data/form-options";
 import {
   ACTIONS,
   SLA_TONE,
@@ -261,7 +261,7 @@ function BookingsPage() {
   }
 
   const requirements = (r: any) =>
-    [r.university, SHARING_LABEL[r.occupancy] ?? r.occupancy, r.room_name]
+    [universityAbbr(r.university), SHARING_LABEL[r.occupancy] ?? r.occupancy, r.room_name]
       .filter(Boolean)
       .join(" · ") || "—";
 
@@ -566,7 +566,7 @@ function BookingsPage() {
                     ["Monthly rent", money(open.monthly_rent)],
                     ["First payment", money(open.first_payment)],
                     ["Add-ons", (open.addons ?? []).join(", ") || "—"],
-                    ["University", open.university || "—"],
+                    ["University", universityAbbr(open.university) || "—"],
                     ["Intake", open.intake || "—"],
                     ["Nationality", open.nationality || "—"],
                     ["Gender", open.gender || "—"],
