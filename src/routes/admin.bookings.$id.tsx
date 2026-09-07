@@ -32,7 +32,7 @@ import {
 
 type Candidate = { row: BedRow; convert: boolean; blocked?: string };
 
-import { STAFF, SHARING_PREFERENCES, GENDERS, universityAbbr } from "@/data/form-options";
+import { STAFF, SHARING_PREFERENCES, GENDERS, HEARD_ABOUT, universityAbbr } from "@/data/form-options";
 import {
   ACTIONS,
   SLA_TONE,
@@ -366,6 +366,8 @@ function BookingDetail() {
     ["email", "Email", "text"],
     ["nationality", "Nationality", "text"],
     ["university", "University", "text"],
+    ["intake", "Intake", "text"],
+    ["heard_about", "Heard about us", "heard"],
   ] as const;
 
   const stayFields = [
@@ -377,7 +379,6 @@ function BookingDetail() {
     ["term", "Term", "term"],
     ["monthly_rent", "Monthly rent (RM)", "number"],
     ["first_payment", "First payment (RM)", "number"],
-    ["intake", "Intake", "text"],
   ] as const;
 
   return (
@@ -486,14 +487,6 @@ function BookingDetail() {
             extra={[
               ["Stay duration", monthsBetween(row.move_in, row.move_out)],
               ["Add-ons", ((r.addons as any[]) ?? []).join(", ") || "—"],
-              [
-                "Heard about us",
-                row.heard_about
-                  ? row.heard_about === "Other" && row.heard_about_other
-                    ? `Other — ${row.heard_about_other}`
-                    : row.heard_about
-                  : "—",
-              ],
             ]}
           />
 
@@ -860,7 +853,10 @@ function EditableCard({
 
   function startEdit() {
     const d: Record<string, string> = {};
-    for (const [k] of fields) d[k] = String(row[k] ?? "");
+    for (const [k, , kind] of fields) {
+      d[k] = String(row[k] ?? "");
+      if (kind === "heard") d[`${k}_other`] = String(row[`${k}_other`] ?? "");
+    }
     setDraft(d);
     onEdit();
   }
@@ -868,6 +864,14 @@ function EditableCard({
   function save() {
     for (const [k] of fields) {
       if (draft[k] !== String(row[k] ?? "")) onSaveField(k, draft[k]);
+    }
+    // save the paired "Other" free-text for heard fields
+    for (const [k, , kind] of fields) {
+      if (kind === "heard") {
+        const otherKey = `${k}_other`;
+        if ((draft[otherKey] ?? "") !== String(row[otherKey] ?? ""))
+          onSaveField(otherKey, draft[otherKey] ?? "");
+      }
     }
     onSave();
   }
@@ -946,6 +950,29 @@ function EditableCard({
                     </option>
                   ))}
                 </select>
+              ) : kind === "heard" ? (
+                <div className="mt-1 space-y-1">
+                  <select
+                    value={draft[k] ?? ""}
+                    onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
+                    className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  >
+                    <option value="">—</option>
+                    {HEARD_ABOUT.map((h) => (
+                      <option key={h} value={h}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
+                  {draft[k] === "Other" ? (
+                    <Input
+                      value={draft[`${k}_other`] ?? ""}
+                      onChange={(e) => setDraft((d) => ({ ...d, [`${k}_other`]: e.target.value }))}
+                      placeholder="Please specify"
+                      className="h-9"
+                    />
+                  ) : null}
+                </div>
               ) : (
                 <Input
                   type={kind === "date" ? "date" : kind === "number" ? "number" : "text"}
@@ -972,7 +999,11 @@ function EditableCard({
                       : "Long term"
                     : kind === "number"
                       ? money(Number(row[k] ?? 0))
-                      : row[k] || "—"
+                      : kind === "heard"
+                        ? row[k] === "Other" && row[`${k}_other`]
+                          ? `Other — ${row[`${k}_other`]}`
+                          : row[k] || "—"
+                        : row[k] || "—"
               }
             />
           ))}
