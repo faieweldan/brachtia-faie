@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -11,19 +11,16 @@ import {
   listEnquiries,
   listResidenceOptions,
 } from "@/lib/admin.functions";
+import { fetchDaySlots } from "@/lib/public.functions";
 import { formatSlot } from "@/lib/slots";
+import { useOps } from "@/lib/ops-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  ENQUIRY_STATUS,
-  HEARD_ABOUT,
-  SHARING_LABEL,
-  SHARING_PREFERENCES,
-} from "@/data/form-options";
+import { Calendar as DayPicker } from "@/components/ui/calendar";
+import { STAFF, SHARING_LABEL, SHARING_PREFERENCES } from "@/data/form-options";
 import {
   Dialog,
-
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -36,7 +33,23 @@ export const Route = createFileRoute("/admin/appointments/")({
   component: AppointmentsPage,
 });
 
-const STATUSES = ["pending", "confirmed", "completed", "cancelled", "no_show"] as const;
+const STATUSES = ["pending", "confirmed", "completed", "no_show", "cancelled"] as const;
+
+const STATUS_LABEL: Record<string, string> = {
+  pending: "Pending",
+  confirmed: "Confirmed",
+  completed: "Completed",
+  no_show: "No Show",
+  cancelled: "Cancelled",
+};
+
+const STATUS_PILL: Record<string, string> = {
+  pending: "bg-amber-100 text-amber-800",
+  confirmed: "bg-emerald-100 text-emerald-800",
+  completed: "bg-slate-200 text-slate-700",
+  no_show: "bg-orange-100 text-orange-800",
+  cancelled: "bg-rose-100 text-rose-700",
+};
 
 const selectClass =
   "h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-brand/30";
@@ -45,12 +58,26 @@ function localDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Kuala_Lumpur" });
 }
 
+function endISO(a: any) {
+  return new Date(
+    new Date(a.starts_at).getTime() + (a.duration_minutes ?? 30) * 60000,
+  ).toISOString();
+}
+
+function longDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-MY", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Kuala_Lumpur",
+  });
+}
+
 function emptyForm() {
   const now = new Date();
   return {
     id: undefined as string | undefined,
     type_slug: "viewing-in-person",
-    residence_slug: "",
     residence_slugs: [] as string[],
     move_in: "",
     move_out: "",
@@ -59,19 +86,18 @@ function emptyForm() {
     date: now.toLocaleDateString("en-CA", { timeZone: "Asia/Kuala_Lumpur" }),
     time: "10:00",
     duration_minutes: 30,
-    status: "confirmed",
+    status: "pending",
+    assigned_staff: "",
     full_name: "",
     email: "",
     phone: "",
     university: "",
-    nationality: "",
-    intake: "",
-    gender: "",
-    heard_about: "",
-    heard_about_other: "",
-    enquiry_status: "",
     notes: "",
     admin_notes: "",
+    enquiry_id: "" as string,
+    resident_id: "" as string,
+    history: [] as any[],
+    starts_at: "" as string,
   };
 }
 
@@ -79,7 +105,9 @@ type FormState = ReturnType<typeof emptyForm>;
 
 function AppointmentsPage() {
   const queryClient = useQueryClient();
+  const ops = useOps();
   const [view, setView] = useState<"list" | "calendar">("list");
+  const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [residenceFilter, setResidenceFilter] = useState("all");
@@ -90,6 +118,10 @@ function AppointmentsPage() {
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [form, setForm] = useState<FormState | null>(null);
+  const [rescheduling, setRescheduling] = useState(false);
+  const [linkEditing, setLinkEditing] = useState(false);
+  const [slots, setSlots] = useState<string[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin", "appointments"],
@@ -105,6 +137,7 @@ function AppointmentsPage() {
   });
 
   const enquiryById = new Map((enquiries as any[]).map((e) => [e.id, e]));
+  const residentById = new Map(ops.residents.map((r) => [r.id, r]));
   const appointments = ((data as any)?.appointments ?? []) as any[];
   const types = ((data as any)?.types ?? []) as any[];
   const typeBySlug = new Map(types.map((t) => [t.slug, t]));
@@ -144,13 +177,51 @@ function AppointmentsPage() {
         const day = localDate(a.starts_at);
         if (from && day < from) return false;
         if (to && day > to) return false;
+        if (search.trim()) {
+          const q = search.trim().toLowerCase();
+          const ref = a.enquiry_id ? (enquiryById.get(a.enquiry_id)?.reference ?? "") : "";
+          const hay = [a.full_name, a.email, a.phone, ref, a.resident_id]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
         return true;
       }),
-    [appointments, typeFilter, statusFilter, residenceFilter, from, to],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [appointments, typeFilter, statusFilter, residenceFilter, from, to, search],
   );
+
+  /* ---- slot loading for reschedule / new ---- */
+  useEffect(() => {
+    if (!form || !rescheduling) return;
+    let cancelled = false;
+    setSlotsLoading(true);
+    void fetchDaySlots({
+      data: {
+        residenceSlug: form.residence_slugs[0] ?? "",
+        mode: form.mode === "virtual" ? "virtual" : "in_person",
+        date: form.date,
+      },
+    })
+      .then((res: any) => {
+        if (!cancelled) setSlots((res?.slots ?? []) as string[]);
+      })
+      .catch(() => {
+        if (!cancelled) setSlots([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSlotsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [form?.date, form?.mode, form?.residence_slugs?.[0], rescheduling]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function openNew() {
     setForm(emptyForm());
+    setRescheduling(true);
+    setLinkEditing(false);
   }
 
   function openEdit(a: any) {
@@ -158,7 +229,6 @@ function AppointmentsPage() {
     setForm({
       id: a.id,
       type_slug: a.type_slug ?? "viewing-in-person",
-      residence_slug: a.residence_slug ?? "",
       residence_slugs: ((a.residence_slugs ?? []) as string[]).length
         ? (a.residence_slugs as string[])
         : a.residence_slug
@@ -176,38 +246,56 @@ function AppointmentsPage() {
       }),
       duration_minutes: a.duration_minutes ?? 30,
       status: a.status ?? "pending",
+      assigned_staff: a.assigned_staff ?? "",
       full_name: a.full_name ?? "",
       email: a.email ?? "",
       phone: a.phone ?? "",
       university: a.university ?? "",
-      nationality: a.nationality ?? "",
-      intake: a.intake ?? "",
-      gender: a.gender ?? "",
-      heard_about: a.heard_about ?? "",
-      heard_about_other: a.heard_about_other ?? "",
-      enquiry_status: a.enquiry_status ?? "",
       notes: a.notes ?? "",
       admin_notes: a.admin_notes ?? "",
+      enquiry_id: a.enquiry_id ?? "",
+      resident_id: a.resident_id ?? "",
+      history: Array.isArray(a.history) ? a.history : [],
+      starts_at: a.starts_at,
     });
+    setRescheduling(false);
+    setLinkEditing(false);
   }
 
-  function submit() {
+  function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
+  }
+
+  function submit(overrides?: Partial<Record<string, unknown>>) {
     if (!form) return;
     if (!form.full_name.trim()) {
       toast.error("Add a name");
       return;
     }
-    const slugs = form.residence_slugs.length
-      ? form.residence_slugs
-      : form.residence_slug
-        ? [form.residence_slug]
-        : [];
+    const slugs = form.residence_slugs;
     const primarySlug = slugs[0] ?? "";
     const residence = (residences as any[]).find((r) => r.slug === primarySlug);
-    const names = slugs.map(
-      (s) => (residences as any[]).find((r) => r.slug === s)?.name ?? s,
-    );
+    const names = slugs.map((s) => (residences as any[]).find((r) => r.slug === s)?.name ?? s);
     const startsAt = new Date(`${form.date}T${form.time}:00+08:00`).toISOString();
+
+    const history = [...form.history];
+    if (form.id && form.starts_at && startsAt !== form.starts_at) {
+      history.push({
+        at: new Date().toISOString(),
+        kind: "rescheduled",
+        from: form.starts_at,
+        to: startsAt,
+      });
+    }
+    if (overrides?.["status"] && overrides["status"] !== form.status) {
+      history.push({
+        at: new Date().toISOString(),
+        kind: "status",
+        from: form.status,
+        to: overrides["status"],
+      });
+    }
+
     save.mutate({
       ...(form.id ? { id: form.id } : {}),
       values: {
@@ -224,26 +312,99 @@ function AppointmentsPage() {
         starts_at: startsAt,
         duration_minutes: Number(form.duration_minutes) || 30,
         status: form.status,
+        assigned_staff: form.assigned_staff,
         full_name: form.full_name,
         email: form.email,
         phone: form.phone,
         university: form.university,
-        nationality: form.nationality,
-        intake: form.intake,
-        gender: form.gender,
-        heard_about: form.heard_about,
-        heard_about_other: form.heard_about_other,
-        enquiry_status: form.enquiry_status,
         notes: form.notes,
         admin_notes: form.admin_notes,
+        enquiry_id: form.enquiry_id || null,
+        resident_id: form.resident_id,
+        history,
         source: form.id ? undefined : "admin",
+        ...overrides,
       },
     });
   }
 
-  function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
+  function copyInvite() {
+    if (!form) return;
+    const type = typeBySlug.get(form.type_slug);
+    const startsAt = new Date(`${form.date}T${form.time}:00+08:00`).toISOString();
+    const residenceName =
+      (residences as any[]).find((r) => r.slug === form.residence_slugs[0])?.name ?? "";
+    const text = `Hi ${form.full_name}, your ${(type?.name ?? "appointment").toLowerCase()} is confirmed for ${longDate(
+      startsAt,
+    )} at ${formatSlot(startsAt)}${residenceName ? ` at ${residenceName}` : ""}.${
+      form.assigned_staff ? ` You'll be meeting ${form.assigned_staff}.` : ""
+    } See you then! — Brachtia Homes`;
+    void navigator.clipboard.writeText(text);
+    toast.success("Invite message copied");
   }
+
+  function downloadIcs() {
+    if (!form) return;
+    const type = typeBySlug.get(form.type_slug);
+    const startsAt = new Date(`${form.date}T${form.time}:00+08:00`).toISOString();
+    const ends = new Date(
+      new Date(startsAt).getTime() + (Number(form.duration_minutes) || 30) * 60000,
+    ).toISOString();
+    const stamp = (iso: string) => iso.replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    const residenceName =
+      (residences as any[]).find((r) => r.slug === form.residence_slugs[0])?.name ?? "";
+    const ics = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//Brachtia Homes//Appointments//EN",
+      "BEGIN:VEVENT",
+      `UID:${form.id ?? Date.now()}@brachtiahomes.com`,
+      `DTSTAMP:${stamp(new Date().toISOString())}`,
+      `DTSTART:${stamp(startsAt)}`,
+      `DTEND:${stamp(ends)}`,
+      `SUMMARY:${type?.name ?? "Appointment"} — ${form.full_name}`,
+      `LOCATION:${residenceName}`,
+      `DESCRIPTION:${form.mode === "virtual" ? "Virtual" : "In person"}`,
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n");
+    const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `appointment-${form.id ?? "new"}.ics`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function linkedLabel(a: any) {
+    if (a.enquiry_id && enquiryById.get(a.enquiry_id)) {
+      return (
+        <Link
+          to="/admin/bookings/$id"
+          params={{ id: a.enquiry_id }}
+          onClick={(e) => e.stopPropagation()}
+          className="font-semibold text-brand-deep hover:underline"
+        >
+          Booking · {enquiryById.get(a.enquiry_id).reference}
+        </Link>
+      );
+    }
+    if (a.resident_id && residentById.get(a.resident_id)) {
+      return (
+        <Link
+          to="/admin/residents/$id"
+          params={{ id: a.resident_id }}
+          onClick={(e) => e.stopPropagation()}
+          className="font-semibold text-brand-deep hover:underline"
+        >
+          Resident · {a.resident_id}
+        </Link>
+      );
+    }
+    return <span className="text-muted-foreground">—</span>;
+  }
+
+  const cols = "1fr_1.1fr_0.9fr_0.9fr_0.8fr_0.8fr_1.2fr";
 
   return (
     <div className="space-y-5">
@@ -262,6 +423,16 @@ function AppointmentsPage() {
               {v}
             </button>
           ))}
+        </div>
+
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="h-9 w-56 pl-8"
+            placeholder="Search name or ID…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
 
         <select
@@ -297,8 +468,8 @@ function AppointmentsPage() {
         >
           <option value="all">All statuses</option>
           {STATUSES.map((s) => (
-            <option key={s} value={s} className="capitalize">
-              {s.replace("_", "-")}
+            <option key={s} value={s}>
+              {STATUS_LABEL[s]}
             </option>
           ))}
         </select>
@@ -340,103 +511,81 @@ function AppointmentsPage() {
       </div>
 
       {view === "list" ? (
-        <div className="overflow-hidden rounded-2xl border border-border bg-card">
-          {isLoading ? (
-            <p className="p-4 text-sm text-muted-foreground">Loading…</p>
-          ) : filtered.length === 0 ? (
-            <p className="p-4 text-sm text-muted-foreground">No appointments match these filters.</p>
-          ) : (
-            filtered.map((a) => {
-              const type = typeBySlug.get(a.type_slug);
-              return (
-                <div
-                  key={a.id}
-                  className="grid gap-2 border-b border-border px-4 py-3 text-sm last:border-0 md:grid-cols-[1.1fr_1.3fr_0.8fr_auto] md:items-center md:gap-3"
-                >
-                  <div className="min-w-0">
-                    <p className="flex items-center gap-2 truncate font-medium text-foreground">
+        <div className="overflow-x-auto rounded-2xl border border-border bg-card">
+          <div className="min-w-[980px]">
+            <div
+              className={`grid grid-cols-[${cols}] gap-3 border-b border-border bg-muted/50 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground`}
+            >
+              <span>Date &amp; time</span>
+              <span>Person</span>
+              <span>Type</span>
+              <span>Residence</span>
+              <span>Assigned</span>
+              <span>Status</span>
+              <span>Linked to</span>
+            </div>
+            {isLoading ? (
+              <p className="p-4 text-sm text-muted-foreground">Loading…</p>
+            ) : filtered.length === 0 ? (
+              <p className="p-4 text-sm text-muted-foreground">
+                No appointments match these filters.
+              </p>
+            ) : (
+              filtered.map((a) => {
+                const type = typeBySlug.get(a.type_slug);
+                const residence = (a.residence_names ?? []).length
+                  ? (a.residence_names as string[]).join(", ")
+                  : a.residence_name || "—";
+                return (
+                  <div
+                    key={a.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openEdit(a)}
+                    onKeyDown={(e) => e.key === "Enter" && openEdit(a)}
+                    className={`grid cursor-pointer grid-cols-[${cols}] items-center gap-3 border-b border-border px-4 py-3 text-sm last:border-0 hover:bg-muted/40`}
+                  >
+                    <div>
+                      <p className="font-medium text-foreground">
+                        {new Date(a.starts_at).toLocaleDateString("en-MY", {
+                          day: "numeric",
+                          month: "short",
+                          timeZone: "Asia/Kuala_Lumpur",
+                        })}{" "}
+                        · {formatSlot(a.starts_at)}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {a.duration_minutes} min
+                      </p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-foreground">{a.full_name}</p>
+                      <p className="truncate text-[11px] text-muted-foreground">{a.email}</p>
+                    </div>
+                    <p className="flex items-center gap-1.5 text-foreground">
                       <span
                         className="size-2.5 shrink-0 rounded-full"
                         style={{ backgroundColor: type?.color || "#64748b" }}
                       />
-                      {a.full_name}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {a.email} · {a.phone}
-                    </p>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    <p className="text-foreground">
-                      {new Date(a.starts_at).toLocaleDateString("en-MY", {
-                        weekday: "short",
-                        day: "numeric",
-                        month: "short",
-                      })}{" "}
-                      · {formatSlot(a.starts_at)} · {a.duration_minutes} min
-                    </p>
-                    <p>
                       {type?.name ?? a.type_slug}
-                      {(a.residence_names ?? []).length
-                        ? ` · ${(a.residence_names as string[]).join(", ")}`
-                        : a.residence_name
-                          ? ` · ${a.residence_name}`
-                          : ""}
                     </p>
-                    {a.move_in || a.move_out || a.sharing_preference ? (
-                      <p>
-                        {[
-                          a.move_in ? `Move-in ${a.move_in}` : "",
-                          a.move_out ? `Move-out ${a.move_out}` : "",
-                          a.sharing_preference
-                            ? (SHARING_LABEL[a.sharing_preference] ?? a.sharing_preference)
-                            : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
-                    ) : null}
-                    {a.assigned_staff ? (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Assigned: {a.assigned_staff}
-                      </p>
-                    ) : null}
-                    {a.enquiry_id && enquiryById.get(a.enquiry_id) ? (
-                      <Link
-                        to="/admin/bookings/$id"
-                        params={{ id: a.enquiry_id }}
-                        onClick={(e) => e.stopPropagation()}
-                        className="mt-1 inline-flex rounded-full bg-brand-tint px-2 py-0.5 text-[11px] font-semibold text-brand-deep hover:underline"
+                    <p className="truncate text-muted-foreground">{residence}</p>
+                    <p className="text-muted-foreground">{a.assigned_staff || "—"}</p>
+                    <p>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                          STATUS_PILL[a.status] ?? "bg-muted text-muted-foreground"
+                        }`}
                       >
-                        Booking {enquiryById.get(a.enquiry_id).reference} ·{" "}
-                        {enquiryById.get(a.enquiry_id).full_name}
-                      </Link>
-                    ) : null}
+                        {STATUS_LABEL[a.status] ?? a.status}
+                      </span>
+                    </p>
+                    <p className="truncate text-xs">{linkedLabel(a)}</p>
                   </div>
-                  <select
-                    value={a.status}
-                    onChange={(e) =>
-                      save.mutate({ id: a.id, values: { status: e.target.value } })
-                    }
-                    className="h-8 rounded-md border border-input bg-background px-2 text-xs capitalize"
-                  >
-                    {STATUSES.map((s) => (
-                      <option key={s} value={s}>
-                        {s.replace("_", "-")}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="flex items-center gap-1">
-                    <Button size="sm" variant="outline" onClick={() => openEdit(a)}>
-                      Edit
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => remove.mutate(a.id)}>
-                      Delete
-                    </Button>
-                  </div>
-                </div>
-              );
-            })
-          )}
+                );
+              })
+            )}
+          </div>
         </div>
       ) : (
         <CalendarView
@@ -448,218 +597,359 @@ function AppointmentsPage() {
         />
       )}
 
+      {/* Appointment details */}
       <Dialog open={Boolean(form)} onOpenChange={(o) => !o && setForm(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{form?.id ? "Edit appointment" : "New appointment"}</DialogTitle>
-          </DialogHeader>
-          {form ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                Type
-                <select
-                  className={`${selectClass} w-full`}
-                  value={form.type_slug}
-                  onChange={(e) => {
-                    const t = typeBySlug.get(e.target.value);
-                    setForm((p) =>
-                      p
-                        ? {
-                            ...p,
-                            type_slug: e.target.value,
-                            duration_minutes: t?.duration_minutes ?? p.duration_minutes,
-                          }
-                        : p,
-                    );
-                  }}
+            <DialogTitle className="flex items-center gap-2">
+              {form?.id ? "Appointment details" : "New appointment"}
+              {form?.id ? (
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                    STATUS_PILL[form.status] ?? "bg-muted text-muted-foreground"
+                  }`}
                 >
-                  {types.map((t) => (
-                    <option key={t.slug} value={t.slug}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="space-y-1 text-xs font-medium text-muted-foreground">
-                Residences
-                <div className="grid gap-1 rounded-md border border-input p-2">
-                  {(residences as any[]).map((r) => (
-                    <label key={r.slug} className="flex items-center gap-2 text-sm text-foreground">
-                      <input
-                        type="checkbox"
-                        checked={form.residence_slugs.includes(r.slug)}
-                        onChange={(e) =>
-                          setField(
-                            "residence_slugs",
-                            e.target.checked
-                              ? [...form.residence_slugs, r.slug]
-                              : form.residence_slugs.filter((s) => s !== r.slug),
-                          )
-                        }
-                      />
-                      {r.name}
-                    </label>
-                  ))}
+                  {STATUS_LABEL[form.status] ?? form.status}
+                </span>
+              ) : null}
+            </DialogTitle>
+          </DialogHeader>
+
+          {form ? (
+            <div className="space-y-4 text-sm">
+              {/* Person */}
+              <section className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Person
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Input
+                    placeholder="Full name"
+                    value={form.full_name}
+                    onChange={(e) => setField("full_name", e.target.value)}
+                  />
+                  <Input
+                    placeholder="Email"
+                    value={form.email}
+                    onChange={(e) => setField("email", e.target.value)}
+                  />
+                  <Input
+                    placeholder="Phone"
+                    value={form.phone}
+                    onChange={(e) => setField("phone", e.target.value)}
+                  />
+                  <Input
+                    placeholder="University"
+                    value={form.university}
+                    onChange={(e) => setField("university", e.target.value)}
+                  />
+                </div>
+              </section>
+
+              {/* Type & residence */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                  Type
+                  <select
+                    className={`${selectClass} w-full`}
+                    value={form.type_slug}
+                    onChange={(e) => {
+                      const t = typeBySlug.get(e.target.value);
+                      setForm((p) =>
+                        p
+                          ? {
+                              ...p,
+                              type_slug: e.target.value,
+                              duration_minutes: t?.duration_minutes ?? p.duration_minutes,
+                            }
+                          : p,
+                      );
+                    }}
+                  >
+                    {types.map((t) => (
+                      <option key={t.slug} value={t.slug}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                  Mode
+                  <select
+                    className={`${selectClass} w-full`}
+                    value={form.mode}
+                    onChange={(e) => setField("mode", e.target.value)}
+                  >
+                    <option value="in_person">In person</option>
+                    <option value="virtual">Virtual</option>
+                  </select>
+                </label>
+                <div className="space-y-1 text-xs font-medium text-muted-foreground sm:col-span-2">
+                  Residence
+                  <div className="grid gap-1 rounded-md border border-input p-2">
+                    {(residences as any[]).map((r) => (
+                      <label
+                        key={r.slug}
+                        className="flex items-center gap-2 text-sm text-foreground"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={form.residence_slugs.includes(r.slug)}
+                          onChange={(e) =>
+                            setField(
+                              "residence_slugs",
+                              e.target.checked
+                                ? [...form.residence_slugs, r.slug]
+                                : form.residence_slugs.filter((s) => s !== r.slug),
+                            )
+                          }
+                        />
+                        {r.name}
+                      </label>
+                    ))}
+                  </div>
                 </div>
               </div>
-              <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                Move-in date
-                <Input
-                  type="date"
-                  value={form.move_in}
-                  onChange={(e) => setField("move_in", e.target.value)}
-                />
-              </label>
-              <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                Move-out date
-                <Input
-                  type="date"
-                  value={form.move_out}
-                  onChange={(e) => setField("move_out", e.target.value)}
-                />
-              </label>
-              <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                Room sharing preference
-                <select
-                  className={`${selectClass} w-full`}
-                  value={form.sharing_preference}
-                  onChange={(e) => setField("sharing_preference", e.target.value)}
-                >
-                  <option value="">—</option>
-                  {SHARING_PREFERENCES.map((s) => (
-                    <option key={s.value} value={s.value}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                Date
-                <Input
-                  type="date"
-                  value={form.date}
-                  onChange={(e) => setField("date", e.target.value)}
-                />
-              </label>
-              <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                Time
-                <Input
-                  type="time"
-                  value={form.time}
-                  onChange={(e) => setField("time", e.target.value)}
-                />
-              </label>
-              <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                Duration (min)
-                <Input
-                  type="number"
-                  value={String(form.duration_minutes)}
-                  onChange={(e) => setField("duration_minutes", Number(e.target.value))}
-                />
-              </label>
-              <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                Mode
-                <select
-                  className={`${selectClass} w-full`}
-                  value={form.mode}
-                  onChange={(e) => setField("mode", e.target.value)}
-                >
-                  <option value="in_person">In person</option>
-                  <option value="virtual">Virtual</option>
-                </select>
-              </label>
-              <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                Status
-                <select
-                  className={`${selectClass} w-full`}
-                  value={form.status}
-                  onChange={(e) => setField("status", e.target.value)}
-                >
-                  {STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {s.replace("_", "-")}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                Name
-                <Input
-                  value={form.full_name}
-                  onChange={(e) => setField("full_name", e.target.value)}
-                />
-              </label>
-              <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                Email
-                <Input value={form.email} onChange={(e) => setField("email", e.target.value)} />
-              </label>
-              <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                Phone
-                <Input value={form.phone} onChange={(e) => setField("phone", e.target.value)} />
-              </label>
-              <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                University
-                <Input
-                  value={form.university}
-                  onChange={(e) => setField("university", e.target.value)}
-                />
-              </label>
-              <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                Nationality
-                <Input
-                  value={form.nationality}
-                  onChange={(e) => setField("nationality", e.target.value)}
-                />
-              </label>
-              <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                Intake
-                <Input value={form.intake} onChange={(e) => setField("intake", e.target.value)} />
-              </label>
-              <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                Gender
-                <Input value={form.gender} onChange={(e) => setField("gender", e.target.value)} />
-              </label>
-              <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                Already enquired?
-                <select
-                  className={`${selectClass} w-full`}
-                  value={form.enquiry_status}
-                  onChange={(e) => setField("enquiry_status", e.target.value)}
-                >
-                  <option value="">—</option>
-                  {ENQUIRY_STATUS.map((s) => (
-                    <option key={s.value} value={s.value}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                How did you hear about us?
-                <select
-                  className={`${selectClass} w-full`}
-                  value={form.heard_about}
-                  onChange={(e) => setField("heard_about", e.target.value)}
-                >
-                  <option value="">—</option>
-                  {HEARD_ABOUT.map((h) => (
-                    <option key={h} value={h}>
-                      {h}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {form.heard_about === "Other" ? (
+
+              {/* Date & time */}
+              <section className="space-y-2 rounded-lg border border-border p-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Date &amp; time
+                    </p>
+                    <p className="text-foreground">
+                      {longDate(`${form.date}T${form.time}:00+08:00`)} ·{" "}
+                      {formatSlot(new Date(`${form.date}T${form.time}:00+08:00`).toISOString())} –{" "}
+                      {formatSlot(
+                        endISO({
+                          starts_at: new Date(`${form.date}T${form.time}:00+08:00`).toISOString(),
+                          duration_minutes: Number(form.duration_minutes) || 30,
+                        }),
+                      )}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setRescheduling((v) => !v)}
+                  >
+                    {rescheduling ? "Close" : "Reschedule"}
+                  </Button>
+                </div>
+
+                {rescheduling ? (
+                  <div className="space-y-2">
+                    <DayPicker
+                      mode="single"
+                      selected={new Date(`${form.date}T00:00:00`)}
+                      onSelect={(d) =>
+                        d && setField("date", d.toLocaleDateString("en-CA"))
+                      }
+                      className="pointer-events-auto rounded-md border border-border p-2"
+                    />
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Available times
+                    </p>
+                    {slotsLoading ? (
+                      <p className="text-xs text-muted-foreground">Loading times…</p>
+                    ) : slots.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        No open slots for this date — set a custom time below.
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {slots.map((iso) => {
+                          const hhmm = new Date(iso).toLocaleTimeString("en-GB", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            timeZone: "Asia/Kuala_Lumpur",
+                          });
+                          const active = hhmm === form.time;
+                          return (
+                            <button
+                              key={iso}
+                              type="button"
+                              onClick={() => setField("time", hhmm)}
+                              className={`rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                                active
+                                  ? "border-brand-deep bg-brand-tint text-brand-deep"
+                                  : "border-input text-foreground hover:bg-muted"
+                              }`}
+                            >
+                              {formatSlot(iso)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                        Custom time
+                        <Input
+                          type="time"
+                          value={form.time}
+                          onChange={(e) => setField("time", e.target.value)}
+                        />
+                      </label>
+                      <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                        Duration (min)
+                        <Input
+                          type="number"
+                          value={String(form.duration_minutes)}
+                          onChange={(e) => setField("duration_minutes", Number(e.target.value))}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+
+              {/* Staff + status */}
+              <div className="grid gap-3 sm:grid-cols-2">
                 <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                  Heard about us — details
+                  Assigned staff
+                  <select
+                    className={`${selectClass} w-full`}
+                    value={form.assigned_staff}
+                    onChange={(e) => setField("assigned_staff", e.target.value)}
+                  >
+                    <option value="">Unassigned</option>
+                    {STAFF.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                  Status
+                  <select
+                    className={`${selectClass} w-full`}
+                    value={form.status}
+                    onChange={(e) => setField("status", e.target.value)}
+                  >
+                    {STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {STATUS_LABEL[s]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              {/* Linked to */}
+              <section className="space-y-2 rounded-lg border border-border p-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Linked to
+                    </p>
+                    <p className="text-foreground">
+                      {form.enquiry_id && enquiryById.get(form.enquiry_id)
+                        ? `Booking · ${enquiryById.get(form.enquiry_id).reference}`
+                        : form.resident_id
+                          ? `Resident · ${form.resident_id}`
+                          : "Not linked"}
+                    </p>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="ghost" onClick={() => setLinkEditing((v) => !v)}>
+                      {linkEditing ? "Close" : "Change"}
+                    </Button>
+                    {form.enquiry_id || form.resident_id ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setField("enquiry_id", "");
+                          setField("resident_id", "");
+                        }}
+                      >
+                        Unlink
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+                {linkEditing ? (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                      Booking
+                      <select
+                        className={`${selectClass} w-full`}
+                        value={form.enquiry_id}
+                        onChange={(e) => {
+                          setField("enquiry_id", e.target.value);
+                          if (e.target.value) setField("resident_id", "");
+                        }}
+                      >
+                        <option value="">—</option>
+                        {(enquiries as any[]).map((e) => (
+                          <option key={e.id} value={e.id}>
+                            {e.reference} · {e.full_name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                      Resident
+                      <select
+                        className={`${selectClass} w-full`}
+                        value={form.resident_id}
+                        onChange={(e) => {
+                          setField("resident_id", e.target.value);
+                          if (e.target.value) setField("enquiry_id", "");
+                        }}
+                      >
+                        <option value="">—</option>
+                        {ops.residents.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.id} · {r.fullName}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                ) : null}
+              </section>
+
+              {/* Stay preferences */}
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                  Move-in
                   <Input
-                    value={form.heard_about_other}
-                    onChange={(e) => setField("heard_about_other", e.target.value)}
+                    type="date"
+                    value={form.move_in}
+                    onChange={(e) => setField("move_in", e.target.value)}
                   />
                 </label>
-              ) : null}
+                <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                  Move-out
+                  <Input
+                    type="date"
+                    value={form.move_out}
+                    onChange={(e) => setField("move_out", e.target.value)}
+                  />
+                </label>
+                <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                  Sharing
+                  <select
+                    className={`${selectClass} w-full`}
+                    value={form.sharing_preference}
+                    onChange={(e) => setField("sharing_preference", e.target.value)}
+                  >
+                    <option value="">—</option>
+                    {SHARING_PREFERENCES.map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {SHARING_LABEL[s.value] ?? s.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
 
-              <label className="space-y-1 text-xs font-medium text-muted-foreground sm:col-span-2">
+              {/* Notes */}
+              <label className="space-y-1 text-xs font-medium text-muted-foreground">
                 Notes
                 <Textarea
                   rows={2}
@@ -667,7 +957,7 @@ function AppointmentsPage() {
                   onChange={(e) => setField("notes", e.target.value)}
                 />
               </label>
-              <label className="space-y-1 text-xs font-medium text-muted-foreground sm:col-span-2">
+              <label className="space-y-1 text-xs font-medium text-muted-foreground">
                 Internal notes
                 <Textarea
                   rows={2}
@@ -675,19 +965,61 @@ function AppointmentsPage() {
                   onChange={(e) => setField("admin_notes", e.target.value)}
                 />
               </label>
+
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={copyInvite}>
+                  Copy invite
+                </Button>
+                <Button size="sm" variant="outline" onClick={downloadIcs}>
+                  Add to calendar
+                </Button>
+              </div>
+
+              {form.history.length ? (
+                <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+                  <p className="mb-1 font-semibold uppercase tracking-wide">History</p>
+                  <ul className="space-y-0.5">
+                    {form.history
+                      .slice()
+                      .reverse()
+                      .map((h: any, i: number) => (
+                        <li key={i}>
+                          {longDate(h.at)} —{" "}
+                          {h.kind === "rescheduled"
+                            ? `rescheduled from ${longDate(h.from)} ${formatSlot(h.from)} to ${longDate(
+                                h.to,
+                              )} ${formatSlot(h.to)}`
+                            : `status ${STATUS_LABEL[h.from] ?? h.from} → ${
+                                STATUS_LABEL[h.to] ?? h.to
+                              }`}
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
           ) : null}
-          <DialogFooter>
+
+          <DialogFooter className="flex-wrap gap-2">
             {form?.id ? (
-              <Button variant="ghost" onClick={() => remove.mutate(form.id!)}>
-                Delete
-              </Button>
+              <>
+                <Button
+                  variant="ghost"
+                  className="text-rose-600 hover:text-rose-700"
+                  onClick={() => submit({ status: "cancelled" })}
+                >
+                  Cancel appointment
+                </Button>
+                <Button variant="ghost" onClick={() => remove.mutate(form.id!)}>
+                  Delete
+                </Button>
+              </>
             ) : null}
             <Button variant="outline" onClick={() => setForm(null)}>
-              Cancel
+              Close
             </Button>
-            <Button onClick={submit} disabled={save.isPending}>
-              {save.isPending ? "Saving…" : "Save appointment"}
+            <Button onClick={() => submit()} disabled={save.isPending}>
+              {save.isPending ? "Saving…" : form?.id ? "Save changes" : "Create appointment"}
             </Button>
           </DialogFooter>
         </DialogContent>
