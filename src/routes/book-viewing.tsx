@@ -353,6 +353,14 @@ function BookViewingPage() {
                 for (const issue of parsed.error.issues)
                   next[String(issue.path[0])] = issue.message;
               }
+              if (slugs.length === 0) next['residences'] = "Pick at least one residence";
+              if (needsStayDetails) {
+                if (!moveIn) next['moveIn'] = "Select your move-in date";
+                if (!moveOut) next['moveOut'] = "Select your move-out date";
+                else if (moveIn && moveOut <= moveIn)
+                  next['moveOut'] = "Move-out must be after move-in";
+                if (!sharing) next['sharingPreference'] = "Pick a room sharing preference";
+              }
               if (Object.keys(next).length > 0) {
                 setErrors(next);
                 requestAnimationFrame(() => {
