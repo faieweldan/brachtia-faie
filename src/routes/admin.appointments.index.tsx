@@ -798,6 +798,10 @@ function AppointmentsPage() {
                   ? enquiryById.get(form.enquiry_id)
                   : null;
                 const readOnly = Boolean(linkedBooking);
+                const stayMoveIn = form.move_in || linkedBooking?.move_in || "";
+                const stayMoveOut = form.move_out || linkedBooking?.move_out || "";
+                const staySharing =
+                  form.sharing_preference || linkedBooking?.occupancy || "";
                 const startIso = new Date(`${form.date}T${form.time}:00+08:00`).toISOString();
                 const initials = (form.full_name || "?")
                   .split(" ")
