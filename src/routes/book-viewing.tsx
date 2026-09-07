@@ -108,6 +108,11 @@ function BookViewingPage() {
   const [universityOther, setUniversityOther] = useState("");
   const [heardChoice, setHeardChoice] = useState("");
   const [heardOther, setHeardOther] = useState("");
+  const [enquiryStatus, setEnquiryStatus] = useState("");
+  const [moveIn, setMoveIn] = useState("");
+  const [moveOut, setMoveOut] = useState("");
+  const [sharing, setSharing] = useState("");
+  const needsStayDetails = enquiryStatus === "viewing_first";
 
   const intakes = useMemo(() => intakeMonths(), []);
   const nationality = nationalityIso ? (countryByIso(nationalityIso)?.name ?? "") : "";
