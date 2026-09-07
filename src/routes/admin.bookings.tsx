@@ -219,6 +219,12 @@ function BookingsPage() {
     .sort((a, b) => {
       const dir = sort.dir;
       switch (sort.key) {
+        case "quote_id":
+          return (
+            dir *
+            ((a.row.created_at ? new Date(a.row.created_at).getTime() : 0) -
+              (b.row.created_at ? new Date(b.row.created_at).getTime() : 0))
+          );
         case "student":
           return dir * String(a.row.full_name).localeCompare(String(b.row.full_name));
         case "move_in":
