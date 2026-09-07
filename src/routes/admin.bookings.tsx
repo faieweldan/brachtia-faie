@@ -68,7 +68,7 @@ function BookingsPage() {
   const [stageFilter, setStageFilter] = useState("all");
   const [staffFilter, setStaffFilter] = useState("all");
   const [actionFilter, setActionFilter] = useState("all");
-  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "sla", dir: 1 });
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "quote_id", dir: -1 });
   const [open, setOpen] = useState<any>(null);
   const [downloading, setDownloading] = useState(false);
   const [closeReason, setCloseReason] = useState("");
