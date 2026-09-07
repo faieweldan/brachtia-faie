@@ -187,15 +187,29 @@ function AppointmentsPage() {
       toast.error("Add a name");
       return;
     }
-    const residence = (residences as any[]).find((r) => r.slug === form.residence_slug);
+    const slugs = form.residence_slugs.length
+      ? form.residence_slugs
+      : form.residence_slug
+        ? [form.residence_slug]
+        : [];
+    const primarySlug = slugs[0] ?? "";
+    const residence = (residences as any[]).find((r) => r.slug === primarySlug);
+    const names = slugs.map(
+      (s) => (residences as any[]).find((r) => r.slug === s)?.name ?? s,
+    );
     const startsAt = new Date(`${form.date}T${form.time}:00+08:00`).toISOString();
     save.mutate({
       ...(form.id ? { id: form.id } : {}),
       values: {
         type_slug: form.type_slug,
         residence_id: residence?.id ?? null,
-        residence_slug: form.residence_slug,
+        residence_slug: primarySlug,
         residence_name: residence?.name ?? "",
+        residence_slugs: slugs,
+        residence_names: names,
+        move_in: form.move_in || null,
+        move_out: form.move_out || null,
+        sharing_preference: form.sharing_preference,
         mode: form.mode,
         starts_at: startsAt,
         duration_minutes: Number(form.duration_minutes) || 30,
