@@ -291,17 +291,16 @@ function BookingsTable() {
                   </p>
                 </div>
                 <div className="min-w-0 space-y-0.5">
-                  <p className="truncate text-xs text-muted-foreground">
-                    {(() => {
-                      const req = requirements(r);
-                      return req.line1;
-                    })()}
-                  </p>
                   {(() => {
                     const req = requirements(r);
-                    return req.line2 ? (
-                      <p className="truncate text-xs text-foreground">{req.line2}</p>
-                    ) : null;
+                    return (
+                      <>
+                        <p className="truncate text-xs text-muted-foreground">{req.line1}</p>
+                        {req.line2 ? (
+                          <p className="truncate text-xs text-foreground">{req.line2}</p>
+                        ) : null}
+                      </>
+                    );
                   })()}
                 </div>
                 <p className="text-xs text-foreground">{shortDate(r.move_in)}</p>
