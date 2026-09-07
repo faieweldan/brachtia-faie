@@ -798,6 +798,10 @@ function AppointmentsPage() {
                   ? enquiryById.get(form.enquiry_id)
                   : null;
                 const readOnly = Boolean(linkedBooking);
+                const stayMoveIn = form.move_in || linkedBooking?.move_in || "";
+                const stayMoveOut = form.move_out || linkedBooking?.move_out || "";
+                const staySharing =
+                  form.sharing_preference || linkedBooking?.occupancy || "";
                 const startIso = new Date(`${form.date}T${form.time}:00+08:00`).toISOString();
                 const initials = (form.full_name || "?")
                   .split(" ")
@@ -1339,7 +1343,7 @@ function AppointmentsPage() {
                           <p className="text-xs font-medium text-muted-foreground">Move-in</p>
                           {readOnly ? (
                             <p className="rounded-md bg-muted/50 px-3 py-2 text-foreground">
-                              {form.move_in ? longDate(`${form.move_in}T00:00:00+08:00`) : "—"}
+                              {stayMoveIn ? longDate(`${stayMoveIn}T00:00:00+08:00`) : "—"}
                             </p>
                           ) : (
                             <Input
@@ -1353,7 +1357,7 @@ function AppointmentsPage() {
                           <p className="text-xs font-medium text-muted-foreground">Move-out</p>
                           {readOnly ? (
                             <p className="rounded-md bg-muted/50 px-3 py-2 text-foreground">
-                              {form.move_out ? longDate(`${form.move_out}T00:00:00+08:00`) : "—"}
+                              {stayMoveOut ? longDate(`${stayMoveOut}T00:00:00+08:00`) : "—"}
                             </p>
                           ) : (
                             <Input
@@ -1367,9 +1371,7 @@ function AppointmentsPage() {
                           <p className="text-xs font-medium text-muted-foreground">Sharing</p>
                           {readOnly ? (
                             <p className="rounded-md bg-muted/50 px-3 py-2 text-foreground">
-                              {SHARING_LABEL[form.sharing_preference] ??
-                                form.sharing_preference ??
-                                "—"}
+                              {SHARING_LABEL[staySharing] || staySharing || "—"}
                             </p>
                           ) : (
                             <select
