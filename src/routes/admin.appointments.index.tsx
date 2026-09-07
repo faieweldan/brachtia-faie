@@ -1371,9 +1371,7 @@ function AppointmentsPage() {
                           <p className="text-xs font-medium text-muted-foreground">Sharing</p>
                           {readOnly ? (
                             <p className="rounded-md bg-muted/50 px-3 py-2 text-foreground">
-                              {SHARING_LABEL[form.sharing_preference] ??
-                                form.sharing_preference ??
-                                "—"}
+                              {SHARING_LABEL[staySharing] || staySharing || "—"}
                             </p>
                           ) : (
                             <select
