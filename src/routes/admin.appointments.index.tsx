@@ -206,6 +206,11 @@ function AppointmentsPage() {
             : [a.residence_slug];
           if (!slugs.includes(residenceFilter)) return false;
         }
+        if (staffFilter !== "all") {
+          if (staffFilter === "unassigned") {
+            if (a.assigned_staff) return false;
+          } else if (a.assigned_staff !== staffFilter) return false;
+        }
         const day = localDate(a.starts_at);
         if (from && day < from) return false;
         if (to && day > to) return false;
