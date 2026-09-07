@@ -1,7 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
+import {
+  Building2,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  Flag,
+  GraduationCap,
+  Info,
+  Link2,
+  Luggage,
+  Mail,
+  MessageCircle,
+  Phone,
+  Plus,
+  Search,
+  User,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -689,428 +706,599 @@ function AppointmentsPage() {
 
       {/* Appointment details */}
       <Dialog open={Boolean(form)} onOpenChange={(o) => !o && setForm(null)}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {form?.id ? "Appointment details" : "New appointment"}
-              {form?.id ? (
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                    STATUS_PILL[form.status] ?? "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  {STATUS_LABEL[form.status] ?? form.status}
-                </span>
-              ) : null}
-            </DialogTitle>
-          </DialogHeader>
-
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           {form ? (
-            <div className="space-y-4 text-sm">
-              {/* Person */}
-              <section className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Person
+            <>
+              <DialogHeader className="space-y-1">
+                <DialogTitle className="flex flex-wrap items-center gap-2 text-lg">
+                  {form.id ? "Appointment Details" : "New Appointment"}
+                  {form.id ? (
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                        STATUS_PILL[form.status] ?? "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {STATUS_LABEL[form.status] ?? form.status}
+                    </span>
+                  ) : null}
+                </DialogTitle>
+                <p className="text-sm text-muted-foreground">
+                  {typeBySlug.get(form.type_slug)?.name ?? "Appointment"}
+                  {" ("}
+                  {form.mode === "virtual" ? "Virtual" : "In Person"}
+                  {")"}
                 </p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Input
-                    placeholder="Full name"
-                    value={form.full_name}
-                    onChange={(e) => setField("full_name", e.target.value)}
-                  />
-                  <Input
-                    placeholder="Email"
-                    value={form.email}
-                    onChange={(e) => setField("email", e.target.value)}
-                  />
-                  <Input
-                    placeholder="Phone"
-                    value={form.phone}
-                    onChange={(e) => setField("phone", e.target.value)}
-                  />
-                  <Input
-                    placeholder="University"
-                    value={form.university}
-                    onChange={(e) => setField("university", e.target.value)}
-                  />
-                </div>
-              </section>
+              </DialogHeader>
 
-              {/* Type & residence */}
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                  Type
-                  <select
-                    className={`${selectClass} w-full`}
-                    value={form.type_slug}
-                    onChange={(e) => {
-                      const t = typeBySlug.get(e.target.value);
-                      setForm((p) =>
-                        p
-                          ? {
-                              ...p,
-                              type_slug: e.target.value,
-                              duration_minutes: t?.duration_minutes ?? p.duration_minutes,
-                            }
-                          : p,
-                      );
-                    }}
-                  >
-                    {types.map((t) => (
-                      <option key={t.slug} value={t.slug}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                  Mode
-                  <select
-                    className={`${selectClass} w-full`}
-                    value={form.mode}
-                    onChange={(e) => setField("mode", e.target.value)}
-                  >
-                    <option value="in_person">In person</option>
-                    <option value="virtual">Virtual</option>
-                  </select>
-                </label>
-                <div className="space-y-1 text-xs font-medium text-muted-foreground sm:col-span-2">
-                  Residence
-                  <div className="grid gap-1 rounded-md border border-input p-2">
-                    {(residences as any[]).map((r) => (
-                      <label
-                        key={r.slug}
-                        className="flex items-center gap-2 text-sm text-foreground"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={form.residence_slugs.includes(r.slug)}
-                          onChange={(e) =>
-                            setField(
-                              "residence_slugs",
-                              e.target.checked
-                                ? [...form.residence_slugs, r.slug]
-                                : form.residence_slugs.filter((s) => s !== r.slug),
-                            )
-                          }
-                        />
-                        {r.name}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              {(() => {
+                const linkedBooking = form.enquiry_id
+                  ? enquiryById.get(form.enquiry_id)
+                  : null;
+                const readOnly = Boolean(linkedBooking);
+                const startIso = new Date(`${form.date}T${form.time}:00+08:00`).toISOString();
+                const initials = (form.full_name || "?")
+                  .split(" ")
+                  .filter(Boolean)
+                  .slice(0, 2)
+                  .map((p) => p[0]?.toUpperCase())
+                  .join("");
 
-              {/* Date & time */}
-              <section className="space-y-2 rounded-lg border border-border p-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Date &amp; time
-                    </p>
-                    <p className="text-foreground">
-                      {longDate(`${form.date}T${form.time}:00+08:00`)} ·{" "}
-                      {formatSlot(new Date(`${form.date}T${form.time}:00+08:00`).toISOString())} –{" "}
-                      {formatSlot(
-                        endISO({
-                          starts_at: new Date(`${form.date}T${form.time}:00+08:00`).toISOString(),
-                          duration_minutes: Number(form.duration_minutes) || 30,
-                        }),
-                      )}
-                    </p>
+                return (
+                  <div className="space-y-4 text-sm">
+                    {/* Appointment card */}
+                    <section className="overflow-hidden rounded-xl border border-border">
+                      <header className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5 text-sm font-semibold text-foreground">
+                        <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                        Appointment
+                      </header>
+                      <div className="space-y-3 p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground">
+                              Date &amp; Time
+                            </p>
+                            <p className="text-foreground">
+                              {longDate(startIso)} · {formatSlot(startIso)} –{" "}
+                              {formatSlot(
+                                endISO({
+                                  starts_at: startIso,
+                                  duration_minutes: Number(form.duration_minutes) || 30,
+                                }),
+                              )}{" "}
+                              <span className="text-muted-foreground">
+                                ({Number(form.duration_minutes) || 30} min)
+                              </span>
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setRescheduling((v) => !v)}
+                          >
+                            <CalendarDays className="mr-1.5 h-4 w-4" />
+                            {rescheduling ? "Close" : "Reschedule"}
+                          </Button>
+                        </div>
+
+                        {rescheduling ? (
+                          <div className="space-y-2 rounded-lg bg-muted/40 p-3">
+                            <DayPicker
+                              mode="single"
+                              selected={new Date(`${form.date}T00:00:00`)}
+                              onSelect={(d) =>
+                                d && setField("date", d.toLocaleDateString("en-CA"))
+                              }
+                              className="pointer-events-auto rounded-md border border-border bg-background p-2"
+                            />
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              Available times
+                            </p>
+                            {slotsLoading ? (
+                              <p className="text-xs text-muted-foreground">Loading times…</p>
+                            ) : slots.length === 0 ? (
+                              <p className="text-xs text-muted-foreground">
+                                No open slots for this date — set a custom time below.
+                              </p>
+                            ) : (
+                              <div className="flex flex-wrap gap-2">
+                                {slots.map((iso) => {
+                                  const hhmm = new Date(iso).toLocaleTimeString("en-GB", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    timeZone: "Asia/Kuala_Lumpur",
+                                  });
+                                  const active = hhmm === form.time;
+                                  return (
+                                    <button
+                                      key={iso}
+                                      type="button"
+                                      onClick={() => setField("time", hhmm)}
+                                      className={`rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                                        active
+                                          ? "border-brand-deep bg-brand-tint text-brand-deep"
+                                          : "border-input bg-background text-foreground hover:bg-muted"
+                                      }`}
+                                    >
+                                      {formatSlot(iso)}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                                Custom time
+                                <Input
+                                  type="time"
+                                  value={form.time}
+                                  onChange={(e) => setField("time", e.target.value)}
+                                />
+                              </label>
+                              <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                                Duration (min)
+                                <Input
+                                  type="number"
+                                  value={String(form.duration_minutes)}
+                                  onChange={(e) =>
+                                    setField("duration_minutes", Number(e.target.value))
+                                  }
+                                />
+                              </label>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className="space-y-1">
+                            <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                              <FileText className="h-3.5 w-3.5" /> Type
+                            </span>
+                            <select
+                              className={`${selectClass} w-full`}
+                              value={form.type_slug}
+                              onChange={(e) => {
+                                const t = typeBySlug.get(e.target.value);
+                                setForm((p) =>
+                                  p
+                                    ? {
+                                        ...p,
+                                        type_slug: e.target.value,
+                                        duration_minutes:
+                                          t?.duration_minutes ?? p.duration_minutes,
+                                      }
+                                    : p,
+                                );
+                              }}
+                            >
+                              {types.map((t) => (
+                                <option key={t.slug} value={t.slug}>
+                                  {t.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="space-y-1">
+                            <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                              <MessageCircle className="h-3.5 w-3.5" /> Mode
+                            </span>
+                            <select
+                              className={`${selectClass} w-full`}
+                              value={form.mode}
+                              onChange={(e) => setField("mode", e.target.value)}
+                            >
+                              <option value="in_person">In person</option>
+                              <option value="virtual">Virtual</option>
+                            </select>
+                          </label>
+
+                          <div className="space-y-1 sm:col-span-2">
+                            <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                              <Building2 className="h-3.5 w-3.5" /> Residence
+                            </span>
+                            <div className="grid gap-1 rounded-md border border-input p-2">
+                              {(residences as any[]).map((r) => (
+                                <label
+                                  key={r.slug}
+                                  className="flex items-center gap-2 text-sm text-foreground"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={form.residence_slugs.includes(r.slug)}
+                                    onChange={(e) =>
+                                      setField(
+                                        "residence_slugs",
+                                        e.target.checked
+                                          ? [...form.residence_slugs, r.slug]
+                                          : form.residence_slugs.filter((s) => s !== r.slug),
+                                      )
+                                    }
+                                  />
+                                  {r.name}
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+
+                          <label className="space-y-1">
+                            <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                              <User className="h-3.5 w-3.5" /> Assigned Staff
+                            </span>
+                            <select
+                              className={`${selectClass} w-full`}
+                              value={form.assigned_staff}
+                              onChange={(e) => setField("assigned_staff", e.target.value)}
+                            >
+                              <option value="">Unassigned</option>
+                              {STAFF.map((s) => (
+                                <option key={s} value={s}>
+                                  {s}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="space-y-1">
+                            <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                              <Flag className="h-3.5 w-3.5" /> Status
+                            </span>
+                            <select
+                              className={`${selectClass} w-full`}
+                              value={form.status}
+                              onChange={(e) => setField("status", e.target.value)}
+                            >
+                              {STATUSES.map((s) => (
+                                <option key={s} value={s}>
+                                  {STATUS_LABEL[s]}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <div className="space-y-1 sm:col-span-2">
+                            <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                              <Link2 className="h-3.5 w-3.5" /> Linked To
+                            </span>
+                            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/50 px-3 py-2">
+                              <span className="text-foreground">
+                                {linkedBooking ? (
+                                  <Link
+                                    to="/admin/bookings/$id"
+                                    params={{ id: form.enquiry_id }}
+                                    className="font-semibold text-brand-deep hover:underline"
+                                  >
+                                    Booking · {linkedBooking.reference}
+                                  </Link>
+                                ) : form.resident_id ? (
+                                  <Link
+                                    to="/admin/residents/$id"
+                                    params={{ id: form.resident_id }}
+                                    className="font-semibold text-brand-deep hover:underline"
+                                  >
+                                    Resident · {form.resident_id}
+                                  </Link>
+                                ) : (
+                                  <span className="text-muted-foreground">Not linked</span>
+                                )}
+                              </span>
+                              <span className="flex gap-2 text-xs">
+                                <button
+                                  type="button"
+                                  onClick={() => setLinkEditing((v) => !v)}
+                                  className="font-medium text-brand-deep underline underline-offset-2"
+                                >
+                                  {linkEditing
+                                    ? "Close"
+                                    : form.enquiry_id || form.resident_id
+                                      ? "Change"
+                                      : "Link Booking / Resident"}
+                                </button>
+                                {form.enquiry_id || form.resident_id ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setField("enquiry_id", "");
+                                      setField("resident_id", "");
+                                    }}
+                                    className="font-medium text-muted-foreground underline underline-offset-2"
+                                  >
+                                    Unlink
+                                  </button>
+                                ) : null}
+                              </span>
+                            </div>
+                            {linkEditing ? (
+                              <div className="grid gap-2 pt-2 sm:grid-cols-2">
+                                <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                                  Booking
+                                  <select
+                                    className={`${selectClass} w-full`}
+                                    value={form.enquiry_id}
+                                    onChange={(e) => {
+                                      setField("enquiry_id", e.target.value);
+                                      if (e.target.value) setField("resident_id", "");
+                                    }}
+                                  >
+                                    <option value="">—</option>
+                                    {(enquiries as any[]).map((e) => (
+                                      <option key={e.id} value={e.id}>
+                                        {e.reference} · {e.full_name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                                  Resident
+                                  <select
+                                    className={`${selectClass} w-full`}
+                                    value={form.resident_id}
+                                    onChange={(e) => {
+                                      setField("resident_id", e.target.value);
+                                      if (e.target.value) setField("enquiry_id", "");
+                                    }}
+                                  >
+                                    <option value="">—</option>
+                                    {ops.residents.map((r) => (
+                                      <option key={r.id} value={r.id}>
+                                        {r.id} · {r.fullName}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div
+                          className={`flex items-start gap-2 rounded-lg px-3 py-2 text-xs ${
+                            readOnly
+                              ? "bg-brand-tint text-brand-deep"
+                              : "bg-sky-50 text-sky-800"
+                          }`}
+                        >
+                          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          <span>
+                            {readOnly
+                              ? "This appointment is linked to a booking. Person and stay details are pulled from the booking and are read-only here."
+                              : "Unlinked appointment. Person and stay details can be edited here."}
+                          </span>
+                        </div>
+                      </div>
+                    </section>
+
+                    {/* Person */}
+                    <section className="overflow-hidden rounded-xl border border-border">
+                      <header className="flex items-center justify-between gap-2 border-b border-border bg-muted/40 px-4 py-2.5 text-sm font-semibold text-foreground">
+                        <span className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          Person
+                        </span>
+                        {readOnly ? (
+                          <Link
+                            to="/admin/bookings/$id"
+                            params={{ id: form.enquiry_id }}
+                            className="text-xs font-medium text-brand-deep underline underline-offset-2"
+                          >
+                            Edit in Booking
+                          </Link>
+                        ) : null}
+                      </header>
+                      <div className="p-4">
+                        {readOnly ? (
+                          <div className="flex items-start gap-3">
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-tint text-sm font-semibold text-brand-deep">
+                              {initials}
+                            </span>
+                            <div className="space-y-1">
+                              <p className="text-base font-semibold text-foreground">
+                                {form.full_name || "—"}
+                              </p>
+                              <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                                {form.phone ? (
+                                  <span className="flex items-center gap-1.5">
+                                    <Phone className="h-3.5 w-3.5" />
+                                    {form.phone}
+                                  </span>
+                                ) : null}
+                                {form.email ? (
+                                  <span className="flex items-center gap-1.5">
+                                    <Mail className="h-3.5 w-3.5" />
+                                    {form.email}
+                                  </span>
+                                ) : null}
+                              </p>
+                              {form.university ? (
+                                <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                                  <GraduationCap className="h-3.5 w-3.5" />
+                                  {form.university}
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <Input
+                              placeholder="Full name"
+                              value={form.full_name}
+                              onChange={(e) => setField("full_name", e.target.value)}
+                            />
+                            <Input
+                              placeholder="Phone"
+                              value={form.phone}
+                              onChange={(e) => setField("phone", e.target.value)}
+                            />
+                            <Input
+                              placeholder="Email"
+                              value={form.email}
+                              onChange={(e) => setField("email", e.target.value)}
+                            />
+                            <Input
+                              placeholder="University"
+                              value={form.university}
+                              onChange={(e) => setField("university", e.target.value)}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </section>
+
+                    {/* Stay requirements */}
+                    <section className="overflow-hidden rounded-xl border border-border">
+                      <header className="flex items-center justify-between gap-2 border-b border-border bg-muted/40 px-4 py-2.5 text-sm font-semibold text-foreground">
+                        <span className="flex items-center gap-2">
+                          <Luggage className="h-4 w-4 text-muted-foreground" />
+                          Stay Requirements
+                        </span>
+                        {readOnly ? (
+                          <Link
+                            to="/admin/bookings/$id"
+                            params={{ id: form.enquiry_id }}
+                            className="text-xs font-medium text-brand-deep underline underline-offset-2"
+                          >
+                            View in Booking
+                          </Link>
+                        ) : null}
+                      </header>
+                      <div className="grid gap-3 p-4 sm:grid-cols-3">
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-muted-foreground">Move-in</p>
+                          {readOnly ? (
+                            <p className="rounded-md bg-muted/50 px-3 py-2 text-foreground">
+                              {form.move_in ? longDate(`${form.move_in}T00:00:00+08:00`) : "—"}
+                            </p>
+                          ) : (
+                            <Input
+                              type="date"
+                              value={form.move_in}
+                              onChange={(e) => setField("move_in", e.target.value)}
+                            />
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-muted-foreground">Move-out</p>
+                          {readOnly ? (
+                            <p className="rounded-md bg-muted/50 px-3 py-2 text-foreground">
+                              {form.move_out ? longDate(`${form.move_out}T00:00:00+08:00`) : "—"}
+                            </p>
+                          ) : (
+                            <Input
+                              type="date"
+                              value={form.move_out}
+                              onChange={(e) => setField("move_out", e.target.value)}
+                            />
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-muted-foreground">Sharing</p>
+                          {readOnly ? (
+                            <p className="rounded-md bg-muted/50 px-3 py-2 text-foreground">
+                              {SHARING_LABEL[form.sharing_preference] ??
+                                form.sharing_preference ??
+                                "—"}
+                            </p>
+                          ) : (
+                            <select
+                              className={`${selectClass} w-full`}
+                              value={form.sharing_preference}
+                              onChange={(e) => setField("sharing_preference", e.target.value)}
+                            >
+                              <option value="">—</option>
+                              {SHARING_PREFERENCES.map((s) => (
+                                <option key={s.value} value={s.value}>
+                                  {SHARING_LABEL[s.value] ?? s.label}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      </div>
+                    </section>
+
+                    {/* Notes */}
+                    <section className="overflow-hidden rounded-xl border border-border">
+                      <header className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5 text-sm font-semibold text-foreground">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        Notes
+                      </header>
+                      <div className="space-y-3 p-4">
+                        <label className="block space-y-1 text-xs font-medium text-muted-foreground">
+                          Student notes
+                          <Textarea
+                            rows={2}
+                            value={form.notes}
+                            onChange={(e) => setField("notes", e.target.value)}
+                          />
+                        </label>
+                        <label className="block space-y-1 text-xs font-medium text-muted-foreground">
+                          Internal notes
+                          <Textarea
+                            rows={2}
+                            placeholder="Add an internal note…"
+                            value={form.admin_notes}
+                            onChange={(e) => setField("admin_notes", e.target.value)}
+                          />
+                        </label>
+                      </div>
+                    </section>
+
+                    {form.history.length ? (
+                      <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+                        <p className="mb-1 font-semibold uppercase tracking-wide">History</p>
+                        <ul className="space-y-0.5">
+                          {form.history
+                            .slice()
+                            .reverse()
+                            .map((h: any, i: number) => (
+                              <li key={i}>
+                                {longDate(h.at)} —{" "}
+                                {h.kind === "rescheduled"
+                                  ? `rescheduled from ${longDate(h.from)} ${formatSlot(
+                                      h.from,
+                                    )} to ${longDate(h.to)} ${formatSlot(h.to)}`
+                                  : `status ${STATUS_LABEL[h.from] ?? h.from} → ${
+                                      STATUS_LABEL[h.to] ?? h.to
+                                    }`}
+                              </li>
+                            ))}
+                        </ul>
+                      </div>
+                    ) : null}
                   </div>
+                );
+              })()}
+            </>
+          ) : null}
+
+          <DialogFooter className="flex-wrap gap-2 sm:justify-between">
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={copyInvite}>
+                <MessageCircle className="mr-1.5 h-4 w-4" />
+                Copy Invite
+              </Button>
+              <Button size="sm" variant="outline" onClick={downloadIcs}>
+                <CalendarDays className="mr-1.5 h-4 w-4" />
+                Add to Calendar
+              </Button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {form?.id ? (
+                <>
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => setRescheduling((v) => !v)}
+                    className="text-rose-600 hover:text-rose-700"
+                    onClick={() => submit({ status: "cancelled" })}
                   >
-                    {rescheduling ? "Close" : "Reschedule"}
+                    Cancel Appointment
                   </Button>
-                </div>
-
-                {rescheduling ? (
-                  <div className="space-y-2">
-                    <DayPicker
-                      mode="single"
-                      selected={new Date(`${form.date}T00:00:00`)}
-                      onSelect={(d) =>
-                        d && setField("date", d.toLocaleDateString("en-CA"))
-                      }
-                      className="pointer-events-auto rounded-md border border-border p-2"
-                    />
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Available times
-                    </p>
-                    {slotsLoading ? (
-                      <p className="text-xs text-muted-foreground">Loading times…</p>
-                    ) : slots.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">
-                        No open slots for this date — set a custom time below.
-                      </p>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {slots.map((iso) => {
-                          const hhmm = new Date(iso).toLocaleTimeString("en-GB", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            timeZone: "Asia/Kuala_Lumpur",
-                          });
-                          const active = hhmm === form.time;
-                          return (
-                            <button
-                              key={iso}
-                              type="button"
-                              onClick={() => setField("time", hhmm)}
-                              className={`rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                                active
-                                  ? "border-brand-deep bg-brand-tint text-brand-deep"
-                                  : "border-input text-foreground hover:bg-muted"
-                              }`}
-                            >
-                              {formatSlot(iso)}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                        Custom time
-                        <Input
-                          type="time"
-                          value={form.time}
-                          onChange={(e) => setField("time", e.target.value)}
-                        />
-                      </label>
-                      <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                        Duration (min)
-                        <Input
-                          type="number"
-                          value={String(form.duration_minutes)}
-                          onChange={(e) => setField("duration_minutes", Number(e.target.value))}
-                        />
-                      </label>
-                    </div>
-                  </div>
-                ) : null}
-              </section>
-
-              {/* Staff + status */}
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                  Assigned staff
-                  <select
-                    className={`${selectClass} w-full`}
-                    value={form.assigned_staff}
-                    onChange={(e) => setField("assigned_staff", e.target.value)}
-                  >
-                    <option value="">Unassigned</option>
-                    {STAFF.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                  Status
-                  <select
-                    className={`${selectClass} w-full`}
-                    value={form.status}
-                    onChange={(e) => setField("status", e.target.value)}
-                  >
-                    {STATUSES.map((s) => (
-                      <option key={s} value={s}>
-                        {STATUS_LABEL[s]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              {/* Linked to */}
-              <section className="space-y-2 rounded-lg border border-border p-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Linked to
-                    </p>
-                    <p className="text-foreground">
-                      {form.enquiry_id && enquiryById.get(form.enquiry_id)
-                        ? `Booking · ${enquiryById.get(form.enquiry_id).reference}`
-                        : form.resident_id
-                          ? `Resident · ${form.resident_id}`
-                          : "Not linked"}
-                    </p>
-                  </div>
-                  <div className="flex gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => setLinkEditing((v) => !v)}>
-                      {linkEditing ? "Close" : "Change"}
-                    </Button>
-                    {form.enquiry_id || form.resident_id ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setField("enquiry_id", "");
-                          setField("resident_id", "");
-                        }}
-                      >
-                        Unlink
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-                {linkEditing ? (
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                      Booking
-                      <select
-                        className={`${selectClass} w-full`}
-                        value={form.enquiry_id}
-                        onChange={(e) => {
-                          setField("enquiry_id", e.target.value);
-                          if (e.target.value) setField("resident_id", "");
-                        }}
-                      >
-                        <option value="">—</option>
-                        {(enquiries as any[]).map((e) => (
-                          <option key={e.id} value={e.id}>
-                            {e.reference} · {e.full_name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                      Resident
-                      <select
-                        className={`${selectClass} w-full`}
-                        value={form.resident_id}
-                        onChange={(e) => {
-                          setField("resident_id", e.target.value);
-                          if (e.target.value) setField("enquiry_id", "");
-                        }}
-                      >
-                        <option value="">—</option>
-                        {ops.residents.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.id} · {r.fullName}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                ) : null}
-              </section>
-
-              {/* Stay preferences */}
-              <div className="grid gap-3 sm:grid-cols-3">
-                <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                  Move-in
-                  <Input
-                    type="date"
-                    value={form.move_in}
-                    onChange={(e) => setField("move_in", e.target.value)}
-                  />
-                </label>
-                <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                  Move-out
-                  <Input
-                    type="date"
-                    value={form.move_out}
-                    onChange={(e) => setField("move_out", e.target.value)}
-                  />
-                </label>
-                <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                  Sharing
-                  <select
-                    className={`${selectClass} w-full`}
-                    value={form.sharing_preference}
-                    onChange={(e) => setField("sharing_preference", e.target.value)}
-                  >
-                    <option value="">—</option>
-                    {SHARING_PREFERENCES.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {SHARING_LABEL[s.value] ?? s.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              {/* Notes */}
-              <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                Notes
-                <Textarea
-                  rows={2}
-                  value={form.notes}
-                  onChange={(e) => setField("notes", e.target.value)}
-                />
-              </label>
-              <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                Internal notes
-                <Textarea
-                  rows={2}
-                  value={form.admin_notes}
-                  onChange={(e) => setField("admin_notes", e.target.value)}
-                />
-              </label>
-
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={copyInvite}>
-                  Copy invite
-                </Button>
-                <Button size="sm" variant="outline" onClick={downloadIcs}>
-                  Add to calendar
-                </Button>
-              </div>
-
-              {form.history.length ? (
-                <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
-                  <p className="mb-1 font-semibold uppercase tracking-wide">History</p>
-                  <ul className="space-y-0.5">
-                    {form.history
-                      .slice()
-                      .reverse()
-                      .map((h: any, i: number) => (
-                        <li key={i}>
-                          {longDate(h.at)} —{" "}
-                          {h.kind === "rescheduled"
-                            ? `rescheduled from ${longDate(h.from)} ${formatSlot(h.from)} to ${longDate(
-                                h.to,
-                              )} ${formatSlot(h.to)}`
-                            : `status ${STATUS_LABEL[h.from] ?? h.from} → ${
-                                STATUS_LABEL[h.to] ?? h.to
-                              }`}
-                        </li>
-                      ))}
-                  </ul>
-                </div>
+                  <Button size="sm" variant="ghost" onClick={() => remove.mutate(form.id!)}>
+                    Delete
+                  </Button>
+                </>
               ) : null}
+              <Button size="sm" onClick={() => submit()} disabled={save.isPending}>
+                {save.isPending ? "Saving…" : form?.id ? "Save Changes" : "Create appointment"}
+              </Button>
             </div>
-          ) : null}
-
-          <DialogFooter className="flex-wrap gap-2">
-            {form?.id ? (
-              <>
-                <Button
-                  variant="ghost"
-                  className="text-rose-600 hover:text-rose-700"
-                  onClick={() => submit({ status: "cancelled" })}
-                >
-                  Cancel appointment
-                </Button>
-                <Button variant="ghost" onClick={() => remove.mutate(form.id!)}>
-                  Delete
-                </Button>
-              </>
-            ) : null}
-            <Button variant="outline" onClick={() => setForm(null)}>
-              Close
-            </Button>
-            <Button onClick={() => submit()} disabled={save.isPending}>
-              {save.isPending ? "Saving…" : form?.id ? "Save changes" : "Create appointment"}
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
