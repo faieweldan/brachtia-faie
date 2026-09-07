@@ -103,6 +103,8 @@ function emptyForm() {
 
 type FormState = ReturnType<typeof emptyForm>;
 
+type SortKey = "datetime" | "person" | "type" | "residence" | "assigned" | "status";
+
 function AppointmentsPage() {
   const queryClient = useQueryClient();
   const ops = useOps();
