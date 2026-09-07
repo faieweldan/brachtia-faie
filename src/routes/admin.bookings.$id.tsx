@@ -652,40 +652,177 @@ function BookingDetail() {
 
           {/* Viewing */}
           <Card title="Viewing">
-            <div className="flex items-center justify-between">
-              {viewing ? (
-                <div className="flex items-center gap-3">
-                  <Calendar className="size-5 text-brand-deep" />
+            {viewing && !viewingPanel ? (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <Calendar className="size-5 text-brand-deep" />
+                    <div>
+                      <p className="font-medium text-foreground">
+                        {new Date(viewing.starts_at).toLocaleDateString("en-MY", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}{" "}
+                        · {formatSlot(viewing.starts_at)} – {formatSlot(viewingEndISO(viewing))}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {viewing.residence_name || row.residence_name || "—"} ·{" "}
+                        {viewing.mode === "virtual" ? "Virtual tour" : "In person"}
+                      </p>
+                      {viewing.assigned_staff ? (
+                        <p className="text-xs text-muted-foreground">
+                          Assigned: {viewing.assigned_staff}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-brand-tint px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-brand-deep">
+                    {viewing.status}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => copyViewingMessage(viewing)}>
+                    Copy Message
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => addToCalendar(viewing)}>
+                    Add to Calendar
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => openViewingPanel(viewing)}>
+                    Reschedule
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-destructive"
+                    onClick={() => {
+                      if (confirm("Cancel this viewing?")) cancelView.mutate(viewing.id);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : viewingPanel ? (
+              <div className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)]">
                   <div>
-                    <p className="font-medium text-foreground">
-                      {new Date(viewing.starts_at).toLocaleDateString("en-MY", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}{" "}
-                      · {formatSlot(viewing.starts_at)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {viewing.mode === "virtual" ? "Virtual tour" : "In person"} · {viewing.status}
-                    </p>
+                    <p className="mb-1 text-xs font-semibold text-muted-foreground">Date</p>
+                    <div className="rounded-lg border border-border p-1">
+                      <DayPicker
+                        mode="single"
+                        selected={vDate}
+                        onSelect={setVDate}
+                        disabled={{ before: todayDate }}
+                        className="pointer-events-auto"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="mb-1 text-xs font-semibold text-muted-foreground">Mode</p>
+                      <select
+                        value={vMode}
+                        onChange={(e) => setVMode(e.target.value as "in_person" | "virtual")}
+                        className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      >
+                        <option value="in_person">In person</option>
+                        <option value="virtual">Virtual tour</option>
+                      </select>
+                    </div>
+                    <div>
+                      <p className="mb-1 text-xs font-semibold text-muted-foreground">
+                        Available times
+                      </p>
+                      {!vISO ? (
+                        <p className="text-sm text-muted-foreground">Pick a date first.</p>
+                      ) : slotsQuery.isLoading ? (
+                        <p className="text-sm text-muted-foreground">Loading times…</p>
+                      ) : vSlots.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          No times available on this date.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-2">
+                          {vSlots.map((s) => (
+                            <button
+                              key={s}
+                              type="button"
+                              onClick={() => setVSlot(s)}
+                              className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors ${
+                                vSlot === s
+                                  ? "border-brand bg-brand text-white"
+                                  : "border-border hover:border-brand/50"
+                              }`}
+                            >
+                              {formatSlot(s)}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <p className="mb-1 text-xs font-semibold text-muted-foreground">
+                        Assigned staff
+                      </p>
+                      <select
+                        value={vStaff}
+                        onChange={(e) => setVStaff(e.target.value)}
+                        className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                      >
+                        <option value="">Unassigned</option>
+                        {STAFF.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
-              ) : (
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => setViewingPanel(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={!vSlot || bookView.isPending}
+                    onClick={() =>
+                      bookView.mutate({
+                        startsAt: vSlot as string,
+                        mode: vMode,
+                        assignedStaff: vStaff,
+                        ...(viewing ? { appointmentId: viewing.id as string } : {}),
+                      })
+                    }
+                  >
+                    Confirm Viewing
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3 text-muted-foreground">
                   <Calendar className="size-5" />
                   <p className="text-sm">No viewing scheduled yet</p>
                 </div>
-              )}
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" onClick={() => navigate({ to: "/admin/appointments" })}>
-                  Book a Time
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => copyBookingLink(row)}>
-                  <Link2 className="size-4" /> Booking Link
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => openViewingPanel(null)}>
+                    Book a Time
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={linkGen.isPending}
+                    onClick={() => linkGen.mutate()}
+                  >
+                    <Link2 className="size-4" /> Generate Booking Link
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
           </Card>
+
 
           {/* Documents */}
           <Card title="Documents">
