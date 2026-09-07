@@ -321,7 +321,7 @@ function BookingDetail() {
       } else if (wantedOcc === "unit" && !unitEmpty) {
         blocked = "Unit not fully empty — change the sharing preference first";
       }
-      candidates.push({ row: b, convert, blocked });
+      candidates.push({ row: b, convert, ...(blocked ? { blocked } : {}) });
       continue;
     }
 
