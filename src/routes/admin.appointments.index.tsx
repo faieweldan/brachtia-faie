@@ -15,8 +15,10 @@ import { formatSlot } from "@/lib/slots";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { ENQUIRY_STATUS, HEARD_ABOUT } from "@/data/form-options";
 import {
   Dialog,
+
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -53,6 +55,12 @@ function emptyForm() {
     email: "",
     phone: "",
     university: "",
+    nationality: "",
+    intake: "",
+    gender: "",
+    heard_about: "",
+    heard_about_other: "",
+    enquiry_status: "",
     notes: "",
     admin_notes: "",
   };
@@ -150,6 +158,12 @@ function AppointmentsPage() {
       email: a.email ?? "",
       phone: a.phone ?? "",
       university: a.university ?? "",
+      nationality: a.nationality ?? "",
+      intake: a.intake ?? "",
+      gender: a.gender ?? "",
+      heard_about: a.heard_about ?? "",
+      heard_about_other: a.heard_about_other ?? "",
+      enquiry_status: a.enquiry_status ?? "",
       notes: a.notes ?? "",
       admin_notes: a.admin_notes ?? "",
     });
@@ -178,6 +192,12 @@ function AppointmentsPage() {
         email: form.email,
         phone: form.phone,
         university: form.university,
+        nationality: form.nationality,
+        intake: form.intake,
+        gender: form.gender,
+        heard_about: form.heard_about,
+        heard_about_other: form.heard_about_other,
+        enquiry_status: form.enquiry_status,
         notes: form.notes,
         admin_notes: form.admin_notes,
         source: form.id ? undefined : "admin",
@@ -483,6 +503,61 @@ function AppointmentsPage() {
                   onChange={(e) => setField("university", e.target.value)}
                 />
               </label>
+              <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                Nationality
+                <Input
+                  value={form.nationality}
+                  onChange={(e) => setField("nationality", e.target.value)}
+                />
+              </label>
+              <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                Intake
+                <Input value={form.intake} onChange={(e) => setField("intake", e.target.value)} />
+              </label>
+              <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                Gender
+                <Input value={form.gender} onChange={(e) => setField("gender", e.target.value)} />
+              </label>
+              <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                Already enquired?
+                <select
+                  className={`${selectClass} w-full`}
+                  value={form.enquiry_status}
+                  onChange={(e) => setField("enquiry_status", e.target.value)}
+                >
+                  <option value="">—</option>
+                  {ENQUIRY_STATUS.map((s) => (
+                    <option key={s.value} value={s.value}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                How did you hear about us?
+                <select
+                  className={`${selectClass} w-full`}
+                  value={form.heard_about}
+                  onChange={(e) => setField("heard_about", e.target.value)}
+                >
+                  <option value="">—</option>
+                  {HEARD_ABOUT.map((h) => (
+                    <option key={h} value={h}>
+                      {h}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {form.heard_about === "Other" ? (
+                <label className="space-y-1 text-xs font-medium text-muted-foreground">
+                  Heard about us — details
+                  <Input
+                    value={form.heard_about_other}
+                    onChange={(e) => setField("heard_about_other", e.target.value)}
+                  />
+                </label>
+              ) : null}
+
               <label className="space-y-1 text-xs font-medium text-muted-foreground sm:col-span-2">
                 Notes
                 <Textarea
