@@ -395,11 +395,21 @@ function AppointmentsPage() {
                           .join(" · ")}
                       </p>
                     ) : null}
-                    {a.enquiry_id && enquiryById.get(a.enquiry_id) ? (
-                      <p className="mt-1 inline-flex rounded-full bg-brand-tint px-2 py-0.5 text-[11px] font-semibold text-brand-deep">
-                        Enquiry {enquiryById.get(a.enquiry_id).reference} ·{" "}
-                        {enquiryById.get(a.enquiry_id).full_name}
+                    {a.assigned_staff ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Assigned: {a.assigned_staff}
                       </p>
+                    ) : null}
+                    {a.enquiry_id && enquiryById.get(a.enquiry_id) ? (
+                      <Link
+                        to="/admin/bookings/$id"
+                        params={{ id: a.enquiry_id }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-1 inline-flex rounded-full bg-brand-tint px-2 py-0.5 text-[11px] font-semibold text-brand-deep hover:underline"
+                      >
+                        Booking {enquiryById.get(a.enquiry_id).reference} ·{" "}
+                        {enquiryById.get(a.enquiry_id).full_name}
+                      </Link>
                     ) : null}
                   </div>
                   <select
