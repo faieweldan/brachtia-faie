@@ -90,8 +90,8 @@ function BookingsTable() {
   const counters = [
     { label: "New enquiries", value: decorated.filter((d) => d.row.status === "open").length },
     {
-      label: "Need availability check",
-      value: decorated.filter((d) => d.next.action === "check_availability").length,
+      label: "Overdue actions",
+      value: decorated.filter((d) => d.sla.tone === "over").length,
     },
     {
       label: "Viewings upcoming",
@@ -159,9 +159,13 @@ function BookingsTable() {
   }
 
   const SHARING_SHORT: Record<string, string> = { single: "Single", twin: "Twin", unit: "Whole unit" };
-  const requirements = (r: any) =>
-    [universityAbbr(r.university), SHARING_SHORT[r.occupancy] ?? r.occupancy, r.room_name].filter(Boolean).join(" · ") ||
-    "—";
+  const requirements = (r: any) => {
+    const line1 = [universityAbbr(r.university), SHARING_SHORT[r.occupancy] ?? r.occupancy]
+      .filter(Boolean)
+      .join(" · ");
+    const line2 = r.room_name || "";
+    return { line1: line1 || "—", line2 };
+  };
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
@@ -231,8 +235,8 @@ function BookingsTable() {
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-border bg-card">
-        <div className="min-w-[1100px]">
-          <div className="grid grid-cols-[1fr_1.1fr_1.3fr_0.7fr_0.9fr_0.9fr_0.9fr_0.7fr_1.1fr] gap-3 border-b border-border px-4 py-2.5 text-[11px] font-semibold text-muted-foreground">
+        <div className="min-w-[1120px]">
+          <div className="grid grid-cols-[0.7fr_1.5fr_1.4fr_0.7fr_0.9fr_0.9fr_0.5fr_0.7fr_1.1fr] gap-3 border-b border-border px-4 py-2.5 text-[11px] font-semibold text-muted-foreground">
             <SortHead label="Quote ID" sortKey="quote_id" />
             <SortHead label="Student" sortKey="student" />
             <span className="uppercase tracking-wide">Requirements</span>
@@ -256,11 +260,11 @@ function BookingsTable() {
                 tabIndex={0}
                 onClick={() => navigate({ to: "/admin/bookings/$id", params: { id: r.id } })}
                 onKeyDown={(e) => e.key === "Enter" && navigate({ to: "/admin/bookings/$id", params: { id: r.id } })}
-                className="grid cursor-pointer grid-cols-[1fr_1.1fr_1.3fr_0.7fr_0.9fr_0.9fr_0.9fr_0.7fr_1.1fr] items-center gap-3 border-b border-border px-4 py-3 text-sm transition-colors last:border-0 hover:bg-muted/60"
+                className="grid cursor-pointer grid-cols-[0.7fr_1.5fr_1.4fr_0.7fr_0.9fr_0.9fr_0.5fr_0.7fr_1.1fr] items-center gap-3 border-b border-border px-4 py-3 text-sm transition-colors last:border-0 hover:bg-muted/60"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold text-brand-deep">{r.reference || "—"}</p>
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="truncate text-[11px] font-semibold text-brand-deep">{r.reference || "—"}</p>
+                  <p className="text-[10px] text-muted-foreground">
                     {r.created_at
                       ? new Date(r.created_at).toLocaleDateString("en-MY", {
                           day: "numeric",
@@ -286,7 +290,19 @@ function BookingsTable() {
                     ) : null}
                   </p>
                 </div>
-                <p className="truncate text-xs text-muted-foreground">{requirements(r)}</p>
+                <div className="min-w-0 space-y-0.5">
+                  {(() => {
+                    const req = requirements(r);
+                    return (
+                      <>
+                        <p className="truncate text-xs text-muted-foreground">{req.line1}</p>
+                        {req.line2 ? (
+                          <p className="truncate text-xs text-foreground">{req.line2}</p>
+                        ) : null}
+                      </>
+                    );
+                  })()}
+                </div>
                 <p className="text-xs text-foreground">{shortDate(r.move_in)}</p>
                 <p className="truncate text-xs text-foreground">{roomAssigned(r)}</p>
                 <span
@@ -296,22 +312,13 @@ function BookingsTable() {
                 >
                   {stageLabel(r.status)}
                 </span>
-                <select
-                  value={r.assigned_staff ?? ""}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => {
-                    e.stopPropagation();
-                    navigate({ to: "/admin/bookings/$id", params: { id: r.id } });
-                  }}
-                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
-                >
-                  <option value="">Unassigned</option>
-                  {STAFF.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
+                <p className="truncate text-xs text-foreground">
+                  {r.assigned_staff ? (
+                    <span className="truncate">{r.assigned_staff}</span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </p>
                 <p className={`text-xs font-medium ${SLA_TONE[sla.tone]}`}>{sla.text}</p>
                 {next.action === "none" ? (
                   <span className="text-xs text-muted-foreground">—</span>
