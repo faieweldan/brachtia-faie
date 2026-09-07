@@ -35,7 +35,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar as DayPicker } from "@/components/ui/calendar";
-import { STAFF, SHARING_LABEL, SHARING_PREFERENCES } from "@/data/form-options";
+import {
+  STAFF,
+  SHARING_LABEL,
+  SHARING_PREFERENCES,
+  UNIVERSITIES,
+  GENDERS,
+  HEARD_ABOUT,
+  ENQUIRY_STATUS,
+} from "@/data/form-options";
 import {
   Dialog,
   DialogContent,
