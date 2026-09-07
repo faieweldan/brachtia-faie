@@ -512,39 +512,42 @@ function AppointmentsPage() {
         </select>
 
         {view === "list" ? (
-          <>
+          <div className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-input bg-background px-2 py-1">
+            <span className="text-[11px] font-medium text-muted-foreground">Date range</span>
             <input
               type="date"
-              className={selectClass}
+              aria-label="From date"
+              className="h-7 rounded-md border-0 bg-transparent px-1 text-xs outline-none"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
             />
+            <span className="text-xs text-muted-foreground">–</span>
             <input
               type="date"
-              className={selectClass}
+              aria-label="To date"
+              className="h-7 rounded-md border-0 bg-transparent px-1 text-xs outline-none"
               value={to}
               onChange={(e) => setTo(e.target.value)}
             />
-          </>
+            {from || to ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setFrom("");
+                  setTo("");
+                }}
+                className="text-[11px] font-semibold text-muted-foreground hover:text-brand-deep"
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
         ) : null}
 
         <Button size="sm" className="ml-auto" onClick={openNew}>
           <Plus className="mr-1 size-4" />
           New appointment
         </Button>
-      </div>
-
-      {/* Type legend */}
-      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-        {types.map((t) => (
-          <span key={t.slug} className="inline-flex items-center gap-1.5">
-            <span
-              className="size-2.5 rounded-full"
-              style={{ backgroundColor: t.color || "#64748b" }}
-            />
-            {t.name} · {t.duration_minutes} min
-          </span>
-        ))}
       </div>
 
       {view === "list" ? (
@@ -554,22 +557,22 @@ function AppointmentsPage() {
               style={gridCols}
               className="grid gap-3 border-b border-border bg-muted/50 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
             >
-              <span>Date &amp; time</span>
-              <span>Person</span>
-              <span>Type</span>
-              <span>Residence</span>
-              <span>Assigned</span>
-              <span>Status</span>
+              <SortHead label="Date & time" sortKey="datetime" sort={sort} onSort={toggleSort} />
+              <SortHead label="Person" sortKey="person" sort={sort} onSort={toggleSort} />
+              <SortHead label="Type" sortKey="type" sort={sort} onSort={toggleSort} />
+              <SortHead label="Residence" sortKey="residence" sort={sort} onSort={toggleSort} />
+              <SortHead label="Assigned" sortKey="assigned" sort={sort} onSort={toggleSort} />
+              <SortHead label="Status" sortKey="status" sort={sort} onSort={toggleSort} />
               <span>Linked to</span>
             </div>
             {isLoading ? (
               <p className="p-4 text-sm text-muted-foreground">Loading…</p>
-            ) : filtered.length === 0 ? (
+            ) : sorted.length === 0 ? (
               <p className="p-4 text-sm text-muted-foreground">
                 No appointments match these filters.
               </p>
             ) : (
-              filtered.map((a) => {
+              sorted.map((a) => {
                 const type = typeBySlug.get(a.type_slug);
                 const residence = (a.residence_names ?? []).length
                   ? (a.residence_names as string[]).join(", ")
