@@ -149,6 +149,14 @@ function AppointmentsPage() {
       id: a.id,
       type_slug: a.type_slug ?? "viewing-in-person",
       residence_slug: a.residence_slug ?? "",
+      residence_slugs: ((a.residence_slugs ?? []) as string[]).length
+        ? (a.residence_slugs as string[])
+        : a.residence_slug
+          ? [a.residence_slug as string]
+          : [],
+      move_in: a.move_in ?? "",
+      move_out: a.move_out ?? "",
+      sharing_preference: a.sharing_preference ?? "",
       mode: a.mode ?? "in_person",
       date: localDate(a.starts_at),
       time: d.toLocaleTimeString("en-GB", {
