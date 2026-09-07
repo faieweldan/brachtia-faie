@@ -130,7 +130,12 @@ function AppointmentsPage() {
       appointments.filter((a) => {
         if (typeFilter !== "all" && a.type_slug !== typeFilter) return false;
         if (statusFilter !== "all" && a.status !== statusFilter) return false;
-        if (residenceFilter !== "all" && a.residence_slug !== residenceFilter) return false;
+        if (residenceFilter !== "all") {
+          const slugs: string[] = (a.residence_slugs ?? []).length
+            ? a.residence_slugs
+            : [a.residence_slug];
+          if (!slugs.includes(residenceFilter)) return false;
+        }
         const day = localDate(a.starts_at);
         if (from && day < from) return false;
         if (to && day > to) return false;
