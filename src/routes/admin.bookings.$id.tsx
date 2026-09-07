@@ -30,7 +30,7 @@ import {
   type BedRow,
 } from "@/lib/ops-store";
 
-type Candidate = { row: BedRow; convert: boolean };
+type Candidate = { row: BedRow; convert: boolean; blocked?: string };
 
 import { STAFF, SHARING_PREFERENCES, GENDERS, universityAbbr } from "@/data/form-options";
 import {
