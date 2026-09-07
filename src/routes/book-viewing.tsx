@@ -35,6 +35,7 @@ import {
   ENQUIRY_STATUS,
   GENDERS,
   HEARD_ABOUT,
+  SHARING_PREFERENCES,
   UNIVERSITIES,
   intakeMonths,
 } from "@/data/form-options";
