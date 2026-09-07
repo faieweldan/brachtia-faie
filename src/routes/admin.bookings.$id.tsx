@@ -32,7 +32,7 @@ import {
 
 type Candidate = { row: BedRow; convert: boolean; blocked?: string };
 
-import { STAFF, SHARING_PREFERENCES, GENDERS, universityAbbr } from "@/data/form-options";
+import { STAFF, SHARING_PREFERENCES, GENDERS, HEARD_ABOUT, universityAbbr } from "@/data/form-options";
 import {
   ACTIONS,
   SLA_TONE,
