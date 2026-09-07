@@ -1263,7 +1263,7 @@ function AppointmentsPage() {
                         Enquiry Details
                       </header>
                       <div className="grid gap-3 p-4 sm:grid-cols-2">
-                        <Field label="Already submitted an availability enquiry?">
+                        <Field label="Availability Enquiry?">
                           {readOnly ? (
                             <ReadValue>
                               {ENQUIRY_STATUS.find((s) => s.value === form.enquiry_status)?.label ??
