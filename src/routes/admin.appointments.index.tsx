@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
+import { ENQUIRY_STATUS, HEARD_ABOUT } from "@/data/form-options";
   Dialog,
   DialogContent,
   DialogHeader,
@@ -53,6 +54,12 @@ function emptyForm() {
     email: "",
     phone: "",
     university: "",
+    nationality: "",
+    intake: "",
+    gender: "",
+    heard_about: "",
+    heard_about_other: "",
+    enquiry_status: "",
     notes: "",
     admin_notes: "",
   };
@@ -150,6 +157,12 @@ function AppointmentsPage() {
       email: a.email ?? "",
       phone: a.phone ?? "",
       university: a.university ?? "",
+      nationality: a.nationality ?? "",
+      intake: a.intake ?? "",
+      gender: a.gender ?? "",
+      heard_about: a.heard_about ?? "",
+      heard_about_other: a.heard_about_other ?? "",
+      enquiry_status: a.enquiry_status ?? "",
       notes: a.notes ?? "",
       admin_notes: a.admin_notes ?? "",
     });
@@ -178,6 +191,12 @@ function AppointmentsPage() {
         email: form.email,
         phone: form.phone,
         university: form.university,
+        nationality: form.nationality,
+        intake: form.intake,
+        gender: form.gender,
+        heard_about: form.heard_about,
+        heard_about_other: form.heard_about_other,
+        enquiry_status: form.enquiry_status,
         notes: form.notes,
         admin_notes: form.admin_notes,
         source: form.id ? undefined : "admin",
