@@ -1,0 +1,367 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design system definition.
+ *
+ * The @theme inline block maps CSS custom properties to Tailwind utility
+ * classes (e.g. --color-primary -> bg-primary, text-primary).
+ *
+ * The :root and .dark blocks define the actual color values using oklch.
+ * All colors MUST use oklch format.
+ *
+ * To add a new semantic color:
+ * 1. Add the variable to :root (light value) and .dark (dark value)
+ * 2. Register it in @theme inline as --color-<name>: var(--<name>)
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-deep: var(--brand-deep);
+  --color-gold: var(--gold);
+  --color-brand-tint: var(--brand-tint);
+  --color-accent-warm: var(--accent-warm);
+  --color-accent-warm-foreground: var(--accent-warm-foreground);
+  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --shadow-card: 0 1px 2px oklch(0.35 0.03 55 / 0.05), 0 10px 30px -16px oklch(0.35 0.03 55 / 0.18);
+  --shadow-lift: 0 2px 6px oklch(0.35 0.03 55 / 0.07), 0 22px 48px -22px oklch(0.35 0.03 55 / 0.24);
+}
+
+
+
+:root {
+  --radius: 1.25rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.24 0.018 165);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.24 0.018 165);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.24 0.018 165);
+  --primary: oklch(0.44 0.086 163);
+  --primary-foreground: oklch(0.99 0.005 165);
+  --secondary: oklch(0.965 0.012 62);
+  --secondary-foreground: oklch(0.32 0.03 52);
+  --muted: oklch(0.968 0.008 62);
+  --muted-foreground: oklch(0.505 0.012 60);
+  --accent: oklch(0.952 0.026 62);
+  --accent-foreground: oklch(0.34 0.04 50);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0.006 95);
+  --border: oklch(0.925 0.008 62);
+  --input: oklch(0.925 0.008 62);
+  --ring: oklch(0.44 0.086 163);
+  --brand: oklch(0.44 0.086 163);
+  --brand-soft: oklch(0.938 0.031 62);
+  --brand-tint: oklch(0.972 0.014 62);
+  --brand-deep: oklch(0.26 0.045 164);
+  --gold: oklch(0.78 0.13 66);
+  --accent-warm: oklch(0.76 0.1 58);
+  --accent-warm-foreground: oklch(0.28 0.03 52);
+  --chart-1: oklch(0.44 0.086 163);
+  --chart-2: oklch(0.76 0.1 58);
+  --chart-3: oklch(0.78 0.13 66);
+  --chart-4: oklch(0.72 0.04 62);
+  --chart-5: oklch(0.34 0.05 163);
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.24 0.018 165);
+  --sidebar-primary: oklch(0.44 0.086 163);
+  --sidebar-primary-foreground: oklch(0.99 0.005 165);
+  --sidebar-accent: oklch(0.952 0.026 62);
+  --sidebar-accent-foreground: oklch(0.34 0.04 50);
+  --sidebar-border: oklch(0.925 0.008 62);
+  --sidebar-ring: oklch(0.44 0.086 163);
+}
+
+
+
+.dark {
+  --background: oklch(0.129 0.042 264.695);
+  --foreground: oklch(0.984 0.003 247.858);
+  --card: oklch(0.208 0.042 265.755);
+  --card-foreground: oklch(0.984 0.003 247.858);
+  --popover: oklch(0.208 0.042 265.755);
+  --popover-foreground: oklch(0.984 0.003 247.858);
+  --primary: oklch(0.929 0.013 255.508);
+  --primary-foreground: oklch(0.208 0.042 265.755);
+  --secondary: oklch(0.279 0.041 260.031);
+  --secondary-foreground: oklch(0.984 0.003 247.858);
+  --muted: oklch(0.279 0.041 260.031);
+  --muted-foreground: oklch(0.704 0.04 256.788);
+  --accent: oklch(0.279 0.041 260.031);
+  --accent-foreground: oklch(0.984 0.003 247.858);
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.984 0.003 247.858);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.551 0.027 264.364);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.208 0.042 265.755);
+  --sidebar-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-accent: oklch(0.279 0.041 260.031);
+  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.551 0.027 264.364);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+  }
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    letter-spacing: -0.005em;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.025em;
+  }
+}
+
+@layer utilities {
+  @keyframes marquee-x {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  .animate-marquee {
+    animation: marquee-x 26s linear infinite;
+  }
+
+  .marquee-mask {
+    mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+  }
+
+  @keyframes flow-x {
+    0% {
+      transform: translateX(-30%);
+      opacity: 0;
+    }
+    15%,
+    85% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(330%);
+      opacity: 0;
+    }
+  }
+
+  .animate-flow-x {
+    animation: flow-x 5s ease-in-out infinite;
+  }
+
+  @keyframes float-slow {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    50% {
+      transform: translate3d(0, -18px, 0) scale(1.06);
+    }
+  }
+
+  .animate-float-slow {
+    animation: float-slow 12s ease-in-out infinite;
+  }
+
+  @keyframes pulse-ring {
+    0% {
+      transform: scale(0.9);
+      opacity: 0.55;
+    }
+    70%,
+    100% {
+      transform: scale(1.45);
+      opacity: 0;
+    }
+  }
+
+  .animate-pulse-ring {
+    animation: pulse-ring 3s ease-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-marquee,
+    .animate-flow-x,
+    .animate-float-slow,
+    .animate-pulse-ring {
+      animation: none;
+    }
+  }
+}
+
+
+/* ---------------------------------------------------------------
+   Admin portal palette — white canvas, deep green → emerald accent,
+   light grey surfaces, light beige warm accent. Scoped to .admin-ui
+   so the public site keeps its own tokens.
+   --------------------------------------------------------------- */
+.admin-ui {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.22 0.02 165);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.02 165);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.02 165);
+
+  --primary: oklch(0.32 0.062 165);
+  --primary-foreground: oklch(0.99 0.004 165);
+  --secondary: oklch(0.975 0.002 250);
+  --secondary-foreground: oklch(0.3 0.02 165);
+  --muted: oklch(0.975 0.002 250);
+  --muted-foreground: oklch(0.53 0.012 250);
+  --accent: oklch(0.945 0.014 82);
+  --accent-foreground: oklch(0.32 0.03 82);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0.006 95);
+
+  --border: oklch(0.922 0.003 250);
+  --input: oklch(0.9 0.004 250);
+  --ring: oklch(0.62 0.11 165);
+
+  --brand: oklch(0.5 0.1 165);
+  --brand-soft: oklch(0.945 0.014 82);
+  --brand-tint: oklch(0.945 0.014 82);
+  --brand-deep: oklch(0.3 0.06 165);
+  --accent-warm: oklch(0.945 0.014 82);
+  --accent-warm-foreground: oklch(0.32 0.03 82);
+
+  /* admin-only extras */
+  --admin-emerald: oklch(0.7 0.115 164);
+  --admin-beige: oklch(0.945 0.014 82);
+  --admin-rail: linear-gradient(180deg, oklch(0.3 0.06 165), oklch(0.25 0.05 168));
+  --admin-gradient: linear-gradient(135deg, oklch(0.32 0.062 165), oklch(0.55 0.105 164));
+}
+
+@theme inline {
+  --color-admin-emerald: var(--admin-emerald);
+  --color-admin-beige: var(--admin-beige);
+}
+
+/* Admin portal: tighter, less pill-shaped controls */
+.admin-ui input,
+.admin-ui textarea,
+.admin-ui select,
+.admin-ui button {
+  border-radius: 0.375rem;
+}
+.admin-ui input,
+.admin-ui select {
+  height: 2.25rem;
+}
+
+/* Admin side rail: deep forest gradient with a soft glass sheen */
+.admin-rail {
+  position: relative;
+  isolation: isolate;
+  background-color: oklch(0.21 0.045 168);
+  background-image:
+    radial-gradient(100% 55% at 15% -5%, oklch(0.4 0.07 165 / 0.85), transparent 70%),
+    linear-gradient(180deg, oklch(0.24 0.05 166), oklch(0.155 0.032 172));
+  backdrop-filter: blur(20px) saturate(120%);
+  border-right: 1px solid oklch(1 0 0 / 0.07);
+}
+.admin-rail::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: linear-gradient(
+    170deg,
+    oklch(1 0 0 / 0.07),
+    oklch(1 0 0 / 0) 55%
+  );
+  pointer-events: none;
+}
+
+
+.admin-gradient {
+  background-image: var(--admin-gradient);
+}
+
+
+/* Admin rail nav: solid, saturated pill for the active item */
+.admin-nav-item {
+  color: oklch(1 0 0 / 0.62);
+  transition: background-color 150ms ease, color 150ms ease;
+}
+.admin-nav-item:hover {
+  background-color: oklch(1 0 0 / 0.07);
+  color: oklch(1 0 0 / 0.92);
+}
+.admin-nav-item[data-active="true"],
+.admin-nav-item[data-active="true"]:hover {
+  background-color: var(--admin-beige);
+  color: oklch(0.28 0.05 166);
+  box-shadow: 0 8px 18px -10px oklch(0 0 0 / 0.6);
+}

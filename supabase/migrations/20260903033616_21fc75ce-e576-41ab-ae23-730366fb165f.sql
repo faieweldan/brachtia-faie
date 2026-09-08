@@ -1,0 +1,1 @@
+ALTER TABLE public.residences ADD COLUMN IF NOT EXISTS icon_overrides jsonb NOT NULL DEFAULT '{}'::jsonb;
