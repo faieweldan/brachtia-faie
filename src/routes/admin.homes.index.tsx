@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState, Panel, Select, StatusPill } from "@/components/admin/ops-ui";
 import {
+  bedBlockedBy,
   GENDERS,
   UNIT_TYPES,
   allBeds,
@@ -68,9 +69,10 @@ function InventoryPage() {
       if (from && bed.tenancyEnd && bed.tenancyEnd < from) return false;
       if (to && bed.tenancyStart && bed.tenancyStart > to) return false;
       if (q) {
-        const hay = `${unit.code} ${unit.unitNo} ${room.letter} ${bed.label} ${bed.residentName ?? ""} ${
-          bed.university ?? ""
-        }`.toLowerCase();
+        const hay =
+          `${unit.code} ${unit.unitNo} ${room.letter} ${bed.label} ${bed.residentName ?? ""} ${
+            bed.university ?? ""
+          }`.toLowerCase();
         if (!hay.includes(q.toLowerCase())) return false;
       }
       return true;
@@ -117,7 +119,9 @@ function InventoryPage() {
             type="button"
             onClick={() => setStatus(status === s.value ? "" : s.value)}
             className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-              status === s.value ? "border-brand-deep bg-brand-deep text-white" : "border-border bg-card"
+              status === s.value
+                ? "border-brand-deep bg-brand-deep text-white"
+                : "border-border bg-card"
             }`}
           >
             {s.label} · {counts[s.value] ?? 0}
@@ -129,12 +133,40 @@ function InventoryPage() {
         <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
           <div className="space-y-1.5">
             <p className="text-xs text-muted-foreground">Search</p>
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Unit, room, resident…" />
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Unit, room, resident…"
+            />
           </div>
-          <Select label="Residence" value={residence} onChange={setResidence} options={residenceOptions} placeholder="All" />
-          <Select label="Block / floor" value={block} onChange={setBlock} options={blockOptions} placeholder="All" />
-          <Select label="Unit type" value={unitType} onChange={setUnitType} options={UNIT_TYPES} placeholder="All" />
-          <Select label="Room" value={letter} onChange={setLetter} options={letterOptions} placeholder="All" />
+          <Select
+            label="Residence"
+            value={residence}
+            onChange={setResidence}
+            options={residenceOptions}
+            placeholder="All"
+          />
+          <Select
+            label="Block / floor"
+            value={block}
+            onChange={setBlock}
+            options={blockOptions}
+            placeholder="All"
+          />
+          <Select
+            label="Unit type"
+            value={unitType}
+            onChange={setUnitType}
+            options={UNIT_TYPES}
+            placeholder="All"
+          />
+          <Select
+            label="Room"
+            value={letter}
+            onChange={setLetter}
+            options={letterOptions}
+            placeholder="All"
+          />
           <Select
             label="Occupancy"
             value={occupancy}
@@ -145,7 +177,13 @@ function InventoryPage() {
             ]}
             placeholder="All"
           />
-          <Select label="Gender" value={gender} onChange={setGender} options={GENDERS} placeholder="All" />
+          <Select
+            label="Gender"
+            value={gender}
+            onChange={setGender}
+            options={GENDERS}
+            placeholder="All"
+          />
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1.5">
               <p className="text-xs text-muted-foreground">Available from</p>
@@ -173,7 +211,11 @@ function InventoryPage() {
                 onClick={() => setOpen((o) => ({ ...o, [unitId]: !expanded }))}
                 className="flex w-full flex-wrap items-center gap-3 px-4 py-3 text-left"
               >
-                {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                {expanded ? (
+                  <ChevronDown className="size-4" />
+                ) : (
+                  <ChevronRight className="size-4" />
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-brand-deep">
                     {unit.residenceName} · {unit.unitNo}
@@ -182,7 +224,12 @@ function InventoryPage() {
                     {unit.code} · {unit.unitType} · {unit.block || "—"} · {unit.gender || "Any"}
                   </p>
                 </div>
-                <span className="text-xs text-muted-foreground">{unitRows.length} beds</span>
+                <span className="text-xs text-muted-foreground">
+                  {unitRows.filter((r) => r.room.letter.toLowerCase() !== "unit").length} beds
+                  {unitRows.some((r) => r.room.letter.toLowerCase() === "unit")
+                    ? " · lettable whole"
+                    : ""}
+                </span>
               </button>
 
               {expanded ? (
@@ -202,63 +249,103 @@ function InventoryPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {unitRows.map(({ room, bed }) => (
-                        <tr key={bed.id}>
-                          <td className="px-4 py-2 font-medium">Room {room.letter}</td>
-                          <td className="px-4 py-2">{bed.label}</td>
-                          <td className="px-4 py-2 capitalize">{room.occupancy}</td>
-                          <td className="px-4 py-2">
-                            <StatusPill status={bed.status} />
-                            {bed.status === "held" && bed.holdUntil ? (
-                              <span className="ml-2 text-xs text-muted-foreground">till {fmtDate(bed.holdUntil)}</span>
-                            ) : null}
-                          </td>
-                          <td className="px-4 py-2">
-                            {bed.residentId ? (
-                              <Link
-                                to="/admin/residents/$id"
-                                params={{ id: bed.residentId }}
-                                className="text-brand-deep underline-offset-2 hover:underline"
-                              >
-                                {bed.residentName}
-                              </Link>
-                            ) : (
-                              (bed.holdFor ?? "—")
-                            )}
-                          </td>
-                          <td className="px-4 py-2 text-muted-foreground">{bed.university ?? "—"}</td>
-                          <td className="px-4 py-2 text-muted-foreground">
-                            {bed.tenancyStart ? `${fmtDate(bed.tenancyStart)} → ${fmtDate(bed.tenancyEnd)}` : "—"}
-                          </td>
-                          <td className="px-4 py-2">{money(bed.rent ?? room.rent)}</td>
-                          <td className="px-4 py-2 text-right">
-                            {bed.status === "vacant" ? (
-                              <Button asChild size="sm" variant="outline">
-                                <Link to="/admin/homes">Hold</Link>
-                              </Button>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  updateBed(bed.id, {
-                                    status: "vacant",
-                                    residentId: undefined,
-                                    residentName: undefined,
-                                    holdFor: undefined,
-                                    holdUntil: undefined,
-                                    tenancyStart: undefined,
-                                    tenancyEnd: undefined,
-                                  });
-                                  toast.success("Bed released");
-                                }}
-                              >
-                                Release
-                              </Button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                      {unitRows.map(({ unit, room, bed }) => {
+                        const blocked = bedBlockedBy(unit, room, bed);
+                        return (
+                          <tr
+                            key={bed.id}
+                            className={blocked ? "text-muted-foreground/60" : undefined}
+                          >
+                            <td className="px-4 py-2 font-medium">
+                              {room.letter.toLowerCase() === "unit"
+                                ? "Whole unit"
+                                : `Room ${room.letter}`}
+                            </td>
+                            <td className="px-4 py-2">{bed.label}</td>
+                            <td className="px-4 py-2">
+                              {room.occupancy === "unit"
+                                ? "Whole unit"
+                                : room.occupancy === "twin"
+                                  ? "Twin sharing"
+                                  : "Single"}
+                            </td>
+                            <td className="px-4 py-2">
+                              {blocked ? (
+                                <span className="inline-flex items-center rounded-full border border-border px-2 py-0.5 text-xs">
+                                  Blocked
+                                </span>
+                              ) : (
+                                <StatusPill status={bed.status} />
+                              )}
+                              {blocked ? (
+                                <span className="ml-2 text-xs text-muted-foreground">
+                                  {blocked}
+                                </span>
+                              ) : null}
+                              {!blocked && bed.status === "held" && bed.holdUntil ? (
+                                <span className="ml-2 text-xs text-muted-foreground">
+                                  till {fmtDate(bed.holdUntil)}
+                                </span>
+                              ) : null}
+                            </td>
+                            <td className="px-4 py-2">
+                              {bed.residentId ? (
+                                <Link
+                                  to="/admin/residents/$id"
+                                  params={{ id: bed.residentId }}
+                                  className="text-brand-deep underline-offset-2 hover:underline"
+                                >
+                                  {bed.residentName}
+                                </Link>
+                              ) : (
+                                (bed.holdFor ?? "—")
+                              )}
+                            </td>
+                            <td className="px-4 py-2 text-muted-foreground">
+                              {bed.university ?? "—"}
+                            </td>
+                            <td className="px-4 py-2 text-muted-foreground">
+                              {bed.tenancyStart
+                                ? `${fmtDate(bed.tenancyStart)} → ${fmtDate(bed.tenancyEnd)}`
+                                : "—"}
+                            </td>
+                            <td className="px-4 py-2">
+                              {money(
+                                bed.rent ??
+                                  (room.letter.toLowerCase() === "unit"
+                                    ? unit.wholeUnitRent
+                                    : room.rent),
+                              )}
+                            </td>
+                            <td className="px-4 py-2 text-right">
+                              {blocked ? null : bed.status === "vacant" ? (
+                                <Button asChild size="sm" variant="outline">
+                                  <Link to="/admin/homes">Hold</Link>
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    updateBed(bed.id, {
+                                      status: "vacant",
+                                      residentId: undefined,
+                                      residentName: undefined,
+                                      holdFor: undefined,
+                                      holdUntil: undefined,
+                                      tenancyStart: undefined,
+                                      tenancyEnd: undefined,
+                                    });
+                                    toast.success("Bed released");
+                                  }}
+                                >
+                                  Release
+                                </Button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

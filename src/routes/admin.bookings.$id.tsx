@@ -407,7 +407,7 @@ function BookingDetail() {
     }
   }
 
-  function createResident(r: any) {
+  async function createResident(r: any) {
     const resident = blankResident({
       enquiryId: r.id,
       fullName: r.full_name ?? "",
@@ -418,10 +418,17 @@ function BookingDetail() {
       university: r.university ?? "",
       moveIn: r.move_in ?? "",
     });
-    saveResidentRecord(resident);
-    mutate.mutate({ residentId: resident.id });
-    void linkBillingToResident({ data: { enquiryId: r.id, residentId: resident.id } });
-    void navigate({ to: "/admin/residents/$id", params: { id: resident.id } });
+    // the server assigns the real id, so everything downstream must use that one
+    let saved;
+    try {
+      saved = await saveResidentRecord(resident);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not create resident");
+      return;
+    }
+    mutate.mutate({ residentId: saved.id });
+    void linkBillingToResident({ data: { enquiryId: r.id, residentId: saved.id } });
+    void navigate({ to: "/admin/residents/$id", params: { id: saved.id } });
   }
 
 
