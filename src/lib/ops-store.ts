@@ -1,8 +1,12 @@
 /**
- * Front-end only store for the Homes / Residents / Tasks modules.
- * No backend yet: state lives in memory and is mirrored to localStorage so a
- * session survives page reloads while the flow is being designed.
- * Starts completely empty — no seed rows.
+ * Store for the Homes / Residents / Tasks modules.
+ *
+ * Units / rooms / beds are backed by Supabase (see src/lib/homes.functions.ts).
+ * Writes update memory first so the UI stays instant, then persist in the
+ * background and reconcile with whatever the server saved.
+ *
+ * Residents / tenancies / payments / tasks are still front-end only and are
+ * mirrored to localStorage until their tables exist.
  */
 import { useSyncExternalStore } from "react";
 
@@ -28,11 +32,15 @@ export type Bed = {
   enquiryId?: string | undefined;
 };
 
+/** How a room may be sold. "unit" is the whole-unit letting for the unit. */
+export type Occupancy = "single" | "twin" | "unit";
+
 export type UnitRoom = {
   id: string;
-  letter: string; // A / B / C / D
+  letter: string; // A / B / C / D, or "Unit" for the whole-unit letting
   roomTypeCode: string; // matches a room type from the Website module
-  occupancy: "single" | "twin";
+  /** Display default only - the bed rows below are the real sellable slots. */
+  occupancy: Occupancy;
   rent: number;
   beds: Bed[];
 };
@@ -65,6 +73,8 @@ export type Resident = {
   id: string;
   createdAt: string;
   enquiryId?: string | undefined;
+  /** Brachtia's own resident number, e.g. "00256". Blank for in-app signups. */
+  legacyId: string;
   // personal
   fullName: string;
   email: string;
@@ -82,6 +92,7 @@ export type Resident = {
   course: string;
   studentId: string;
   graduationYear: string;
+  sponsor: string;
   // housing & health
   unitId?: string | undefined;
   roomId?: string | undefined;
@@ -108,6 +119,7 @@ export type Resident = {
   payerMobile: string;
   payerEmail: string;
   // misc
+  status: string;
   portalInvited: boolean;
   docs: ResidentDoc[];
 };
@@ -194,16 +206,44 @@ function hydrate() {
   hydrated = true;
   try {
     const raw = window.localStorage.getItem(KEY);
-    if (raw) state = { ...EMPTY, ...(JSON.parse(raw) as OpsState) };
+    if (raw) state = { ...EMPTY, ...(JSON.parse(raw) as OpsState), units: [], residents: [] };
   } catch {
     /* ignore */
+  }
+  void refreshUnits();
+  void refreshResidents();
+}
+
+/** Pull the full unit tree from Supabase and swap it into state. */
+export async function refreshUnits() {
+  try {
+    const { listUnits } = await import("@/lib/homes.functions");
+    const units = await listUnits();
+    state = { ...state, units };
+    listeners.forEach((l) => l());
+  } catch {
+    /* offline or not signed in: keep whatever is in memory */
+  }
+}
+
+/** Pull residents from Supabase and swap them into state. */
+export async function refreshResidents() {
+  try {
+    const { listResidents } = await import("@/lib/residents.functions");
+    const residents = await listResidents();
+    state = { ...state, residents };
+    listeners.forEach((l) => l());
+  } catch {
+    /* offline or not signed in: keep whatever is in memory */
   }
 }
 
 function persist() {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(KEY, JSON.stringify(state));
+    // units live in Supabase; never let a stale local copy shadow them
+    const { units: _units, residents: _residents, ...rest } = state;
+    window.localStorage.setItem(KEY, JSON.stringify(rest));
   } catch {
     /* ignore */
   }
@@ -241,23 +281,34 @@ export const money = (n: number) =>
   `RM ${Number(n || 0).toLocaleString("en-MY", { maximumFractionDigits: 0 })}`;
 
 export const fmtDate = (d?: string) =>
-  d ? new Date(d).toLocaleDateString("en-MY", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+  d
+    ? new Date(d).toLocaleDateString("en-MY", { day: "2-digit", month: "short", year: "numeric" })
+    : "—";
 
 /* ---------------- Unit helpers ---------------- */
 
-export function bedsFor(occupancy: "single" | "twin"): Bed[] {
-  const labels = occupancy === "twin" ? ["Twin 1", "Twin 2"] : ["Single"];
+/**
+ * The beds a room carries, for the way it is configured right now.
+ *
+ * A room holds ONE configuration at a time - single, twin, or the whole-unit
+ * letting. Converting between them is a change to the room, made while it is
+ * empty, not a set of competing slots.
+ */
+export function bedsFor(occupancy: Occupancy): Bed[] {
+  const labels =
+    occupancy === "unit" ? ["Unit"] : occupancy === "twin" ? ["Twin 1", "Twin 2"] : ["Single"];
   return labels.map((label) => ({ id: uid(), label, status: "vacant" as BedStatus }));
 }
 
 export function blankRoom(letter: string): UnitRoom {
+  const occupancy: Occupancy = letter.toLowerCase() === "unit" ? "unit" : "single";
   return {
     id: uid(),
     letter,
     roomTypeCode: "",
-    occupancy: "single",
+    occupancy,
     rent: 0,
-    beds: bedsFor("single"),
+    beds: bedsFor(occupancy),
   };
 }
 
@@ -272,22 +323,59 @@ export function nextUnitCode(units: Unit[]) {
   return `U${String(units.length + 1).padStart(3, "0")}`;
 }
 
-export function saveUnit(unit: Unit) {
+/** Put a unit into local state, replacing any row with the same id. */
+function mergeUnit(unit: Unit, replaceId = unit.id) {
   setState((s) => ({
     ...s,
-    units: s.units.some((u) => u.id === unit.id)
-      ? s.units.map((u) => (u.id === unit.id ? unit : u))
+    units: s.units.some((u) => u.id === replaceId)
+      ? s.units.map((u) => (u.id === replaceId ? unit : u))
       : [...s.units, unit],
   }));
 }
 
-export function deleteUnit(id: string) {
+/**
+ * Save a unit. Local state updates immediately; the server write follows and
+ * the saved row (with real database ids) replaces the optimistic one.
+ */
+export async function saveUnit(unit: Unit, importBatchId?: string) {
+  mergeUnit(unit);
+  try {
+    const { saveUnitRow } = await import("@/lib/homes.functions");
+    const saved = await saveUnitRow({
+      data: { unit, ...(importBatchId ? { importBatchId } : {}) },
+    });
+    mergeUnit(saved, unit.id);
+    return saved;
+  } catch (err) {
+    // roll back so the UI never shows a unit the database does not have
+    setState((s) => ({ ...s, units: s.units.filter((u) => u.id !== unit.id) }));
+    throw err;
+  }
+}
+
+export async function deleteUnit(id: string) {
+  const previous = state.units;
   setState((s) => ({ ...s, units: s.units.filter((u) => u.id !== id) }));
+  try {
+    const { deleteUnitRow } = await import("@/lib/homes.functions");
+    await deleteUnitRow({ data: { id } });
+  } catch (err) {
+    setState((s) => ({ ...s, units: previous }));
+    throw err;
+  }
 }
 
 export type BedPatch = { [K in keyof Bed]?: Bed[K] | undefined };
 
 export function updateBed(bedId: string, patch: BedPatch) {
+  void (async () => {
+    try {
+      const { updateBedRow } = await import("@/lib/homes.functions");
+      await updateBedRow({ data: { bedId, patch } });
+    } catch {
+      void refreshUnits();
+    }
+  })();
   setState((s) => ({
     ...s,
     units: s.units.map((u) => ({
@@ -300,30 +388,66 @@ export function updateBed(bedId: string, patch: BedPatch) {
   }));
 }
 
-/** Switch a room between single and twin, preserving any occupied bed. */
-export function convertRoomOccupancy(roomId: string, occupancy: "single" | "twin") {
+/**
+ * Re-configure a room: single <-> twin <-> whole unit. The beds are rebuilt to
+ * match. An occupied bed is carried over into the first slot so a conversion
+ * never loses a resident.
+ */
+export function convertRoomOccupancy(roomId: string, occupancy: Occupancy) {
   setState((s) => ({
     ...s,
     units: s.units.map((u) => ({
       ...u,
       rooms: u.rooms.map((r) => {
         if (r.id !== roomId || r.occupancy === occupancy) return r;
-        if (occupancy === "twin") {
-          const first = r.beds[0] ?? bedsFor("single")[0]!;
-          return {
-            ...r,
-            occupancy,
-            beds: [
-              { ...first, label: "Twin 1" },
-              { id: uid(), label: "Twin 2", status: "vacant" as BedStatus },
-            ],
-          };
-        }
-        const keep = r.beds.find((b) => b.status !== "vacant") ?? r.beds[0]!;
-        return { ...r, occupancy, beds: [{ ...keep, label: "Single" }] };
+        const fresh = bedsFor(occupancy);
+        const keep = r.beds.find((b) => b.status !== "vacant");
+        const beds = keep ? [{ ...keep, label: fresh[0]!.label }, ...fresh.slice(1)] : fresh;
+        return { ...r, occupancy, beds };
       }),
     })),
   }));
+
+  const owner = state.units.find((u) => u.rooms.some((r) => r.id === roomId));
+  if (owner) {
+    void (async () => {
+      try {
+        const { saveUnitRow } = await import("@/lib/homes.functions");
+        const saved = await saveUnitRow({ data: { unit: owner } });
+        mergeUnit(saved, owner.id);
+      } catch {
+        void refreshUnits();
+      }
+    })();
+  }
+}
+
+const TAKEN: BedStatus[] = ["held", "booked", "active", "notice"];
+const isTaken = (b: Bed) => TAKEN.includes(b.status);
+
+/**
+ * Why a bed cannot be sold right now, or "" when it is free.
+ *
+ * A room holds one configuration, so single and twin never compete. What does
+ * compete is the whole-unit letting against the rooms inside it:
+ *   - the unit let as a whole -> every room in it is blocked
+ *   - any room let            -> the whole-unit slot is blocked
+ */
+export function bedBlockedBy(unit: Unit, room: UnitRoom, bed: Bed): string {
+  if (isTaken(bed)) return "";
+  const isUnitSlot = room.letter.toLowerCase() === "unit";
+
+  if (!isUnitSlot) {
+    const unitRoom = unit.rooms.find((r) => r.letter.toLowerCase() === "unit");
+    return unitRoom?.beds.some(isTaken) ? "whole unit let" : "";
+  }
+
+  for (const r of unit.rooms) {
+    if (r.letter.toLowerCase() === "unit") continue;
+    const t = r.beds.find(isTaken);
+    if (t) return `Room ${r.letter} ${t.label} let`;
+  }
+  return "";
 }
 
 /** A bed is usable for a stay when it is free, or its tenancy does not overlap. */
@@ -340,7 +464,6 @@ export function bedFreeForPeriod(bed: Bed, from?: string | null, to?: string | n
 }
 
 export type BedRow = {
-
   unit: Unit;
   room: UnitRoom;
   bed: Bed;
@@ -348,13 +471,30 @@ export type BedRow = {
 
 export function allBeds(units: Unit[]): BedRow[] {
   const out: BedRow[] = [];
-  for (const unit of units) for (const room of unit.rooms) for (const bed of room.beds) out.push({ unit, room, bed });
+  for (const unit of units)
+    for (const room of unit.rooms) for (const bed of room.beds) out.push({ unit, room, bed });
   return out;
 }
 
 export function findBed(units: Unit[], bedId?: string): BedRow | undefined {
   if (!bedId) return undefined;
   return allBeds(units).find((r) => r.bed.id === bedId);
+}
+
+/**
+ * Where a resident actually sleeps.
+ *
+ * beds.resident_id is the single record of a placement, so the lookup runs from
+ * the bed side. A resident row carries no copy of it - two copies would drift.
+ * bedId is still honoured for a placement made by hand before it is saved.
+ */
+export function findBedForResident(
+  units: Unit[],
+  resident: { id: string; legacyId?: string | undefined; bedId?: string | undefined },
+): BedRow | undefined {
+  const keys = [resident.legacyId, resident.id].filter(Boolean);
+  const byLink = allBeds(units).find((r) => r.bed.residentId && keys.includes(r.bed.residentId));
+  return byLink ?? findBed(units, resident.bedId);
 }
 
 /* ---------------- Resident helpers ---------------- */
@@ -374,6 +514,7 @@ export function blankResident(partial: Partial<Resident> = {}): Resident {
   return {
     id: uid(),
     createdAt: new Date().toISOString(),
+    legacyId: "",
     fullName: "",
     email: "",
     mobile: "",
@@ -389,6 +530,7 @@ export function blankResident(partial: Partial<Resident> = {}): Resident {
     course: "",
     studentId: "",
     graduationYear: "",
+    sponsor: "",
     occupancy: "",
     moveIn: "",
     leaseMonths: "",
@@ -408,6 +550,7 @@ export function blankResident(partial: Partial<Resident> = {}): Resident {
     payerRelationship: "",
     payerMobile: "",
     payerEmail: "",
+    status: "",
     portalInvited: false,
     docs: [],
     ...partial,
@@ -436,26 +579,55 @@ export const REQUIRED_RESIDENT_FIELDS: (keyof Resident)[] = [
 
 export function completeness(r: Resident) {
   const missing = REQUIRED_RESIDENT_FIELDS.filter((k) => !String(r[k] ?? "").trim());
-  const pct = Math.round(((REQUIRED_RESIDENT_FIELDS.length - missing.length) / REQUIRED_RESIDENT_FIELDS.length) * 100);
+  const pct = Math.round(
+    ((REQUIRED_RESIDENT_FIELDS.length - missing.length) / REQUIRED_RESIDENT_FIELDS.length) * 100,
+  );
   return { pct, missing };
 }
 
-export function saveResidentRecord(resident: Resident) {
+function mergeResident(resident: Resident, replaceId = resident.id) {
   setState((s) => ({
     ...s,
-    residents: s.residents.some((r) => r.id === resident.id)
-      ? s.residents.map((r) => (r.id === resident.id ? resident : r))
+    residents: s.residents.some((r) => r.id === replaceId)
+      ? s.residents.map((r) => (r.id === replaceId ? resident : r))
       : [...s.residents, resident],
   }));
 }
 
-export function deleteResident(id: string) {
+/**
+ * Save a resident. Local state updates immediately; the server write follows
+ * and the saved row (with its real database id) replaces the optimistic one.
+ */
+export async function saveResidentRecord(resident: Resident, importBatchId?: string) {
+  mergeResident(resident);
+  try {
+    const { saveResidentRow } = await import("@/lib/residents.functions");
+    const saved = await saveResidentRow({
+      data: { resident, ...(importBatchId ? { importBatchId } : {}) },
+    });
+    mergeResident(saved, resident.id);
+    return saved;
+  } catch (err) {
+    setState((s) => ({ ...s, residents: s.residents.filter((r) => r.id !== resident.id) }));
+    throw err;
+  }
+}
+
+export async function deleteResident(id: string) {
+  const previous = state.residents;
   setState((s) => ({
     ...s,
     residents: s.residents.filter((r) => r.id !== id),
     tenancies: s.tenancies.filter((t) => t.residentId !== id),
     payments: s.payments.filter((p) => p.residentId !== id),
   }));
+  try {
+    const { deleteResidentRow } = await import("@/lib/residents.functions");
+    await deleteResidentRow({ data: { id } });
+  } catch (err) {
+    setState((s) => ({ ...s, residents: previous }));
+    throw err;
+  }
 }
 
 /* ---------------- Tenancy / task / payment helpers ---------------- */
@@ -486,7 +658,10 @@ export function createTenancy(input: TenancyPatch & { residentId: string }): Ten
 }
 
 export function saveTenancy(tenancy: Tenancy) {
-  setState((s) => ({ ...s, tenancies: s.tenancies.map((t) => (t.id === tenancy.id ? tenancy : t)) }));
+  setState((s) => ({
+    ...s,
+    tenancies: s.tenancies.map((t) => (t.id === tenancy.id ? tenancy : t)),
+  }));
 }
 
 export function addTask(task: Omit<Task, "id" | "status"> & { status?: Task["status"] }) {
@@ -496,7 +671,9 @@ export function addTask(task: Omit<Task, "id" | "status"> & { status?: Task["sta
 export function toggleTask(id: string) {
   setState((s) => ({
     ...s,
-    tasks: s.tasks.map((t) => (t.id === id ? { ...t, status: t.status === "open" ? "done" : "open" } : t)),
+    tasks: s.tasks.map((t) =>
+      t.id === id ? { ...t, status: t.status === "open" ? "done" : "open" } : t,
+    ),
   }));
 }
 
