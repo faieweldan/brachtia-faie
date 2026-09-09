@@ -32,7 +32,13 @@ import {
 
 type Candidate = { row: BedRow; convert: boolean; blocked?: string };
 
-import { STAFF, SHARING_PREFERENCES, GENDERS, HEARD_ABOUT, universityAbbr } from "@/data/form-options";
+import {
+  STAFF,
+  SHARING_PREFERENCES,
+  GENDERS,
+  HEARD_ABOUT,
+  universityAbbr,
+} from "@/data/form-options";
 import {
   ACTIONS,
   SLA_TONE,
@@ -132,7 +138,6 @@ function BookingDetail() {
   const [openUnitId, setOpenUnitId] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
 
-
   const { data: row, isLoading } = useQuery({
     queryKey: ["admin", "enquiry", id],
     queryFn: () => getEnquiry({ data: { id } }),
@@ -150,7 +155,8 @@ function BookingDetail() {
   });
 
   const mutate = useMutation({
-    mutationFn: (input: Record<string, unknown>) => updateEnquiry({ data: { id, ...input } as any }),
+    mutationFn: (input: Record<string, unknown>) =>
+      updateEnquiry({ data: { id, ...input } as any }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin"] }),
     onError: () => toast.error("Could not save changes"),
   });
@@ -239,7 +245,6 @@ function BookingDetail() {
   const next = row ? nextActionFor(row, viewing?.starts_at) : null;
   const sla = next ? slaText(next.due) : null;
 
-
   if (isLoading || !row) {
     return (
       <div className="mx-auto max-w-6xl p-6 text-sm text-muted-foreground">Loading booking…</div>
@@ -266,7 +271,7 @@ function BookingDetail() {
     }
   }
 
-  function createResident(r: any) {
+  async function createResident(r: any) {
     const resident = blankResident({
       enquiryId: r.id,
       fullName: r.full_name ?? "",
@@ -277,11 +282,16 @@ function BookingDetail() {
       university: r.university ?? "",
       moveIn: r.move_in ?? "",
     });
-    saveResidentRecord(resident);
-    mutate.mutate({ residentId: resident.id });
-    void navigate({ to: "/admin/residents/$id", params: { id: resident.id } });
+    let saved;
+    try {
+      saved = await saveResidentRecord(resident);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not create resident");
+      return;
+    }
+    mutate.mutate({ residentId: saved.id });
+    void navigate({ to: "/admin/residents/$id", params: { id: saved.id } });
   }
-
 
   function viewingEndISO(v: any) {
     return new Date(
@@ -337,7 +347,6 @@ function BookingDetail() {
     a.click();
     URL.revokeObjectURL(url);
   }
-
 
   function runPrimary(action: ActionKey) {
     switch (action) {
@@ -404,7 +413,10 @@ function BookingDetail() {
       holdUntil: undefined,
     });
     // revert an auto-converted twin back to single when nobody else is in it
-    if (room.occupancy === "twin" && room.beds.every((b) => b.id === assignedBed.bed.id || b.status === "vacant")) {
+    if (
+      room.occupancy === "twin" &&
+      room.beds.every((b) => b.id === assignedBed.bed.id || b.status === "vacant")
+    ) {
       convertRoomOccupancy(room.id, "single");
     }
     toast.success("Room released");
@@ -431,7 +443,9 @@ function BookingDetail() {
       if (wantedOcc === "twin") {
         if (b.room.occupancy === "single") {
           if (roomEmpty) convert = true;
-          else blocked = "Single room already occupied — change the sharing preference to Single first";
+          else
+            blocked =
+              "Single room already occupied — change the sharing preference to Single first";
         }
       } else if (wantedOcc === "single") {
         if (b.room.occupancy === "twin")
@@ -442,7 +456,6 @@ function BookingDetail() {
       candidates.push({ row: b, convert, ...(blocked ? { blocked } : {}) });
       continue;
     }
-
 
     if (!bedFree) continue;
     // one entry per room: only consider the first free bed of the room
@@ -474,8 +487,11 @@ function BookingDetail() {
       .includes(q);
   });
 
-
-  const SHARING_SHORT: Record<string, string> = { single: "Single", twin: "Twin", unit: "Whole unit" };
+  const SHARING_SHORT: Record<string, string> = {
+    single: "Single",
+    twin: "Twin",
+    unit: "Whole unit",
+  };
 
   const studentFields = [
     ["full_name", "Name", "text"],
@@ -620,7 +636,9 @@ function BookingDetail() {
               <div>
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
-                    <p className="font-semibold text-foreground">{assignedBed.unit.residenceName}</p>
+                    <p className="font-semibold text-foreground">
+                      {assignedBed.unit.residenceName}
+                    </p>
                     <p className="font-medium text-foreground">
                       Unit {assignedBed.unit.unitNo} · Room {assignedBed.room.letter}
                     </p>
@@ -645,7 +663,8 @@ function BookingDetail() {
               <div className="space-y-3">
                 {assignedBed ? (
                   <p className="text-sm text-muted-foreground">
-                    Currently {assignedBed.unit.unitNo} · {assignedBed.room.letter} — pick a different room below.
+                    Currently {assignedBed.unit.unitNo} · {assignedBed.room.letter} — pick a
+                    different room below.
                   </p>
                 ) : null}
                 <p className="text-sm italic text-muted-foreground">
@@ -677,8 +696,8 @@ function BookingDetail() {
                   </div>
                   {matches.length === 0 ? (
                     <p className="px-3 py-4 text-xs text-muted-foreground">
-                      No rooms match this student&apos;s residence, room type, stay dates, gender and
-                      sharing preference. Use “Show all rooms” to override.
+                      No rooms match this student&apos;s residence, room type, stay dates, gender
+                      and sharing preference. Use “Show all rooms” to override.
                     </p>
                   ) : (
                     matches.map((c) => {
@@ -702,7 +721,9 @@ function BookingDetail() {
                                   ? `Twin · ${taken + 1}/2`
                                   : "Single"}
                               {c.blocked ? (
-                                <span className="block text-[10px] text-amber-600">{c.blocked}</span>
+                                <span className="block text-[10px] text-amber-600">
+                                  {c.blocked}
+                                </span>
                               ) : null}
                             </span>
                             <Button
@@ -714,7 +735,6 @@ function BookingDetail() {
                             >
                               Select
                             </Button>
-
                           </div>
                           {open ? (
                             <div className="space-y-2 border-t border-border bg-muted/30 px-3 py-3 text-xs">
@@ -722,8 +742,12 @@ function BookingDetail() {
                                 {b.unit.residenceName} · Unit {b.unit.unitNo}
                               </p>
                               <p className="text-muted-foreground">
-                                {[b.unit.unitType, b.unit.block && `Block ${b.unit.block}`,
-                                  b.unit.floor && `Floor ${b.unit.floor}`, b.unit.gender]
+                                {[
+                                  b.unit.unitType,
+                                  b.unit.block && `Block ${b.unit.block}`,
+                                  b.unit.floor && `Floor ${b.unit.floor}`,
+                                  b.unit.gender,
+                                ]
                                   .filter(Boolean)
                                   .join(" · ")}
                               </p>
@@ -732,9 +756,13 @@ function BookingDetail() {
                               ) : null}
                               <div className="space-y-1">
                                 {b.unit.rooms.map((rm) => (
-                                  <div key={rm.id} className="rounded-md border border-border bg-background p-2">
+                                  <div
+                                    key={rm.id}
+                                    className="rounded-md border border-border bg-background p-2"
+                                  >
                                     <p className="font-medium text-foreground">
-                                      Room {rm.letter} · {rm.occupancy === "twin" ? "Twin" : "Single"}
+                                      Room {rm.letter} ·{" "}
+                                      {rm.occupancy === "twin" ? "Twin" : "Single"}
                                     </p>
                                     {rm.beds.map((bd) => (
                                       <p key={bd.id} className="text-muted-foreground">
@@ -747,10 +775,13 @@ function BookingDetail() {
                                   </div>
                                 ))}
                               </div>
-                              <Button size="sm" disabled={!!c.blocked} onClick={() => assignRoom(c)}>
+                              <Button
+                                size="sm"
+                                disabled={!!c.blocked}
+                                onClick={() => assignRoom(c)}
+                              >
                                 {c.blocked ? c.blocked : `Select Room ${b.room.letter}`}
                               </Button>
-
                             </div>
                           ) : null}
                         </div>
@@ -941,7 +972,6 @@ function BookingDetail() {
             )}
           </Card>
 
-
           {/* Documents */}
           <Card title="Documents">
             <div className="grid gap-3 sm:grid-cols-3">
@@ -1025,7 +1055,9 @@ function BookingDetail() {
         <div className="space-y-5">
           {/* Next action */}
           <div className="rounded-xl border border-brand-deep/30 bg-brand-deep/5 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-brand-deep">Next Action</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-deep">
+              Next Action
+            </p>
             {next && next.action !== "none" ? (
               <div className="mt-2 space-y-3">
                 <p className="text-sm font-medium text-foreground">{next.label}</p>
@@ -1137,7 +1169,11 @@ function EditableCard({
     onSave();
   }
 
-  const SHARING_SHORT: Record<string, string> = { single: "Single", twin: "Twin", unit: "Whole unit" };
+  const SHARING_SHORT: Record<string, string> = {
+    single: "Single",
+    twin: "Twin",
+    unit: "Whole unit",
+  };
 
   return (
     <div className="rounded-xl border border-border bg-card p-4">
@@ -1253,7 +1289,7 @@ function EditableCard({
               label={label}
               value={
                 kind === "sharing"
-                  ? SHARING_SHORT[row[k] as string] ?? row[k]
+                  ? (SHARING_SHORT[row[k] as string] ?? row[k])
                   : kind === "term"
                     ? row[k] === "short"
                       ? "Short term"
@@ -1280,11 +1316,19 @@ function EditableCard({
 function ProgressTimeline({ row }: { row: any }) {
   const steps = [
     { label: "Enquiry submitted", at: row.created_at, done: true },
-    { label: "Room reserved", at: row.stage_changed_at, done: ["room_reserved", "viewing_scheduled", "awaiting_fee", "booked"].includes(row.status) },
+    {
+      label: "Room reserved",
+      at: row.stage_changed_at,
+      done: ["room_reserved", "viewing_scheduled", "awaiting_fee", "booked"].includes(row.status),
+    },
     { label: "Viewing", at: row.viewing_completed_at, done: !!row.viewing_completed_at },
     { label: "Invoice", at: row.invoice_issued_at, done: !!row.invoice_issued_at },
     { label: "Payment", at: row.fee_received_at, done: !!row.fee_received_at },
-    { label: "Resident created", at: row.resident_id ? row.updated_at : null, done: !!row.resident_id },
+    {
+      label: "Resident created",
+      at: row.resident_id ? row.updated_at : null,
+      done: !!row.resident_id,
+    },
   ];
   const currentIndex = steps.findIndex((s) => !s.done);
   return (
@@ -1308,7 +1352,9 @@ function ProgressTimeline({ row }: { row: any }) {
               ) : null}
             </div>
             <div>
-              <p className={`text-sm ${s.done ? "font-medium text-foreground" : isCurrent ? "font-semibold text-brand-deep" : "text-muted-foreground"}`}>
+              <p
+                className={`text-sm ${s.done ? "font-medium text-foreground" : isCurrent ? "font-semibold text-brand-deep" : "text-muted-foreground"}`}
+              >
                 {s.label}
               </p>
               {s.at ? (
@@ -1331,14 +1377,11 @@ function ActivityFeed({ row }: { row: any }) {
     events.push({ at: row.stage_changed_at, text: `Stage changed to ${stageLabel(row.status)}` });
   if (row.viewing_completed_at)
     events.push({ at: row.viewing_completed_at, text: "Viewing completed" });
-  if (row.invoice_issued_at)
-    events.push({ at: row.invoice_issued_at, text: "Invoice issued" });
-  if (row.fee_received_at)
-    events.push({ at: row.fee_received_at, text: "Booking fee received" });
+  if (row.invoice_issued_at) events.push({ at: row.invoice_issued_at, text: "Invoice issued" });
+  if (row.fee_received_at) events.push({ at: row.fee_received_at, text: "Booking fee received" });
   if (row.resident_id) events.push({ at: row.updated_at, text: "Resident created" });
   events.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
-  if (events.length === 0)
-    return <p className="text-xs text-muted-foreground">No activity yet.</p>;
+  if (events.length === 0) return <p className="text-xs text-muted-foreground">No activity yet.</p>;
   return (
     <div className="space-y-3">
       {events.map((e, i) => (
