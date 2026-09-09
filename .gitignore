@@ -31,3 +31,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Brachtia's real student data - names, passports, phone numbers
+references/
+
+# working notes, kept local
+docs/
+
+# env backups
+.env.backup-*
