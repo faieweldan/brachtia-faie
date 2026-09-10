@@ -989,8 +989,8 @@ function BookingDetail() {
           </Card>
 
 
-          {/* Documents */}
-          <Card title="Documents">
+          {/* Documents & Payment */}
+          <Card title="Documents & Payment">
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-lg border border-border p-3">
                 <p className="text-sm font-medium text-foreground">Quote</p>
@@ -1006,22 +1006,150 @@ function BookingDetail() {
                   <Download className="size-4" /> Download
                 </Button>
               </div>
-              <div className="rounded-lg border border-border p-3 opacity-60">
+
+              <div className="rounded-lg border border-border p-3">
                 <p className="text-sm font-medium text-foreground">Invoice</p>
-                <p className="mt-1 text-xs text-muted-foreground">Coming soon</p>
-                <Button size="sm" className="mt-2" disabled>
-                  Generate
-                </Button>
+                {invoice ? (
+                  <>
+                    <p className="mt-1 text-xs font-medium text-foreground">{invoice.number}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Total: {money(Number(invoice.total))}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Paid: {money(paidTotal)} · Balance: {money(balanceDue)}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={() => void viewInvoice()}>
+                        View Invoice
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setPayAmount(String(Math.max(balanceDue, 0)));
+                          setPayOpen(true);
+                        }}
+                      >
+                        Record Payment
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-1 text-xs text-muted-foreground">Not generated</p>
+                    <Button
+                      size="sm"
+                      className="mt-2"
+                      onClick={() =>
+                        void navigate({ to: "/admin/bookings/$id/invoice", params: { id } })
+                      }
+                    >
+                      Generate Invoice
+                    </Button>
+                  </>
+                )}
               </div>
-              <div className="rounded-lg border border-border p-3 opacity-60">
+
+              <div className="rounded-lg border border-border p-3">
                 <p className="text-sm font-medium text-foreground">Payment Receipt</p>
-                <p className="mt-1 text-xs text-muted-foreground">Coming soon</p>
-                <Button size="sm" className="mt-2" disabled>
-                  Generate
-                </Button>
+                {receipts.length === 0 ? (
+                  <p className="mt-1 text-xs text-muted-foreground">No receipts yet</p>
+                ) : (
+                  <ul className="mt-1 space-y-1.5">
+                    {receipts.map((rc) => (
+                      <li key={rc.id} className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground">
+                          {rc.number} · {money(Number(rc.amount))}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => void downloadReceiptFor(rc)}
+                        >
+                          <Download className="size-4" />
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
           </Card>
+
+          {payOpen ? (
+            <Card title="Record Payment">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Amount Received (RM)</p>
+                  <Input
+                    type="number"
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Payment Date</p>
+                  <Input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Payment Method</p>
+                  <select
+                    value={payMethod}
+                    onChange={(e) => setPayMethod(e.target.value)}
+                    className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  >
+                    {["Bank Transfer", "DuitNow QR Pay", "Cash", "Cheque"].map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Reference No. (optional)</p>
+                  <Input value={payRef} onChange={(e) => setPayRef(e.target.value)} />
+                </div>
+                <div className="space-y-1 sm:col-span-2">
+                  <p className="text-xs text-muted-foreground">Proof of Payment</p>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    disabled={uploadingProof}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setUploadingProof(true);
+                      void (async () => {
+                        try {
+                          const { uploadPhoto } = await import("@/lib/upload");
+                          setPayProof(await uploadPhoto(file, "payment-proofs"));
+                        } catch {
+                          toast.error("Could not upload the proof");
+                        } finally {
+                          setUploadingProof(false);
+                        }
+                      })();
+                    }}
+                  />
+                  {payProof ? (
+                    <p className="text-xs text-emerald-700">Proof uploaded</p>
+                  ) : null}
+                </div>
+              </div>
+              <div className="mt-3 flex justify-end gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setPayOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!payAmount || pay.isPending || uploadingProof}
+                  onClick={() => pay.mutate()}
+                >
+                  Save Payment
+                </Button>
+              </div>
+            </Card>
+          ) : null}
+
 
           {/* Internal notes */}
           <Card title="Internal Notes">
