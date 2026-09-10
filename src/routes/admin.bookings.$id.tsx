@@ -236,8 +236,51 @@ function BookingDetail() {
     onError: () => toast.error("Could not create the link"),
   });
 
+  /* ----- billing ----- */
+  const { data: billing } = useQuery({
+    queryKey: ["admin", "billing", id],
+    queryFn: () => getBookingBilling({ data: { enquiryId: id } }),
+  });
+  const invoice = (billing as any)?.invoice ?? null;
+  const invoiceItems = ((billing as any)?.items ?? []) as any[];
+  const receipts = ((billing as any)?.receipts ?? []) as any[];
+  const paidTotal = Number((billing as any)?.paid ?? 0);
+  const balanceDue = Number((billing as any)?.balance ?? 0);
+
+  const [payOpen, setPayOpen] = useState(false);
+  const [payAmount, setPayAmount] = useState("");
+  const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
+  const [payMethod, setPayMethod] = useState("Bank Transfer");
+  const [payRef, setPayRef] = useState("");
+  const [payProof, setPayProof] = useState("");
+  const [uploadingProof, setUploadingProof] = useState(false);
+
+  const pay = useMutation({
+    mutationFn: () =>
+      recordPayment({
+        data: {
+          invoiceId: invoice?.id as string,
+          amount: Number(payAmount || 0),
+          paidOn: payDate,
+          method: payMethod,
+          reference: payRef,
+          proofPath: payProof,
+        },
+      }),
+    onSuccess: (res: any) => {
+      toast.success(`Payment recorded — receipt ${res?.receipt?.number ?? ""}`);
+      setPayOpen(false);
+      setPayAmount("");
+      setPayRef("");
+      setPayProof("");
+      void queryClient.invalidateQueries({ queryKey: ["admin"] });
+    },
+    onError: () => toast.error("Could not record the payment"),
+  });
+
   const next = row ? nextActionFor(row, viewing?.starts_at) : null;
   const sla = next ? slaText(next.due) : null;
+
 
 
   if (isLoading || !row) {
