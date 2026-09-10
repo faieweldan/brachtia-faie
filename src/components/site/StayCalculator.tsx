@@ -143,6 +143,7 @@ export default function StayCalculator({
     moveOut,
     room: selected,
     quote,
+    paymentTerm: effectiveTerm,
   };
 
 
