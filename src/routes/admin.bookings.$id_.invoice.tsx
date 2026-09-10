@@ -233,7 +233,11 @@ function InvoiceGenerator() {
         </div>
         {!roomAssigned ? (
           <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-            A room must be assigned in Booking Details before an invoice can be generated.
+            No room is assigned yet. Reserve a room under Room Assignment on the{" "}
+            <Link to="/admin/bookings/$id" params={{ id }} className="font-semibold underline">
+              Booking Details
+            </Link>{" "}
+            page before generating the invoice.
           </div>
         ) : null}
       </section>
