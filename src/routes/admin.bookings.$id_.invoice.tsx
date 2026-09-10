@@ -206,8 +206,18 @@ function InvoiceGenerator() {
           <Field label="Mobile"><p className="text-sm">{r.phone || "—"}</p></Field>
           <Field label="Residence"><p className="text-sm">{r.residence_name || "—"}</p></Field>
           <Field label="Unit type"><p className="text-sm">{r.unit_type || "—"}</p></Field>
-          <Field label="Room">
-            <p className="text-sm font-medium">{r.room_name || "—"}</p>
+          <Field label="Room preference">
+            <p className="text-sm">{r.room_name || "—"}</p>
+          </Field>
+          <Field label="Assigned room">
+            {assignedBed ? (
+              <>
+                <p className="text-sm font-semibold text-foreground">{assignedRoomLabel}</p>
+                <p className="text-xs text-muted-foreground">{assignedRoomDetail}</p>
+              </>
+            ) : (
+              <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Not assigned</p>
+            )}
           </Field>
           <Field label="Occupancy">
             <p className="text-sm capitalize">{r.occupancy || "—"}</p>
