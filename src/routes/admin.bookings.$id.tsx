@@ -745,8 +745,23 @@ function BookingDetail() {
             onSave={() => setEditingStay(false)}
             fields={stayFields}
             row={row}
-            onSaveField={(k, v) => mutate.mutate({ [k]: v })}
+            onSaveField={(k, v) => {
+              const mapped = FIELD_KEY_MAP[k] ?? k;
+              const patch: Record<string, unknown> = { [mapped]: v };
+              // When room preference changes, also persist the matching room code.
+              if (k === "room_name") {
+                const match = (roomOptions ?? []).find((r) => r.name === v);
+                if (match) patch.roomCode = match.code;
+              }
+              // When residence changes, also update the slug.
+              if (k === "residence_name") {
+                const match = (resOptions ?? []).find((r) => r.name === v);
+                if (match) patch.residenceSlug = match.slug;
+              }
+              mutate.mutate(patch);
+            }}
             resOptions={resOptions ?? []}
+            roomOptions={roomOptions ?? []}
             extra={[
               ["Stay duration", monthsBetween(row.move_in, row.move_out)],
               ["Add-ons", ((r.addons as any[]) ?? []).join(", ") || "—"],
