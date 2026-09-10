@@ -39,6 +39,10 @@ function toResident(row: any): Resident {
     nationality: str(row.nationality),
     idNumber: str(row.id_number),
     gender: str(row.gender),
+    address: str(row.address),
+    postcode: str(row.postcode),
+    state: str(row.state),
+    country: str(row.country),
     maritalStatus: str(row.marital_status),
     race: str(row.race),
     religion: str(row.religion),
@@ -67,6 +71,10 @@ function toResident(row: any): Resident {
     payerRelationship: str(row.payer_relationship),
     payerMobile: str(row.payer_mobile),
     payerEmail: str(row.payer_email),
+    payerAddress: str(row.payer_address),
+    payerPostcode: str(row.payer_postcode),
+    payerState: str(row.payer_state),
+    payerCountry: str(row.payer_country),
     status: str(row.status),
     portalInvited: !!row.portal_invited,
     docs: Array.isArray(row.docs) ? (row.docs as ResidentDoc[]) : [],
@@ -84,6 +92,10 @@ function toRow(r: Resident) {
     nationality: r.nationality ?? "",
     id_number: r.idNumber ?? "",
     gender: r.gender ?? "",
+    address: r.address ?? "",
+    postcode: r.postcode ?? "",
+    state: r.state ?? "",
+    country: r.country ?? "",
     marital_status: r.maritalStatus ?? "",
     race: r.race ?? "",
     religion: r.religion ?? "",
@@ -112,6 +124,10 @@ function toRow(r: Resident) {
     payer_relationship: r.payerRelationship ?? "",
     payer_mobile: r.payerMobile ?? "",
     payer_email: r.payerEmail ?? "",
+    payer_address: r.payerAddress ?? "",
+    payer_postcode: r.payerPostcode ?? "",
+    payer_state: r.payerState ?? "",
+    payer_country: r.payerCountry ?? "",
     status: r.status ?? "",
     portal_invited: !!r.portalInvited,
     docs: r.docs ?? [],
@@ -180,6 +196,18 @@ export type ImportReport = {
   problems: { row: number; legacyId: string; reason: string }[];
 };
 
+/**
+ * Excel stores an id like 00949 as the number 949, which arrives as "949" or
+ * "949.0" once its leading zeros are gone. Brachtia's ids are five digits, so a
+ * bare number is padded back.
+ */
+function toLegacyId(raw: string) {
+  const v = raw.trim();
+  if (!v) return "";
+  const m = /^(\d+)(?:\.0+)?$/.exec(v);
+  return m ? m[1]!.padStart(5, "0") : v;
+}
+
 const pick = (row: ImportRow, ...keys: string[]) => {
   for (const k of keys) {
     const v = row[k];
@@ -200,6 +228,45 @@ function toDate(raw: string): string {
   }
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+}
+
+/** The sheet writes M / F; the app stores the words the dropdown offers. */
+function toGender(raw: string) {
+  const v = raw.trim().toLowerCase();
+  if (v === "m" || v === "male") return "Male";
+  if (v === "f" || v === "female") return "Female";
+  return raw.trim();
+}
+
+/**
+ * "(B1)" / "(B2)" / "(B3)" in a student's name is a sponsor intake batch - in
+ * this data, always PETRONAS. It describes the sponsorship, not the person, so
+ * it is lifted off the name and carried on the payor instead.
+ */
+function splitBatch(fullName: string) {
+  const m = /\((B\d+)\)/i.exec(fullName);
+  if (!m) return { name: fullName.trim(), batch: "" };
+  return {
+    name: fullName
+      .replace(m[0], "")
+      .replace(/\s{2,}/g, " ")
+      .trim(),
+    batch: m[1]!.toUpperCase(),
+  };
+}
+
+/**
+ * Sponsor is who pays. Anything other than "SELF" (MARA, PETRONAS, a university)
+ * is a third party.
+ *
+ * "SELF" only tells us there is no sponsor - it does not say who transfers the
+ * money, which is often a parent. Leaving the payor blank there keeps the field
+ * honest until someone fills it in; a wrong name would end up on an invoice.
+ */
+function toPayor(sponsor: string, batch: string) {
+  const v = sponsor.trim();
+  if (!v || v.toUpperCase() === "SELF") return { name: "", relationship: "" };
+  return { name: batch ? `${v} (${batch})` : v, relationship: "Sponsor" };
 }
 
 const num = (raw: string) => {
@@ -223,6 +290,66 @@ const num = (raw: string) => {
  *   - a unit / room / bed that does not exist -> the resident is still saved,
  *     the placement is skipped and reported. Never guess at a bed.
  */
+/**
+ * A whole-unit letting is one tenancy shared by several students, and the sheet
+ * packs them into a single row: ids separated by spaces, everything else by line
+ * breaks.
+ *
+ *   StudentID   "00357   00358   00359   00360"
+ *   StudentName "Liew Jie Sheng\nNg Jun Wei\n…"
+ *
+ * Each is a real person with their own passport and phone, so the row is split
+ * into one row per student. Only the first is placed on the bed - a bed records
+ * one occupant - and the rest are reported, because sharing a letting needs the
+ * tenancies table to be modelled properly.
+ */
+function expandSharedRows(rows: ImportRow[]): { row: ImportRow; sharesWith?: string }[] {
+  const out: { row: ImportRow; sharesWith?: string }[] = [];
+  const perLine = [
+    "studentname",
+    "student name",
+    "email",
+    "mobilenumber",
+    "mobile number",
+    "idnumber",
+    "id number",
+  ];
+
+  for (const row of rows) {
+    const rawIds = pick(row, "studentid", "student id", "resident id", "legacy_id");
+    const ids = rawIds.split(/[\s,]+/).filter(Boolean);
+    if (ids.length < 2) {
+      out.push({ row });
+      continue;
+    }
+
+    const lines: Record<string, string[]> = {};
+    for (const key of perLine) {
+      const v = row[key];
+      if (v)
+        lines[key] = String(v)
+          .split("\n")
+          .map((x) => x.trim());
+    }
+
+    const names = lines["studentname"] ?? lines["student name"] ?? [];
+    ids.forEach((id, i) => {
+      const copy: ImportRow = { ...row };
+      copy["studentid"] = id;
+      for (const key of perLine) {
+        const parts = lines[key];
+        if (parts) copy[key] = parts[i] ?? "";
+      }
+      const others = names.filter((_, j) => j !== i).filter(Boolean);
+      out.push({
+        row: copy,
+        ...(i > 0 || others.length ? { sharesWith: others.join(", ") } : {}),
+      });
+    });
+  }
+  return out;
+}
+
 export const importResidents = createServerFn({ method: "POST" })
   .inputValidator((data: { rows: ImportRow[]; filename?: string }) => data)
   .handler(async ({ data }): Promise<ImportReport> => {
@@ -234,6 +361,22 @@ export const importResidents = createServerFn({ method: "POST" })
       duplicates: 0,
       problems: [],
     };
+
+    /**
+     * The sheet writes A-23A-3A where the inventory holds A-23A-03A - the same
+     * unit, padded differently. Every numeric-leading part is padded to two
+     * digits so both spellings land on the same key.
+     */
+    const normUnit = (raw: string) =>
+      raw
+        .trim()
+        .toUpperCase()
+        .split("-")
+        .map((part) => {
+          const m = /^(\d+)([A-Z]*)$/.exec(part);
+          return m ? `${m[1]!.padStart(2, "0")}${m[2]}` : part;
+        })
+        .join("-");
 
     // the bed map: "unitno|letter|label" -> bed id
     const { data: units } = await supabase.from("units").select("id, unit_no");
@@ -247,15 +390,148 @@ export const importResidents = createServerFn({ method: "POST" })
         { unitNo: unitById.get(r.unit_id) ?? "", letter: String(r.letter) },
       ]),
     );
-    const { data: beds } = await supabase.from("beds").select("id, room_id, label");
+    const { data: beds } = await supabase.from("beds").select("id, room_id, label, resident_id");
     const bedKey = (unitNo: string, letter: string, label: string) =>
-      `${unitNo}|${letter}|${label}`.toLowerCase().replace(/\s+/g, " ").trim();
+      `${normUnit(unitNo)}|${letter}|${label}`.toLowerCase().replace(/\s+/g, " ").trim();
     const bedIdByKey = new Map<string, string>();
     for (const b of beds ?? []) {
       const room = roomById.get((b as any).room_id);
       if (!room) continue;
       bedIdByKey.set(bedKey(room.unitNo, room.letter, String((b as any).label)), (b as any).id);
     }
+
+    // rooms indexed the way the sheet addresses them, so a row can find its room
+    // even when the room is configured the wrong way round
+    const roomIdByKey = new Map<string, string>();
+    for (const r of rooms ?? []) {
+      const unitNo = unitById.get((r as any).unit_id) ?? "";
+      roomIdByKey.set(
+        `${normUnit(unitNo)}|${String((r as any).letter)}`.toLowerCase().trim(),
+        (r as any).id,
+      );
+    }
+    const bedsByRoom = new Map<string, { id: string; label: string; taken: boolean }[]>();
+    for (const b of beds ?? []) {
+      const list = bedsByRoom.get((b as any).room_id) ?? [];
+      list.push({
+        id: (b as any).id,
+        label: String((b as any).label),
+        taken: !!(b as any).resident_id,
+      });
+      bedsByRoom.set((b as any).room_id, list);
+    }
+
+    /**
+     * Nobody has touched the website yet, so every room's configuration comes
+     * from this sheet too - including the configuration of a room that already
+     * has someone in it. The sheet decides, and the app follows.
+     *
+     * So the rooms are settled BEFORE anyone is placed. An Active row wins,
+     * because that is the letting in force; otherwise whichever shape the sheet
+     * uses most often for that room.
+     */
+    function wantedFor(label: string) {
+      if (/^single$/i.test(label)) return { occupancy: "single", labels: ["Single"] };
+      if (/^unit$/i.test(label)) return { occupancy: "unit", labels: ["Unit"] };
+      return { occupancy: "twin", labels: ["Twin 1", "Twin 2"] };
+    }
+
+    async function applyRoomConfigs(rows: ImportRow[]) {
+      type Vote = { active: string | null; counts: Record<string, number> };
+      const votes = new Map<string, Vote>();
+
+      for (const row of rows) {
+        const unitNo = pick(row, "unit", "unit_no", "unitno");
+        const letter = pick(row, "room", "room_letter");
+        const label = pick(row, "bed", "bed_label");
+        if (!unitNo || !letter || !label) continue;
+        const shape = wantedFor(label).occupancy;
+        const key = `${normUnit(unitNo)}|${letter}`.toLowerCase().trim();
+        const v = votes.get(key) ?? { active: null, counts: {} };
+        v.counts[shape] = (v.counts[shape] ?? 0) + 1;
+        if (/^active$/i.test(pick(row, "status"))) {
+          if (v.active && v.active !== shape) {
+            report.problems.push({
+              row: 0,
+              legacyId: "",
+              reason: `${unitNo} / ${letter}: the sheet has active lettings as both ${v.active} and ${shape} — ${shape} was used`,
+            });
+          }
+          v.active = shape;
+        }
+        votes.set(key, v);
+      }
+
+      for (const [key, v] of votes) {
+        const roomId = roomIdByKey.get(key);
+        if (!roomId) continue;
+        const shape =
+          v.active ?? Object.entries(v.counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "twin";
+        const labels = wantedFor(
+          shape === "single" ? "Single" : shape === "unit" ? "Unit" : "Twin 1",
+        ).labels;
+
+        const existing = bedsByRoom.get(roomId) ?? [];
+        const same =
+          existing.length === labels.length &&
+          labels.every((l) => existing.some((b) => b.label.toLowerCase() === l.toLowerCase()));
+        if (same) continue;
+
+        await supabase
+          .from("rooms")
+          .update({ occupancy: shape } as any)
+          .eq("id", roomId);
+        const stale = existing.filter(
+          (b) => !labels.some((l) => l.toLowerCase() === b.label.toLowerCase()),
+        );
+        if (stale.length) {
+          await supabase
+            .from("beds")
+            .delete()
+            .in(
+              "id",
+              stale.map((b) => b.id),
+            );
+        }
+        const missing = labels.filter(
+          (l) => !existing.some((b) => b.label.toLowerCase() === l.toLowerCase()),
+        );
+        let made: { id: string; label: string; taken: boolean }[] = [];
+        if (missing.length) {
+          const { data: rowsMade } = await supabase
+            .from("beds")
+            .insert(
+              missing.map((l, i) => ({
+                room_id: roomId,
+                label: l,
+                status: "vacant",
+                sort_order: i,
+              })) as any,
+            )
+            .select("id, label");
+          made = (rowsMade ?? []).map((b: any) => ({
+            id: b.id as string,
+            label: String(b.label),
+            taken: false,
+          }));
+        }
+
+        const kept = existing.filter((b) =>
+          labels.some((l) => l.toLowerCase() === b.label.toLowerCase()),
+        );
+        const fresh = [...kept, ...made];
+        bedsByRoom.set(roomId, fresh);
+
+        const [unitNo, letter] = key.split("|");
+        for (const b of stale) bedIdByKey.delete(bedKey(unitNo!, letter!, b.label));
+        for (const b of fresh) bedIdByKey.set(bedKey(unitNo!, letter!, b.label), b.id);
+      }
+    }
+
+    const expanded = expandSharedRows(data.rows);
+    const rows = expanded.map((e) => e.row);
+
+    await applyRoomConfigs(rows);
 
     // A repeated StudentID is a room move, not a typo, so one row has to win.
     // Status decides it - an Active row beats an Inactive one however they are
@@ -267,11 +543,11 @@ export const importResidents = createServerFn({ method: "POST" })
       return 1; // blank or anything else sits between the two
     };
     const winnerFor = new Map<string, number>();
-    data.rows.forEach((row, i) => {
-      const id = pick(row, "studentid", "student id", "resident id", "legacy_id");
+    rows.forEach((row, i) => {
+      const id = toLegacyId(pick(row, "studentid", "student id", "resident id", "legacy_id"));
       if (!id) return;
       const held = winnerFor.get(id);
-      if (held === undefined || rank(row) >= rank(data.rows[held]!)) winnerFor.set(id, i);
+      if (held === undefined || rank(row) >= rank(rows[held]!)) winnerFor.set(id, i);
     });
 
     const batch = await supabase
@@ -287,22 +563,37 @@ export const importResidents = createServerFn({ method: "POST" })
     if (batchId) report.batchId = batchId;
 
     const bedsToClear: string[] = [];
+    /**
+     * A bed holds one person. If two rows both claim it, the later write would
+     * quietly overwrite the earlier one and leave a student with no room and no
+     * explanation - so the first claim keeps the bed and the second is reported.
+     */
+    const claimedBy = new Map<string, { legacyId: string; row: number }>();
 
-    for (let i = 0; i < data.rows.length; i += 1) {
-      const row = data.rows[i]!;
-      const legacyId = pick(row, "studentid", "student id", "resident id", "legacy_id");
+    for (let i = 0; i < rows.length; i += 1) {
+      const row = rows[i]!;
+      const sharesWith = expanded[i]?.sharesWith;
+      const legacyId = toLegacyId(pick(row, "studentid", "student id", "resident id", "legacy_id"));
       const name = pick(row, "studentname", "student name", "full name", "name");
       const unitNo = pick(row, "unit", "unit_no", "unitno");
       const letter = pick(row, "room", "room_letter");
       const label = pick(row, "bed", "bed_label");
       const bedId = bedIdByKey.get(bedKey(unitNo, letter, label));
 
-      const status = pick(row, "status");
+      const rawStatus = pick(row, "status");
+      /**
+       * "Vacant" describes the bed, not the person. Someone whose bed is vacant
+       * is not a current resident, so they are recorded as Inactive - otherwise
+       * they would sit in the Current list with nowhere to live.
+       */
+      const status = /^vacant$/i.test(rawStatus) ? "Inactive" : rawStatus;
 
-      // A vacant marker, or a tenancy that has ended: the bed is free. An
-      // Inactive row is history - the student moved out - so it must never
-      // leave the bed looking occupied.
-      if (!legacyId || /^vacant$/i.test(name) || /^inactive$/i.test(status)) {
+      // A row whose STATUS says Vacant records who a bed is earmarked for, not
+      // who is living in it. Together with Inactive - a student who has moved
+      // out - neither may leave the bed looking occupied.
+      const freesTheBed = /^(inactive|vacant)$/i.test(rawStatus);
+
+      if (!legacyId || /^vacant$/i.test(name) || freesTheBed) {
         if (bedId) bedsToClear.push(bedId);
         if (!legacyId || /^vacant$/i.test(name)) continue;
         // still save the person; only the placement is dropped
@@ -322,16 +613,22 @@ export const importResidents = createServerFn({ method: "POST" })
       const tenancyEnd = toDate(pick(row, "tenancy end", "tenancy_end"));
       const rent = num(pick(row, "monthly rent", "rent"));
 
+      const sponsor = pick(row, "sponsor");
+      const { name: cleanName, batch } = splitBatch(name);
+      const payor = toPayor(sponsor, batch);
+
       const residentRow: Record<string, unknown> = {
         legacy_id: legacyId,
-        full_name: name,
+        full_name: cleanName,
         email: pick(row, "email"),
         mobile: pick(row, "mobilenumber", "mobile number", "mobile", "phone"),
         nationality: pick(row, "nationality"),
         id_number: pick(row, "idnumber", "id number", "passport", "nric"),
-        gender: pick(row, "gender"),
+        gender: toGender(pick(row, "gender")),
         university: pick(row, "university"),
-        sponsor: pick(row, "sponsor"),
+        sponsor,
+        payer_name: payor.name,
+        payer_relationship: payor.relationship,
         status,
         move_in: tenancyStart,
         ...(batchId ? { import_batch_id: batchId } : {}),
@@ -346,8 +643,19 @@ export const importResidents = createServerFn({ method: "POST" })
       }
       report.residents += 1;
 
-      // an ended tenancy leaves no one in the bed
-      if (/^inactive$/i.test(status)) continue;
+      // an ended or not-yet-started letting leaves no one in the bed
+      if (freesTheBed) continue;
+
+      // a shared whole-unit letting: the bed records one occupant, so the others
+      // are saved as residents and reported rather than silently dropped
+      if (sharesWith) {
+        report.problems.push({
+          row: i + 2,
+          legacyId,
+          reason: `shares the whole-unit letting at ${unitNo} with ${sharesWith} — saved, but only one occupant can be recorded on a bed until tenancies exist`,
+        });
+        continue;
+      }
 
       if (!bedId) {
         if (unitNo || letter || label) {
@@ -360,15 +668,27 @@ export const importResidents = createServerFn({ method: "POST" })
         continue;
       }
 
+      const heldBy = claimedBy.get(bedId);
+      if (heldBy && heldBy.legacyId !== legacyId) {
+        report.problems.push({
+          row: i + 2,
+          legacyId,
+          reason: `${unitNo} / ${letter} / ${label} is already taken by ${heldBy.legacyId} on row ${heldBy.row} — resident saved, placement skipped`,
+        });
+        continue;
+      }
+      claimedBy.set(bedId, { legacyId, row: i + 2 });
+
       const { error: bedErr } = await supabase
         .from("beds")
         .update({
-          status: "active",
+          // "Booked" is a letting agreed but not moved into
+          status: /^booked$/i.test(rawStatus) ? "booked" : "active",
           resident_id: legacyId,
           resident_name: name,
           university: pick(row, "university") || null,
           nationality: pick(row, "nationality") || null,
-          gender: pick(row, "gender") || null,
+          gender: toGender(pick(row, "gender")) || null,
           tenancy_start: tenancyStart || null,
           tenancy_end: tenancyEnd || null,
           rent,
