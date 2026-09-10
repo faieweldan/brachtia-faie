@@ -159,7 +159,7 @@ function InvoiceGenerator() {
       university: r.university ?? "",
       nationality: r.nationality ?? "",
       residence_name: r.residence_name ?? "",
-      room_name: r.room_name ?? "",
+      room_name: invoiceRoomName,
       occupancy: r.occupancy ?? "",
       tenancy_start: r.move_in ?? null,
       tenancy_end: r.move_out ?? null,
