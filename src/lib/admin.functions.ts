@@ -119,6 +119,8 @@ export const updateEnquiry = createServerFn({ method: "POST" })
     if (data.moveOut !== undefined) patch["move_out"] = data.moveOut || null;
     if (data.monthlyRent !== undefined) patch["monthly_rent"] = data.monthlyRent;
     if (data.firstPayment !== undefined) patch["first_payment"] = data.firstPayment;
+    if (data.paymentTerm !== undefined) patch["payment_term"] = data.paymentTerm;
+    if (data.unitType !== undefined) patch["unit_type"] = data.unitType;
     if (data.message !== undefined) patch["message"] = data.message;
     if (data.heardAbout !== undefined) patch["heard_about"] = data.heardAbout;
     if (data.heardAboutOther !== undefined) patch["heard_about_other"] = data.heardAboutOther;
