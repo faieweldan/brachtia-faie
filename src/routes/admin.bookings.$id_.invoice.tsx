@@ -253,7 +253,32 @@ function InvoiceGenerator() {
           </Field>
           <Field label="Tenancy start"><p className="text-sm">{r.move_in ?? "—"}</p></Field>
           <Field label="Tenancy end"><p className="text-sm">{r.move_out ?? "—"}</p></Field>
-          <Field label="Monthly rent"><p className="text-sm">{money(rent)}</p></Field>
+          <Field label="Monthly rent">
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                value={rent}
+                className="h-8 w-32 text-right"
+                onChange={(e) => setRentOverride(Number(e.target.value))}
+              />
+              {rentOverride !== null && rentOverride !== autoRent ? (
+                <button
+                  type="button"
+                  className="text-xs text-brand hover:underline"
+                  onClick={() => setRentOverride(null)}
+                >
+                  Reset
+                </button>
+              ) : null}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {rentOverride !== null && rentOverride !== autoRent
+                ? `Overridden · assigned room rate ${money(autoRent)}`
+                : roomRent
+                  ? "From the assigned room"
+                  : "From the booking"}
+            </p>
+          </Field>
           <Field label="Payment frequency">
             <p className="text-sm">
               {FREQUENCIES.find((f) => f.value === frequency)?.label ?? frequency}
