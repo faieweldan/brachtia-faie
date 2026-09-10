@@ -326,8 +326,29 @@ function InvoiceGenerator() {
 
       {/* Line items — accounting-style table */}
       <section className="rounded-xl border border-border bg-card p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-foreground">Initial payment</h2>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Initial payment</h2>
+            <p className="text-xs text-muted-foreground">
+              {manual
+                ? "Manually edited — no longer following the rent and payment frequency."
+                : `Calculated from ${money(rent)}/month · ${
+                    FREQUENCIES.find((f) => f.value === frequency)?.label ?? frequency
+                  }`}
+            </p>
+          </div>
+          {manual && calculated ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setManual(false);
+                setLines(calculated);
+              }}
+            >
+              Recalculate
+            </Button>
+          ) : null}
           <Button
             size="sm"
             variant="outline"
