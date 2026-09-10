@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { createInvoice, getEnquiry } from "@/lib/admin.functions";
+import { allBeds, useOps } from "@/lib/ops-store";
 import { previewInvoice, type InvoiceDoc } from "@/lib/invoice-pdf";
 
 export const Route = createFileRoute("/admin/bookings/$id_/invoice")({
