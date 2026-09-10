@@ -116,6 +116,12 @@ function InvoiceGenerator() {
     setReady(true);
   }, [row, ready]);
 
+  /** Any manual line edit stops the automatic recalculation. */
+  const editLines = (fn: (rows: Line[]) => Line[]) => {
+    setManual(true);
+    setLines(fn);
+  };
+
   /* Auto-fill the lines from the calculation unless admin has edited them. */
   useEffect(() => {
     if (manual) return;
