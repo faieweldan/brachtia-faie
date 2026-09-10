@@ -40,6 +40,7 @@ import { Route as AdminResidentsPaymentsRouteImport } from './routes/admin.resid
 import { Route as AdminResidentsTenanciesRouteImport } from './routes/admin.residents.tenancies'
 import { Route as AdminWebsiteIndexRouteImport } from './routes/admin.website.index'
 import { Route as PropertiesSlugIndexRouteImport } from './routes/properties.$slug.index'
+import { Route as AdminBookingsIdInvoiceRouteImport } from './routes/admin.bookings.$id_.invoice'
 import { Route as AdminWebsiteResidencesIndexRouteImport } from './routes/admin.website.residences.index'
 import { Route as AdminWebsiteResidencesIdRouteImport } from './routes/admin.website.residences.$id'
 import { Route as ApiPublicPhotoSplatRouteImport } from './routes/api/public/photo.$'
@@ -200,6 +201,11 @@ const PropertiesSlugIndexRoute = PropertiesSlugIndexRouteImport.update({
   path: '/properties/$slug/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminBookingsIdInvoiceRoute = AdminBookingsIdInvoiceRouteImport.update({
+  id: '/$id_/invoice',
+  path: '/$id/invoice',
+  getParentRoute: () => AdminBookingsRoute,
+} as any)
 const AdminWebsiteResidencesIndexRoute =
   AdminWebsiteResidencesIndexRouteImport.update({
     id: '/residences/',
@@ -250,6 +256,7 @@ export interface FileRoutesByFullPath {
   '/admin/residents/': typeof AdminResidentsIndexRoute
   '/admin/website/': typeof AdminWebsiteIndexRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
+  '/admin/bookings/$id/invoice': typeof AdminBookingsIdInvoiceRoute
   '/admin/website/residences/$id': typeof AdminWebsiteResidencesIdRoute
   '/api/public/photo/$': typeof ApiPublicPhotoSplatRoute
   '/admin/website/residences/': typeof AdminWebsiteResidencesIndexRoute
@@ -280,6 +287,7 @@ export interface FileRoutesByTo {
   '/admin/residents': typeof AdminResidentsIndexRoute
   '/admin/website': typeof AdminWebsiteIndexRoute
   '/properties/$slug': typeof PropertiesSlugIndexRoute
+  '/admin/bookings/$id/invoice': typeof AdminBookingsIdInvoiceRoute
   '/admin/website/residences/$id': typeof AdminWebsiteResidencesIdRoute
   '/api/public/photo/$': typeof ApiPublicPhotoSplatRoute
   '/admin/website/residences': typeof AdminWebsiteResidencesIndexRoute
@@ -317,6 +325,7 @@ export interface FileRoutesById {
   '/admin/residents/': typeof AdminResidentsIndexRoute
   '/admin/website/': typeof AdminWebsiteIndexRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
+  '/admin/bookings/$id_/invoice': typeof AdminBookingsIdInvoiceRoute
   '/admin/website/residences/$id': typeof AdminWebsiteResidencesIdRoute
   '/api/public/photo/$': typeof ApiPublicPhotoSplatRoute
   '/admin/website/residences/': typeof AdminWebsiteResidencesIndexRoute
@@ -355,6 +364,7 @@ export interface FileRouteTypes {
     | '/admin/residents/'
     | '/admin/website/'
     | '/properties/$slug/'
+    | '/admin/bookings/$id/invoice'
     | '/admin/website/residences/$id'
     | '/api/public/photo/$'
     | '/admin/website/residences/'
@@ -385,6 +395,7 @@ export interface FileRouteTypes {
     | '/admin/residents'
     | '/admin/website'
     | '/properties/$slug'
+    | '/admin/bookings/$id/invoice'
     | '/admin/website/residences/$id'
     | '/api/public/photo/$'
     | '/admin/website/residences'
@@ -421,6 +432,7 @@ export interface FileRouteTypes {
     | '/admin/residents/'
     | '/admin/website/'
     | '/properties/$slug/'
+    | '/admin/bookings/$id_/invoice'
     | '/admin/website/residences/$id'
     | '/api/public/photo/$'
     | '/admin/website/residences/'
@@ -661,6 +673,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PropertiesSlugIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/bookings/$id_/invoice': {
+      id: '/admin/bookings/$id_/invoice'
+      path: '/$id/invoice'
+      fullPath: '/admin/bookings/$id/invoice'
+      preLoaderRoute: typeof AdminBookingsIdInvoiceRouteImport
+      parentRoute: typeof AdminBookingsRoute
+    }
     '/admin/website/residences/': {
       id: '/admin/website/residences/'
       path: '/residences'
@@ -701,11 +720,13 @@ const AdminAppointmentsRouteWithChildren =
 interface AdminBookingsRouteChildren {
   AdminBookingsIdRoute: typeof AdminBookingsIdRoute
   AdminBookingsIndexRoute: typeof AdminBookingsIndexRoute
+  AdminBookingsIdInvoiceRoute: typeof AdminBookingsIdInvoiceRoute
 }
 
 const AdminBookingsRouteChildren: AdminBookingsRouteChildren = {
   AdminBookingsIdRoute: AdminBookingsIdRoute,
   AdminBookingsIndexRoute: AdminBookingsIndexRoute,
+  AdminBookingsIdInvoiceRoute: AdminBookingsIdInvoiceRoute,
 }
 
 const AdminBookingsRouteWithChildren = AdminBookingsRoute._addFileChildren(
