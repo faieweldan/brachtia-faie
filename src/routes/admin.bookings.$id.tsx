@@ -313,6 +313,66 @@ function BookingDetail() {
     }
   }
 
+  function invoiceDoc() {
+    return {
+      number: invoice.number,
+      issued_at: invoice.issued_at,
+      reference: r.reference ?? null,
+      full_name: invoice.full_name,
+      email: invoice.email,
+      phone: invoice.phone,
+      university: invoice.university,
+      nationality: invoice.nationality,
+      residence_name: invoice.residence_name,
+      room_name: invoice.room_name,
+      occupancy: invoice.occupancy,
+      tenancy_start: invoice.tenancy_start,
+      tenancy_end: invoice.tenancy_end,
+      monthly_rent: Number(invoice.monthly_rent),
+      payment_frequency: invoice.payment_frequency,
+      total: Number(invoice.total),
+      deposits_total: Number(invoice.deposits_total),
+      notes: invoice.notes ?? "",
+      items: invoiceItems.map((i) => ({
+        label: i.label,
+        kind: i.kind,
+        amount: Number(i.amount),
+      })),
+    };
+  }
+
+  async function viewInvoice() {
+    if (!invoice) return;
+    try {
+      const { previewInvoice } = await import("@/lib/invoice-pdf");
+      await previewInvoice(invoiceDoc());
+    } catch {
+      toast.error("Could not open the invoice");
+    }
+  }
+
+  async function downloadReceiptFor(rc: any) {
+    const payment = (((billing as any)?.payments ?? []) as any[]).find(
+      (p) => p.id === rc.payment_id,
+    );
+    try {
+      const { downloadReceipt } = await import("@/lib/invoice-pdf");
+      await downloadReceipt({
+        number: rc.number,
+        issued_at: rc.issued_at,
+        invoiceNumber: invoice?.number ?? "",
+        full_name: r.full_name ?? "",
+        amount: Number(rc.amount),
+        balance_after: Number(rc.balance_after),
+        method: payment?.method ?? "",
+        reference: payment?.reference ?? "",
+        paid_on: payment?.paid_on ?? null,
+      });
+    } catch {
+      toast.error("Could not build the receipt");
+    }
+  }
+
   function createResident(r: any) {
     const resident = blankResident({
       enquiryId: r.id,
@@ -326,8 +386,10 @@ function BookingDetail() {
     });
     saveResidentRecord(resident);
     mutate.mutate({ residentId: resident.id });
+    void linkBillingToResident({ data: { enquiryId: r.id, residentId: resident.id } });
     void navigate({ to: "/admin/residents/$id", params: { id: resident.id } });
   }
+
 
 
   function viewingEndISO(v: any) {
