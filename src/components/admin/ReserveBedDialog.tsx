@@ -91,7 +91,7 @@ export function ReserveBedDialog({
     }
     updateBed(bed.id, {
       status: "held",
-      residentId: person.legacyId || person.id,
+      residentId: person.id,
       residentName: person.fullName,
       university: person.university || undefined,
       nationality: person.nationality || undefined,

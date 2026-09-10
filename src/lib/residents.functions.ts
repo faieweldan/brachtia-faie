@@ -634,11 +634,14 @@ export const importResidents = createServerFn({ method: "POST" })
         ...(batchId ? { import_batch_id: batchId } : {}),
       };
 
-      const { error } = await supabase
+      // the uuid comes back from the write, and it is what the bed link stores
+      const { data: saved, error } = await supabase
         .from("residents")
-        .upsert(residentRow as any, { onConflict: "legacy_id" });
-      if (error) {
-        report.problems.push({ row: i + 2, legacyId, reason: error.message });
+        .upsert(residentRow as any, { onConflict: "legacy_id" })
+        .select("id")
+        .single();
+      if (error || !saved) {
+        report.problems.push({ row: i + 2, legacyId, reason: error?.message ?? "resident not saved" });
         continue;
       }
       report.residents += 1;
@@ -684,7 +687,7 @@ export const importResidents = createServerFn({ method: "POST" })
         .update({
           // "Booked" is a letting agreed but not moved into
           status: /^booked$/i.test(rawStatus) ? "booked" : "active",
-          resident_id: legacyId,
+          resident_id: (saved as { id: string }).id,
           resident_name: name,
           university: pick(row, "university") || null,
           nationality: pick(row, "nationality") || null,

@@ -489,10 +489,10 @@ export function findBed(units: Unit[], bedId?: string): BedRow | undefined {
   return allBeds(units).find((r) => r.bed.id === bedId);
 }
 
-/** The resident a bed points at. beds.resident_id holds the legacy number. */
+/** The resident a bed points at. beds.resident_id is the resident's uuid. */
 export function residentForBed(residents: Resident[], bed: Bed): Resident | undefined {
   if (!bed.residentId) return undefined;
-  return residents.find((r) => r.legacyId === bed.residentId || r.id === bed.residentId);
+  return residents.find((r) => r.id === bed.residentId);
 }
 
 /**
@@ -506,8 +506,7 @@ export function findBedForResident(
   units: Unit[],
   resident: { id: string; legacyId?: string | undefined; bedId?: string | undefined },
 ): BedRow | undefined {
-  const keys = [resident.legacyId, resident.id].filter(Boolean);
-  const byLink = allBeds(units).find((r) => r.bed.residentId && keys.includes(r.bed.residentId));
+  const byLink = allBeds(units).find((r) => r.bed.residentId === resident.id);
   return byLink ?? findBed(units, resident.bedId);
 }
 
