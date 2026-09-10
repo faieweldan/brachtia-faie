@@ -751,12 +751,12 @@ function BookingDetail() {
               // When room preference changes, also persist the matching room code.
               if (k === "room_name") {
                 const match = (roomOptions ?? []).find((r) => r.name === v);
-                if (match) patch.roomCode = match.code;
+                if (match) patch["roomCode"] = match.code;
               }
               // When residence changes, also update the slug.
               if (k === "residence_name") {
                 const match = (resOptions ?? []).find((r) => r.name === v);
-                if (match) patch.residenceSlug = match.slug;
+                if (match) patch["residenceSlug"] = match.slug;
               }
               mutate.mutate(patch);
             }}
