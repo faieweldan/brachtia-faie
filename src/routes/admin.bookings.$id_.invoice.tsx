@@ -331,7 +331,7 @@ function InvoiceGenerator() {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setLines((l) => [...l, { label: "", kind: "onetime", amount: 0 }])}
+            onClick={() => editLines((l) => [...l, { label: "", kind: "onetime", amount: 0 }])}
           >
             <Plus className="size-4" /> Add line
           </Button>
@@ -355,7 +355,7 @@ function InvoiceGenerator() {
                       placeholder="Description"
                       className="h-8 border-transparent bg-transparent focus-visible:border-input"
                       onChange={(e) =>
-                        setLines((rows) =>
+                        editLines((rows) =>
                           rows.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)),
                         )
                       }
@@ -365,7 +365,7 @@ function InvoiceGenerator() {
                     <select
                       value={l.kind}
                       onChange={(e) =>
-                        setLines((rows) =>
+                        editLines((rows) =>
                           rows.map((x, j) => (j === i ? { ...x, kind: e.target.value } : x)),
                         )
                       }
@@ -384,7 +384,7 @@ function InvoiceGenerator() {
                       value={l.amount}
                       className="h-8 text-right"
                       onChange={(e) =>
-                        setLines((rows) =>
+                        editLines((rows) =>
                           rows.map((x, j) =>
                             j === i ? { ...x, amount: Number(e.target.value) } : x,
                           ),
@@ -396,7 +396,7 @@ function InvoiceGenerator() {
                     <button
                       type="button"
                       className="invisible text-muted-foreground hover:text-destructive group-hover:visible"
-                      onClick={() => setLines((rows) => rows.filter((_, j) => j !== i))}
+                      onClick={() => editLines((rows) => rows.filter((_, j) => j !== i))}
                     >
                       <Trash2 className="size-4" />
                     </button>
