@@ -100,7 +100,7 @@ function InvoiceGenerator() {
     [lines],
   );
 
-  const roomAssigned = Boolean(r?.room_name);
+  const roomAssigned = Boolean(assignedBed);
   const termDays = paymentTerms === "NET30" ? 30 : 15;
   const dueDate = invoiceDate
     ? new Date(new Date(invoiceDate).getTime() + termDays * 86400000)
