@@ -83,6 +83,10 @@ export type Resident = {
   nationality: string;
   idNumber: string;
   gender: string;
+  address: string;
+  postcode: string;
+  state: string;
+  country: string;
   maritalStatus: string;
   race: string;
   religion: string;
@@ -118,6 +122,10 @@ export type Resident = {
   payerRelationship: string;
   payerMobile: string;
   payerEmail: string;
+  payerAddress: string;
+  payerPostcode: string;
+  payerState: string;
+  payerCountry: string;
   // misc
   status: string;
   portalInvited: boolean;
@@ -481,6 +489,12 @@ export function findBed(units: Unit[], bedId?: string): BedRow | undefined {
   return allBeds(units).find((r) => r.bed.id === bedId);
 }
 
+/** The resident a bed points at. beds.resident_id holds the legacy number. */
+export function residentForBed(residents: Resident[], bed: Bed): Resident | undefined {
+  if (!bed.residentId) return undefined;
+  return residents.find((r) => r.legacyId === bed.residentId || r.id === bed.residentId);
+}
+
 /**
  * Where a resident actually sleeps.
  *
@@ -522,6 +536,10 @@ export function blankResident(partial: Partial<Resident> = {}): Resident {
     nationality: "",
     idNumber: "",
     gender: "",
+    address: "",
+    postcode: "",
+    state: "",
+    country: "",
     maritalStatus: "",
     race: "",
     religion: "",
@@ -550,6 +568,10 @@ export function blankResident(partial: Partial<Resident> = {}): Resident {
     payerRelationship: "",
     payerMobile: "",
     payerEmail: "",
+    payerAddress: "",
+    payerPostcode: "",
+    payerState: "",
+    payerCountry: "",
     status: "",
     portalInvited: false,
     docs: [],

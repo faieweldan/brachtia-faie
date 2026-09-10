@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { ArrowLeft, Link2, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import {
   DocumentRow,
   EmptyState,
   Panel,
+  ReadOnlyField,
   Select,
   StatusPill,
   Text,
@@ -24,6 +25,7 @@ import {
   SCHEDULES,
   addTask,
   allBeds,
+  blankResident,
   completeness,
   fmtDate,
   money,
@@ -87,11 +89,33 @@ export const Route = createFileRoute("/admin/residents/$id")({
 function ResidentProfilePage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
-  const { residents, units, tenancies } = useOps();
+  const { residents, units, tenancies, payments } = useOps();
+  // "new" is a resident that does not exist yet: the form is filled in first and
+  // the row is only created on save, so an abandoned form leaves nothing behind
+  const isNew = id === "new";
   const stored = residents.find((r) => r.id === id);
-  const [form, setForm] = useState<Resident | null>(stored ?? null);
+  const [form, setForm] = useState<Resident | null>(isNew ? blankResident() : (stored ?? null));
   const [tab, setTab] = useState("profile");
   const [active, setActive] = useState("personal");
+  // sections are read-only until the pencil is clicked
+  const [editing, setEditing] = useState<Record<string, boolean>>({});
+  const [linking, setLinking] = useState(false);
+  const isEditing = (key: string) => !!editing[key];
+  const editAction = (key: string) => (
+    <Button
+      size="sm"
+      variant={isEditing(key) ? "default" : "ghost"}
+      onClick={() => setEditing((e) => ({ ...e, [key]: !e[key] }))}
+    >
+      {isEditing(key) ? (
+        "Done"
+      ) : (
+        <>
+          <Pencil className="mr-1 size-3.5" /> Edit
+        </>
+      )}
+    </Button>
+  );
   const sections = useRef<Record<string, HTMLElement | null>>({});
   const sectionRef = (key: string) => (el: HTMLElement | null) => {
     sections.current[key] = el;
@@ -125,7 +149,7 @@ function ResidentProfilePage() {
     if (stored && !form) setForm(stored);
   }, [stored, form]);
 
-  if (!stored || !form) {
+  if ((!stored && !isNew) || !form) {
     return (
       <EmptyState
         title="Resident not found"
@@ -149,10 +173,17 @@ function ResidentProfilePage() {
 
   async function save() {
     if (!form) return;
+    let saved;
     try {
-      await saveResidentRecord(form);
+      saved = await saveResidentRecord(form);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save resident");
+      return;
+    }
+    if (isNew) {
+      // the server assigned the real id, so move onto that address
+      toast.success("Resident created");
+      void navigate({ to: "/admin/residents/$id", params: { id: saved.id }, replace: true });
       return;
     }
     if (form.bedId) {
@@ -214,6 +245,85 @@ function ResidentProfilePage() {
     },
   };
 
+  /**
+   * A blank row is an accident, not a record: no name, no Brachtia id, no bed,
+   * no tenancy, no payments. Nothing points at it, so removing it loses nothing.
+   * Anyone with real data is deactivated instead.
+   */
+  const isEmptyDraft =
+    !form.fullName.trim() &&
+    !form.legacyId.trim() &&
+    !form.email.trim() &&
+    !placed &&
+    !tenancy &&
+    !payments.some((p) => p.residentId === form.id);
+
+  /**
+   * A link the student opens to check and complete their own profile. It writes
+   * straight back to this resident, so anything they change shows up here and
+   * everywhere else at once.
+   */
+  async function copyProfileLink() {
+    if (!form || isNew) return;
+    setLinking(true);
+    try {
+      const { getOrCreateProfileLink } = await import("@/lib/profile-link.functions");
+      const { token } = await getOrCreateProfileLink({ data: { residentId: form.id } });
+      const url = `${window.location.origin}/my-profile/${token}`;
+      await navigator.clipboard.writeText(url);
+      toast.success("Profile link copied", {
+        description: "Send it to the student. It works for 30 days.",
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not create the link");
+    } finally {
+      setLinking(false);
+    }
+  }
+
+  async function discard() {
+    if (!form) return;
+    if (isNew) {
+      void navigate({ to: "/admin/residents" });
+      return;
+    }
+    try {
+      await deleteResident(form.id);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not remove resident");
+      return;
+    }
+    toast.success("Blank resident removed");
+    void navigate({ to: "/admin/residents" });
+  }
+
+  /**
+   * Residents are never deleted - they are history, and a deleted one would
+   * leave payments and agreements pointing at nothing. Deactivating marks them
+   * inactive and frees the bed they held.
+   */
+  async function deactivate() {
+    const bed = placed?.bed;
+    try {
+      await saveResidentRecord({ ...form, status: "Inactive" } as Resident);
+      if (bed) {
+        updateBed(bed.id, {
+          status: "vacant",
+          residentId: undefined,
+          residentName: undefined,
+          tenancyStart: undefined,
+          tenancyEnd: undefined,
+          rent: undefined,
+        });
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not deactivate resident");
+      return;
+    }
+    toast.success("Resident deactivated");
+    void navigate({ to: "/admin/residents" });
+  }
+
   return (
     <div className="space-y-5">
       <Button asChild size="sm" variant="ghost" className="-ml-2 self-start">
@@ -223,8 +333,8 @@ function ResidentProfilePage() {
       </Button>
 
       <Panel>
-        <div className="flex flex-wrap items-start gap-x-5 gap-y-4">
-          <div className="flex min-w-0 flex-1 items-center gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
             {/* photo comes later; initials keep the shape stable until then */}
             <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-brand-tint text-base font-semibold tracking-wide text-brand-deep">
               {initials(form.fullName)}
@@ -233,68 +343,61 @@ function ResidentProfilePage() {
               <p className="truncate text-lg font-bold text-brand-deep">
                 {form.fullName || "New resident"}
               </p>
-              <p className="truncate text-xs text-muted-foreground">
-                {[form.legacyId && `ID ${form.legacyId}`, form.university, form.nationality]
-                  .filter(Boolean)
-                  .join(" · ") || "No details yet"}
-              </p>
-              <p className="truncate text-xs text-muted-foreground">
-                {placed
-                  ? `${placed.unit.unitNo} · Room ${placed.room.letter} · ${placed.bed.label}`
-                  : "No placement yet"}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
                 <StatusPill status={stay.status} />
-                {form.gender ? (
-                  <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
-                    {form.gender}
-                  </span>
-                ) : null}
+                {[
+                  form.legacyId && `ID ${form.legacyId}`,
+                  form.university,
+                  form.nationality,
+                  form.gender,
+                ]
+                  .filter(Boolean)
+                  .map((chip) => (
+                    <span
+                      key={String(chip)}
+                      className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground"
+                    >
+                      {chip}
+                    </span>
+                  ))}
               </div>
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1 lg:order-last">
+          <div className="flex shrink-0 items-center gap-1">
             <Button size="sm" onClick={save}>
               Save
             </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={async () => {
-                try {
-                  await deleteResident(form.id);
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : "Could not remove resident");
-                  return;
-                }
-                toast.success("Resident removed");
-                void navigate({ to: "/admin/residents" });
-              }}
-            >
-              <Trash2 className="size-4" />
-            </Button>
+            {isEmptyDraft ? (
+              <Button size="sm" variant="outline" onClick={discard}>
+                <Trash2 className="mr-1 size-3.5" /> Discard
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" onClick={deactivate}>
+                Deactivate
+              </Button>
+            )}
           </div>
+        </div>
 
-          <div className="grid w-full grid-cols-2 gap-x-6 gap-y-3 border-t border-border pt-4 sm:grid-cols-4 lg:w-auto lg:flex-1 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-            {[
-              { label: "Residence", value: placed?.unit.residenceName },
-              { label: "Unit", value: placed?.unit.unitNo },
-              {
-                label: "Room / bed",
-                value: placed ? `Room ${placed.room.letter} · ${placed.bed.label}` : undefined,
-              },
-              { label: "Monthly rent", value: stay.rent ? money(stay.rent) : undefined },
-              { label: "Tenancy start", value: stay.start ? fmtDate(stay.start) : undefined },
-              { label: "Tenancy end", value: stay.end ? fmtDate(stay.end) : undefined },
-              { label: "Duration", value: stay.duration },
-            ].map((f) => (
-              <div key={f.label} className="min-w-0">
-                <p className="text-xs text-muted-foreground">{f.label}</p>
-                <p className="truncate text-sm font-medium text-foreground">{f.value || "—"}</p>
-              </div>
-            ))}
-          </div>
+        <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-border pt-4 sm:grid-cols-4 lg:grid-cols-7">
+          {[
+            { label: "Residence", value: placed?.unit.residenceName },
+            { label: "Unit", value: placed?.unit.unitNo },
+            {
+              label: "Room / bed",
+              value: placed ? `Room ${placed.room.letter} · ${placed.bed.label}` : undefined,
+            },
+            { label: "Monthly rent", value: stay.rent ? money(stay.rent) : undefined },
+            { label: "Tenancy start", value: stay.start ? fmtDate(stay.start) : undefined },
+            { label: "Tenancy end", value: stay.end ? fmtDate(stay.end) : undefined },
+            { label: "Duration", value: stay.duration },
+          ].map((f) => (
+            <div key={f.label} className="min-w-0">
+              <p className="text-xs text-muted-foreground">{f.label}</p>
+              <p className="truncate text-sm font-medium text-foreground">{f.value || "—"}</p>
+            </div>
+          ))}
         </div>
       </Panel>
 
@@ -312,7 +415,9 @@ function ResidentProfilePage() {
               />
             </div>
             {missing.length ? (
-              <p className="mt-1.5 text-xs text-muted-foreground">Missing: {missing.join(", ")}</p>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                {missing.length} field{missing.length === 1 ? "" : "s"} still to fill in
+              </p>
             ) : null}
           </div>
           {tenancy ? (
@@ -354,63 +459,115 @@ function ResidentProfilePage() {
                   </li>
                 ))}
               </ul>
+
+              {/* sending the student their own form is a nav action, not a
+                  section of the profile */}
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-3 w-full justify-start"
+                disabled={isNew || linking}
+                onClick={copyProfileLink}
+              >
+                <Link2 className="mr-1.5 size-3.5" />
+                {linking ? "Preparing…" : "Copy profile link"}
+              </Button>
             </nav>
 
             <div className="min-w-0 flex-1 space-y-4">
               <section id="sec-personal" ref={sectionRef("personal")} className="scroll-mt-24">
-                <Panel title="Personal">
+                <Panel title="Personal" action={editAction("personal")}>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <Text
+                      readOnly={!isEditing("personal")}
                       label="Full name (per passport / NRIC)"
                       value={form.fullName}
                       onChange={(v) => set({ fullName: v })}
                     />
                     <Text
+                      readOnly={!isEditing("personal")}
                       label="Email"
                       type="email"
                       value={form.email}
                       onChange={(v) => set({ email: v })}
                     />
                     <Text
+                      readOnly={!isEditing("personal")}
                       label="Mobile number"
                       value={form.mobile}
                       onChange={(v) => set({ mobile: v })}
                     />
                     <Text
+                      readOnly={!isEditing("personal")}
                       label="Date of birth"
                       type="date"
                       value={form.dob}
                       onChange={(v) => set({ dob: v })}
                     />
                     <Text
+                      readOnly={!isEditing("personal")}
                       label="Nationality"
                       value={form.nationality}
                       onChange={(v) => set({ nationality: v })}
                     />
                     <Text
+                      readOnly={!isEditing("personal")}
                       label="Passport / NRIC number"
                       value={form.idNumber}
                       onChange={(v) => set({ idNumber: v })}
                     />
                     <Select
+                      readOnly={!isEditing("personal")}
                       label="Gender"
                       value={form.gender}
                       onChange={(v) => set({ gender: v })}
                       options={GENDERS.filter((g) => g !== "Any")}
                     />
                     <Select
+                      readOnly={!isEditing("personal")}
                       label="Marital status"
                       value={form.maritalStatus}
                       onChange={(v) => set({ maritalStatus: v })}
                       options={["Single", "Married", "Other"]}
                     />
-                    <Text label="Race" value={form.race} onChange={(v) => set({ race: v })} />
                     <Text
+                      readOnly={!isEditing("personal")}
+                      label="Race"
+                      value={form.race}
+                      onChange={(v) => set({ race: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("personal")}
                       label="Religion"
                       value={form.religion}
                       onChange={(v) => set({ religion: v })}
                     />
+                    <Text
+                      readOnly={!isEditing("personal")}
+                      label="Address"
+                      value={form.address}
+                      onChange={(v) => set({ address: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("personal")}
+                      label="Postcode"
+                      value={form.postcode}
+                      onChange={(v) => set({ postcode: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("personal")}
+                      label="State"
+                      value={form.state}
+                      onChange={(v) => set({ state: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("personal")}
+                      label="Country"
+                      value={form.country}
+                      onChange={(v) => set({ country: v })}
+                    />
                     <Select
+                      readOnly={!isEditing("personal")}
                       label="Medical condition / allergy"
                       value={form.medicalCondition}
                       onChange={(v) => set({ medicalCondition: v })}
@@ -421,41 +578,50 @@ function ResidentProfilePage() {
                     />
                     <div className="sm:col-span-2 lg:col-span-3">
                       <p className="mb-1.5 text-xs text-muted-foreground">Medical details</p>
-                      <Textarea
-                        value={form.medicalDetail}
-                        onChange={(e) => set({ medicalDetail: e.target.value })}
-                        placeholder="Conditions, allergies, medication…"
-                      />
+                      {isEditing("personal") ? (
+                        <Textarea
+                          value={form.medicalDetail}
+                          onChange={(e) => set({ medicalDetail: e.target.value })}
+                          placeholder="Conditions, allergies, medication…"
+                        />
+                      ) : (
+                        <p className="text-sm text-foreground">{form.medicalDetail || "—"}</p>
+                      )}
                     </div>
                   </div>
                 </Panel>
               </section>
 
               <section id="sec-academic" ref={sectionRef("academic")} className="scroll-mt-24">
-                <Panel title="Academic">
+                <Panel title="Academic" action={editAction("academic")}>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <Text
+                      readOnly={!isEditing("academic")}
                       label="University / college"
                       value={form.university}
                       onChange={(v) => set({ university: v })}
                     />
                     <Select
+                      readOnly={!isEditing("academic")}
                       label="Level of study"
                       value={form.levelOfStudy}
                       onChange={(v) => set({ levelOfStudy: v })}
                       options={LEVELS}
                     />
                     <Text
+                      readOnly={!isEditing("academic")}
                       label="Course / programme"
                       value={form.course}
                       onChange={(v) => set({ course: v })}
                     />
                     <Text
+                      readOnly={!isEditing("academic")}
                       label="Student ID"
                       value={form.studentId}
                       onChange={(v) => set({ studentId: v })}
                     />
                     <Text
+                      readOnly={!isEditing("academic")}
                       label="Expected graduation year"
                       value={form.graduationYear}
                       onChange={(v) => set({ graduationYear: v })}
@@ -465,45 +631,53 @@ function ResidentProfilePage() {
               </section>
 
               <section id="sec-emergency" ref={sectionRef("emergency")} className="scroll-mt-24">
-                <Panel title="Emergency contact">
+                <Panel title="Emergency contact" action={editAction("emergency")}>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <Text
+                      readOnly={!isEditing("emergency")}
                       label="Full name"
                       value={form.ecName}
                       onChange={(v) => set({ ecName: v })}
                     />
                     <Text
+                      readOnly={!isEditing("emergency")}
                       label="Relationship"
                       value={form.ecRelationship}
                       onChange={(v) => set({ ecRelationship: v })}
                     />
                     <Text
+                      readOnly={!isEditing("emergency")}
                       label="Mobile number"
                       value={form.ecMobile}
                       onChange={(v) => set({ ecMobile: v })}
                     />
                     <Text
+                      readOnly={!isEditing("emergency")}
                       label="Email"
                       type="email"
                       value={form.ecEmail}
                       onChange={(v) => set({ ecEmail: v })}
                     />
                     <Text
+                      readOnly={!isEditing("emergency")}
                       label="Address"
                       value={form.ecAddress}
                       onChange={(v) => set({ ecAddress: v })}
                     />
                     <Text
+                      readOnly={!isEditing("emergency")}
                       label="Postcode"
                       value={form.ecPostcode}
                       onChange={(v) => set({ ecPostcode: v })}
                     />
                     <Text
+                      readOnly={!isEditing("emergency")}
                       label="State"
                       value={form.ecState}
                       onChange={(v) => set({ ecState: v })}
                     />
                     <Text
+                      readOnly={!isEditing("emergency")}
                       label="Country"
                       value={form.ecCountry}
                       onChange={(v) => set({ ecCountry: v })}
@@ -513,40 +687,70 @@ function ResidentProfilePage() {
               </section>
 
               <section id="sec-payment" ref={sectionRef("payment")} className="scroll-mt-24">
-                <Panel title="Payor details">
+                <Panel title="Payor details" action={editAction("payment")}>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <Select
+                      readOnly={!isEditing("payment")}
                       label="Payment method"
                       value={form.payMethod}
                       onChange={(v) => set({ payMethod: v })}
                       options={PAY_METHODS}
                     />
                     <Select
+                      readOnly={!isEditing("payment")}
                       label="Payment schedule"
                       value={form.paySchedule}
                       onChange={(v) => set({ paySchedule: v })}
                       options={SCHEDULES.map((s) => ({ value: s.value, label: s.label }))}
                     />
                     <Text
+                      readOnly={!isEditing("payment")}
                       label="Payor name"
                       value={form.payerName}
                       onChange={(v) => set({ payerName: v })}
                     />
                     <Text
+                      readOnly={!isEditing("payment")}
                       label="Relationship to resident"
                       value={form.payerRelationship}
                       onChange={(v) => set({ payerRelationship: v })}
                     />
                     <Text
+                      readOnly={!isEditing("payment")}
                       label="Payor mobile"
                       value={form.payerMobile}
                       onChange={(v) => set({ payerMobile: v })}
                     />
                     <Text
+                      readOnly={!isEditing("payment")}
                       label="Payor email"
                       type="email"
                       value={form.payerEmail}
                       onChange={(v) => set({ payerEmail: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("payment")}
+                      label="Payor address"
+                      value={form.payerAddress}
+                      onChange={(v) => set({ payerAddress: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("payment")}
+                      label="Payor postcode"
+                      value={form.payerPostcode}
+                      onChange={(v) => set({ payerPostcode: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("payment")}
+                      label="Payor state"
+                      value={form.payerState}
+                      onChange={(v) => set({ payerState: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("payment")}
+                      label="Payor country"
+                      value={form.payerCountry}
+                      onChange={(v) => set({ payerCountry: v })}
                     />
                   </div>
                 </Panel>
@@ -612,9 +816,15 @@ function ResidentProfilePage() {
         </TabsContent>
 
         <TabsContent value="tenancy" className="mt-4 space-y-4">
-          <Panel title="Placement" description="Which bed this resident occupies, and the term.">
+          <Panel
+            title="Placement"
+            description="Which bed this resident occupies, and the term."
+            action={editAction("placement")}
+          >
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <ReadOnlyField label="Brachtia resident ID" value={form.legacyId} />
               <Select
+                readOnly={!isEditing("placement")}
                 label="Assigned bed"
                 value={form.bedId ?? ""}
                 onChange={(v) => {
@@ -633,18 +843,21 @@ function ResidentProfilePage() {
                 placeholder={vacantBeds.length ? "Select bed" : "No beds set up yet"}
               />
               <Text
+                readOnly={!isEditing("placement")}
                 label="Occupancy"
                 value={form.occupancy}
                 onChange={(v) => set({ occupancy: v })}
                 placeholder="single / twin"
               />
               <Text
+                readOnly={!isEditing("placement")}
                 label="Move-in date"
                 type="date"
                 value={form.moveIn}
                 onChange={(v) => set({ moveIn: v })}
               />
               <Text
+                readOnly={!isEditing("placement")}
                 label="Lease length (months)"
                 value={form.leaseMonths}
                 onChange={(v) => set({ leaseMonths: v })}
