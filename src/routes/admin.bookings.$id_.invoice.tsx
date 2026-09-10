@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { createInvoice, getEnquiry } from "@/lib/admin.functions";
 import { allBeds, useOps } from "@/lib/ops-store";
 import { previewInvoice, type InvoiceDoc } from "@/lib/invoice-pdf";
+import { stayQuote, type ContractTerm, type PaymentTerm, type Property } from "@/data/properties";
 
 export const Route = createFileRoute("/admin/bookings/$id_/invoice")({
   component: InvoiceGenerator,
@@ -54,8 +55,8 @@ function InvoiceGenerator() {
   });
 
   const [lines, setLines] = useState<Line[]>([]);
-  const [frequency, setFrequency] = useState("bimonthly");
-  const [rent, setRent] = useState(0);
+  const [manual, setManual] = useState(false);
+  const [rentOverride, setRentOverride] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
   const [invoiceDate, setInvoiceDate] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("NET15");
@@ -78,21 +79,55 @@ function InvoiceGenerator() {
     : "";
   const invoiceRoomName = assignedRoomLabel || r?.room_name || "";
 
-  useEffect(() => {
-    if (!row || ready) return;
-    const first = snapshot?.quote?.firstPayment as any[] | undefined;
-    setLines(
-      (first ?? []).map((l) => ({
+  /* Rent follows the assigned room; admin can override it for exceptions. */
+  const roomRent = Number(assignedBed?.bed.rent || assignedBed?.room.rent || 0);
+  const bookingRent = Number(r?.monthly_rent || snapshot?.quote?.monthlyAfter || 0);
+  const autoRent = roomRent || bookingRent;
+  const rent = rentOverride ?? autoRent;
+  const frequency = String(r?.payment_term || "bimonthly");
+
+  const property = snapshot?.property as Property | undefined;
+
+  /* Everything on the invoice is derived from monthly rent + payment frequency. */
+  const calculated = useMemo<Line[] | null>(() => {
+    if (!property || !rent || !r?.move_in || !r?.move_out) return null;
+    const term = (r.term === "short" ? "short" : "long") as ContractTerm;
+    const cycle = frequency === "monthly" ? "bimonthly" : (frequency as PaymentTerm);
+    const q = stayQuote(property, rent, term, r.move_in, r.move_out, cycle);
+    if (!q) return null;
+    return q.firstPayment
+      .filter((l) => !(frequency === "monthly" && l.label.startsWith("Advance rental")))
+      .map((l) => ({ label: l.label, kind: String(l.kind), amount: Number(l.amount || 0) }));
+  }, [property, rent, frequency, r?.move_in, r?.move_out, r?.term]);
+
+  const snapshotLines = useMemo<Line[]>(
+    () =>
+      ((snapshot?.quote?.firstPayment as any[] | undefined) ?? []).map((l) => ({
         label: String(l.label ?? ""),
         kind: String(l.kind ?? "onetime"),
         amount: Number(l.amount ?? 0),
       })),
-    );
-    setFrequency(String(r.payment_term || "bimonthly"));
-    setRent(Number(r.monthly_rent || snapshot?.quote?.monthlyAfter || 0));
+    [snapshot],
+  );
+
+  useEffect(() => {
+    if (!row || ready) return;
     setInvoiceDate(new Date().toISOString().slice(0, 10));
     setReady(true);
-  }, [row, ready, snapshot, r.payment_term, r.monthly_rent]);
+  }, [row, ready]);
+
+  /** Any manual line edit stops the automatic recalculation. */
+  const editLines = (fn: (rows: Line[]) => Line[]) => {
+    setManual(true);
+    setLines(fn);
+  };
+
+  /* Auto-fill the lines from the calculation unless admin has edited them. */
+  useEffect(() => {
+    if (manual) return;
+    setLines(calculated ?? snapshotLines);
+  }, [manual, calculated, snapshotLines]);
+
 
   const total = useMemo(() => lines.reduce((n, l) => n + Number(l.amount || 0), 0), [lines]);
   const deposits = useMemo(
@@ -224,7 +259,32 @@ function InvoiceGenerator() {
           </Field>
           <Field label="Tenancy start"><p className="text-sm">{r.move_in ?? "—"}</p></Field>
           <Field label="Tenancy end"><p className="text-sm">{r.move_out ?? "—"}</p></Field>
-          <Field label="Monthly rent"><p className="text-sm">{money(rent)}</p></Field>
+          <Field label="Monthly rent">
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                value={rent}
+                className="h-8 w-32 text-right"
+                onChange={(e) => setRentOverride(Number(e.target.value))}
+              />
+              {rentOverride !== null && rentOverride !== autoRent ? (
+                <button
+                  type="button"
+                  className="text-xs text-brand hover:underline"
+                  onClick={() => setRentOverride(null)}
+                >
+                  Reset
+                </button>
+              ) : null}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {rentOverride !== null && rentOverride !== autoRent
+                ? `Overridden · assigned room rate ${money(autoRent)}`
+                : roomRent
+                  ? "From the assigned room"
+                  : "From the booking"}
+            </p>
+          </Field>
           <Field label="Payment frequency">
             <p className="text-sm">
               {FREQUENCIES.find((f) => f.value === frequency)?.label ?? frequency}
@@ -272,12 +332,33 @@ function InvoiceGenerator() {
 
       {/* Line items — accounting-style table */}
       <section className="rounded-xl border border-border bg-card p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-foreground">Initial payment</h2>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Initial payment</h2>
+            <p className="text-xs text-muted-foreground">
+              {manual
+                ? "Manually edited — no longer following the rent and payment frequency."
+                : `Calculated from ${money(rent)}/month · ${
+                    FREQUENCIES.find((f) => f.value === frequency)?.label ?? frequency
+                  }`}
+            </p>
+          </div>
+          {manual && calculated ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setManual(false);
+                setLines(calculated);
+              }}
+            >
+              Recalculate
+            </Button>
+          ) : null}
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setLines((l) => [...l, { label: "", kind: "onetime", amount: 0 }])}
+            onClick={() => editLines((l) => [...l, { label: "", kind: "onetime", amount: 0 }])}
           >
             <Plus className="size-4" /> Add line
           </Button>
@@ -301,7 +382,7 @@ function InvoiceGenerator() {
                       placeholder="Description"
                       className="h-8 border-transparent bg-transparent focus-visible:border-input"
                       onChange={(e) =>
-                        setLines((rows) =>
+                        editLines((rows) =>
                           rows.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)),
                         )
                       }
@@ -311,7 +392,7 @@ function InvoiceGenerator() {
                     <select
                       value={l.kind}
                       onChange={(e) =>
-                        setLines((rows) =>
+                        editLines((rows) =>
                           rows.map((x, j) => (j === i ? { ...x, kind: e.target.value } : x)),
                         )
                       }
@@ -330,7 +411,7 @@ function InvoiceGenerator() {
                       value={l.amount}
                       className="h-8 text-right"
                       onChange={(e) =>
-                        setLines((rows) =>
+                        editLines((rows) =>
                           rows.map((x, j) =>
                             j === i ? { ...x, amount: Number(e.target.value) } : x,
                           ),
@@ -342,7 +423,7 @@ function InvoiceGenerator() {
                     <button
                       type="button"
                       className="invisible text-muted-foreground hover:text-destructive group-hover:visible"
-                      onClick={() => setLines((rows) => rows.filter((_, j) => j !== i))}
+                      onClick={() => editLines((rows) => rows.filter((_, j) => j !== i))}
                     >
                       <Trash2 className="size-4" />
                     </button>
