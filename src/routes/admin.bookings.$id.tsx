@@ -633,11 +633,13 @@ function BookingDetail() {
 
   const stayFields = [
     ["residence_name", "Residence", "residence"],
+    ["unit_type", "Unit type", "unittype"],
+    ["room_name", "Room preference", "room"],
     ["occupancy", "Occupancy", "sharing"],
-    ["room_name", "Room preference", "text"],
     ["move_in", "Move in", "date"],
     ["move_out", "Move out", "date"],
     ["term", "Term", "term"],
+    ["payment_term", "Payment frequency", "payment"],
     ["monthly_rent", "Monthly rent (RM)", "number"],
     ["first_payment", "First payment (RM)", "number"],
   ] as const;
