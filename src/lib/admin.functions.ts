@@ -85,6 +85,8 @@ export const updateEnquiry = createServerFn({ method: "POST" })
       moveOut?: string;
       monthlyRent?: number;
       firstPayment?: number;
+      paymentTerm?: string;
+      unitType?: string;
       message?: string;
       heardAbout?: string;
       heardAboutOther?: string;
