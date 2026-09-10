@@ -14,8 +14,8 @@
 
 ```text
 ITEM                              TYPE              AMOUNT (RM)
-First month rent · Sep 2026       Rent / Advance         1,050.00
-Advance rental · 1 month          Rent / Advance         1,050.00
+First month rent · Sep 2026       Advance Rent           1,050.00
+Advance rental · 1 month          Advance Rent           1,050.00
 Utilities deposit · ½ month       Refundable               525.00
 Security deposit · 2 months       Refundable             2,100.00
 Access card deposit               Refundable                50.00
