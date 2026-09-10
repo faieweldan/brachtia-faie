@@ -493,3 +493,183 @@ export const generateViewingToken = createServerFn({ method: "POST" })
     if (upErr) throw new Error(upErr.message);
     return { token };
   });
+
+/* ---------------- Invoices, payments & receipts ---------------- */
+
+export type InvoiceLine = { label: string; kind: string; amount: number };
+
+/** Invoice + its items, payments and receipts for one booking. */
+export const getBookingBilling = createServerFn({ method: "GET" })
+  .inputValidator((data: { enquiryId: string }) => data)
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    const { data: invoice, error } = await supabase
+      .from("invoices")
+      .select("*")
+      .eq("enquiry_id", data.enquiryId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!invoice) return { invoice: null, items: [], payments: [], receipts: [], paid: 0, balance: 0 };
+
+    const invoiceId = (invoice as any).id as string;
+    const [items, payments, receipts] = await Promise.all([
+      supabase.from("invoice_items").select("*").eq("invoice_id", invoiceId).order("sort_order"),
+      supabase.from("payments").select("*").eq("invoice_id", invoiceId).order("paid_on"),
+      supabase.from("receipts").select("*").eq("invoice_id", invoiceId).order("issued_at"),
+    ]);
+    const paid = (payments.data ?? []).reduce((n: number, p: any) => n + Number(p.amount || 0), 0);
+    return {
+      invoice,
+      items: items.data ?? [],
+      payments: payments.data ?? [],
+      receipts: receipts.data ?? [],
+      paid,
+      balance: Number((invoice as any).total || 0) - paid,
+    };
+  });
+
+export const createInvoice = createServerFn({ method: "POST" })
+  .inputValidator((data: { enquiryId: string; values: Record<string, unknown>; items: InvoiceLine[] }) => data)
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    const total = data.items.reduce((n, l) => n + Number(l.amount || 0), 0);
+    const deposits = data.items
+      .filter((l) => l.kind === "refundable")
+      .reduce((n, l) => n + Number(l.amount || 0), 0);
+
+    const { data: inv, error } = await supabase
+      .from("invoices")
+      .insert({
+        ...data.values,
+        enquiry_id: data.enquiryId,
+        total,
+        deposits_total: deposits,
+      } as any)
+      .select("*")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    const invoiceId = (inv as any).id as string;
+
+    if (data.items.length) {
+      const rows = data.items.map((l, i) => ({
+        invoice_id: invoiceId,
+        label: l.label,
+        kind: l.kind,
+        amount: Number(l.amount || 0),
+        sort_order: i,
+      }));
+      const ins = await supabase.from("invoice_items").insert(rows as any);
+      if (ins.error) throw new Error(ins.error.message);
+    }
+
+    await supabase
+      .from("enquiries")
+      .update({
+        invoice_issued_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      } as any)
+      .eq("id", data.enquiryId);
+
+    return { id: invoiceId, number: (inv as any).number as string };
+  });
+
+/** Logs a payment against an invoice and issues the matching receipt. */
+export const recordPayment = createServerFn({ method: "POST" })
+  .inputValidator(
+    (data: {
+      invoiceId: string;
+      amount: number;
+      paidOn: string;
+      method: string;
+      reference?: string;
+      proofPath?: string;
+    }) => data,
+  )
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    const { data: invoice, error } = await supabase
+      .from("invoices")
+      .select("*")
+      .eq("id", data.invoiceId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!invoice) throw new Error("Invoice not found");
+
+    const existing = await supabase.from("payments").select("amount").eq("invoice_id", data.invoiceId);
+    const paidBefore = (existing.data ?? []).reduce((n: number, p: any) => n + Number(p.amount || 0), 0);
+    const amount = Number(data.amount || 0);
+    const balance = Number((invoice as any).total || 0) - paidBefore - amount;
+
+    const { data: payment, error: payErr } = await supabase
+      .from("payments")
+      .insert({
+        invoice_id: data.invoiceId,
+        enquiry_id: (invoice as any).enquiry_id,
+        resident_id: (invoice as any).resident_id ?? "",
+        amount,
+        paid_on: data.paidOn,
+        method: data.method,
+        reference: data.reference ?? "",
+        proof_path: data.proofPath ?? "",
+      } as any)
+      .select("*")
+      .maybeSingle();
+    if (payErr) throw new Error(payErr.message);
+
+    const { data: receipt, error: recErr } = await supabase
+      .from("receipts")
+      .insert({
+        payment_id: (payment as any).id,
+        invoice_id: data.invoiceId,
+        enquiry_id: (invoice as any).enquiry_id,
+        resident_id: (invoice as any).resident_id ?? "",
+        amount,
+        balance_after: balance,
+      } as any)
+      .select("*")
+      .maybeSingle();
+    if (recErr) throw new Error(recErr.message);
+
+    await supabase
+      .from("invoices")
+      .update({
+        status: balance <= 0 ? "paid" : "part_paid",
+        updated_at: new Date().toISOString(),
+      } as any)
+      .eq("id", data.invoiceId);
+
+    const enquiryId = (invoice as any).enquiry_id as string | null;
+    if (enquiryId) {
+      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      const { data: enq } = await supabase
+        .from("enquiries")
+        .select("fee_received_at,status")
+        .eq("id", enquiryId)
+        .maybeSingle();
+      if (enq && !(enq as any).fee_received_at) {
+        patch["fee_received_at"] = new Date().toISOString();
+        patch["status"] = "booked";
+        patch["stage_changed_at"] = new Date().toISOString();
+      }
+      await supabase.from("enquiries").update(patch as any).eq("id", enquiryId);
+    }
+
+    return { receipt, balance };
+  });
+
+/** Attaches an existing booking's billing records to a resident profile. */
+export const linkBillingToResident = createServerFn({ method: "POST" })
+  .inputValidator((data: { enquiryId: string; residentId: string }) => data)
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    for (const table of ["invoices", "payments", "receipts"] as const) {
+      const { error } = await supabase
+        .from(table)
+        .update({ resident_id: data.residentId } as any)
+        .eq("enquiry_id", data.enquiryId);
+      if (error) throw new Error(error.message);
+    }
+    return { ok: true };
+  });
