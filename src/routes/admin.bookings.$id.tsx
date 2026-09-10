@@ -154,8 +154,41 @@ function BookingDetail() {
     queryFn: () => listResidenceOptions(),
   });
 
+  const { data: roomOptions } = useQuery({
+    queryKey: ["admin", "room-options", row?.residence_slug ?? ""],
+    queryFn: () => listRoomOptions({ data: { residenceSlug: row?.residence_slug ?? "" } }),
+    enabled: !!row?.residence_slug,
+  });
+
+  /** Maps the snake_case field keys used by EditableCard to the camelCase keys updateEnquiry expects. */
+  const FIELD_KEY_MAP: Record<string, string> = {
+    full_name: "fullName",
+    phone: "phone",
+    email: "email",
+    nationality: "nationality",
+    university: "university",
+    gender: "gender",
+    intake: "intake",
+    heard_about: "heardAbout",
+    heard_about_other: "heardAboutOther",
+    residence_name: "residenceName",
+    residence_slug: "residenceSlug",
+    occupancy: "occupancy",
+    room_name: "roomName",
+    room_code: "roomCode",
+    unit_type: "unitType",
+    move_in: "moveIn",
+    move_out: "moveOut",
+    term: "term",
+    monthly_rent: "monthlyRent",
+    first_payment: "firstPayment",
+    payment_term: "paymentTerm",
+    message: "message",
+  };
+
   const mutate = useMutation({
-    mutationFn: (input: Record<string, unknown>) => updateEnquiry({ data: { id, ...input } as any }),
+    mutationFn: (input: Record<string, unknown>) =>
+      updateEnquiry({ data: { id, ...input } as any }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin"] }),
     onError: () => toast.error("Could not save changes"),
   });
