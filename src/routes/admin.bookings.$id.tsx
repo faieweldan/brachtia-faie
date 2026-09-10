@@ -1385,6 +1385,7 @@ function EditableCard({
   row,
   onSaveField,
   resOptions,
+  roomOptions,
   extra,
 }: {
   title: string;
@@ -1396,6 +1397,7 @@ function EditableCard({
   row: any;
   onSaveField: (key: string, value: unknown) => void;
   resOptions: { id: string; slug: string; name: string }[];
+  roomOptions?: { code: string; room_code: string; name: string; unit_type: string; occupancies: string[] }[];
   extra?: [string, React.ReactNode][];
 }) {
   const [draft, setDraft] = useState<Record<string, string>>({});
