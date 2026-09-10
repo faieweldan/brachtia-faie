@@ -26,6 +26,7 @@ import { Route as AdminResidentsRouteImport } from './routes/admin.residents'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminTasksRouteImport } from './routes/admin.tasks'
 import { Route as AdminWebsiteRouteImport } from './routes/admin.website'
+import { Route as MyProfileTokenRouteImport } from './routes/my-profile.$token'
 import { Route as PropertiesIndexRouteImport } from './routes/properties.index'
 import { Route as ViewingTokenRouteImport } from './routes/viewing.$token'
 import { Route as AdminAppointmentsIndexRouteImport } from './routes/admin.appointments.index'
@@ -128,6 +129,11 @@ const AdminWebsiteRoute = AdminWebsiteRouteImport.update({
   id: '/website',
   path: '/website',
   getParentRoute: () => AdminRoute,
+} as any)
+const MyProfileTokenRoute = MyProfileTokenRouteImport.update({
+  id: '/my-profile/$token',
+  path: '/my-profile/$token',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const PropertiesIndexRoute = PropertiesIndexRouteImport.update({
   id: '/properties/',
@@ -235,6 +241,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/tasks': typeof AdminTasksRoute
   '/admin/website': typeof AdminWebsiteRouteWithChildren
+  '/my-profile/$token': typeof MyProfileTokenRoute
   '/viewing/$token': typeof ViewingTokenRoute
   '/admin/': typeof AdminIndexRoute
   '/properties/': typeof PropertiesIndexRoute
@@ -265,6 +272,7 @@ export interface FileRoutesByTo {
   '/terms-and-conditions': typeof TermsAndConditionsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/tasks': typeof AdminTasksRoute
+  '/my-profile/$token': typeof MyProfileTokenRoute
   '/viewing/$token': typeof ViewingTokenRoute
   '/admin': typeof AdminIndexRoute
   '/properties': typeof PropertiesIndexRoute
@@ -302,6 +310,7 @@ export interface FileRoutesById {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/tasks': typeof AdminTasksRoute
   '/admin/website': typeof AdminWebsiteRouteWithChildren
+  '/my-profile/$token': typeof MyProfileTokenRoute
   '/viewing/$token': typeof ViewingTokenRoute
   '/admin/': typeof AdminIndexRoute
   '/properties/': typeof PropertiesIndexRoute
@@ -340,6 +349,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/tasks'
     | '/admin/website'
+    | '/my-profile/$token'
     | '/viewing/$token'
     | '/admin/'
     | '/properties/'
@@ -370,6 +380,7 @@ export interface FileRouteTypes {
     | '/terms-and-conditions'
     | '/admin/settings'
     | '/admin/tasks'
+    | '/my-profile/$token'
     | '/viewing/$token'
     | '/admin'
     | '/properties'
@@ -406,6 +417,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/tasks'
     | '/admin/website'
+    | '/my-profile/$token'
     | '/viewing/$token'
     | '/admin/'
     | '/properties/'
@@ -436,6 +448,7 @@ export interface RootRouteChildren {
   PrivacyPolicyRoute: typeof PrivacyPolicyRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TermsAndConditionsRoute: typeof TermsAndConditionsRoute
+  MyProfileTokenRoute: typeof MyProfileTokenRoute
   ViewingTokenRoute: typeof ViewingTokenRoute
   PropertiesIndexRoute: typeof PropertiesIndexRoute
   PropertiesSlugIndexRoute: typeof PropertiesSlugIndexRoute
@@ -562,6 +575,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/website'
       preLoaderRoute: typeof AdminWebsiteRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/my-profile/$token': {
+      id: '/my-profile/$token'
+      path: '/my-profile/$token'
+      fullPath: '/my-profile/$token'
+      preLoaderRoute: typeof MyProfileTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/properties/': {
       id: '/properties/'
@@ -794,6 +814,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyPolicyRoute: PrivacyPolicyRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TermsAndConditionsRoute: TermsAndConditionsRoute,
+  MyProfileTokenRoute: MyProfileTokenRoute,
   ViewingTokenRoute: ViewingTokenRoute,
   PropertiesIndexRoute: PropertiesIndexRoute,
   PropertiesSlugIndexRoute: PropertiesSlugIndexRoute,
