@@ -301,7 +301,13 @@ export default function EnquiryDialog({
                 })
                   .then((res) => {
                     // only tell the student it is sent once it really is
-                    if (res?.ok && res.reference) setReference(res.reference);
+                    if (!res?.ok) {
+                      toast.error("Could not send your enquiry", {
+                        description: "Please try again, or WhatsApp us.",
+                      });
+                      return;
+                    }
+                    if (res.reference) setReference(res.reference);
                     setSubmitted(true);
                     toast.success("Enquiry sent", {
                       description: "We'll confirm availability within 24 hours.",
