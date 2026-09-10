@@ -16,6 +16,7 @@ import {
   whatsappUrl,
   type ContractTerm,
   type Occupancy,
+  type PaymentTerm,
   type Property,
   type RoomType,
   type StayQuote,
