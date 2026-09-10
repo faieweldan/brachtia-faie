@@ -64,6 +64,20 @@ function InvoiceGenerator() {
   const snapshot = (row as any)?.quote_snapshot;
   const r = row as any;
 
+  /* The real assigned room comes from the room assignment made on Booking Details. */
+  const ops = useOps();
+  const assignedBed = useMemo(
+    () => allBeds(ops.units).find((b) => b.bed.enquiryId === id),
+    [ops.units, id],
+  );
+  const assignedRoomLabel = assignedBed
+    ? `Unit ${assignedBed.unit.unitNo} · Room ${assignedBed.room.letter}`
+    : "";
+  const assignedRoomDetail = assignedBed
+    ? `${assignedBed.room.occupancy === "twin" ? "Twin sharing" : "Single"} · ${assignedBed.bed.label}`
+    : "";
+  const invoiceRoomName = assignedRoomLabel || r?.room_name || "";
+
   useEffect(() => {
     if (!row || ready) return;
     const first = snapshot?.quote?.firstPayment as any[] | undefined;
