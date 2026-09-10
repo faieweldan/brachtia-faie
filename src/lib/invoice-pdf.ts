@@ -22,6 +22,9 @@ export type InvoiceItem = { label: string; kind: string; amount: number };
 export type InvoiceDoc = {
   number: string;
   issued_at?: string | null;
+  invoice_date?: string | null;
+  payment_terms?: string;
+  due_date?: string | null;
   reference?: string | null;
   full_name: string;
   email: string;
