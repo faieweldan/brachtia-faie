@@ -40,6 +40,7 @@ export type StayState = {
   moveOut: string;
   room: RoomType | undefined;
   quote: StayQuote | null;
+  paymentTerm: PaymentTerm;
 };
 
 
