@@ -1501,6 +1501,44 @@ function EditableCard({
                     </option>
                   ))}
                 </select>
+              ) : kind === "payment" ? (
+                <select
+                  value={draft[k] ?? ""}
+                  onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
+                  className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  <option value="bimonthly">Bi-monthly</option>
+                  <option value="quarterly">Quarterly</option>
+                  <option value="full">Full upfront</option>
+                </select>
+              ) : kind === "unittype" ? (
+                <select
+                  value={draft[k] ?? ""}
+                  onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
+                  className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  <option value="">—</option>
+                  {Array.from(new Set((roomOptions ?? []).map((r) => r.unit_type).filter(Boolean))).map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
+                </select>
+              ) : kind === "room" ? (
+                <select
+                  value={draft[k] ?? ""}
+                  onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
+                  className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  <option value="">—</option>
+                  {(roomOptions ?? [])
+                    .filter((r) => !draft["unit_type"] || r.unit_type === draft["unit_type"])
+                    .map((r) => (
+                      <option key={r.code} value={r.name}>
+                        {r.name}
+                      </option>
+                    ))}
+                </select>
               ) : kind === "heard" ? (
                 <div className="mt-1 space-y-1">
                   <select
