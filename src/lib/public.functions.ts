@@ -6,6 +6,7 @@ const enquirySchema = z.object({
   residenceName: z.string().max(160).default(""),
   roomCode: z.string().max(120).default(""),
   roomName: z.string().max(200).default(""),
+  unitType: z.string().max(120).default(""),
   occupancy: z.string().max(20).default("single"),
   moveIn: z.string().max(20).default(""),
   moveOut: z.string().max(20).default(""),
