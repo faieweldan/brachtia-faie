@@ -11,7 +11,7 @@ import { EmptyState, Panel, Select, StatusPill } from "@/components/admin/ops-ui
 import {
   blankResident,
   completeness,
-  findBed,
+  findBedForResident,
   fmtDate,
   money,
   refreshResidents,
@@ -29,6 +29,7 @@ function ResidentsListPage() {
   const navigate = useNavigate();
   const { residents, units, tenancies, payments } = useOps();
   const [q, setQ] = useState("");
+  const [view, setView] = useState<"active" | "inactive" | "all">("active");
   const [university, setUniversity] = useState("");
   const [residence, setResidence] = useState("");
 
@@ -41,14 +42,31 @@ function ResidentsListPage() {
     [units],
   );
 
+  /**
+   * Former residents are kept, never deleted - Malaysian record-keeping runs to
+   * seven years - so the list defaults to current residents and keeps the rest
+   * one click away.
+   */
+  const isInactive = (r: (typeof residents)[number]) =>
+    (r.status || "").toLowerCase() === "inactive";
+
+  const counts = {
+    active: residents.filter((r) => !isInactive(r)).length,
+    inactive: residents.filter(isInactive).length,
+  };
+
   const rows = residents.filter((r) => {
+    if (view === "active" && isInactive(r)) return false;
+    if (view === "inactive" && !isInactive(r)) return false;
     if (university && universityAbbr(r.university) !== university) return false;
     if (residence) {
-      const placed = findBed(units, r.bedId);
+      const placed = findBedForResident(units, r);
       if (placed?.unit.residenceName !== residence) return false;
     }
-    if (q && !`${r.fullName} ${r.email} ${r.studentId}`.toLowerCase().includes(q.toLowerCase()))
-      return false;
+    // the Brachtia id and mobile are how staff actually look people up
+    const haystack =
+      `${r.fullName} ${r.legacyId} ${r.email} ${r.studentId} ${r.mobile} ${r.idNumber}`.toLowerCase();
+    if (q && !haystack.includes(q.trim().toLowerCase())) return false;
     return true;
   });
 
@@ -119,16 +137,9 @@ function ResidentsListPage() {
     }
   }
 
-  async function addResident() {
-    let saved;
-    try {
-      // the server assigns the real id, so navigate with what comes back
-      saved = await saveResidentRecord(blankResident());
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not create resident");
-      return;
-    }
-    void navigate({ to: "/admin/residents/$id", params: { id: saved.id } });
+  /** Open an empty form. The row is created when it is saved, not before. */
+  function addResident() {
+    void navigate({ to: "/admin/residents/$id", params: { id: "new" } });
   }
 
   function downloadProblems() {
@@ -254,13 +265,36 @@ function ResidentsListPage() {
           />
         ) : (
           <>
+            <div className="mb-4 flex flex-wrap gap-2">
+              {(
+                [
+                  { key: "active", label: "Current", count: counts.active },
+                  { key: "inactive", label: "Former", count: counts.inactive },
+                  { key: "all", label: "All", count: residents.length },
+                ] as const
+              ).map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setView(t.key)}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                    view === t.key
+                      ? "border-brand-deep bg-brand-deep text-white"
+                      : "border-border text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  {t.label} · {t.count}
+                </button>
+              ))}
+            </div>
+
             <div className="mb-4 grid gap-3 sm:grid-cols-3">
               <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground">Search</p>
                 <Input
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
-                  placeholder="Name, email, student ID"
+                  placeholder="Name, resident ID, email, mobile"
                 />
               </div>
               <Select
@@ -284,7 +318,7 @@ function ResidentsListPage() {
                 <thead className="bg-muted text-left text-xs text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 font-medium">Resident</th>
-                    <th className="px-3 py-2 font-medium">Student ID</th>
+                    <th className="px-3 py-2 font-medium">Resident ID</th>
                     <th className="px-3 py-2 font-medium">Placement</th>
                     <th className="px-3 py-2 font-medium">University</th>
                     <th className="px-3 py-2 font-medium">Tenancy</th>
@@ -294,7 +328,7 @@ function ResidentsListPage() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {rows.map((r) => {
-                    const placed = findBed(units, r.bedId);
+                    const placed = findBedForResident(units, r);
                     const tenancy = tenancies.find((t) => t.residentId === r.id);
                     const balance = payments
                       .filter((p) => p.residentId === r.id && p.status !== "paid")
@@ -312,7 +346,11 @@ function ResidentsListPage() {
                           </Link>
                           <p className="text-xs text-muted-foreground">{r.email || "No email"}</p>
                         </td>
-                        <td className="px-3 py-2 text-muted-foreground">{r.studentId || "—"}</td>
+                        {/* Brachtia's own number - the one staff quote. The university's id
+                            arrives later, through the application form. */}
+                        <td className="px-3 py-2 tabular-nums text-muted-foreground">
+                          {r.legacyId || r.studentId || "—"}
+                        </td>
                         <td className="px-3 py-2 text-muted-foreground">
                           {placed
                             ? `${placed.unit.unitNo} · Room ${placed.room.letter} · ${placed.bed.label}`
