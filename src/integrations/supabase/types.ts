@@ -390,6 +390,245 @@ export type Database = {
         }
         Relationships: []
       }
+      invoice_items: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          invoice_id: string
+          kind: string
+          label: string
+          sort_order: number
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          id?: string
+          invoice_id: string
+          kind?: string
+          label?: string
+          sort_order?: number
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          kind?: string
+          label?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_items_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          created_at: string
+          deposits_total: number
+          email: string
+          enquiry_id: string | null
+          full_name: string
+          id: string
+          issued_at: string
+          monthly_rent: number
+          nationality: string
+          notes: string
+          number: string
+          occupancy: string
+          payment_frequency: string
+          phone: string
+          residence_name: string
+          resident_id: string
+          room_name: string
+          status: string
+          tenancy_end: string | null
+          tenancy_start: string | null
+          total: number
+          university: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deposits_total?: number
+          email?: string
+          enquiry_id?: string | null
+          full_name?: string
+          id?: string
+          issued_at?: string
+          monthly_rent?: number
+          nationality?: string
+          notes?: string
+          number?: string
+          occupancy?: string
+          payment_frequency?: string
+          phone?: string
+          residence_name?: string
+          resident_id?: string
+          room_name?: string
+          status?: string
+          tenancy_end?: string | null
+          tenancy_start?: string | null
+          total?: number
+          university?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deposits_total?: number
+          email?: string
+          enquiry_id?: string | null
+          full_name?: string
+          id?: string
+          issued_at?: string
+          monthly_rent?: number
+          nationality?: string
+          notes?: string
+          number?: string
+          occupancy?: string
+          payment_frequency?: string
+          phone?: string
+          residence_name?: string
+          resident_id?: string
+          room_name?: string
+          status?: string
+          tenancy_end?: string | null
+          tenancy_start?: string | null
+          total?: number
+          university?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_enquiry_id_fkey"
+            columns: ["enquiry_id"]
+            isOneToOne: false
+            referencedRelation: "enquiries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          amount: number
+          created_at: string
+          enquiry_id: string | null
+          id: string
+          invoice_id: string
+          method: string
+          paid_on: string
+          proof_path: string
+          reference: string
+          resident_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          enquiry_id?: string | null
+          id?: string
+          invoice_id: string
+          method?: string
+          paid_on?: string
+          proof_path?: string
+          reference?: string
+          resident_id?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          enquiry_id?: string | null
+          id?: string
+          invoice_id?: string
+          method?: string
+          paid_on?: string
+          proof_path?: string
+          reference?: string
+          resident_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_enquiry_id_fkey"
+            columns: ["enquiry_id"]
+            isOneToOne: false
+            referencedRelation: "enquiries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      receipts: {
+        Row: {
+          amount: number
+          balance_after: number
+          created_at: string
+          enquiry_id: string | null
+          id: string
+          invoice_id: string
+          issued_at: string
+          number: string
+          payment_id: string
+          resident_id: string
+        }
+        Insert: {
+          amount?: number
+          balance_after?: number
+          created_at?: string
+          enquiry_id?: string | null
+          id?: string
+          invoice_id: string
+          issued_at?: string
+          number?: string
+          payment_id: string
+          resident_id?: string
+        }
+        Update: {
+          amount?: number
+          balance_after?: number
+          created_at?: string
+          enquiry_id?: string | null
+          id?: string
+          invoice_id?: string
+          issued_at?: string
+          number?: string
+          payment_id?: string
+          resident_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receipts_enquiry_id_fkey"
+            columns: ["enquiry_id"]
+            isOneToOne: false
+            referencedRelation: "enquiries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receipts_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receipts_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       residences: {
         Row: {
           addons: Json
@@ -624,6 +863,8 @@ export type Database = {
         Returns: boolean
       }
       next_enquiry_reference: { Args: never; Returns: string }
+      next_invoice_reference: { Args: never; Returns: string }
+      next_receipt_reference: { Args: never; Returns: string }
     }
     Enums: {
       app_role: "admin"
