@@ -39,6 +39,7 @@ export const submitEnquiry = createServerFn({ method: "POST" })
       residence_name: data.residenceName,
       room_code: data.roomCode,
       room_name: data.roomName,
+      unit_type: data.unitType,
       occupancy: data.occupancy,
       move_in: data.moveIn || null,
       move_out: data.moveOut || null,
