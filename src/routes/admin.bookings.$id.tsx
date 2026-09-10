@@ -48,6 +48,7 @@ import {
   getEnquiry,
   listAppointments,
   listResidenceOptions,
+  listRoomOptions,
   updateEnquiry,
   advanceEnquiryStage,
   bookViewingForEnquiry,
