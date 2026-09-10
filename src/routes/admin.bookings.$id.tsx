@@ -48,6 +48,7 @@ import {
   getEnquiry,
   listAppointments,
   listResidenceOptions,
+  listRoomOptions,
   updateEnquiry,
   advanceEnquiryStage,
   bookViewingForEnquiry,
@@ -153,8 +154,41 @@ function BookingDetail() {
     queryFn: () => listResidenceOptions(),
   });
 
+  const { data: roomOptions } = useQuery({
+    queryKey: ["admin", "room-options", row?.residence_slug ?? ""],
+    queryFn: () => listRoomOptions({ data: { residenceSlug: row?.residence_slug ?? "" } }),
+    enabled: !!row?.residence_slug,
+  });
+
+  /** Maps the snake_case field keys used by EditableCard to the camelCase keys updateEnquiry expects. */
+  const FIELD_KEY_MAP: Record<string, string> = {
+    full_name: "fullName",
+    phone: "phone",
+    email: "email",
+    nationality: "nationality",
+    university: "university",
+    gender: "gender",
+    intake: "intake",
+    heard_about: "heardAbout",
+    heard_about_other: "heardAboutOther",
+    residence_name: "residenceName",
+    residence_slug: "residenceSlug",
+    occupancy: "occupancy",
+    room_name: "roomName",
+    room_code: "roomCode",
+    unit_type: "unitType",
+    move_in: "moveIn",
+    move_out: "moveOut",
+    term: "term",
+    monthly_rent: "monthlyRent",
+    first_payment: "firstPayment",
+    payment_term: "paymentTerm",
+    message: "message",
+  };
+
   const mutate = useMutation({
-    mutationFn: (input: Record<string, unknown>) => updateEnquiry({ data: { id, ...input } as any }),
+    mutationFn: (input: Record<string, unknown>) =>
+      updateEnquiry({ data: { id, ...input } as any }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin"] }),
     onError: () => toast.error("Could not save changes"),
   });
@@ -599,11 +633,13 @@ function BookingDetail() {
 
   const stayFields = [
     ["residence_name", "Residence", "residence"],
+    ["unit_type", "Unit type", "unittype"],
+    ["room_name", "Room preference", "room"],
     ["occupancy", "Occupancy", "sharing"],
-    ["room_name", "Room preference", "text"],
     ["move_in", "Move in", "date"],
     ["move_out", "Move out", "date"],
     ["term", "Term", "term"],
+    ["payment_term", "Payment frequency", "payment"],
     ["monthly_rent", "Monthly rent (RM)", "number"],
     ["first_payment", "First payment (RM)", "number"],
   ] as const;
@@ -696,7 +732,7 @@ function BookingDetail() {
             onSave={() => setEditingStudent(false)}
             fields={studentFields}
             row={row}
-            onSaveField={(k, v) => mutate.mutate({ [k]: v })}
+            onSaveField={(k, v) => mutate.mutate({ [FIELD_KEY_MAP[k] ?? k]: v })}
             resOptions={resOptions ?? []}
           />
 
@@ -709,8 +745,23 @@ function BookingDetail() {
             onSave={() => setEditingStay(false)}
             fields={stayFields}
             row={row}
-            onSaveField={(k, v) => mutate.mutate({ [k]: v })}
+            onSaveField={(k, v) => {
+              const mapped = FIELD_KEY_MAP[k] ?? k;
+              const patch: Record<string, unknown> = { [mapped]: v };
+              // When room preference changes, also persist the matching room code.
+              if (k === "room_name") {
+                const match = (roomOptions ?? []).find((r) => r.name === v);
+                if (match) patch["roomCode"] = match.code;
+              }
+              // When residence changes, also update the slug.
+              if (k === "residence_name") {
+                const match = (resOptions ?? []).find((r) => r.name === v);
+                if (match) patch["residenceSlug"] = match.slug;
+              }
+              mutate.mutate(patch);
+            }}
             resOptions={resOptions ?? []}
+            roomOptions={roomOptions ?? []}
             extra={[
               ["Stay duration", monthsBetween(row.move_in, row.move_out)],
               ["Add-ons", ((r.addons as any[]) ?? []).join(", ") || "—"],
@@ -1334,6 +1385,7 @@ function EditableCard({
   row,
   onSaveField,
   resOptions,
+  roomOptions,
   extra,
 }: {
   title: string;
@@ -1345,6 +1397,7 @@ function EditableCard({
   row: any;
   onSaveField: (key: string, value: unknown) => void;
   resOptions: { id: string; slug: string; name: string }[];
+  roomOptions?: { code: string; room_code: string; name: string; unit_type: string; occupancies: string[] }[];
   extra?: [string, React.ReactNode][];
 }) {
   const [draft, setDraft] = useState<Record<string, string>>({});
@@ -1448,6 +1501,44 @@ function EditableCard({
                     </option>
                   ))}
                 </select>
+              ) : kind === "payment" ? (
+                <select
+                  value={draft[k] ?? ""}
+                  onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
+                  className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  <option value="bimonthly">Bi-monthly</option>
+                  <option value="quarterly">Quarterly</option>
+                  <option value="full">Full upfront</option>
+                </select>
+              ) : kind === "unittype" ? (
+                <select
+                  value={draft[k] ?? ""}
+                  onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
+                  className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  <option value="">—</option>
+                  {Array.from(new Set((roomOptions ?? []).map((r) => r.unit_type).filter(Boolean))).map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
+                </select>
+              ) : kind === "room" ? (
+                <select
+                  value={draft[k] ?? ""}
+                  onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
+                  className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  <option value="">—</option>
+                  {(roomOptions ?? [])
+                    .filter((r) => !draft["unit_type"] || r.unit_type === draft["unit_type"])
+                    .map((r) => (
+                      <option key={r.code} value={r.name}>
+                        {r.name}
+                      </option>
+                    ))}
+                </select>
               ) : kind === "heard" ? (
                 <div className="mt-1 space-y-1">
                   <select
@@ -1497,11 +1588,17 @@ function EditableCard({
                       : "Long term"
                     : kind === "number"
                       ? money(Number(row[k] ?? 0))
-                      : kind === "heard"
-                        ? row[k] === "Other" && row[`${k}_other`]
-                          ? `Other — ${row[`${k}_other`]}`
-                          : row[k] || "—"
-                        : row[k] || "—"
+                      : kind === "payment"
+                        ? ({ bimonthly: "Bi-monthly", quarterly: "Quarterly", full: "Full upfront" } as Record<string, string>)[row[k] as string] ?? row[k] ?? "—"
+                        : kind === "unittype"
+                          ? row[k] || "—"
+                          : kind === "room"
+                            ? row[k] || "—"
+                            : kind === "heard"
+                              ? row[k] === "Other" && row[`${k}_other`]
+                                ? `Other — ${row[`${k}_other`]}`
+                                : row[k] || "—"
+                              : row[k] || "—"
               }
             />
           ))}

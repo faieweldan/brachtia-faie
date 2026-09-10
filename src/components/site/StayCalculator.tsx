@@ -40,6 +40,7 @@ export type StayState = {
   moveOut: string;
   room: RoomType | undefined;
   quote: StayQuote | null;
+  paymentTerm: PaymentTerm;
 };
 
 
@@ -142,6 +143,7 @@ export default function StayCalculator({
     moveOut,
     room: selected,
     quote,
+    paymentTerm: effectiveTerm,
   };
 
 

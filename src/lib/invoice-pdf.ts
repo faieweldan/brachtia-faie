@@ -22,6 +22,9 @@ export type InvoiceItem = { label: string; kind: string; amount: number };
 export type InvoiceDoc = {
   number: string;
   issued_at?: string | null;
+  invoice_date?: string | null;
+  payment_terms?: string;
+  due_date?: string | null;
   reference?: string | null;
   full_name: string;
   email: string;
@@ -145,9 +148,16 @@ async function buildInvoice(inv: InvoiceDoc) {
   const FOOT = 54;
 
   const issued = inv.issued_at ? new Date(inv.issued_at) : new Date();
+  const invDate = inv.invoice_date ? new Date(inv.invoice_date) : issued;
+  const terms = inv.payment_terms || "NET15";
+  const termDays = terms === "NET30" ? 30 : 15;
+  const due = inv.due_date
+    ? new Date(inv.due_date)
+    : new Date(invDate.getTime() + termDays * 86400000);
   const band = header(doc, "Invoice", [
     inv.number,
-    issued.toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" }),
+    `Invoice date: ${invDate.toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" })}`,
+    `Due date: ${due.toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" })} (${terms})`,
     inv.reference ? `Booking ${inv.reference}` : "",
   ].filter(Boolean) as string[]);
 
@@ -182,6 +192,7 @@ async function buildInvoice(inv: InvoiceDoc) {
       ["Tenancy", `${formatDate(inv.tenancy_start ?? "")} — ${formatDate(inv.tenancy_end ?? "")}`],
       ["Monthly rent", formatRM(inv.monthly_rent)],
       ["Payment frequency", FREQ_LABEL[inv.payment_frequency] ?? inv.payment_frequency],
+      ["Payment terms", terms],
       ...(inv.university ? [["University", inv.university]] : []),
     ],
   });

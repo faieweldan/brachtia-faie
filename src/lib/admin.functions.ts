@@ -85,6 +85,8 @@ export const updateEnquiry = createServerFn({ method: "POST" })
       moveOut?: string;
       monthlyRent?: number;
       firstPayment?: number;
+      paymentTerm?: string;
+      unitType?: string;
       message?: string;
       heardAbout?: string;
       heardAboutOther?: string;
@@ -117,6 +119,8 @@ export const updateEnquiry = createServerFn({ method: "POST" })
     if (data.moveOut !== undefined) patch["move_out"] = data.moveOut || null;
     if (data.monthlyRent !== undefined) patch["monthly_rent"] = data.monthlyRent;
     if (data.firstPayment !== undefined) patch["first_payment"] = data.firstPayment;
+    if (data.paymentTerm !== undefined) patch["payment_term"] = data.paymentTerm;
+    if (data.unitType !== undefined) patch["unit_type"] = data.unitType;
     if (data.message !== undefined) patch["message"] = data.message;
     if (data.heardAbout !== undefined) patch["heard_about"] = data.heardAbout;
     if (data.heardAboutOther !== undefined) patch["heard_about_other"] = data.heardAboutOther;
@@ -355,6 +359,28 @@ export const listResidenceOptions = createServerFn({ method: "GET" })
     return (data ?? []) as { id: string; slug: string; name: string }[];
   });
 
+/** Room types for a residence, optionally filtered by unit type — used by the booking Room Preference dropdown. */
+export const listRoomOptions = createServerFn({ method: "GET" })
+  .inputValidator((data: { residenceSlug?: string; unitType?: string }) => data)
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    let q = supabase.from("room_types").select("code,room_code,name,unit_type,occupancies");
+    const { data: res, error } = await (async () => {
+      if (data.residenceSlug) {
+        const { data: rrow } = await supabase
+          .from("residences").select("id").eq("slug", data.residenceSlug).maybeSingle();
+        if (!rrow) return { data: null, error: null };
+        q = q.eq("residence_id", rrow.id as string);
+      }
+      if (data.unitType) q = q.eq("unit_type", data.unitType);
+      return await q.order("sort_order");
+    })();
+    if (error) throw new Error(error.message);
+    return (res ?? []) as {
+      code: string; room_code: string; name: string; unit_type: string; occupancies: string[];
+    }[];
+  });
+
 /* ---------------- Residences ---------------- */
 
 
@@ -531,7 +557,13 @@ export const getBookingBilling = createServerFn({ method: "GET" })
   });
 
 export const createInvoice = createServerFn({ method: "POST" })
-  .inputValidator((data: { enquiryId: string; values: Record<string, unknown>; items: InvoiceLine[] }) => data)
+  .inputValidator((data: {
+    enquiryId: string;
+    values: Record<string, unknown>;
+    items: InvoiceLine[];
+    invoiceDate?: string;
+    paymentTerms?: string;
+  }) => data)
   .handler(async ({ data }) => {
     const supabase = await admin();
     const total = data.items.reduce((n, l) => n + Number(l.amount || 0), 0);
@@ -539,11 +571,18 @@ export const createInvoice = createServerFn({ method: "POST" })
       .filter((l) => l.kind === "refundable")
       .reduce((n, l) => n + Number(l.amount || 0), 0);
 
+    const invoiceDate = data.invoiceDate || new Date().toISOString().slice(0, 10);
+    const paymentTerms = data.paymentTerms || "NET15";
+    const issuedAt = new Date(`${invoiceDate}T00:00:00Z`).toISOString();
+
     const { data: inv, error } = await supabase
       .from("invoices")
       .insert({
         ...data.values,
         enquiry_id: data.enquiryId,
+        invoice_date: invoiceDate,
+        payment_terms: paymentTerms,
+        issued_at: issuedAt,
         total,
         deposits_total: deposits,
       } as any)

@@ -307,6 +307,7 @@ export type Database = {
           stage_changed_at: string | null
           status: string
           term: string
+          unit_type: string
           university: string
           updated_at: string
           viewing_completed_at: string | null
@@ -345,6 +346,7 @@ export type Database = {
           stage_changed_at?: string | null
           status?: string
           term?: string
+          unit_type?: string
           university?: string
           updated_at?: string
           viewing_completed_at?: string | null
@@ -383,6 +385,7 @@ export type Database = {
           stage_changed_at?: string | null
           status?: string
           term?: string
+          unit_type?: string
           university?: string
           updated_at?: string
           viewing_completed_at?: string | null
@@ -436,6 +439,7 @@ export type Database = {
           enquiry_id: string | null
           full_name: string
           id: string
+          invoice_date: string | null
           issued_at: string
           monthly_rent: number
           nationality: string
@@ -443,6 +447,7 @@ export type Database = {
           number: string
           occupancy: string
           payment_frequency: string
+          payment_terms: string
           phone: string
           residence_name: string
           resident_id: string
@@ -461,6 +466,7 @@ export type Database = {
           enquiry_id?: string | null
           full_name?: string
           id?: string
+          invoice_date?: string | null
           issued_at?: string
           monthly_rent?: number
           nationality?: string
@@ -468,6 +474,7 @@ export type Database = {
           number?: string
           occupancy?: string
           payment_frequency?: string
+          payment_terms?: string
           phone?: string
           residence_name?: string
           resident_id?: string
@@ -486,6 +493,7 @@ export type Database = {
           enquiry_id?: string | null
           full_name?: string
           id?: string
+          invoice_date?: string | null
           issued_at?: string
           monthly_rent?: number
           nationality?: string
@@ -493,6 +501,7 @@ export type Database = {
           number?: string
           occupancy?: string
           payment_frequency?: string
+          payment_terms?: string
           phone?: string
           residence_name?: string
           resident_id?: string

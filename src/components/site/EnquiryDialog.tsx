@@ -16,6 +16,7 @@ import {
   whatsappUrl,
   type ContractTerm,
   type Occupancy,
+  type PaymentTerm,
   type Property,
   type RoomType,
   type StayQuote,
@@ -71,6 +72,7 @@ export type EnquiryStay = {
   moveIn: string;
   moveOut: string;
   quote?: StayQuote | null | undefined;
+  paymentTerm?: PaymentTerm | undefined;
 };
 
 function FieldError({ msg }: { msg?: string | undefined }) {
@@ -265,10 +267,12 @@ export default function EnquiryDialog({
                     residenceName: property.name,
                     roomCode: room?.id ?? raw['roomId'] ?? "",
                     roomName: room?.name ?? "",
+                    unitType: room?.unitType ?? "",
                     occupancy: occupancy ?? raw['occupancy'] ?? "single",
                     moveIn: stay.moveIn,
                     moveOut: stay.moveOut,
                     term: stay.term ?? "long",
+                    paymentTerm: stay.paymentTerm ?? "bimonthly",
                     monthlyRent: quote?.monthlyAfter ?? 0,
                     firstPayment: quote?.totalUpfront ?? 0,
                     fullName: leadData.name,

@@ -375,6 +375,7 @@ function PropertyPage() {
                         moveIn: state.moveIn,
                         moveOut: state.moveOut,
                         quote: state.quote,
+                        paymentTerm: state.paymentTerm,
                       }}
                       onStayChange={(next) => {
                         if (next.roomId !== undefined) {
