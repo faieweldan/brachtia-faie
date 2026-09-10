@@ -36,12 +36,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-import {
-  GENDERS,
-  HEARD_ABOUT,
-  UNIVERSITIES,
-  intakeMonths,
-} from "@/data/form-options";
+import { GENDERS, HEARD_ABOUT, UNIVERSITIES, intakeMonths } from "@/data/form-options";
 import { fieldClass } from "@/components/site/form-fields";
 
 const staySchema = z.object({
@@ -125,9 +120,8 @@ export default function EnquiryDialog({
 
   const universities = UNIVERSITIES;
   const intakes = useMemo(() => intakeMonths(), []);
-  const universityValue =
-    universityChoice === "Other" ? universityOther.trim() : universityChoice;
-  const heardValue = heardChoice === "Other" ? (heardOther.trim() || "Other") : heardChoice;
+  const universityValue = universityChoice === "Other" ? universityOther.trim() : universityChoice;
+  const heardValue = heardChoice === "Other" ? heardOther.trim() || "Other" : heardChoice;
 
   const summaryMessage = `Hi Brachtia Homes, I'd like to check availability at ${property.name}${
     room ? ` — ${room.name}` : ""
@@ -208,7 +202,11 @@ export default function EnquiryDialog({
                 </Button>
               )}
               <Button asChild variant="outline" size="lg" className="flex-1">
-                <a href="https://wa.me/60123306815?text=Hi+I+would+like+to+learn+more+about+Brachtia+Homes+before+choosing+my+residence" target="_blank" rel="noreferrer">
+                <a
+                  href="https://wa.me/60123306815?text=Hi+I+would+like+to+learn+more+about+Brachtia+Homes+before+choosing+my+residence"
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   <MessageCircle className="size-4" /> WhatsApp us
                 </a>
               </Button>
@@ -217,7 +215,7 @@ export default function EnquiryDialog({
         ) : (
           <form
             className="flex max-h-[92vh] flex-col"
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
               const fd = new FormData(e.currentTarget);
               const raw = Object.fromEntries(fd.entries()) as Record<string, string>;
@@ -228,7 +226,7 @@ export default function EnquiryDialog({
                 for (const issue of stayParsed.error.issues)
                   next[String(issue.path[0])] = issue.message;
               } else if (stayParsed.data.moveOut <= stayParsed.data.moveIn) {
-                next['moveOut'] = "Move-out must be after move-in";
+                next["moveOut"] = "Move-out must be after move-in";
               }
 
               const leadParsed = leadSchema.safeParse(raw);
@@ -239,7 +237,7 @@ export default function EnquiryDialog({
 
               if (Object.keys(next).length > 0) {
                 setErrors(next);
-                if (next['roomId'] || next['occupancy'] || next['moveIn'] || next['moveOut']) {
+                if (next["roomId"] || next["occupancy"] || next["moveIn"] || next["moveOut"]) {
                   setEditStay(true);
                 }
                 const form = e.currentTarget;
@@ -254,18 +252,14 @@ export default function EnquiryDialog({
               setErrors({});
               const leadData = leadParsed.success ? leadParsed.data : null;
               setLead(leadData);
-              setSubmitted(true);
-              toast.success("Enquiry sent", {
-                description: "We'll confirm availability within 24 hours.",
-              });
               if (leadData) {
-                void submitEnquiry({
+                await submitEnquiry({
                   data: {
                     residenceSlug: property.slug,
                     residenceName: property.name,
-                    roomCode: room?.id ?? raw['roomId'] ?? "",
+                    roomCode: room?.id ?? raw["roomId"] ?? "",
                     roomName: room?.name ?? "",
-                    occupancy: occupancy ?? raw['occupancy'] ?? "single",
+                    occupancy: occupancy ?? raw["occupancy"] ?? "single",
                     moveIn: stay.moveIn,
                     moveOut: stay.moveOut,
                     term: stay.term ?? "long",
@@ -284,7 +278,7 @@ export default function EnquiryDialog({
                     quoteSnapshot: {
                       property,
                       room,
-                      occupancy: occupancy ?? raw['occupancy'] ?? "single",
+                      occupancy: occupancy ?? raw["occupancy"] ?? "single",
                       term: stay.term ?? "long",
                       moveIn: stay.moveIn,
                       moveOut: stay.moveOut,
@@ -302,11 +296,21 @@ export default function EnquiryDialog({
                   },
                 })
                   .then((res) => {
+                    // only tell the student it is sent once it really is
                     if (res?.ok && res.reference) setReference(res.reference);
+                    setSubmitted(true);
+                    toast.success("Enquiry sent", {
+                      description: "We'll confirm availability within 24 hours.",
+                    });
                   })
-                  .catch((err: unknown) => console.error(err));
+                  .catch((err: unknown) => {
+                    console.error(err);
+                    toast.error("Could not send your enquiry", {
+                      description:
+                        err instanceof Error ? err.message : "Please try again, or WhatsApp us.",
+                    });
+                  });
               }
-
             }}
           >
             <DialogHeader className="border-b px-6 py-5 text-left">
@@ -346,8 +350,7 @@ export default function EnquiryDialog({
                     <input type="hidden" name="moveOut" value={stay.moveOut} />
 
                     <p className="text-sm font-bold text-brand-deep">
-                      {room?.name} ·{" "}
-                      {occupancy === "single" ? "Single occupancy" : "Twin sharing"}
+                      {room?.name} · {occupancy === "single" ? "Single occupancy" : "Twin sharing"}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {formatDate(stay.moveIn)} — {formatDate(stay.moveOut)}
@@ -372,7 +375,7 @@ export default function EnquiryDialog({
                         id="en-room"
                         name="roomId"
                         className={fieldClass}
-                        data-invalid={errors['roomId'] ? "true" : undefined}
+                        data-invalid={errors["roomId"] ? "true" : undefined}
                         value={room?.id ?? ""}
                         onChange={(e) => onStayChange({ roomId: e.target.value })}
                       >
@@ -385,7 +388,7 @@ export default function EnquiryDialog({
                           </option>
                         ))}
                       </select>
-                      <FieldError msg={errors['roomId']} />
+                      <FieldError msg={errors["roomId"]} />
                     </div>
 
                     <div className="space-y-1.5">
@@ -394,7 +397,7 @@ export default function EnquiryDialog({
                         id="en-occ"
                         name="occupancy"
                         className={fieldClass}
-                        data-invalid={errors['occupancy'] ? "true" : undefined}
+                        data-invalid={errors["occupancy"] ? "true" : undefined}
                         value={occupancy ?? ""}
                         disabled={!room}
                         onChange={(e) => onStayChange({ occupancy: e.target.value as Occupancy })}
@@ -408,7 +411,7 @@ export default function EnquiryDialog({
                           </option>
                         ))}
                       </select>
-                      <FieldError msg={errors['occupancy']} />
+                      <FieldError msg={errors["occupancy"]} />
                     </div>
 
                     <div className="space-y-1.5">
@@ -418,11 +421,11 @@ export default function EnquiryDialog({
                         name="moveIn"
                         type="date"
                         className="h-11 rounded-xl"
-                        data-invalid={errors['moveIn'] ? "true" : undefined}
+                        data-invalid={errors["moveIn"] ? "true" : undefined}
                         value={stay.moveIn}
                         onChange={(e) => onStayChange({ moveIn: e.target.value })}
                       />
-                      <FieldError msg={errors['moveIn']} />
+                      <FieldError msg={errors["moveIn"]} />
                     </div>
 
                     <div className="space-y-1.5">
@@ -432,11 +435,11 @@ export default function EnquiryDialog({
                         name="moveOut"
                         type="date"
                         className="h-11 rounded-xl"
-                        data-invalid={errors['moveOut'] ? "true" : undefined}
+                        data-invalid={errors["moveOut"] ? "true" : undefined}
                         value={stay.moveOut}
                         onChange={(e) => onStayChange({ moveOut: e.target.value })}
                       />
-                      <FieldError msg={errors['moveOut']} />
+                      <FieldError msg={errors["moveOut"]} />
                     </div>
                   </div>
                 )}
@@ -457,9 +460,9 @@ export default function EnquiryDialog({
                       placeholder="Aisha Rahman"
                       maxLength={100}
                       className="h-11 rounded-xl"
-                      data-invalid={errors['name'] ? "true" : undefined}
+                      data-invalid={errors["name"] ? "true" : undefined}
                     />
-                    <FieldError msg={errors['name']} />
+                    <FieldError msg={errors["name"]} />
                   </div>
 
                   <div className="space-y-1.5">
@@ -471,16 +474,16 @@ export default function EnquiryDialog({
                       placeholder="you@email.com"
                       maxLength={255}
                       className="h-11 rounded-xl"
-                      data-invalid={errors['email'] ? "true" : undefined}
+                      data-invalid={errors["email"] ? "true" : undefined}
                     />
-                    <FieldError msg={errors['email']} />
+                    <FieldError msg={errors["email"]} />
                   </div>
 
                   <div className="space-y-1.5">
                     <Label htmlFor="en-mobile-number">Mobile / WhatsApp</Label>
                     <div
                       className={`flex h-11 items-stretch overflow-hidden rounded-xl border ${
-                        errors['mobile'] ? "border-destructive" : "border-input"
+                        errors["mobile"] ? "border-destructive" : "border-input"
                       } bg-background focus-within:ring-2 focus-within:ring-brand/40`}
                     >
                       <CountryCombobox
@@ -497,7 +500,7 @@ export default function EnquiryDialog({
                         placeholder="12 345 6789"
                         maxLength={20}
                         className="min-w-0 flex-1 bg-transparent px-3 text-sm outline-none"
-                        data-invalid={errors['mobile'] ? "true" : undefined}
+                        data-invalid={errors["mobile"] ? "true" : undefined}
                         value={mobileNumber}
                         onChange={(e) =>
                           setMobileNumber(e.target.value.replace(/[^\d\s]/g, "").trimStart())
@@ -505,7 +508,7 @@ export default function EnquiryDialog({
                       />
                       <input type="hidden" name="mobile" value={mobileCombined} />
                     </div>
-                    <FieldError msg={errors['mobile']} />
+                    <FieldError msg={errors["mobile"]} />
                   </div>
                 </div>
               </section>
@@ -524,7 +527,7 @@ export default function EnquiryDialog({
                       className={fieldClass}
                       value={universityChoice}
                       onChange={(e) => setUniversityChoice(e.target.value)}
-                      data-invalid={errors['university'] ? "true" : undefined}
+                      data-invalid={errors["university"] ? "true" : undefined}
                     >
                       <option value="" disabled>
                         Select
@@ -545,7 +548,7 @@ export default function EnquiryDialog({
                       />
                     )}
                     <input type="hidden" name="university" value={universityValue} />
-                    <FieldError msg={errors['university']} />
+                    <FieldError msg={errors["university"]} />
                   </div>
 
                   <div className="space-y-1.5">
@@ -555,7 +558,7 @@ export default function EnquiryDialog({
                       name="intake"
                       className={fieldClass}
                       defaultValue=""
-                      data-invalid={errors['intake'] ? "true" : undefined}
+                      data-invalid={errors["intake"] ? "true" : undefined}
                     >
                       <option value="" disabled>
                         Select month & year
@@ -566,7 +569,7 @@ export default function EnquiryDialog({
                         </option>
                       ))}
                     </select>
-                    <FieldError msg={errors['intake']} />
+                    <FieldError msg={errors["intake"]} />
                   </div>
 
                   <div className="space-y-1.5">
@@ -577,10 +580,10 @@ export default function EnquiryDialog({
                       placeholder="Search your country"
                       onChange={(c: Country) => setNationalityIso(c.iso)}
                       className="w-full"
-                      invalid={Boolean(errors['nationality'])}
+                      invalid={Boolean(errors["nationality"])}
                     />
                     <input type="hidden" name="nationality" value={nationality} />
-                    <FieldError msg={errors['nationality']} />
+                    <FieldError msg={errors["nationality"]} />
                   </div>
 
                   <div className="space-y-1.5">
@@ -590,7 +593,7 @@ export default function EnquiryDialog({
                       name="gender"
                       className={fieldClass}
                       defaultValue=""
-                      data-invalid={errors['gender'] ? "true" : undefined}
+                      data-invalid={errors["gender"] ? "true" : undefined}
                     >
                       <option value="" disabled>
                         Select
@@ -601,7 +604,7 @@ export default function EnquiryDialog({
                         </option>
                       ))}
                     </select>
-                    <FieldError msg={errors['gender']} />
+                    <FieldError msg={errors["gender"]} />
                   </div>
 
                   <div className="space-y-1.5 sm:col-span-2">
@@ -611,7 +614,7 @@ export default function EnquiryDialog({
                       className={fieldClass}
                       value={heardChoice}
                       onChange={(e) => setHeardChoice(e.target.value)}
-                      data-invalid={errors['heardAbout'] ? "true" : undefined}
+                      data-invalid={errors["heardAbout"] ? "true" : undefined}
                     >
                       <option value="" disabled>
                         Select
@@ -632,7 +635,7 @@ export default function EnquiryDialog({
                       />
                     )}
                     <input type="hidden" name="heardAbout" value={heardValue} />
-                    <FieldError msg={errors['heardAbout']} />
+                    <FieldError msg={errors["heardAbout"]} />
                   </div>
 
                   <div className="space-y-1.5 sm:col-span-2">
