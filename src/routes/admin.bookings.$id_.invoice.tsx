@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { createInvoice, getEnquiry } from "@/lib/admin.functions";
+import { allBeds, useOps } from "@/lib/ops-store";
 import { previewInvoice, type InvoiceDoc } from "@/lib/invoice-pdf";
 
 export const Route = createFileRoute("/admin/bookings/$id_/invoice")({
@@ -63,6 +64,20 @@ function InvoiceGenerator() {
   const snapshot = (row as any)?.quote_snapshot;
   const r = row as any;
 
+  /* The real assigned room comes from the room assignment made on Booking Details. */
+  const ops = useOps();
+  const assignedBed = useMemo(
+    () => allBeds(ops.units).find((b) => b.bed.enquiryId === id),
+    [ops.units, id],
+  );
+  const assignedRoomLabel = assignedBed
+    ? `Unit ${assignedBed.unit.unitNo} · Room ${assignedBed.room.letter}`
+    : "";
+  const assignedRoomDetail = assignedBed
+    ? `${assignedBed.room.occupancy === "twin" ? "Twin sharing" : "Single"} · ${assignedBed.bed.label}`
+    : "";
+  const invoiceRoomName = assignedRoomLabel || r?.room_name || "";
+
   useEffect(() => {
     if (!row || ready) return;
     const first = snapshot?.quote?.firstPayment as any[] | undefined;
@@ -85,7 +100,7 @@ function InvoiceGenerator() {
     [lines],
   );
 
-  const roomAssigned = Boolean(r?.room_name);
+  const roomAssigned = Boolean(assignedBed);
   const termDays = paymentTerms === "NET30" ? 30 : 15;
   const dueDate = invoiceDate
     ? new Date(new Date(invoiceDate).getTime() + termDays * 86400000)
@@ -108,7 +123,7 @@ function InvoiceGenerator() {
             university: r.university ?? "",
             nationality: r.nationality ?? "",
             residence_name: r.residence_name ?? "",
-            room_name: r.room_name ?? "",
+            room_name: invoiceRoomName,
             occupancy: r.occupancy ?? "",
             tenancy_start: r.move_in ?? null,
             tenancy_end: r.move_out ?? null,
@@ -144,7 +159,7 @@ function InvoiceGenerator() {
       university: r.university ?? "",
       nationality: r.nationality ?? "",
       residence_name: r.residence_name ?? "",
-      room_name: r.room_name ?? "",
+      room_name: invoiceRoomName,
       occupancy: r.occupancy ?? "",
       tenancy_start: r.move_in ?? null,
       tenancy_end: r.move_out ?? null,
@@ -191,8 +206,18 @@ function InvoiceGenerator() {
           <Field label="Mobile"><p className="text-sm">{r.phone || "—"}</p></Field>
           <Field label="Residence"><p className="text-sm">{r.residence_name || "—"}</p></Field>
           <Field label="Unit type"><p className="text-sm">{r.unit_type || "—"}</p></Field>
-          <Field label="Room">
-            <p className="text-sm font-medium">{r.room_name || "—"}</p>
+          <Field label="Room preference">
+            <p className="text-sm">{r.room_name || "—"}</p>
+          </Field>
+          <Field label="Assigned room">
+            {assignedBed ? (
+              <>
+                <p className="text-sm font-semibold text-foreground">{assignedRoomLabel}</p>
+                <p className="text-xs text-muted-foreground">{assignedRoomDetail}</p>
+              </>
+            ) : (
+              <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Not assigned</p>
+            )}
           </Field>
           <Field label="Occupancy">
             <p className="text-sm capitalize">{r.occupancy || "—"}</p>
@@ -208,7 +233,11 @@ function InvoiceGenerator() {
         </div>
         {!roomAssigned ? (
           <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-            A room must be assigned in Booking Details before an invoice can be generated.
+            No room is assigned yet. Reserve a room under Room Assignment on the{" "}
+            <Link to="/admin/bookings/$id" params={{ id }} className="font-semibold underline">
+              Booking Details
+            </Link>{" "}
+            page before generating the invoice.
           </div>
         ) : null}
       </section>
