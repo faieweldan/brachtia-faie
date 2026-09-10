@@ -1588,11 +1588,17 @@ function EditableCard({
                       : "Long term"
                     : kind === "number"
                       ? money(Number(row[k] ?? 0))
-                      : kind === "heard"
-                        ? row[k] === "Other" && row[`${k}_other`]
-                          ? `Other — ${row[`${k}_other`]}`
-                          : row[k] || "—"
-                        : row[k] || "—"
+                      : kind === "payment"
+                        ? ({ bimonthly: "Bi-monthly", quarterly: "Quarterly", full: "Full upfront" } as Record<string, string>)[row[k] as string] ?? row[k] ?? "—"
+                        : kind === "unittype"
+                          ? row[k] || "—"
+                          : kind === "room"
+                            ? row[k] || "—"
+                            : kind === "heard"
+                              ? row[k] === "Other" && row[`${k}_other`]
+                                ? `Other — ${row[`${k}_other`]}`
+                                : row[k] || "—"
+                              : row[k] || "—"
               }
             />
           ))}
