@@ -24,7 +24,7 @@ const STATUS_STYLES: Record<string, string> = {
 
 const STATUS_LABELS: Record<string, string> = {
   vacant: "Vacant",
-  held: "Held",
+  held: "Reserved",
   booked: "Booked",
   active: "Active",
   notice: "Notice",
@@ -111,7 +111,10 @@ export function StageStepper({
   stages: { key: string; label: string }[];
   current: string;
 }) {
-  const index = Math.max(0, stages.findIndex((s) => s.key === current));
+  const index = Math.max(
+    0,
+    stages.findIndex((s) => s.key === current),
+  );
   return (
     <ol className="flex flex-wrap items-center gap-1.5">
       {stages.map((s, i) => {
@@ -192,23 +195,44 @@ export function DocumentRow({
 
 /* ---------- small form helpers ---------- */
 
+/** A saved value shown as text. Same height and spacing as the input it replaces. */
+export function ReadOnlyField({ label, value }: { label: string; value?: string }) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <p className="flex h-9 items-center truncate text-sm text-foreground">{value || "—"}</p>
+    </div>
+  );
+}
+
 export function Text({
   label,
   value,
   onChange,
   type = "text",
   placeholder,
+  readOnly = false,
+  display,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
   placeholder?: string;
+  readOnly?: boolean;
+  /** what to show when read-only, if the raw value is not the friendly form */
+  display?: string;
 }) {
+  if (readOnly) return <ReadOnlyField label={label} value={display ?? value} />;
   return (
     <div className="space-y-1.5">
       <Label className="text-xs text-muted-foreground">{label}</Label>
-      <Input type={type} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+      <Input
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
     </div>
   );
 }
@@ -219,13 +243,20 @@ export function Select({
   onChange,
   options,
   placeholder = "Select",
+  readOnly = false,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: (string | { value: string; label: string })[];
   placeholder?: string;
+  readOnly?: boolean;
 }) {
+  if (readOnly) {
+    const match = options.find((o) => (typeof o === "string" ? o : o.value) === value);
+    const shown = match ? (typeof match === "string" ? match : match.label) : value;
+    return <ReadOnlyField label={label} value={shown} />;
+  }
   return (
     <div className="space-y-1.5">
       <Label className="text-xs text-muted-foreground">{label}</Label>
