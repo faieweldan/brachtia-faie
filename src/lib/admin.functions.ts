@@ -557,7 +557,13 @@ export const getBookingBilling = createServerFn({ method: "GET" })
   });
 
 export const createInvoice = createServerFn({ method: "POST" })
-  .inputValidator((data: { enquiryId: string; values: Record<string, unknown>; items: InvoiceLine[] }) => data)
+  .inputValidator((data: {
+    enquiryId: string;
+    values: Record<string, unknown>;
+    items: InvoiceLine[];
+    invoiceDate?: string;
+    paymentTerms?: string;
+  }) => data)
   .handler(async ({ data }) => {
     const supabase = await admin();
     const total = data.items.reduce((n, l) => n + Number(l.amount || 0), 0);
@@ -565,11 +571,18 @@ export const createInvoice = createServerFn({ method: "POST" })
       .filter((l) => l.kind === "refundable")
       .reduce((n, l) => n + Number(l.amount || 0), 0);
 
+    const invoiceDate = data.invoiceDate || new Date().toISOString().slice(0, 10);
+    const paymentTerms = data.paymentTerms || "NET15";
+    const issuedAt = new Date(`${invoiceDate}T00:00:00Z`).toISOString();
+
     const { data: inv, error } = await supabase
       .from("invoices")
       .insert({
         ...data.values,
         enquiry_id: data.enquiryId,
+        invoice_date: invoiceDate,
+        payment_terms: paymentTerms,
+        issued_at: issuedAt,
         total,
         deposits_total: deposits,
       } as any)
