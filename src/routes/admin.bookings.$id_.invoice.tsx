@@ -55,8 +55,8 @@ function InvoiceGenerator() {
   });
 
   const [lines, setLines] = useState<Line[]>([]);
-  const [frequency, setFrequency] = useState("bimonthly");
-  const [rent, setRent] = useState(0);
+  const [manual, setManual] = useState(false);
+  const [rentOverride, setRentOverride] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
   const [invoiceDate, setInvoiceDate] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("NET15");
@@ -79,21 +79,49 @@ function InvoiceGenerator() {
     : "";
   const invoiceRoomName = assignedRoomLabel || r?.room_name || "";
 
-  useEffect(() => {
-    if (!row || ready) return;
-    const first = snapshot?.quote?.firstPayment as any[] | undefined;
-    setLines(
-      (first ?? []).map((l) => ({
+  /* Rent follows the assigned room; admin can override it for exceptions. */
+  const roomRent = Number(assignedBed?.bed.rent || assignedBed?.room.rent || 0);
+  const bookingRent = Number(r?.monthly_rent || snapshot?.quote?.monthlyAfter || 0);
+  const autoRent = roomRent || bookingRent;
+  const rent = rentOverride ?? autoRent;
+  const frequency = String(r?.payment_term || "bimonthly");
+
+  const property = snapshot?.property as Property | undefined;
+
+  /* Everything on the invoice is derived from monthly rent + payment frequency. */
+  const calculated = useMemo<Line[] | null>(() => {
+    if (!property || !rent || !r?.move_in || !r?.move_out) return null;
+    const term = (r.term === "short" ? "short" : "long") as ContractTerm;
+    const cycle = frequency === "monthly" ? "bimonthly" : (frequency as PaymentTerm);
+    const q = stayQuote(property, rent, term, r.move_in, r.move_out, cycle);
+    if (!q) return null;
+    return q.firstPayment
+      .filter((l) => !(frequency === "monthly" && l.label.startsWith("Advance rental")))
+      .map((l) => ({ label: l.label, kind: String(l.kind), amount: Number(l.amount || 0) }));
+  }, [property, rent, frequency, r?.move_in, r?.move_out, r?.term]);
+
+  const snapshotLines = useMemo<Line[]>(
+    () =>
+      ((snapshot?.quote?.firstPayment as any[] | undefined) ?? []).map((l) => ({
         label: String(l.label ?? ""),
         kind: String(l.kind ?? "onetime"),
         amount: Number(l.amount ?? 0),
       })),
-    );
-    setFrequency(String(r.payment_term || "bimonthly"));
-    setRent(Number(r.monthly_rent || snapshot?.quote?.monthlyAfter || 0));
+    [snapshot],
+  );
+
+  useEffect(() => {
+    if (!row || ready) return;
     setInvoiceDate(new Date().toISOString().slice(0, 10));
     setReady(true);
-  }, [row, ready, snapshot, r.payment_term, r.monthly_rent]);
+  }, [row, ready]);
+
+  /* Auto-fill the lines from the calculation unless admin has edited them. */
+  useEffect(() => {
+    if (manual) return;
+    setLines(calculated ?? snapshotLines);
+  }, [manual, calculated, snapshotLines]);
+
 
   const total = useMemo(() => lines.reduce((n, l) => n + Number(l.amount || 0), 0), [lines]);
   const deposits = useMemo(
