@@ -732,7 +732,7 @@ function BookingDetail() {
             onSave={() => setEditingStudent(false)}
             fields={studentFields}
             row={row}
-            onSaveField={(k, v) => mutate.mutate({ [k]: v })}
+            onSaveField={(k, v) => mutate.mutate({ [FIELD_KEY_MAP[k] ?? k]: v })}
             resOptions={resOptions ?? []}
           />
 
