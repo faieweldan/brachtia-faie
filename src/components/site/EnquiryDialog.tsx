@@ -71,6 +71,7 @@ export type EnquiryStay = {
   moveIn: string;
   moveOut: string;
   quote?: StayQuote | null | undefined;
+  paymentTerm?: PaymentTerm | undefined;
 };
 
 function FieldError({ msg }: { msg?: string | undefined }) {
