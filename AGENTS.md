@@ -32,3 +32,21 @@ You are responsible for organizing his thinking, not just executing tasks.
   against the actual Supabase tables, not just the migration files.
 - Brachtia's ops team is cleaning the master sheet and filling in tenancy end
   dates (week of 15 Sep 2026). Don't block on missing/dirty end dates.
+
+## Phase docs and quizzes
+
+`docs/PHASE-*.md` are Dani's learning material as well as project memory, so they
+must capture **technical** problems as fully as business decisions. He wants to be
+quizzed on both.
+
+Record every real bug, not just the model-level decisions — including the ones that
+were the assistant's own mistakes. Each entry: what broke, why, and the general rule
+it teaches.
+
+Examples worth having in there:
+- An edit reported as done that silently matched nothing, because a formatter had
+  reshaped the code after a previous edit. Rule: verify the file, never assume the
+  edit landed.
+- A cause diagnosed as "stale page" when it was really unapplied code.
+- A link built from the wrong id (legacy number vs database uuid), and the same bug
+  appearing a second time in a different file.
