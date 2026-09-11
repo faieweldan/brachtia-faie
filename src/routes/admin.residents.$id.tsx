@@ -890,7 +890,7 @@ function ResidentProfilePage() {
         </TabsContent>
 
         <TabsContent value="payments" className="mt-4">
-          <ResidentPayments residentId={form.id} />
+          <ResidentPayments residentId={form.id} legacyId={form.legacyId} tenancyEnd={stay.end} />
         </TabsContent>
       </Tabs>
     </div>
