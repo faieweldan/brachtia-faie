@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  COST_TERMS,
   DECLARATION_INTRO,
   termRuns,
   DECLARATION_TERMS,
@@ -90,10 +89,6 @@ function printDeclaration(fullName: string, idNumber: string) {
  * It is laid out as a document rather than a form, because it is one: a form
  * says "fill me in" and a contract says "read me", and the page should say
  * which before a word is read.
- *
- * What a student actually reads is the cost table. So that comes first, in
- * their own currency, with the full thirteen terms underneath - nothing hidden,
- * but nothing buried either.
  *
  * The terms carry the bold and underline of the paper form, because that
  * emphasis is part of the document rather than styling. Agreement is a single
@@ -188,21 +183,6 @@ export function DeclarationSection({
       <p className="mt-0.5 text-xs text-muted-foreground">
         Please read this before you sign. It is the agreement between you and {LANDLORD_ENTITY}.
       </p>
-
-      {/* the five numbers a student will want to know, before the wording */}
-      <div className="mt-4 overflow-hidden rounded-xl border border-border">
-        <p className="border-b border-border bg-muted/60 px-4 py-2 text-xs font-medium text-foreground">
-          What this means for you
-        </p>
-        <dl className="divide-y divide-border">
-          {COST_TERMS.map((t) => (
-            <div key={t.key} className="flex flex-wrap gap-2 px-4 py-2.5 text-sm">
-              <dt className="min-w-40 flex-1 text-muted-foreground">{t.summary}</dt>
-              <dd className="font-medium text-foreground">{t.plain}</dd>
-            </div>
-          ))}
-        </dl>
-      </div>
 
       {/* the whole thing, unabridged */}
       <div
