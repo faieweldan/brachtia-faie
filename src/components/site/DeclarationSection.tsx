@@ -230,7 +230,7 @@ export function DeclarationSection({
       </label>
 
       <p className="mt-5 text-xs font-medium text-foreground">
-        Please confirm each of these separately — they are the ones that cost money.
+        Please confirm each of these separately.
       </p>
       <div className="mt-2.5 space-y-2.5">
         {COST_TERMS.map((t) => (
