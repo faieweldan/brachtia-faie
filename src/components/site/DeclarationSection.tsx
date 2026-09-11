@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import {
   COST_TERMS,
   DECLARATION_INTRO,
+  termRuns,
   DECLARATION_TERMS,
   LANDLORD_ENTITY,
   LANDLORD_REG_NO,
@@ -31,7 +32,16 @@ function printDeclaration(fullName: string, idNumber: string) {
     v.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
   const w = window.open("", "_blank", "width=820,height=1000");
   if (!w) return;
-  const terms = DECLARATION_TERMS.map((t) => `<li>${esc(t)}</li>`).join("");
+  const runHtml = (t: string) =>
+    termRuns(t)
+      .map((r) => {
+        let html = esc(r.text);
+        if (r.underline) html = `<u>${html}</u>`;
+        if (r.bold) html = `<b>${html}</b>`;
+        return html;
+      })
+      .join("");
+  const terms = DECLARATION_TERMS.map((t) => `<li>${runHtml(t)}</li>`).join("");
   w.document.write(`<!doctype html><html><head><meta charset="utf-8">
 <title>Brachtia Homes - Declaration</title>
 <style>
@@ -82,9 +92,12 @@ function printDeclaration(fullName: string, idNumber: string) {
  *
  * What a student actually reads is the cost table. So that comes first, in
  * their own currency, with the full thirteen terms underneath - nothing hidden,
- * but nothing buried either. The ticks are on the five terms that cost money,
- * not on all thirteen: thirteen ticks are clicked in four seconds without being
- * read, and that is weaker evidence of agreement, not stronger.
+ * but nothing buried either.
+ *
+ * The terms carry the bold and underline of the paper form, because that
+ * emphasis is part of the document rather than styling. Agreement is a single
+ * deliberate act taken after reading to the end, and the fact that the text was
+ * read to the end is recorded alongside it.
  */
 export function DeclarationSection({
   token,
@@ -99,7 +112,6 @@ export function DeclarationSection({
   signed: SignedDeclaration | null;
   onSigned: (s: SignedDeclaration) => void;
 }) {
-  const [agreed, setAgreed] = useState<Record<string, boolean>>({});
   const [readAll, setReadAll] = useState(false);
   const [typedName, setTypedName] = useState("");
   const [scrolledToEnd, setScrolledToEnd] = useState(false);
@@ -132,7 +144,7 @@ export function DeclarationSection({
     );
   }
 
-  const allTicked = COST_TERMS.every((t) => agreed[t.key]) && readAll;
+  const allTicked = readAll;
   const nameOk = nameMatches(typedName, fullName);
 
   // a disabled button with no reason is the commonest failure in the world -
@@ -140,20 +152,18 @@ export function DeclarationSection({
   const blocker = !scrolledToEnd
     ? "Scroll to the end of the terms first."
     : !readAll
-      ? `Confirm you have read all ${DECLARATION_TERMS.length} terms.`
-      : !COST_TERMS.every((t) => agreed[t.key])
-        ? `Confirm each of the ${COST_TERMS.length} cost items.`
-        : !typedName.trim()
-          ? "Type your full name to sign."
-          : !nameOk
-            ? `This does not match the name we hold (${fullName || "—"}).`
-            : "";
+      ? `Confirm you have read and agree to all ${DECLARATION_TERMS.length} terms.`
+      : !typedName.trim()
+        ? "Type your full name to sign."
+        : !nameOk
+          ? `This does not match the name we hold (${fullName || "—"}).`
+          : "";
 
   async function sign() {
     setBusy(true);
     try {
       const res = await signDeclarationByToken({
-        data: { token, signedName: typedName, agreedTerms: agreed, scrolledToEnd },
+        data: { token, signedName: typedName, agreedTerms: { all_terms: readAll }, scrolledToEnd },
       });
       if (!res.ok) {
         toast.error(res.error);
@@ -204,7 +214,18 @@ export function DeclarationSection({
         <p className="text-sm leading-relaxed text-foreground">{DECLARATION_INTRO}</p>
         <ol className="mt-3 list-decimal space-y-2.5 pl-5 text-sm leading-relaxed text-muted-foreground">
           {DECLARATION_TERMS.map((t, i) => (
-            <li key={i}>{t}</li>
+            <li key={i}>
+              {termRuns(t).map((r, j) => (
+                <span
+                  key={j}
+                  className={`${r.bold ? "font-semibold text-foreground" : ""} ${
+                    r.underline ? "underline" : ""
+                  }`}
+                >
+                  {r.text}
+                </span>
+              ))}
+            </li>
           ))}
         </ol>
       </div>
@@ -214,9 +235,8 @@ export function DeclarationSection({
         </p>
       ) : null}
 
-      {/* confirming the reading sits with the reading. it deliberately does not
-          tick the five below: one click meaning "I agree to five things that
-          cost me money" is the thing those five ticks exist to prevent */}
+      {/* agreement sits with the terms it refers to, and is one deliberate act
+          rather than a row of ticks repeating what the terms already say */}
       <label className="mt-3 flex cursor-pointer items-start gap-3 text-sm">
         <input
           type="checkbox"
@@ -225,28 +245,9 @@ export function DeclarationSection({
           onChange={(e) => setReadAll(e.target.checked)}
         />
         <span className="font-medium text-foreground">
-          I have read all {DECLARATION_TERMS.length} terms above.
+          I have read and agree to all {DECLARATION_TERMS.length} terms above.
         </span>
       </label>
-
-      <p className="mt-5 text-xs font-medium text-foreground">
-        Please confirm each of these separately.
-      </p>
-      <div className="mt-2.5 space-y-2.5">
-        {COST_TERMS.map((t) => (
-          <label key={t.key} className="flex cursor-pointer items-start gap-3 text-sm">
-            <input
-              type="checkbox"
-              className="mt-1 size-4 shrink-0"
-              checked={!!agreed[t.key]}
-              onChange={(e) => setAgreed((a) => ({ ...a, [t.key]: e.target.checked }))}
-            />
-            <span className="text-foreground">
-              {t.detail} <span className="text-muted-foreground">(term {t.term})</span>
-            </span>
-          </label>
-        ))}
-      </div>
 
       {/* the signature. the evidence is the record, not the look of it */}
       <div className="mt-5 grid gap-4 sm:grid-cols-2">

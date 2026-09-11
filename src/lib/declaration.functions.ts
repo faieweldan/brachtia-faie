@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 
-import { COST_TERMS, DECLARATION_VERSION, declarationBody, nameMatches } from "@/lib/declaration";
+import { DECLARATION_VERSION, declarationBody, nameMatches } from "@/lib/declaration";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -134,13 +134,13 @@ export const signDeclarationByToken = createServerFn({ method: "POST" })
       .single();
     if (!resident) return { ok: false as const, error: "Resident not found." };
 
-    // every cost term has to be ticked - these are the ones that cost money,
-    // and a signature that skipped them is not worth having
-    const missing = COST_TERMS.filter((t) => !data.agreedTerms?.[t.key]);
-    if (missing.length) {
+    // agreement is one deliberate act, taken after the terms have been read to
+    // the end. whatever the browser sends is recorded, but the server decides
+    // whether it amounts to a signature
+    if (!data.agreedTerms?.["all_terms"]) {
       return {
         ok: false as const,
-        error: `Please tick all ${COST_TERMS.length} cost items before signing.`,
+        error: "Please confirm you have read and agree to all the terms before signing.",
       };
     }
 
