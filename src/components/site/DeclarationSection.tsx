@@ -6,11 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  DECLARATION_INTRO,
   termRuns,
+  DECLARATION_INTRO,
   DECLARATION_TERMS,
   LANDLORD_ENTITY,
-  LANDLORD_REG_NO,
   nameMatches,
 } from "@/lib/declaration";
 import {
@@ -18,70 +17,6 @@ import {
   signDeclarationByToken,
   type SignedDeclaration,
 } from "@/lib/declaration.functions";
-
-/**
- * A copy to keep, or to take to a parent or guardian.
- *
- * It is not how the student signs - that happens here, and the record of it is
- * stronger than a photograph of a signed page could be. It exists because a
- * parent or guardian is a second person this form cannot reach, and because
- * people like a copy of what they agreed to.
- */
-function printDeclaration(fullName: string, idNumber: string) {
-  const esc = (v: string) =>
-    v.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
-  const w = window.open("", "_blank", "width=820,height=1000");
-  if (!w) return;
-  const runHtml = (t: string) =>
-    termRuns(t)
-      .map((r) => {
-        let html = esc(r.text);
-        if (r.underline) html = `<u>${html}</u>`;
-        if (r.bold) html = `<b>${html}</b>`;
-        return html;
-      })
-      .join("");
-  const terms = DECLARATION_TERMS.map((t) => `<li>${runHtml(t)}</li>`).join("");
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8">
-<title>Brachtia Homes - Declaration</title>
-<style>
-  /* the original is a single page, and so is this: the type sizes and spacing
-     are set to fit thirteen terms and three signature blocks on one sheet */
-  @page { margin: 14mm; size: A4; }
-  body { font: 9.5pt/1.34 Calibri, Arial, sans-serif; color: #000; margin: 0; }
-  h1 { font-size: 17pt; letter-spacing: .06em; margin: 0 0 9px; font-family: Georgia, serif; }
-  p { margin: 0 0 7px; }
-  .rule { display: inline-block; border-bottom: 1px solid #000; min-width: 190px; }
-  ol { padding-left: 18px; margin: 7px 0 0; }
-  li { margin-bottom: 3.5px; text-align: justify; }
-  .sign { display: flex; gap: 22px; margin-top: 20px; page-break-inside: avoid; }
-  .sign div { flex: 1; }
-  .sign .role { min-height: 26px; }
-  .sign .line { border-top: 1px solid #000; margin-top: 24px; padding-top: 4px; }
-  footer { margin-top: 14px; border-top: 2px solid #2f6f5e; padding-top: 5px;
-           color: #2f6f5e; font-weight: 700; page-break-inside: avoid; }
-  footer small { display: block; color: #444; font-weight: 400; }
-</style></head><body>
-  <h1>PART 2: DECLARATION</h1>
-  <p class="who">I, <span class="rule">&nbsp;<b>${esc(fullName)}</b></span>
-     NRIC / Passport No. <span class="rule">&nbsp;<b>${esc(idNumber)}</b></span>,</p>
-  <p>${esc(DECLARATION_INTRO)}</p>
-  <ol>${terms}</ol>
-  <div class="sign">
-    <div><div class="role">Student Signature</div>
-      <div class="line">Name:<br/>NRIC / PP No.:<br/>Date:</div></div>
-    <div><div class="role">Parents / Guardian Signature</div>
-      <div class="line">Name:<br/>NRIC / PP No.:<br/>Date:</div></div>
-    <div><div class="role">Landlord/Landlord's Authorized Person</div>
-      <div class="line">Name:<br/>NRIC / PP No.:<br/>Date:</div></div>
-  </div>
-  <footer>${esc(LANDLORD_ENTITY)}
-    <small>Reg No : ${esc(LANDLORD_REG_NO)}</small></footer>
-</body></html>`);
-  w.document.close();
-  w.focus();
-  w.print();
-}
 
 /**
  * The declaration, read and signed.
@@ -254,19 +189,8 @@ export function DeclarationSection({
           {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
           Sign declaration
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => printDeclaration(fullName, idNumber)}
-        >
-          Print for parent / guardian
-        </Button>
         {blocker ? <p className="text-xs text-muted-foreground">{blocker}</p> : null}
       </div>
-      <p className="mt-2 text-[11px] text-muted-foreground">
-        Signing here is your signature - nothing needs printing or sending back. The printed copy is
-        yours to keep, or for a parent or guardian if Brachtia has asked for one.
-      </p>
     </section>
   );
 }
