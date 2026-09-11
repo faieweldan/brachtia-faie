@@ -115,10 +115,10 @@ export function DeclarationSection({
   // it always says what is still missing
   const blocker = !scrolledToEnd
     ? "Scroll to the end of the terms first."
-    : !COST_TERMS.every((t) => agreed[t.key])
-      ? "Tick all five cost items."
-      : !readAll
-        ? "Confirm you have read all 13 terms."
+    : !readAll
+      ? `Confirm you have read all ${DECLARATION_TERMS.length} terms.`
+      : !COST_TERMS.every((t) => agreed[t.key])
+        ? `Confirm each of the ${COST_TERMS.length} cost items.`
         : !typedName.trim()
           ? "Type your full name to sign."
           : !nameOk
@@ -190,8 +190,25 @@ export function DeclarationSection({
         </p>
       ) : null}
 
-      {/* a tick for each term that costs money, and one for the rest */}
-      <div className="mt-5 space-y-2.5">
+      {/* confirming the reading sits with the reading. it deliberately does not
+          tick the five below: one click meaning "I agree to five things that
+          cost me money" is the thing those five ticks exist to prevent */}
+      <label className="mt-3 flex cursor-pointer items-start gap-3 text-sm">
+        <input
+          type="checkbox"
+          className="mt-1 size-4 shrink-0"
+          checked={readAll}
+          onChange={(e) => setReadAll(e.target.checked)}
+        />
+        <span className="font-medium text-foreground">
+          I have read all {DECLARATION_TERMS.length} terms above.
+        </span>
+      </label>
+
+      <p className="mt-5 text-xs font-medium text-foreground">
+        Please confirm each of these separately — they are the ones that cost money.
+      </p>
+      <div className="mt-2.5 space-y-2.5">
         {COST_TERMS.map((t) => (
           <label key={t.key} className="flex cursor-pointer items-start gap-3 text-sm">
             <input
@@ -205,17 +222,6 @@ export function DeclarationSection({
             </span>
           </label>
         ))}
-        <label className="flex cursor-pointer items-start gap-3 border-t border-border pt-3 text-sm">
-          <input
-            type="checkbox"
-            className="mt-1 size-4 shrink-0"
-            checked={readAll}
-            onChange={(e) => setReadAll(e.target.checked)}
-          />
-          <span className="font-medium text-foreground">
-            I have read and agree to all {DECLARATION_TERMS.length} terms above.
-          </span>
-        </label>
       </div>
 
       {/* the signature. the evidence is the record, not the look of it */}
