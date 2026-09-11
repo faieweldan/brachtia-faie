@@ -15,6 +15,8 @@ import {
   type ProfileLinkFields,
 } from "@/lib/profile-link.functions";
 import { compressImage, readableSize } from "@/lib/compress";
+import { DeclarationSection } from "@/components/site/DeclarationSection";
+import { getDeclarationByToken, type SignedDeclaration } from "@/lib/declaration.functions";
 import {
   COUNTRY_OPTIONS,
   GENDER_OPTIONS,
@@ -183,6 +185,7 @@ function MyProfilePage() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
+  const [signed, setSigned] = useState<SignedDeclaration | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -194,6 +197,8 @@ function MyProfilePage() {
         else {
           setValues(res.values);
           setDocs(Object.fromEntries(res.docs.map((d) => [d.key, d.fileName])));
+          const dec = await getDeclarationByToken({ data: { token } });
+          if (!cancelled && dec.ok) setSigned(dec.signed);
         }
       } catch {
         if (!cancelled) setError("Something went wrong loading this form.");
@@ -437,6 +442,18 @@ function MyProfilePage() {
             })}
           </div>
         </section>
+      </div>
+
+      {/* last, because it refers back to everything above it - nobody can agree
+          to terms about their own tenancy before saying who they are */}
+      <div className="mt-5">
+        <DeclarationSection
+          token={token}
+          fullName={values["full_name"] ?? ""}
+          idNumber={values["id_number"] ?? ""}
+          signed={signed}
+          onSigned={setSigned}
+        />
       </div>
 
       <div className="sticky bottom-0 mt-5 flex justify-end border-t border-border bg-background py-4">

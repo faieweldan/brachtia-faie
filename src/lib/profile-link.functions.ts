@@ -218,6 +218,13 @@ export const STUDENT_DOCS = [
   { key: "offer", label: "University offer letter" },
   { key: "id", label: "Passport / NRIC copy" },
   { key: "booking_proof", label: "Booking fee payment proof" },
+  // A parent or guardian is a second person, and a student typing their name
+  // proves nothing. Until they get a link of their own, the paper route is the
+  // honest one: print it, have it signed, photograph it back.
+  {
+    key: "guardian_declaration",
+    label: "Declaration signed by parent / guardian (only if Brachtia asked for it)",
+  },
 ] as const;
 
 function safeExt(name: string, type: string) {

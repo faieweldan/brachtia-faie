@@ -15,6 +15,7 @@ import {
   normRelationship,
   normUniversity,
 } from "@/lib/reference-data";
+import { getDeclarationForResident } from "@/lib/declaration.functions";
 
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -113,6 +114,55 @@ const PROFILE_SECTIONS = [
 export const Route = createFileRoute("/admin/residents/$id")({
   component: ResidentProfilePage,
 });
+
+/**
+ * Whether the declaration has been signed - read from the signature record, not
+ * from a flag on the resident. A flag would be overwritten by the next bulk
+ * upload; a signature is an event of its own and cannot be.
+ */
+function DeclarationStatus({ residentId }: { residentId: string }) {
+  const [state, setState] = useState<
+    { version: string; signedName: string; signedAt: string; readToEnd: boolean } | null | "loading"
+  >("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!residentId || residentId === "new") {
+      setState(null);
+      return;
+    }
+    void (async () => {
+      try {
+        const res = await getDeclarationForResident({ data: { residentId } });
+        if (!cancelled) setState(res.signed);
+      } catch {
+        if (!cancelled) setState(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [residentId]);
+
+  if (state === "loading") return <p className="text-sm text-muted-foreground">Checking…</p>;
+  if (!state) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Not signed yet. It is the last section of their profile link.
+      </p>
+    );
+  }
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <ReadOnlyField label="Signed by" value={state.signedName} />
+      <ReadOnlyField label="Signed on" value={fmtDate(state.signedAt)} />
+      <ReadOnlyField
+        label="Version"
+        value={`${state.version}${state.readToEnd ? " · read to the end" : ""}`}
+      />
+    </div>
+  );
+}
 
 function ResidentProfilePage() {
   const { id } = Route.useParams();
@@ -920,6 +970,10 @@ function ResidentProfilePage() {
                 onChange={(v) => set({ leaseMonths: v })}
               />
             </div>
+          </Panel>
+
+          <Panel title="Declaration" description="What this resident agreed to, and when.">
+            <DeclarationStatus residentId={form.id} />
           </Panel>
 
           <Panel
