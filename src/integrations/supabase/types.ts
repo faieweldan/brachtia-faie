@@ -235,6 +235,97 @@ export type Database = {
           },
         ]
       }
+      beds: {
+        Row: {
+          created_at: string
+          enquiry_id: string | null
+          gender: string | null
+          hold_for: string | null
+          hold_until: string | null
+          id: string
+          import_batch_id: string | null
+          label: string
+          nationality: string | null
+          rent: number | null
+          resident_id: string | null
+          resident_name: string | null
+          room_id: string
+          sort_order: number
+          status: string
+          student_id: string | null
+          tenancy_end: string | null
+          tenancy_start: string | null
+          university: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enquiry_id?: string | null
+          gender?: string | null
+          hold_for?: string | null
+          hold_until?: string | null
+          id?: string
+          import_batch_id?: string | null
+          label: string
+          nationality?: string | null
+          rent?: number | null
+          resident_id?: string | null
+          resident_name?: string | null
+          room_id: string
+          sort_order?: number
+          status?: string
+          student_id?: string | null
+          tenancy_end?: string | null
+          tenancy_start?: string | null
+          university?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enquiry_id?: string | null
+          gender?: string | null
+          hold_for?: string | null
+          hold_until?: string | null
+          id?: string
+          import_batch_id?: string | null
+          label?: string
+          nationality?: string | null
+          rent?: number | null
+          resident_id?: string | null
+          resident_name?: string | null
+          room_id?: string
+          sort_order?: number
+          status?: string
+          student_id?: string | null
+          tenancy_end?: string | null
+          tenancy_start?: string | null
+          university?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "beds_enquiry_id_fkey"
+            columns: ["enquiry_id"]
+            isOneToOne: false
+            referencedRelation: "enquiries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "beds_resident_id_fkey"
+            columns: ["resident_id"]
+            isOneToOne: false
+            referencedRelation: "residents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "beds_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       blocked_dates: {
         Row: {
           blocked_on: string
@@ -393,6 +484,36 @@ export type Database = {
         }
         Relationships: []
       }
+      import_batches: {
+        Row: {
+          created_at: string
+          error_count: number
+          filename: string
+          id: string
+          kind: string
+          row_count: number
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          error_count?: number
+          filename?: string
+          id?: string
+          kind: string
+          row_count?: number
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          error_count?: number
+          filename?: string
+          id?: string
+          kind?: string
+          row_count?: number
+          status?: string
+        }
+        Relationships: []
+      }
       invoice_items: {
         Row: {
           amount: number
@@ -440,6 +561,7 @@ export type Database = {
           full_name: string
           id: string
           invoice_date: string | null
+          invoice_type: string
           issued_at: string
           monthly_rent: number
           nationality: string
@@ -448,6 +570,8 @@ export type Database = {
           occupancy: string
           payment_frequency: string
           payment_terms: string
+          period_end: string | null
+          period_start: string | null
           phone: string
           residence_name: string
           resident_id: string
@@ -467,6 +591,7 @@ export type Database = {
           full_name?: string
           id?: string
           invoice_date?: string | null
+          invoice_type?: string
           issued_at?: string
           monthly_rent?: number
           nationality?: string
@@ -475,6 +600,8 @@ export type Database = {
           occupancy?: string
           payment_frequency?: string
           payment_terms?: string
+          period_end?: string | null
+          period_start?: string | null
           phone?: string
           residence_name?: string
           resident_id?: string
@@ -494,6 +621,7 @@ export type Database = {
           full_name?: string
           id?: string
           invoice_date?: string | null
+          invoice_type?: string
           issued_at?: string
           monthly_rent?: number
           nationality?: string
@@ -502,6 +630,8 @@ export type Database = {
           occupancy?: string
           payment_frequency?: string
           payment_terms?: string
+          period_end?: string | null
+          period_start?: string | null
           phone?: string
           residence_name?: string
           resident_id?: string
@@ -573,6 +703,47 @@ export type Database = {
             columns: ["invoice_id"]
             isOneToOne: false
             referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profile_links: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          opened_at: string | null
+          resident_id: string
+          revoked_at: string | null
+          submitted_at: string | null
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          opened_at?: string | null
+          resident_id: string
+          revoked_at?: string | null
+          submitted_at?: string | null
+          token: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          opened_at?: string | null
+          resident_id?: string
+          revoked_at?: string | null
+          submitted_at?: string | null
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_links_resident_id_fkey"
+            columns: ["resident_id"]
+            isOneToOne: false
+            referencedRelation: "residents"
             referencedColumns: ["id"]
           },
         ]
@@ -740,6 +911,179 @@ export type Database = {
         }
         Relationships: []
       }
+      residents: {
+        Row: {
+          address: string
+          country: string
+          course: string
+          created_at: string
+          dob: string
+          docs: Json
+          ec_address: string
+          ec_country: string
+          ec_email: string
+          ec_mobile: string
+          ec_name: string
+          ec_postcode: string
+          ec_relationship: string
+          ec_state: string
+          email: string
+          enquiry_id: string | null
+          full_name: string
+          gender: string
+          graduation_year: string
+          id: string
+          id_number: string
+          import_batch_id: string | null
+          lease_months: string
+          legacy_id: string | null
+          level_of_study: string
+          marital_status: string
+          medical_condition: string
+          medical_detail: string
+          mobile: string
+          move_in: string
+          nationality: string
+          occupancy: string
+          pay_method: string
+          pay_schedule: string
+          payer_address: string
+          payer_country: string
+          payer_email: string
+          payer_mobile: string
+          payer_name: string
+          payer_postcode: string
+          payer_relationship: string
+          payer_state: string
+          portal_invited: boolean
+          postcode: string
+          race: string
+          religion: string
+          sponsor: string
+          state: string
+          status: string
+          student_id: string
+          university: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string
+          country?: string
+          course?: string
+          created_at?: string
+          dob?: string
+          docs?: Json
+          ec_address?: string
+          ec_country?: string
+          ec_email?: string
+          ec_mobile?: string
+          ec_name?: string
+          ec_postcode?: string
+          ec_relationship?: string
+          ec_state?: string
+          email?: string
+          enquiry_id?: string | null
+          full_name?: string
+          gender?: string
+          graduation_year?: string
+          id?: string
+          id_number?: string
+          import_batch_id?: string | null
+          lease_months?: string
+          legacy_id?: string | null
+          level_of_study?: string
+          marital_status?: string
+          medical_condition?: string
+          medical_detail?: string
+          mobile?: string
+          move_in?: string
+          nationality?: string
+          occupancy?: string
+          pay_method?: string
+          pay_schedule?: string
+          payer_address?: string
+          payer_country?: string
+          payer_email?: string
+          payer_mobile?: string
+          payer_name?: string
+          payer_postcode?: string
+          payer_relationship?: string
+          payer_state?: string
+          portal_invited?: boolean
+          postcode?: string
+          race?: string
+          religion?: string
+          sponsor?: string
+          state?: string
+          status?: string
+          student_id?: string
+          university?: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string
+          country?: string
+          course?: string
+          created_at?: string
+          dob?: string
+          docs?: Json
+          ec_address?: string
+          ec_country?: string
+          ec_email?: string
+          ec_mobile?: string
+          ec_name?: string
+          ec_postcode?: string
+          ec_relationship?: string
+          ec_state?: string
+          email?: string
+          enquiry_id?: string | null
+          full_name?: string
+          gender?: string
+          graduation_year?: string
+          id?: string
+          id_number?: string
+          import_batch_id?: string | null
+          lease_months?: string
+          legacy_id?: string | null
+          level_of_study?: string
+          marital_status?: string
+          medical_condition?: string
+          medical_detail?: string
+          mobile?: string
+          move_in?: string
+          nationality?: string
+          occupancy?: string
+          pay_method?: string
+          pay_schedule?: string
+          payer_address?: string
+          payer_country?: string
+          payer_email?: string
+          payer_mobile?: string
+          payer_name?: string
+          payer_postcode?: string
+          payer_relationship?: string
+          payer_state?: string
+          portal_invited?: boolean
+          postcode?: string
+          race?: string
+          religion?: string
+          sponsor?: string
+          state?: string
+          status?: string
+          student_id?: string
+          university?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "residents_enquiry_id_fkey"
+            columns: ["enquiry_id"]
+            isOneToOne: false
+            referencedRelation: "enquiries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       room_types: {
         Row: {
           available_from: string | null
@@ -831,6 +1175,112 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "room_types_residence_id_fkey"
+            columns: ["residence_id"]
+            isOneToOne: false
+            referencedRelation: "residences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rooms: {
+        Row: {
+          created_at: string
+          id: string
+          import_batch_id: string | null
+          letter: string
+          occupancy: string
+          rent: number
+          room_type_code: string
+          sort_order: number
+          unit_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          import_batch_id?: string | null
+          letter: string
+          occupancy?: string
+          rent?: number
+          room_type_code?: string
+          sort_order?: number
+          unit_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          import_batch_id?: string | null
+          letter?: string
+          occupancy?: string
+          rent?: number
+          room_type_code?: string
+          sort_order?: number
+          unit_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rooms_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      units: {
+        Row: {
+          block: string
+          code: string
+          created_at: string
+          floor: string
+          gender: string
+          id: string
+          import_batch_id: string | null
+          notes: string
+          residence_id: string
+          unit_no: string
+          unit_type: string
+          updated_at: string
+          whole_unit: boolean
+          whole_unit_rent: number
+        }
+        Insert: {
+          block?: string
+          code: string
+          created_at?: string
+          floor?: string
+          gender?: string
+          id?: string
+          import_batch_id?: string | null
+          notes?: string
+          residence_id: string
+          unit_no: string
+          unit_type?: string
+          updated_at?: string
+          whole_unit?: boolean
+          whole_unit_rent?: number
+        }
+        Update: {
+          block?: string
+          code?: string
+          created_at?: string
+          floor?: string
+          gender?: string
+          id?: string
+          import_batch_id?: string | null
+          notes?: string
+          residence_id?: string
+          unit_no?: string
+          unit_type?: string
+          updated_at?: string
+          whole_unit?: boolean
+          whole_unit_rent?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "units_residence_id_fkey"
             columns: ["residence_id"]
             isOneToOne: false
             referencedRelation: "residences"
