@@ -61,8 +61,10 @@ export const submitEnquiry = createServerFn({ method: "POST" })
       quote_snapshot: (data.quoteSnapshot ?? {}) as never,
     }).select("reference").maybeSingle();
     if (error) {
+      // the reason travels back to the browser: a failure the student cannot see
+      // is a failure nobody fixes
       console.error("enquiry insert failed", error);
-      return { ok: false as const, reference: "" };
+      return { ok: false as const, reference: "", error: error.message };
     }
     return { ok: true as const, reference: (row?.reference ?? "") as string };
   });

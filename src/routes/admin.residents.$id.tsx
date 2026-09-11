@@ -1,12 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { ArrowLeft, Link2, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { DocumentRow, EmptyState, Panel, Select, Text } from "@/components/admin/ops-ui";
+import {
+  DocumentRow,
+  EmptyState,
+  Panel,
+  ReadOnlyField,
+  Select,
+  StatusPill,
+  Text,
+} from "@/components/admin/ops-ui";
 import { TenancyCard } from "@/components/admin/TenancyCard";
 import { ResidentPayments } from "@/components/admin/ResidentPayments";
 import {
@@ -17,16 +25,62 @@ import {
   SCHEDULES,
   addTask,
   allBeds,
+  blankResident,
   completeness,
+  fmtDate,
+  money,
   createTenancy,
   deleteResident,
   findBed,
+  findBedForResident,
   saveResidentRecord,
   updateBed,
   useOps,
+  type BedStatus,
   type Resident,
   type ResidentPatch,
 } from "@/lib/ops-store";
+
+function initials(name: string) {
+  // names carry suffixes like "(B1)" and particles like bin / binti - neither
+  // belongs in a monogram
+  const skip = new Set(["bin", "binti", "bt", "a/l", "a/p", "al", "el"]);
+  const parts = name
+    .replace(/\(.*?\)/g, " ")
+    .split(/\s+/)
+    .map((p) => p.replace(/[^\p{L}]/gu, ""))
+    .filter((p) => p && !skip.has(p.toLowerCase()));
+  if (!parts.length) return "—";
+  return (
+    (parts[0]?.[0] ?? "") + (parts.length > 1 ? (parts.at(-1)?.[0] ?? "") : "")
+  ).toUpperCase();
+}
+
+/** "12 months", or "1 y 2 m" once it passes a year. Empty when dates are missing. */
+function monthsBetween(start: string, end: string) {
+  if (!start || !end) return "";
+  const a = new Date(start);
+  const b = new Date(end);
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return "";
+  const months = Math.max(
+    0,
+    (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()),
+  );
+  if (months < 12) return `${months} month${months === 1 ? "" : "s"}`;
+  const rem = months % 12;
+  return rem
+    ? `${Math.floor(months / 12)}y ${rem}m`
+    : `${Math.floor(months / 12)} year${months === 12 ? "" : "s"}`;
+}
+
+const PROFILE_SECTIONS = [
+  { key: "personal", label: "Personal" },
+  { key: "academic", label: "Academic" },
+  { key: "emergency", label: "Emergency contact" },
+  { key: "payment", label: "Payor details" },
+  { key: "documents", label: "Documents" },
+  { key: "portal", label: "Portal access" },
+];
 
 export const Route = createFileRoute("/admin/residents/$id")({
   component: ResidentProfilePage,
@@ -35,16 +89,67 @@ export const Route = createFileRoute("/admin/residents/$id")({
 function ResidentProfilePage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
-  const { residents, units, tenancies } = useOps();
+  const { residents, units, tenancies, payments } = useOps();
+  // "new" is a resident that does not exist yet: the form is filled in first and
+  // the row is only created on save, so an abandoned form leaves nothing behind
+  const isNew = id === "new";
   const stored = residents.find((r) => r.id === id);
-  const [form, setForm] = useState<Resident | null>(stored ?? null);
+  const [form, setForm] = useState<Resident | null>(isNew ? blankResident() : (stored ?? null));
   const [tab, setTab] = useState("profile");
+  const [active, setActive] = useState("personal");
+  // sections are read-only until the pencil is clicked
+  const [editing, setEditing] = useState<Record<string, boolean>>({});
+  const [linking, setLinking] = useState(false);
+  const isEditing = (key: string) => !!editing[key];
+  const editAction = (key: string) => (
+    <Button
+      size="sm"
+      variant={isEditing(key) ? "default" : "ghost"}
+      onClick={() => setEditing((e) => ({ ...e, [key]: !e[key] }))}
+    >
+      {isEditing(key) ? (
+        "Done"
+      ) : (
+        <>
+          <Pencil className="mr-1 size-3.5" /> Edit
+        </>
+      )}
+    </Button>
+  );
+  const sections = useRef<Record<string, HTMLElement | null>>({});
+  const sectionRef = (key: string) => (el: HTMLElement | null) => {
+    sections.current[key] = el;
+  };
+
+  function goToSection(key: string) {
+    setActive(key);
+    sections.current[key]?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // keep the left nav in step with whatever the reader has scrolled to
+  useEffect(() => {
+    if (tab !== "profile") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        const key = visible?.target.id.replace("sec-", "");
+        if (key) setActive(key);
+      },
+      { rootMargin: "-80px 0px -60% 0px" },
+    );
+    for (const el of Object.values(sections.current)) {
+      if (el) observer.observe(el);
+    }
+    return () => observer.disconnect();
+  }, [tab]);
 
   useEffect(() => {
     if (stored && !form) setForm(stored);
   }, [stored, form]);
 
-  if (!stored || !form) {
+  if ((!stored && !isNew) || !form) {
     return (
       <EmptyState
         title="Resident not found"
@@ -61,19 +166,32 @@ function ResidentProfilePage() {
   const set = (p: ResidentPatch) => setForm((f) => (f ? ({ ...f, ...p } as Resident) : f));
   const { pct, missing } = completeness(form);
   const tenancy = tenancies.find((t) => t.residentId === form.id);
-  const placed = findBed(units, form.bedId);
+  const placed = findBedForResident(units, form);
   const vacantBeds = allBeds(units).filter(
     ({ bed }) => bed.status === "vacant" || bed.id === form.bedId || bed.status === "held",
   );
 
-  function save() {
+  async function save() {
     if (!form) return;
-    saveResidentRecord(form);
+    let saved;
+    try {
+      saved = await saveResidentRecord(form);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save resident");
+      return;
+    }
+    if (isNew) {
+      // the server assigned the real id, so move onto that address
+      toast.success("Resident created");
+      void navigate({ to: "/admin/residents/$id", params: { id: saved.id }, replace: true });
+      return;
+    }
     if (form.bedId) {
       const row = findBed(units, form.bedId);
       if (row) {
         updateBed(form.bedId, {
-          status: row.bed.status === "vacant" || row.bed.status === "held" ? "booked" : row.bed.status,
+          status:
+            row.bed.status === "vacant" || row.bed.status === "held" ? "booked" : row.bed.status,
           residentId: form.id,
           residentName: form.fullName,
           university: form.university,
@@ -115,37 +233,173 @@ function ResidentProfilePage() {
     setTab("tenancy");
   }
 
+  // the stay summary: the tenancy record if there is one, otherwise whatever the
+  // bed placement and the profile already know
+  const stay = {
+    start: tenancy?.start || placed?.bed.tenancyStart || form.moveIn || "",
+    end: tenancy?.end || placed?.bed.tenancyEnd || "",
+    rent: tenancy?.rent || placed?.bed.rent || placed?.room.rent || 0,
+    status: (placed?.bed.status ?? "vacant") as BedStatus,
+    get duration() {
+      return monthsBetween(this.start, this.end);
+    },
+  };
+
+  /**
+   * A blank row is an accident, not a record: no name, no Brachtia id, no bed,
+   * no tenancy, no payments. Nothing points at it, so removing it loses nothing.
+   * Anyone with real data is deactivated instead.
+   */
+  const isEmptyDraft =
+    !form.fullName.trim() &&
+    !form.legacyId.trim() &&
+    !form.email.trim() &&
+    !placed &&
+    !tenancy &&
+    !payments.some((p) => p.residentId === form.id);
+
+  /**
+   * A link the student opens to check and complete their own profile. It writes
+   * straight back to this resident, so anything they change shows up here and
+   * everywhere else at once.
+   */
+  async function copyProfileLink() {
+    if (!form || isNew) return;
+    setLinking(true);
+    try {
+      const { getOrCreateProfileLink } = await import("@/lib/profile-link.functions");
+      const { token } = await getOrCreateProfileLink({ data: { residentId: form.id } });
+      const url = `${window.location.origin}/my-profile/${token}`;
+      await navigator.clipboard.writeText(url);
+      toast.success("Profile link copied", {
+        description: "Send it to the student. It works for 30 days.",
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not create the link");
+    } finally {
+      setLinking(false);
+    }
+  }
+
+  async function discard() {
+    if (!form) return;
+    if (isNew) {
+      void navigate({ to: "/admin/residents" });
+      return;
+    }
+    try {
+      await deleteResident(form.id);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not remove resident");
+      return;
+    }
+    toast.success("Blank resident removed");
+    void navigate({ to: "/admin/residents" });
+  }
+
+  /**
+   * Residents are never deleted - they are history, and a deleted one would
+   * leave payments and agreements pointing at nothing. Deactivating marks them
+   * inactive and frees the bed they held.
+   */
+  async function deactivate() {
+    const bed = placed?.bed;
+    try {
+      await saveResidentRecord({ ...form, status: "Inactive" } as Resident);
+      if (bed) {
+        updateBed(bed.id, {
+          status: "vacant",
+          residentId: undefined,
+          residentName: undefined,
+          tenancyStart: undefined,
+          tenancyEnd: undefined,
+          rent: undefined,
+        });
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not deactivate resident");
+      return;
+    }
+    toast.success("Resident deactivated");
+    void navigate({ to: "/admin/residents" });
+  }
+
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <Button asChild size="sm" variant="ghost">
-          <Link to="/admin/residents">
-            <ArrowLeft className="mr-1 size-4" /> Residents
-          </Link>
-        </Button>
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-lg font-bold text-brand-deep">{form.fullName || "New resident"}</h2>
-          <p className="truncate text-xs text-muted-foreground">
-            {placed
-              ? `${placed.unit.residenceName} · ${placed.unit.unitNo} · Room ${placed.room.letter} · ${placed.bed.label}`
-              : "No placement yet"}
-          </p>
+      <Button asChild size="sm" variant="ghost" className="-ml-2 self-start">
+        <Link to="/admin/residents">
+          <ArrowLeft className="mr-1 size-4" /> Residents
+        </Link>
+      </Button>
+
+      <Panel>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
+            {/* photo comes later; initials keep the shape stable until then */}
+            <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-brand-tint text-base font-semibold tracking-wide text-brand-deep">
+              {initials(form.fullName)}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-lg font-bold text-brand-deep">
+                {form.fullName || "New resident"}
+              </p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <StatusPill status={stay.status} />
+                {[
+                  form.legacyId && `ID ${form.legacyId}`,
+                  form.university,
+                  form.nationality,
+                  form.gender,
+                ]
+                  .filter(Boolean)
+                  .map((chip) => (
+                    <span
+                      key={String(chip)}
+                      className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground"
+                    >
+                      {chip}
+                    </span>
+                  ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1">
+            <Button size="sm" onClick={save}>
+              Save
+            </Button>
+            {isEmptyDraft ? (
+              <Button size="sm" variant="outline" onClick={discard}>
+                <Trash2 className="mr-1 size-3.5" /> Discard
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" onClick={deactivate}>
+                Deactivate
+              </Button>
+            )}
+          </div>
         </div>
-        <Button size="sm" onClick={save}>
-          Save
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => {
-            deleteResident(form.id);
-            toast.success("Resident removed");
-            void navigate({ to: "/admin/residents" });
-          }}
-        >
-          <Trash2 className="size-4" />
-        </Button>
-      </div>
+
+        <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-border pt-4 sm:grid-cols-4 lg:grid-cols-7">
+          {[
+            { label: "Residence", value: placed?.unit.residenceName },
+            { label: "Unit", value: placed?.unit.unitNo },
+            {
+              label: "Room / bed",
+              value: placed ? `Room ${placed.room.letter} · ${placed.bed.label}` : undefined,
+            },
+            { label: "Monthly rent", value: stay.rent ? money(stay.rent) : undefined },
+            { label: "Tenancy start", value: stay.start ? fmtDate(stay.start) : undefined },
+            { label: "Tenancy end", value: stay.end ? fmtDate(stay.end) : undefined },
+            { label: "Duration", value: stay.duration },
+          ].map((f) => (
+            <div key={f.label} className="min-w-0">
+              <p className="text-xs text-muted-foreground">{f.label}</p>
+              <p className="truncate text-sm font-medium text-foreground">{f.value || "—"}</p>
+            </div>
+          ))}
+        </div>
+      </Panel>
 
       <Panel>
         <div className="flex flex-wrap items-center gap-4">
@@ -155,10 +409,15 @@ function ResidentProfilePage() {
               <span className="text-muted-foreground">{pct}%</span>
             </div>
             <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-brand-deep transition-all" style={{ width: `${pct}%` }} />
+              <div
+                className="h-full rounded-full bg-brand-deep transition-all"
+                style={{ width: `${pct}%` }}
+              />
             </div>
             {missing.length ? (
-              <p className="mt-1.5 text-xs text-muted-foreground">Missing: {missing.join(", ")}</p>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                {missing.length} field{missing.length === 1 ? "" : "s"} still to fill in
+              </p>
             ) : null}
           </div>
           {tenancy ? (
@@ -181,56 +440,391 @@ function ResidentProfilePage() {
         </TabsList>
 
         <TabsContent value="profile" className="mt-4">
-          <Tabs defaultValue="personal">
-        <TabsList className="flex-wrap">
-          <TabsTrigger value="personal">Personal</TabsTrigger>
-          <TabsTrigger value="academic">Academic</TabsTrigger>
-          <TabsTrigger value="housing">Housing & health</TabsTrigger>
-          <TabsTrigger value="emergency">Emergency contact</TabsTrigger>
-          <TabsTrigger value="payment">Payment</TabsTrigger>
-          <TabsTrigger value="documents">Documents</TabsTrigger>
-          <TabsTrigger value="portal">Portal access</TabsTrigger>
-        </TabsList>
+          <div className="flex gap-6">
+            <nav className="sticky top-4 hidden w-48 shrink-0 self-start lg:block">
+              <ul className="space-y-0.5">
+                {PROFILE_SECTIONS.map((s) => (
+                  <li key={s.key}>
+                    <button
+                      type="button"
+                      onClick={() => goToSection(s.key)}
+                      className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                        active === s.key
+                          ? "bg-brand-tint font-medium text-brand-deep"
+                          : "text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
 
+              {/* sending the student their own form is a nav action, not a
+                  section of the profile */}
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-3 w-full justify-start"
+                disabled={isNew || linking}
+                onClick={copyProfileLink}
+              >
+                <Link2 className="mr-1.5 size-3.5" />
+                {linking ? "Preparing…" : "Copy profile link"}
+              </Button>
+            </nav>
 
-        <TabsContent value="personal" className="mt-4">
-          <Panel>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <Text label="Full name (as per passport / NRIC)" value={form.fullName} onChange={(v) => set({ fullName: v })} />
-              <Text label="Email" type="email" value={form.email} onChange={(v) => set({ email: v })} />
-              <Text label="Mobile number" value={form.mobile} onChange={(v) => set({ mobile: v })} />
-              <Text label="Date of birth" type="date" value={form.dob} onChange={(v) => set({ dob: v })} />
-              <Text label="Nationality" value={form.nationality} onChange={(v) => set({ nationality: v })} />
-              <Text label="Passport / NRIC number" value={form.idNumber} onChange={(v) => set({ idNumber: v })} />
-              <Select label="Gender" value={form.gender} onChange={(v) => set({ gender: v })} options={GENDERS.filter((g) => g !== "Any")} />
-              <Select
-                label="Marital status"
-                value={form.maritalStatus}
-                onChange={(v) => set({ maritalStatus: v })}
-                options={["Single", "Married", "Other"]}
-              />
-              <Text label="Race" value={form.race} onChange={(v) => set({ race: v })} />
-              <Text label="Religion" value={form.religion} onChange={(v) => set({ religion: v })} />
+            <div className="min-w-0 flex-1 space-y-4">
+              <section id="sec-personal" ref={sectionRef("personal")} className="scroll-mt-24">
+                <Panel title="Personal" action={editAction("personal")}>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <Text
+                      readOnly={!isEditing("personal")}
+                      label="Full name (per passport / NRIC)"
+                      value={form.fullName}
+                      onChange={(v) => set({ fullName: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("personal")}
+                      label="Email"
+                      type="email"
+                      value={form.email}
+                      onChange={(v) => set({ email: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("personal")}
+                      label="Mobile number"
+                      value={form.mobile}
+                      onChange={(v) => set({ mobile: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("personal")}
+                      label="Date of birth"
+                      type="date"
+                      value={form.dob}
+                      onChange={(v) => set({ dob: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("personal")}
+                      label="Nationality"
+                      value={form.nationality}
+                      onChange={(v) => set({ nationality: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("personal")}
+                      label="Passport / NRIC number"
+                      value={form.idNumber}
+                      onChange={(v) => set({ idNumber: v })}
+                    />
+                    <Select
+                      readOnly={!isEditing("personal")}
+                      label="Gender"
+                      value={form.gender}
+                      onChange={(v) => set({ gender: v })}
+                      options={GENDERS.filter((g) => g !== "Any")}
+                    />
+                    <Select
+                      readOnly={!isEditing("personal")}
+                      label="Marital status"
+                      value={form.maritalStatus}
+                      onChange={(v) => set({ maritalStatus: v })}
+                      options={["Single", "Married", "Other"]}
+                    />
+                    <Text
+                      readOnly={!isEditing("personal")}
+                      label="Race"
+                      value={form.race}
+                      onChange={(v) => set({ race: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("personal")}
+                      label="Religion"
+                      value={form.religion}
+                      onChange={(v) => set({ religion: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("personal")}
+                      label="Address"
+                      value={form.address}
+                      onChange={(v) => set({ address: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("personal")}
+                      label="Postcode"
+                      value={form.postcode}
+                      onChange={(v) => set({ postcode: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("personal")}
+                      label="State"
+                      value={form.state}
+                      onChange={(v) => set({ state: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("personal")}
+                      label="Country"
+                      value={form.country}
+                      onChange={(v) => set({ country: v })}
+                    />
+                    <Select
+                      readOnly={!isEditing("personal")}
+                      label="Medical condition / allergy"
+                      value={form.medicalCondition}
+                      onChange={(v) => set({ medicalCondition: v })}
+                      options={[
+                        { value: "no", label: "No" },
+                        { value: "yes", label: "Yes" },
+                      ]}
+                    />
+                    <div className="sm:col-span-2 lg:col-span-3">
+                      <p className="mb-1.5 text-xs text-muted-foreground">Medical details</p>
+                      {isEditing("personal") ? (
+                        <Textarea
+                          value={form.medicalDetail}
+                          onChange={(e) => set({ medicalDetail: e.target.value })}
+                          placeholder="Conditions, allergies, medication…"
+                        />
+                      ) : (
+                        <p className="text-sm text-foreground">{form.medicalDetail || "—"}</p>
+                      )}
+                    </div>
+                  </div>
+                </Panel>
+              </section>
+
+              <section id="sec-academic" ref={sectionRef("academic")} className="scroll-mt-24">
+                <Panel title="Academic" action={editAction("academic")}>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <Text
+                      readOnly={!isEditing("academic")}
+                      label="University / college"
+                      value={form.university}
+                      onChange={(v) => set({ university: v })}
+                    />
+                    <Select
+                      readOnly={!isEditing("academic")}
+                      label="Level of study"
+                      value={form.levelOfStudy}
+                      onChange={(v) => set({ levelOfStudy: v })}
+                      options={LEVELS}
+                    />
+                    <Text
+                      readOnly={!isEditing("academic")}
+                      label="Course / programme"
+                      value={form.course}
+                      onChange={(v) => set({ course: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("academic")}
+                      label="Student ID"
+                      value={form.studentId}
+                      onChange={(v) => set({ studentId: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("academic")}
+                      label="Expected graduation year"
+                      value={form.graduationYear}
+                      onChange={(v) => set({ graduationYear: v })}
+                    />
+                  </div>
+                </Panel>
+              </section>
+
+              <section id="sec-emergency" ref={sectionRef("emergency")} className="scroll-mt-24">
+                <Panel title="Emergency contact" action={editAction("emergency")}>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <Text
+                      readOnly={!isEditing("emergency")}
+                      label="Full name"
+                      value={form.ecName}
+                      onChange={(v) => set({ ecName: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("emergency")}
+                      label="Relationship"
+                      value={form.ecRelationship}
+                      onChange={(v) => set({ ecRelationship: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("emergency")}
+                      label="Mobile number"
+                      value={form.ecMobile}
+                      onChange={(v) => set({ ecMobile: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("emergency")}
+                      label="Email"
+                      type="email"
+                      value={form.ecEmail}
+                      onChange={(v) => set({ ecEmail: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("emergency")}
+                      label="Address"
+                      value={form.ecAddress}
+                      onChange={(v) => set({ ecAddress: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("emergency")}
+                      label="Postcode"
+                      value={form.ecPostcode}
+                      onChange={(v) => set({ ecPostcode: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("emergency")}
+                      label="State"
+                      value={form.ecState}
+                      onChange={(v) => set({ ecState: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("emergency")}
+                      label="Country"
+                      value={form.ecCountry}
+                      onChange={(v) => set({ ecCountry: v })}
+                    />
+                  </div>
+                </Panel>
+              </section>
+
+              <section id="sec-payment" ref={sectionRef("payment")} className="scroll-mt-24">
+                <Panel title="Payor details" action={editAction("payment")}>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <Select
+                      readOnly={!isEditing("payment")}
+                      label="Payment method"
+                      value={form.payMethod}
+                      onChange={(v) => set({ payMethod: v })}
+                      options={PAY_METHODS}
+                    />
+                    <Select
+                      readOnly={!isEditing("payment")}
+                      label="Payment schedule"
+                      value={form.paySchedule}
+                      onChange={(v) => set({ paySchedule: v })}
+                      options={SCHEDULES.map((s) => ({ value: s.value, label: s.label }))}
+                    />
+                    <Text
+                      readOnly={!isEditing("payment")}
+                      label="Payor name"
+                      value={form.payerName}
+                      onChange={(v) => set({ payerName: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("payment")}
+                      label="Relationship to resident"
+                      value={form.payerRelationship}
+                      onChange={(v) => set({ payerRelationship: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("payment")}
+                      label="Payor mobile"
+                      value={form.payerMobile}
+                      onChange={(v) => set({ payerMobile: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("payment")}
+                      label="Payor email"
+                      type="email"
+                      value={form.payerEmail}
+                      onChange={(v) => set({ payerEmail: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("payment")}
+                      label="Payor address"
+                      value={form.payerAddress}
+                      onChange={(v) => set({ payerAddress: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("payment")}
+                      label="Payor postcode"
+                      value={form.payerPostcode}
+                      onChange={(v) => set({ payerPostcode: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("payment")}
+                      label="Payor state"
+                      value={form.payerState}
+                      onChange={(v) => set({ payerState: v })}
+                    />
+                    <Text
+                      readOnly={!isEditing("payment")}
+                      label="Payor country"
+                      value={form.payerCountry}
+                      onChange={(v) => set({ payerCountry: v })}
+                    />
+                  </div>
+                </Panel>
+              </section>
+
+              <section id="sec-documents" ref={sectionRef("documents")} className="scroll-mt-24">
+                <Panel
+                  title="Documents"
+                  description="Uploads are recorded locally for now — file storage comes with the backend pass."
+                >
+                  {DOC_TYPES.map((d) => {
+                    const doc = form.docs.find((x) => x.key === d.key);
+                    return (
+                      <DocumentRow
+                        key={d.key}
+                        label={d.label}
+                        fileName={doc?.fileName}
+                        uploadedAt={doc?.uploadedAt}
+                        onUpload={(name) =>
+                          set({
+                            docs: [
+                              ...form.docs.filter((x) => x.key !== d.key),
+                              {
+                                key: d.key,
+                                label: d.label,
+                                fileName: name,
+                                uploadedAt: new Date().toISOString(),
+                              },
+                            ],
+                          })
+                        }
+                        onClear={() => set({ docs: form.docs.filter((x) => x.key !== d.key) })}
+                      />
+                    );
+                  })}
+                </Panel>
+              </section>
+
+              <section id="sec-portal" ref={sectionRef("portal")} className="scroll-mt-24">
+                <Panel
+                  title="Resident portal"
+                  description="Coming soon — invitations will be sent once the portal is live."
+                >
+                  <div className="flex flex-wrap items-center gap-3">
+                    <p className="text-sm text-muted-foreground">
+                      Status: {form.portalInvited ? "Invite sent" : "Not invited"}
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        set({ portalInvited: true });
+                        toast.info("Portal invites are not live yet");
+                      }}
+                    >
+                      Send portal invite
+                    </Button>
+                  </div>
+                </Panel>
+              </section>
             </div>
-          </Panel>
+          </div>
         </TabsContent>
 
-        <TabsContent value="academic" className="mt-4">
-          <Panel>
+        <TabsContent value="tenancy" className="mt-4 space-y-4">
+          <Panel
+            title="Placement"
+            description="Which bed this resident occupies, and the term."
+            action={editAction("placement")}
+          >
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <Text label="University / college" value={form.university} onChange={(v) => set({ university: v })} />
-              <Select label="Level of study" value={form.levelOfStudy} onChange={(v) => set({ levelOfStudy: v })} options={LEVELS} />
-              <Text label="Course / programme" value={form.course} onChange={(v) => set({ course: v })} />
-              <Text label="Student ID" value={form.studentId} onChange={(v) => set({ studentId: v })} />
-              <Text label="Expected graduation year" value={form.graduationYear} onChange={(v) => set({ graduationYear: v })} />
-            </div>
-          </Panel>
-        </TabsContent>
-
-        <TabsContent value="housing" className="mt-4">
-          <Panel>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <ReadOnlyField label="Brachtia resident ID" value={form.legacyId} />
               <Select
+                readOnly={!isEditing("placement")}
                 label="Assigned bed"
                 value={form.bedId ?? ""}
                 onChange={(v) => {
@@ -248,114 +842,39 @@ function ResidentProfilePage() {
                 }))}
                 placeholder={vacantBeds.length ? "Select bed" : "No beds set up yet"}
               />
-              <Text label="Occupancy" value={form.occupancy} onChange={(v) => set({ occupancy: v })} placeholder="single / twin" />
-              <Text label="Move-in date" type="date" value={form.moveIn} onChange={(v) => set({ moveIn: v })} />
-              <Text label="Lease length (months)" value={form.leaseMonths} onChange={(v) => set({ leaseMonths: v })} />
-              <Select
-                label="Medical condition / allergy"
-                value={form.medicalCondition}
-                onChange={(v) => set({ medicalCondition: v })}
-                options={[
-                  { value: "no", label: "No" },
-                  { value: "yes", label: "Yes" },
-                ]}
+              <Text
+                readOnly={!isEditing("placement")}
+                label="Occupancy"
+                value={form.occupancy}
+                onChange={(v) => set({ occupancy: v })}
+                placeholder="single / twin"
               />
-              <div className="sm:col-span-2 lg:col-span-3">
-                <p className="mb-1.5 text-xs text-muted-foreground">Medical details</p>
-                <Textarea
-                  value={form.medicalDetail}
-                  onChange={(e) => set({ medicalDetail: e.target.value })}
-                  placeholder="Conditions, allergies, medication…"
-                />
-              </div>
-            </div>
-          </Panel>
-        </TabsContent>
-
-        <TabsContent value="emergency" className="mt-4">
-          <Panel>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <Text label="Full name" value={form.ecName} onChange={(v) => set({ ecName: v })} />
-              <Text label="Relationship" value={form.ecRelationship} onChange={(v) => set({ ecRelationship: v })} />
-              <Text label="Mobile number" value={form.ecMobile} onChange={(v) => set({ ecMobile: v })} />
-              <Text label="Email" type="email" value={form.ecEmail} onChange={(v) => set({ ecEmail: v })} />
-              <Text label="Address" value={form.ecAddress} onChange={(v) => set({ ecAddress: v })} />
-              <Text label="Postcode" value={form.ecPostcode} onChange={(v) => set({ ecPostcode: v })} />
-              <Text label="State" value={form.ecState} onChange={(v) => set({ ecState: v })} />
-              <Text label="Country" value={form.ecCountry} onChange={(v) => set({ ecCountry: v })} />
-            </div>
-          </Panel>
-        </TabsContent>
-
-        <TabsContent value="payment" className="mt-4">
-          <Panel>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <Select label="Preferred payment method" value={form.payMethod} onChange={(v) => set({ payMethod: v })} options={PAY_METHODS} />
-              <Select
-                label="Payment schedule"
-                value={form.paySchedule}
-                onChange={(v) => set({ paySchedule: v })}
-                options={SCHEDULES.map((s) => ({ value: s.value, label: s.label }))}
+              <Text
+                readOnly={!isEditing("placement")}
+                label="Move-in date"
+                type="date"
+                value={form.moveIn}
+                onChange={(v) => set({ moveIn: v })}
               />
-              <Text label="Payer name" value={form.payerName} onChange={(v) => set({ payerName: v })} />
-              <Text label="Payer relationship" value={form.payerRelationship} onChange={(v) => set({ payerRelationship: v })} />
-              <Text label="Payer mobile" value={form.payerMobile} onChange={(v) => set({ payerMobile: v })} />
-              <Text label="Payer email" type="email" value={form.payerEmail} onChange={(v) => set({ payerEmail: v })} />
+              <Text
+                readOnly={!isEditing("placement")}
+                label="Lease length (months)"
+                value={form.leaseMonths}
+                onChange={(v) => set({ leaseMonths: v })}
+              />
             </div>
           </Panel>
-        </TabsContent>
 
-        <TabsContent value="documents" className="mt-4">
-          <Panel title="Documents" description="Uploads are recorded locally for now — file storage comes with the backend pass.">
-            {DOC_TYPES.map((d) => {
-              const doc = form.docs.find((x) => x.key === d.key);
-              return (
-                <DocumentRow
-                  key={d.key}
-                  label={d.label}
-                  fileName={doc?.fileName}
-                  uploadedAt={doc?.uploadedAt}
-                  onUpload={(name) =>
-                    set({
-                      docs: [
-                        ...form.docs.filter((x) => x.key !== d.key),
-                        { key: d.key, label: d.label, fileName: name, uploadedAt: new Date().toISOString() },
-                      ],
-                    })
-                  }
-                  onClear={() => set({ docs: form.docs.filter((x) => x.key !== d.key) })}
-                />
-              );
-            })}
-          </Panel>
-        </TabsContent>
-
-        <TabsContent value="portal" className="mt-4">
-          <Panel title="Resident portal" description="Coming soon — invitations will be sent once the portal is live.">
-            <div className="flex flex-wrap items-center gap-3">
-              <p className="text-sm text-muted-foreground">
-                Status: {form.portalInvited ? "Invite sent" : "Not invited"}
-              </p>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  set({ portalInvited: true });
-                  toast.info("Portal invites are not live yet");
-                }}
-              >
-                Send portal invite
-              </Button>
-            </div>
-          </Panel>
-        </TabsContent>
-          </Tabs>
-        </TabsContent>
-
-        <TabsContent value="tenancy" className="mt-4">
-          <Panel title="Tenancy" description="Agreement lifecycle, dates and pre-check-in checklist.">
+          <Panel
+            title="Tenancy"
+            description="Agreement lifecycle, dates and pre-check-in checklist."
+          >
             {tenancy ? (
-              <TenancyCard tenancy={tenancy} residentName={form.fullName} link={`/admin/residents/${form.id}`} />
+              <TenancyCard
+                tenancy={tenancy}
+                residentName={form.fullName}
+                link={`/admin/residents/${form.id}`}
+              />
             ) : (
               <EmptyState
                 title="No tenancy yet"
@@ -371,7 +890,7 @@ function ResidentProfilePage() {
         </TabsContent>
 
         <TabsContent value="payments" className="mt-4">
-          <ResidentPayments residentId={form.id} />
+          <ResidentPayments residentId={form.id} legacyId={form.legacyId} tenancyEnd={stay.end} />
         </TabsContent>
       </Tabs>
     </div>
