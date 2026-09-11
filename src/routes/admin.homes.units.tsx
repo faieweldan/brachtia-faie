@@ -123,10 +123,17 @@ function UnitSetupPage() {
     [draft, roomTypes],
   );
 
-  function typeInfo(list: any[], code: string) {
+  /**
+   * A room type carries two prices: the whole room as a single, and the per-bed
+   * rate when it is shared. Which one applies depends on how the room is being
+   * let, so the caller passes that in - reading the default here priced every
+   * twin bed at the whole-room rate.
+   */
+  function typeInfo(list: any[], code: string, want?: Occupancy) {
     const rt = list.find((r) => r.code === code || r.room_code === code);
-    const occ: "single" | "twin" =
+    const fallback: "single" | "twin" =
       rt?.occupancies?.length === 1 && rt.occupancies[0] === "twin" ? "twin" : "single";
+    const occ: "single" | "twin" = want === "twin" || want === "single" ? want : fallback;
     const rent = rt?.rent?.long?.[occ] ?? rt?.rent?.long?.single ?? 0;
     return { rt, occ, rent: Number(rent) || 0 };
   }
@@ -159,7 +166,8 @@ function UnitSetupPage() {
   }
 
   function applyRoomType(roomId: string, code: string) {
-    const { occ, rent } = typeInfo(typesForResidence, code);
+    const room = draft?.rooms.find((r) => r.id === roomId);
+    const { occ, rent } = typeInfo(typesForResidence, code, room?.occupancy);
     patchRoom(roomId, { roomTypeCode: code, occupancy: occ, rent, beds: bedsFor(occ) });
   }
 
@@ -262,7 +270,6 @@ function UnitSetupPage() {
       unit.rooms = group.map((row, i) => {
         const letter = row["room_letter"] || LETTERS[i] || String(i + 1);
         const code = row["room_type_code"] ?? "";
-        const info = typeInfo(list, code);
         const occRaw = (row["occupancy"] ?? "").toLowerCase();
         // "unit" marks the whole-unit letting, which the master list records as
         // Room "Unit" / Bed "Unit"
@@ -273,7 +280,9 @@ function UnitSetupPage() {
               ? "twin"
               : occRaw === "single"
                 ? "single"
-                : info.occ;
+                : typeInfo(list, code).occ;
+        // price for the way this room is actually let, not the type's default
+        const info = typeInfo(list, code, occ);
         return {
           ...blankRoom(letter),
           roomTypeCode: info.rt?.code ?? code,
@@ -398,12 +407,19 @@ function UnitSetupPage() {
                   <Select
                     label="Occupancy"
                     value={room.occupancy}
-                    onChange={(v) =>
+                    onChange={(v) => {
+                      // the rate follows the way the room is let
+                      const { rent } = typeInfo(
+                        typesForResidence,
+                        room.roomTypeCode,
+                        v as Occupancy,
+                      );
                       patchRoom(room.id, {
                         occupancy: v as Occupancy,
+                        rent,
                         beds: bedsFor(v as "single" | "twin"),
-                      })
-                    }
+                      });
+                    }}
                     options={[
                       { value: "single", label: "Single" },
                       { value: "twin", label: "Twin sharing" },
