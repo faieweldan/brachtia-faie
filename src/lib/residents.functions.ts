@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
+import { normCountry, normGender, normUniversity } from "@/lib/reference-data";
+
 import type { Resident, ResidentDoc } from "@/lib/ops-store";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -230,12 +232,10 @@ function toDate(raw: string): string {
   return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
 }
 
-/** The sheet writes M / F; the app stores the words the dropdown offers. */
+/** The sheet writes M / F; the app stores the words the dropdown offers.
+ *  Shared with the student form and the admin page so all three agree. */
 function toGender(raw: string) {
-  const v = raw.trim().toLowerCase();
-  if (v === "m" || v === "male") return "Male";
-  if (v === "f" || v === "female") return "Female";
-  return raw.trim();
+  return normGender(raw).value;
 }
 
 /**
@@ -573,7 +573,9 @@ export const importResidents = createServerFn({ method: "POST" })
     for (let i = 0; i < rows.length; i += 1) {
       const row = rows[i]!;
       const sharesWith = expanded[i]?.sharesWith;
-      const quickbooksId = toLegacyId(pick(row, "studentid", "student id", "resident id", "quickbooks_id"));
+      const quickbooksId = toLegacyId(
+        pick(row, "studentid", "student id", "resident id", "quickbooks_id"),
+      );
       const name = pick(row, "studentname", "student name", "full name", "name");
       const unitNo = pick(row, "unit", "unit_no", "unitno");
       const letter = pick(row, "room", "room_letter");
@@ -617,15 +619,36 @@ export const importResidents = createServerFn({ method: "POST" })
       const { name: cleanName, batch } = splitBatch(name);
       const payor = toPayor(sponsor, batch);
 
+      // The sheet is the biggest writer of these fields - 382 rows in one
+      // click - so it maps to the same codes the form offers. An unrecognised
+      // spelling is kept as written and reported, never dropped: a real
+      // university nobody has listed yet is data, not an error.
+      const university = normUniversity(pick(row, "university"));
+      const nationality = normCountry(pick(row, "nationality"));
+      if (!university.matched) {
+        report.problems.push({
+          row: i + 2,
+          quickbooksId,
+          reason: `university "${university.value}" is not one of the known codes - saved as written, worth checking`,
+        });
+      }
+      if (!nationality.matched) {
+        report.problems.push({
+          row: i + 2,
+          quickbooksId,
+          reason: `nationality "${nationality.value}" is not a known country code - saved as written, worth checking`,
+        });
+      }
+
       const residentRow: Record<string, unknown> = {
         quickbooks_id: quickbooksId,
         full_name: cleanName,
         email: pick(row, "email"),
         mobile: pick(row, "mobilenumber", "mobile number", "mobile", "phone"),
-        nationality: pick(row, "nationality"),
+        nationality: nationality.value,
         id_number: pick(row, "idnumber", "id number", "passport", "nric"),
         gender: toGender(pick(row, "gender")),
-        university: pick(row, "university"),
+        university: university.value,
         sponsor,
         payer_name: payor.name,
         payer_relationship: payor.relationship,
@@ -641,7 +664,11 @@ export const importResidents = createServerFn({ method: "POST" })
         .select("id")
         .single();
       if (error || !saved) {
-        report.problems.push({ row: i + 2, quickbooksId, reason: error?.message ?? "resident not saved" });
+        report.problems.push({
+          row: i + 2,
+          quickbooksId,
+          reason: error?.message ?? "resident not saved",
+        });
         continue;
       }
       report.residents += 1;
@@ -689,8 +716,8 @@ export const importResidents = createServerFn({ method: "POST" })
           status: /^booked$/i.test(rawStatus) ? "booked" : "active",
           resident_id: (saved as { id: string }).id,
           resident_name: name,
-          university: pick(row, "university") || null,
-          nationality: pick(row, "nationality") || null,
+          university: university.value || null,
+          nationality: nationality.value || null,
           gender: toGender(pick(row, "gender")) || null,
           tenancy_start: tenancyStart || null,
           tenancy_end: tenancyEnd || null,

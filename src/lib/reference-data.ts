@@ -60,6 +60,7 @@ export const COUNTRIES: Country[] = [
   { code: "MRT", name: "Mauritania", dial: "+222" },
   { code: "MUS", name: "Mauritius", dial: "+230" },
   { code: "MAR", name: "Morocco", dial: "+212" },
+  { code: "MOZ", name: "Mozambique", dial: "+258" },
   { code: "MMR", name: "Myanmar", dial: "+95" },
   { code: "NPL", name: "Nepal", dial: "+977" },
   { code: "NLD", name: "Netherlands", dial: "+31" },
@@ -192,4 +193,159 @@ export function joinPhone(dial: string, rest: string): string {
   const n = (rest ?? "").replace(/^0+/, "").trim();
   if (!n) return "";
   return dial ? `${dial} ${n}` : n;
+}
+
+/* -------------------------------------------------------------------------
+ * Normalising what is already written down.
+ *
+ * The student form can only offer the lists above, but two other writers do not
+ * have that luxury: staff editing a resident, and the master-list importer
+ * reading whatever the spreadsheet says. A rule enforced in one place is not
+ * enforced, so all three agree here.
+ *
+ * Each function returns the value it settled on and whether it recognised it.
+ * Nothing is thrown away - an unrecognised value is kept as typed and reported,
+ * because losing a real university is worse than storing an untidy one.
+ * ---------------------------------------------------------------------- */
+
+export type Normalised = { value: string; matched: boolean };
+
+const keep = (v: string): Normalised => ({ value: v.trim(), matched: false });
+const hit = (v: string): Normalised => ({ value: v, matched: true });
+
+/** Spellings seen in the master list and in enquiries, mapped to the code. */
+const UNIVERSITY_ALIASES: Record<string, string> = {
+  mmu: "MMU",
+  "multimedia university": "MMU",
+  hwum: "HWUM",
+  hw: "HWUM",
+  "heriot watt": "HWUM",
+  "heriot-watt": "HWUM",
+  "heriot watt university malaysia": "HWUM",
+  "heriot-watt university malaysia": "HWUM",
+  ctu: "CTU",
+  cityu: "CTU",
+  "city university": "CTU",
+  "city university malaysia": "CTU",
+  uoc: "UOC",
+  "university of cyberjaya": "UOC",
+  um: "UM",
+  "universiti malaya": "UM",
+  "university of malaya": "UM",
+  mitra: "MITRA",
+};
+
+export function normUniversity(raw: string): Normalised {
+  const v = (raw ?? "").trim();
+  if (!v || /^(n\/a|na|-)$/i.test(v)) return { value: "", matched: true };
+  const key = v.toLowerCase().replace(/\s+/g, " ");
+  const code = UNIVERSITY_ALIASES[key];
+  if (code) return hit(code);
+  if (UNIVERSITY_OPTIONS.some((o) => o.value === v.toUpperCase())) return hit(v.toUpperCase());
+  return keep(v);
+}
+
+/** Accepts the ISO-3 code the sheet uses, a country name, or a 2-letter code. */
+const COUNTRY_ALIASES: Record<string, string> = {
+  malaysian: "MYS",
+  my: "MYS",
+  chinese: "CHN",
+  cn: "CHN",
+  indian: "IND",
+  in: "IND",
+  french: "FRA",
+  fr: "FRA",
+  indonesian: "IDN",
+  id: "IDN",
+  pakistani: "PAK",
+  pk: "PAK",
+  japanese: "JPN",
+  jp: "JPN",
+  burmese: "MMR",
+  mm: "MMR",
+  bangladeshi: "BGD",
+  bd: "BGD",
+  nigerian: "NGA",
+  ng: "NGA",
+  german: "DEU",
+  de: "DEU",
+  // a non-standard code the sheet uses for Germany
+  ger: "DEU",
+  kenyan: "KEN",
+  ke: "KEN",
+  british: "GBR",
+  uk: "GBR",
+  gb: "GBR",
+  american: "USA",
+  us: "USA",
+};
+
+export function normCountry(raw: string): Normalised {
+  const v = (raw ?? "").trim();
+  if (!v || /^(n\/a|na|-)$/i.test(v)) return { value: "", matched: true };
+  const upper = v.toUpperCase();
+  if (COUNTRIES.some((c) => c.code === upper)) return hit(upper);
+  const byName = COUNTRIES.find((c) => c.name.toLowerCase() === v.toLowerCase());
+  if (byName) return hit(byName.code);
+  const alias = COUNTRY_ALIASES[v.toLowerCase()];
+  if (alias) return hit(alias);
+  return keep(v);
+}
+
+export function normGender(raw: string): Normalised {
+  const v = (raw ?? "").trim();
+  if (!v) return { value: "", matched: true };
+  const c = v.charAt(0).toUpperCase();
+  if (c === "M") return hit("Male");
+  if (c === "F") return hit("Female");
+  return keep(v);
+}
+
+/** Matches a fixed list on its first letters, so "Undergrad" finds
+ *  "Undergraduate" and "PhD" is mapped by alias. */
+function normFromList(raw: string, options: { value: string }[], aliases: Record<string, string>) {
+  const v = (raw ?? "").trim();
+  if (!v) return { value: "", matched: true };
+  const lower = v.toLowerCase();
+  const alias = aliases[lower];
+  if (alias) return hit(alias);
+  const exact = options.find((o) => o.value.toLowerCase() === lower);
+  if (exact) return hit(exact.value);
+  const starts = options.find((o) => o.value.toLowerCase().startsWith(lower) && lower.length >= 3);
+  if (starts) return hit(starts.value);
+  return keep(v);
+}
+
+export function normLevel(raw: string): Normalised {
+  return normFromList(raw, LEVEL_OPTIONS, {
+    phd: "Doctorate",
+    "ph.d": "Doctorate",
+    doctoral: "Doctorate",
+    masters: "Master",
+    "master's": "Master",
+    msc: "Master",
+    degree: "Undergraduate",
+    bachelor: "Undergraduate",
+    bachelors: "Undergraduate",
+    undergrad: "Undergraduate",
+    dip: "Diploma",
+    found: "Foundation",
+  });
+}
+
+export function normMarital(raw: string): Normalised {
+  return normFromList(raw, MARITAL_OPTIONS, { widow: "Widowed", widower: "Widowed" });
+}
+
+export function normRelationship(raw: string): Normalised {
+  return normFromList(raw, RELATIONSHIP_OPTIONS, {
+    father: "Parent",
+    mother: "Parent",
+    dad: "Parent",
+    mum: "Parent",
+    mom: "Parent",
+    parents: "Parent",
+    myself: "Self",
+    "self-funded": "Self",
+  });
 }

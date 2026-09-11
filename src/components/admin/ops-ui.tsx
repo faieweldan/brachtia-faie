@@ -237,6 +237,75 @@ export function Text({
   );
 }
 
+/**
+ * A field with a list of suggestions that can still be typed into.
+ *
+ * Staff need the same vocabulary as the student form, but not the same walls.
+ * A member of staff who cannot record a real university on a Tuesday afternoon
+ * will put it in the remarks box, and it is lost. So the list is the easy path
+ * and typing is the escape hatch.
+ *
+ * `normalise` runs when the field loses focus, so "heriot watt" becomes HWUM
+ * without anyone being told off mid-word. Anything it does not recognise is
+ * kept exactly as typed and marked, so it can be found later.
+ */
+export function Combo({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder,
+  readOnly = false,
+  normalise,
+  display,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  placeholder?: string;
+  readOnly?: boolean;
+  normalise?: (v: string) => { value: string; matched: boolean };
+  display?: string;
+}) {
+  const listId = `combo-${label.replace(/\W+/g, "-").toLowerCase()}`;
+  const known = options.some((o) => o.value === value);
+  if (readOnly) {
+    return <ReadOnlyField label={label} value={display ?? labelFor(options, value)} />;
+  }
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Input
+        list={listId}
+        value={value}
+        placeholder={placeholder ?? "Choose or type"}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={(e) => {
+          if (!normalise) return;
+          const r = normalise(e.target.value);
+          if (r.value !== e.target.value) onChange(r.value);
+        }}
+      />
+      <datalist id={listId}>
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </datalist>
+      {value && !known ? (
+        <p className="text-[11px] text-amber-600">Not in the standard list - saved as typed.</p>
+      ) : null}
+    </div>
+  );
+}
+
+/** The friendly label for a stored code, or the code itself if it is not one. */
+function labelFor(options: { value: string; label: string }[], value: string) {
+  return options.find((o) => o.value === value)?.label ?? value;
+}
+
 export function Select({
   label,
   value,

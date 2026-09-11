@@ -3,6 +3,19 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Link2, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  COUNTRY_OPTIONS,
+  LEVEL_OPTIONS,
+  MARITAL_OPTIONS,
+  RELATIONSHIP_OPTIONS,
+  UNIVERSITY_OPTIONS,
+  graduationYearOptions,
+  idLabelFor,
+  normCountry,
+  normRelationship,
+  normUniversity,
+} from "@/lib/reference-data";
+
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,6 +23,7 @@ import {
   DocumentRow,
   EmptyState,
   Panel,
+  Combo,
   ReadOnlyField,
   Select,
   StatusPill,
@@ -20,7 +34,6 @@ import { ResidentPayments } from "@/components/admin/ResidentPayments";
 import {
   DOC_TYPES,
   GENDERS,
-  LEVELS,
   PAY_METHODS,
   SCHEDULES,
   addTask,
@@ -519,15 +532,17 @@ function ResidentProfilePage() {
                       value={form.dob}
                       onChange={(v) => set({ dob: v })}
                     />
-                    <Text
+                    <Combo
                       readOnly={!isEditing("personal")}
                       label="Nationality"
                       value={form.nationality}
                       onChange={(v) => set({ nationality: v })}
+                      options={COUNTRY_OPTIONS}
+                      normalise={normCountry}
                     />
                     <Text
                       readOnly={!isEditing("personal")}
-                      label="Passport / NRIC number"
+                      label={idLabelFor(form.nationality)}
                       value={form.idNumber}
                       onChange={(v) => set({ idNumber: v })}
                     />
@@ -543,7 +558,7 @@ function ResidentProfilePage() {
                       label="Marital status"
                       value={form.maritalStatus}
                       onChange={(v) => set({ maritalStatus: v })}
-                      options={["Single", "Married", "Other"]}
+                      options={MARITAL_OPTIONS}
                     />
                     <Text
                       readOnly={!isEditing("personal")}
@@ -575,11 +590,13 @@ function ResidentProfilePage() {
                       value={form.state}
                       onChange={(v) => set({ state: v })}
                     />
-                    <Text
+                    <Combo
                       readOnly={!isEditing("personal")}
                       label="Country"
                       value={form.country}
                       onChange={(v) => set({ country: v })}
+                      options={COUNTRY_OPTIONS}
+                      normalise={normCountry}
                     />
                     <Select
                       readOnly={!isEditing("personal")}
@@ -610,18 +627,20 @@ function ResidentProfilePage() {
               <section id="sec-academic" ref={sectionRef("academic")} className="scroll-mt-24">
                 <Panel title="Academic" action={editAction("academic")}>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    <Text
+                    <Combo
                       readOnly={!isEditing("academic")}
                       label="University / college"
                       value={form.university}
                       onChange={(v) => set({ university: v })}
+                      options={UNIVERSITY_OPTIONS.filter((o) => o.value !== "OTHER")}
+                      normalise={normUniversity}
                     />
                     <Select
                       readOnly={!isEditing("academic")}
                       label="Level of study"
                       value={form.levelOfStudy}
                       onChange={(v) => set({ levelOfStudy: v })}
-                      options={LEVELS}
+                      options={LEVEL_OPTIONS}
                     />
                     <Text
                       readOnly={!isEditing("academic")}
@@ -635,11 +654,12 @@ function ResidentProfilePage() {
                       value={form.studentId}
                       onChange={(v) => set({ studentId: v })}
                     />
-                    <Text
+                    <Combo
                       readOnly={!isEditing("academic")}
                       label="Expected graduation year"
                       value={form.graduationYear}
                       onChange={(v) => set({ graduationYear: v })}
+                      options={graduationYearOptions()}
                     />
                   </div>
                 </Panel>
@@ -654,11 +674,13 @@ function ResidentProfilePage() {
                       value={form.ecName}
                       onChange={(v) => set({ ecName: v })}
                     />
-                    <Text
+                    <Combo
                       readOnly={!isEditing("emergency")}
                       label="Relationship"
                       value={form.ecRelationship}
                       onChange={(v) => set({ ecRelationship: v })}
+                      options={RELATIONSHIP_OPTIONS}
+                      normalise={normRelationship}
                     />
                     <Text
                       readOnly={!isEditing("emergency")}
@@ -691,11 +713,13 @@ function ResidentProfilePage() {
                       value={form.ecState}
                       onChange={(v) => set({ ecState: v })}
                     />
-                    <Text
+                    <Combo
                       readOnly={!isEditing("emergency")}
                       label="Country"
                       value={form.ecCountry}
                       onChange={(v) => set({ ecCountry: v })}
+                      options={COUNTRY_OPTIONS}
+                      normalise={normCountry}
                     />
                   </div>
                 </Panel>
@@ -724,11 +748,13 @@ function ResidentProfilePage() {
                       value={form.payerName}
                       onChange={(v) => set({ payerName: v })}
                     />
-                    <Text
+                    <Combo
                       readOnly={!isEditing("payment")}
                       label="Relationship to resident"
                       value={form.payerRelationship}
                       onChange={(v) => set({ payerRelationship: v })}
+                      options={RELATIONSHIP_OPTIONS}
+                      normalise={normRelationship}
                     />
                     <Text
                       readOnly={!isEditing("payment")}
