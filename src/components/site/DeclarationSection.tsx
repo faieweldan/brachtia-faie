@@ -35,19 +35,21 @@ function printDeclaration(fullName: string, idNumber: string) {
   w.document.write(`<!doctype html><html><head><meta charset="utf-8">
 <title>Brachtia Homes - Declaration</title>
 <style>
-  @page { margin: 18mm; }
-  body { font: 10.5pt/1.45 Calibri, Arial, sans-serif; color: #000; margin: 0; }
-  h1 { font-size: 20pt; letter-spacing: .06em; margin: 0 0 14px; font-family: Georgia, serif; }
-  .who { margin: 0 0 10px; }
-  .rule { display: inline-block; border-bottom: 1px solid #000; min-width: 210px; }
-  ol { padding-left: 20px; margin: 10px 0 0; }
-  li { margin-bottom: 6px; text-align: justify; }
-  .sign { display: flex; gap: 26px; margin-top: 34px; page-break-inside: avoid; }
+  /* the original is a single page, and so is this: the type sizes and spacing
+     are set to fit thirteen terms and three signature blocks on one sheet */
+  @page { margin: 14mm; size: A4; }
+  body { font: 9.5pt/1.34 Calibri, Arial, sans-serif; color: #000; margin: 0; }
+  h1 { font-size: 17pt; letter-spacing: .06em; margin: 0 0 9px; font-family: Georgia, serif; }
+  p { margin: 0 0 7px; }
+  .rule { display: inline-block; border-bottom: 1px solid #000; min-width: 190px; }
+  ol { padding-left: 18px; margin: 7px 0 0; }
+  li { margin-bottom: 3.5px; text-align: justify; }
+  .sign { display: flex; gap: 22px; margin-top: 20px; page-break-inside: avoid; }
   .sign div { flex: 1; }
-  .sign .role { min-height: 30px; }
-  .sign .line { border-top: 1px solid #000; margin-top: 34px; padding-top: 5px; }
-  footer { margin-top: 26px; border-top: 2px solid #2f6f5e; padding-top: 6px;
-           color: #2f6f5e; font-weight: 700; }
+  .sign .role { min-height: 26px; }
+  .sign .line { border-top: 1px solid #000; margin-top: 24px; padding-top: 4px; }
+  footer { margin-top: 14px; border-top: 2px solid #2f6f5e; padding-top: 5px;
+           color: #2f6f5e; font-weight: 700; page-break-inside: avoid; }
   footer small { display: block; color: #444; font-weight: 400; }
 </style></head><body>
   <h1>PART 2: DECLARATION</h1>
