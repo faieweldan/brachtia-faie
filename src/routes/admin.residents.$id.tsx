@@ -56,21 +56,36 @@ function initials(name: string) {
   ).toUpperCase();
 }
 
-/** "12 months", or "1 y 2 m" once it passes a year. Empty when dates are missing. */
+/**
+ * How long the stay actually is, counted the way a calendar counts it.
+ *
+ * Comparing only the month numbers turned 07 Sept -> 10 May into a flat
+ * "8 months" and quietly dropped the three days. Whole months are taken first,
+ * then the leftover days are borrowed from the month before the end date.
+ */
 function monthsBetween(start: string, end: string) {
   if (!start || !end) return "";
   const a = new Date(start);
   const b = new Date(end);
   if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return "";
-  const months = Math.max(
-    0,
-    (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()),
-  );
-  if (months < 12) return `${months} month${months === 1 ? "" : "s"}`;
+  if (b < a) return "";
+
+  let months = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
+  let days = b.getDate() - a.getDate();
+  if (days < 0) {
+    months -= 1;
+    // days in the month that ends on the end date
+    days += new Date(b.getFullYear(), b.getMonth(), 0).getDate();
+  }
+  if (months < 0) return "";
+
+  const parts: string[] = [];
+  const years = Math.floor(months / 12);
   const rem = months % 12;
-  return rem
-    ? `${Math.floor(months / 12)}y ${rem}m`
-    : `${Math.floor(months / 12)} year${months === 12 ? "" : "s"}`;
+  if (years) parts.push(`${years} year${years === 1 ? "" : "s"}`);
+  if (rem) parts.push(`${rem} month${rem === 1 ? "" : "s"}`);
+  if (days) parts.push(`${days} day${days === 1 ? "" : "s"}`);
+  return parts.length ? parts.join(" ") : "0 days";
 }
 
 const PROFILE_SECTIONS = [
@@ -826,7 +841,9 @@ function ResidentProfilePage() {
               <Select
                 readOnly={!isEditing("placement")}
                 label="Assigned bed"
-                value={form.bedId ?? ""}
+                // the placement is recorded on the bed, so the resident's own
+                // bedId is empty for anyone imported from the master list
+                value={form.bedId || placed?.bed.id || ""}
                 onChange={(v) => {
                   const row = findBed(units, v);
                   set({
@@ -836,16 +853,30 @@ function ResidentProfilePage() {
                     occupancy: row?.room.occupancy ?? form.occupancy,
                   });
                 }}
-                options={vacantBeds.map(({ unit, room, bed }) => ({
-                  value: bed.id,
-                  label: `${unit.unitNo} · Room ${room.letter} · ${bed.label}`,
-                }))}
+                // the bed they are already in is not vacant, so it has to be
+                // added or the field shows nothing
+                options={[
+                  ...(placed
+                    ? [
+                        {
+                          value: placed.bed.id,
+                          label: `${placed.unit.unitNo} · Room ${placed.room.letter} · ${placed.bed.label}`,
+                        },
+                      ]
+                    : []),
+                  ...vacantBeds
+                    .filter(({ bed }) => bed.id !== placed?.bed.id)
+                    .map(({ unit, room, bed }) => ({
+                      value: bed.id,
+                      label: `${unit.unitNo} · Room ${room.letter} · ${bed.label}`,
+                    })),
+                ]}
                 placeholder={vacantBeds.length ? "Select bed" : "No beds set up yet"}
               />
               <Text
                 readOnly={!isEditing("placement")}
                 label="Occupancy"
-                value={form.occupancy}
+                value={form.occupancy || placed?.room.occupancy || ""}
                 onChange={(v) => set({ occupancy: v })}
                 placeholder="single / twin"
               />
@@ -890,7 +921,11 @@ function ResidentProfilePage() {
         </TabsContent>
 
         <TabsContent value="payments" className="mt-4">
-          <ResidentPayments residentId={form.id} quickbooksId={form.quickbooksId} tenancyEnd={stay.end} />
+          <ResidentPayments
+            residentId={form.id}
+            quickbooksId={form.quickbooksId}
+            tenancyEnd={stay.end}
+          />
         </TabsContent>
       </Tabs>
     </div>
