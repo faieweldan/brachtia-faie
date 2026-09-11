@@ -147,6 +147,20 @@ export const LEVEL_OPTIONS = [
   { value: "Doctorate", label: "Doctorate" },
 ];
 
+/**
+ * This year and the next five, worked out when the form is opened.
+ *
+ * A fixed list would quietly go stale in January and start offering a year that
+ * has already passed while missing the one at the far end.
+ */
+export function graduationYearOptions() {
+  const now = new Date().getFullYear();
+  return Array.from({ length: 6 }, (_, i) => {
+    const y = String(now + i);
+    return { value: y, label: y };
+  });
+}
+
 export const RELATIONSHIP_OPTIONS = [
   { value: "Parent", label: "Parent" },
   { value: "Guardian", label: "Guardian" },

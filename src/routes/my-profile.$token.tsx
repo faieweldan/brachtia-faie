@@ -24,6 +24,7 @@ import {
   UNIVERSITY_OPTIONS,
   YES_NO_OPTIONS,
   dialFor,
+  graduationYearOptions,
   idLabelFor,
   idPlaceholderFor,
   COUNTRIES,
@@ -82,7 +83,11 @@ const SECTIONS: { title: string; hint?: string; fields: FieldDef[] }[] = [
       { key: "level_of_study", label: "Level of study", options: LEVEL_OPTIONS },
       { key: "course", label: "Course / programme" },
       { key: "student_id", label: "University student ID" },
-      { key: "graduation_year", label: "Expected graduation year" },
+      {
+        key: "graduation_year",
+        label: "Expected graduation year",
+        options: graduationYearOptions(),
+      },
     ],
   },
   {
@@ -353,6 +358,12 @@ function MyProfilePage() {
                         }
                       >
                         <option value="">Please choose</option>
+                        {/* a value already on record that is not in the list -
+                            an older graduation year, say - is kept visible
+                            rather than silently blanked */}
+                        {value && !f.options.some((o) => o.value === value) && !otherUniversity ? (
+                          <option value={value}>{value}</option>
+                        ) : null}
                         {f.options.map((o) => (
                           <option key={o.value} value={o.value}>
                             {o.label}
