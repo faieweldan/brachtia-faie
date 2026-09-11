@@ -74,7 +74,7 @@ export type Resident = {
   createdAt: string;
   enquiryId?: string | undefined;
   /** Brachtia's own resident number, e.g. "00256". Blank for in-app signups. */
-  legacyId: string;
+  quickbooksId: string;
   // personal
   fullName: string;
   email: string;
@@ -496,6 +496,61 @@ export function residentForBed(residents: Resident[], bed: Bed): Resident | unde
 }
 
 /**
+ * A sponsor shortened for a narrow column, without losing which sponsor it is.
+ *
+ * A single initial would merge Petronas, PTPTN and Perbadanan into one "P", so
+ * known sponsors get a fixed code and anything else falls back to the first
+ * word. The batch is kept because it is how Brachtia groups a sponsor's intake.
+ */
+const SPONSOR_CODES: Record<string, string> = {
+  petronas: "PET",
+  mara: "MARA",
+  jpa: "JPA",
+  ptptn: "PTPTN",
+  yayasan: "YYS",
+  telekom: "TM",
+  tnb: "TNB",
+  shell: "SHELL",
+  sime: "SIME",
+};
+
+export function sponsorLabel(raw?: string): string {
+  const v = (raw ?? "").trim();
+  if (!v || /^self$/i.test(v)) return "Self";
+
+  const m = v.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+  const name = (m?.[1] ?? v).trim();
+  const batch = m?.[2]?.trim() ?? "";
+
+  const first = name.split(/\s+/)[0] ?? name;
+  const code = SPONSOR_CODES[first.toLowerCase()] ?? first.slice(0, 5).toUpperCase();
+  return batch ? `${code} (${batch})` : code;
+}
+
+/**
+ * The gender a unit has taken on, decided by whoever is living in it.
+ *
+ * Malaysian practice is that men and women do not share a unit, but a unit is
+ * not reserved for either in advance - the first person to move in settles it,
+ * and it is free again once everybody has left. So this is worked out from the
+ * occupants rather than stored; units.gender stays as the separate, deliberate
+ * "this unit is reserved for" setting.
+ */
+export function unitGender(unit: Unit, residents: Resident[]): "Male" | "Female" | "Mixed" | "" {
+  const seen = new Set<string>();
+  for (const { bed } of allBeds([unit])) {
+    if (!bed.residentId && !bed.residentName) continue;
+    const person = residentForBed(residents, bed);
+    const g = (person?.gender || bed.gender || "").trim().charAt(0).toUpperCase();
+    if (g === "M" || g === "F") seen.add(g);
+  }
+  if (seen.size > 1) return "Mixed";
+  if (seen.has("M")) return "Male";
+  if (seen.has("F")) return "Female";
+  return "";
+}
+
+/**
  * Where a resident actually sleeps.
  *
  * beds.resident_id is the single record of a placement, so the lookup runs from
@@ -504,7 +559,7 @@ export function residentForBed(residents: Resident[], bed: Bed): Resident | unde
  */
 export function findBedForResident(
   units: Unit[],
-  resident: { id: string; legacyId?: string | undefined; bedId?: string | undefined },
+  resident: { id: string; quickbooksId?: string | undefined; bedId?: string | undefined },
 ): BedRow | undefined {
   const byLink = allBeds(units).find((r) => r.bed.residentId === resident.id);
   return byLink ?? findBed(units, resident.bedId);
@@ -527,7 +582,7 @@ export function blankResident(partial: Partial<Resident> = {}): Resident {
   return {
     id: uid(),
     createdAt: new Date().toISOString(),
-    legacyId: "",
+    quickbooksId: "",
     fullName: "",
     email: "",
     mobile: "",

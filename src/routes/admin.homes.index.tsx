@@ -10,6 +10,8 @@ import { ReserveBedDialog } from "@/components/admin/ReserveBedDialog";
 import {
   bedBlockedBy,
   type BedRow,
+  type Unit,
+  type Resident,
   residentForBed,
   GENDERS,
   UNIT_TYPES,
@@ -19,6 +21,8 @@ import {
   updateBed,
   useOps,
   type BedStatus,
+  sponsorLabel,
+  unitGender,
 } from "@/lib/ops-store";
 
 export const Route = createFileRoute("/admin/homes/")({
@@ -32,6 +36,29 @@ const STATUSES: { value: BedStatus; label: string }[] = [
   { value: "active", label: "Active" },
   { value: "notice", label: "Notice / expiring" },
 ];
+
+function UnitGenderChip({ unit, residents }: { unit: Unit; residents: Resident[] }) {
+  const g = unitGender(unit, residents);
+  if (!g) return <span>{unit.gender || "Any"}</span>;
+  if (g === "Mixed") {
+    return (
+      <span className="rounded-full bg-amber-100 px-2 text-[11px] font-bold text-amber-700">
+        Mixed
+      </span>
+    );
+  }
+  const letter = g === "Male" ? "M" : "F";
+  return (
+    <span
+      className={`inline-flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+        letter === "M" ? "bg-blue-100 text-blue-700" : "bg-pink-100 text-pink-700"
+      }`}
+      title={`${g} - set by the first resident to move in`}
+    >
+      {letter}
+    </span>
+  );
+}
 
 function InventoryPage() {
   const { units, residents } = useOps();
@@ -227,8 +254,11 @@ function InventoryPage() {
                   <p className="truncate text-sm font-semibold text-brand-deep">
                     {unit.residenceName} · {unit.unitNo}
                   </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {unit.code} · {unit.unitType} · {unit.block || "—"} · {unit.gender || "Any"}
+                  <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+                    <span className="truncate">
+                      {unit.code} · {unit.unitType} · {unit.block || "—"} ·
+                    </span>
+                    <UnitGenderChip unit={unit} residents={residents} />
                   </p>
                 </div>
                 <span className="text-xs text-muted-foreground">
@@ -246,10 +276,10 @@ function InventoryPage() {
                       <tr>
                         <th className="px-4 py-2 font-medium">Room</th>
                         <th className="px-4 py-2 font-medium">Bed</th>
-                        <th className="px-4 py-2 font-medium">Occupancy</th>
                         <th className="px-4 py-2 font-medium">Status</th>
                         <th className="px-4 py-2 font-medium">Resident</th>
                         <th className="px-4 py-2 font-medium">University</th>
+                        <th className="px-4 py-2 font-medium">Sponsor</th>
                         <th className="px-4 py-2 font-medium">Tenancy</th>
                         <th className="px-4 py-2 font-medium">Rent</th>
                         <th className="px-4 py-2" />
@@ -265,13 +295,6 @@ function InventoryPage() {
                           </td>
                           <td className="px-4 py-2">{bed.label}</td>
                           <td className="px-4 py-2">
-                            {room.occupancy === "unit"
-                              ? "Whole unit"
-                              : room.occupancy === "twin"
-                                ? "Twin sharing"
-                                : "Single"}
-                          </td>
-                          <td className="px-4 py-2">
                             <StatusPill status={bed.status} />
                             {bed.status === "held" && bed.holdUntil ? (
                               <span className="ml-2 text-xs text-muted-foreground">
@@ -281,8 +304,6 @@ function InventoryPage() {
                           </td>
                           <td className="px-4 py-2">
                             {(() => {
-                              // the bed stores the legacy number; the resident
-                              // page is addressed by the resident's own id
                               const person = residentForBed(residents, bed);
                               if (!person) return bed.residentName || bed.holdFor || "—";
                               return (
@@ -298,6 +319,13 @@ function InventoryPage() {
                           </td>
                           <td className="px-4 py-2 text-muted-foreground">
                             {bed.university ?? "—"}
+                          </td>
+                          <td className="px-4 py-2 text-muted-foreground">
+                            {(() => {
+                              const person = residentForBed(residents, bed);
+                              if (!person) return "—";
+                              return sponsorLabel(person.payerName || person.sponsor);
+                            })()}
                           </td>
                           <td className="px-4 py-2 text-muted-foreground">
                             {bed.tenancyStart
