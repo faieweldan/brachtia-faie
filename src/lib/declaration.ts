@@ -58,25 +58,36 @@ export const COST_TERMS = [
 
 export type CostTermKey = (typeof COST_TERMS)[number]["key"];
 
-/** All thirteen, in the order they appear on Brachtia's paper form. */
+/**
+ * All thirteen, word for word from Brachtia's form.
+ *
+ * Not tidied up, not rephrased. This is a contract: a clearer paraphrase is a
+ * different set of terms from the one on the paper copy, and if the two ever
+ * disagree nobody can say which a student agreed to. The summaries in
+ * COST_TERMS are the plain-language reading; these are the terms themselves.
+ */
 export const DECLARATION_TERMS: string[] = [
-  "Only a student duly registered in a programme conducted by a university may apply for off-campus student accommodation.",
+  "Only student duly registered in any programs conducted by university may apply or off-campus student's accommodation.",
   "The application form should be completed accurately to facilitate processing.",
   "Room reservations are not transferable.",
-  "This application is subject to room availability, on a first come first served basis. All rooms in a unit must be fully occupied before another empty unit is opened. Only rooms and units that are available will be offered.",
-  "Room rental only: a student may be moved to another room if the unit is not fully occupied, because a partly occupied unit carries higher utility costs. Any difference in room price is borne by the student, and the choice is the student's own.",
-  "The minimum term of a local student accommodation agreement is twelve (12) months. International students are considered case by case.",
-  "A non-refundable administration fee of RM 150.00 is payable upon signing this application form.",
-  "Cancellation: a penalty of one (1) month's rental and the RM 150.00 administration fee applies if the student cancels or withdraws after full payment is made, or before signing the accommodation agreement.",
-  "Upon signing the accommodation agreement: (a) deposits paid are refundable within 14 days of completing the tenancy, in accordance with the Tenancy Agreement; (b) pre-terminating may cause the deposit to be forfeited, along with one month's advance rental and the administration fees.",
-  "All residents must adhere to the house rules attached to this form.",
-  "Monthly, bi-monthly or quarterly rental must be paid by the 5th day of each month.",
-  "Utility bills for electricity, water and internet are paid monthly and shared equally between housemates by the 10th day of each month.",
-  "At the end of the tenancy a one-time moving out cleaning charge of RM 50 applies if the room and unit are not left clean and tidy, and air-conditioner service charges of RM 120 per room.",
+  "That this Student Accommodation Application Form is subject to room availability (on first come first serve basis). All the room in the UNIT must be fully occupied before accommodating another empty unit. ONLY rooms / units that are available will be offered to the students.",
+  "ONLY APPLICABLE TO FOR ROOM RENTAL: Student will be moved to any other rooms in the event the Unit is not fully occupied (for cost effective reasons). A student who is occupying a unit which is not fully occupied will end up bearing higher utility costs. Hence, moving the said student to another available room in a different unit will hinder such cost. However, the room price difference should be borne by the student, if need be. The choice of this, which would be allowed and to be decided by the student personally.",
+  "The minimum term of LOCAL student accommodation agreement is TWELVE (12) months. Exception to INTERNATIONAL student on case-to-case basis.",
+  "A non-refundable deposit of RM150.00 for administration fee is required to be paid upon signing this application form.",
+  "CANCELLATION - Penalty of One (1) month rental and administration fees of RM150.00 will be imposed if the student decides to cancel and/or withdraw from accommodating the unit after full payment is made or prior to signing the accommodation agreement.",
+  "Upon Signing accommodation agreement: (a) Deposits paid will be refundable within 14 days upon completion of the duration of the tenancy pursuant to Tenancy Agreement. (b) Pre-Terminating may cause deposit to be forfeited and one-month advance rental and the administration fees.",
+  "All residents of student accommodation must adhere to house rules as attached herein.",
+  "Monthly / Quarterly Rental MUST BE paid by the 5th day of each month - Bi-Monthly/Quarterly.",
+  "Utilities bills (Electricity, Water and Internet) must be paid monthly and shared equally between housemates by 10th day of each month.",
+  "At the end of Tenancy, I will be charged one-time moving out Cleaning @RM50 if I do not leave the room and unit clean and tidy and Air-Cond service charges of RM120 (per room).",
 ];
 
 export const DECLARATION_INTRO =
-  "I have read and agreed to all the terms set out in this Student Accommodation Application Form. By signing this document I understand and fully agree to the following:";
+  "I have read and agreed to all the terms set out in this Student Accommodation Application Form in page 2 specifically. By signing the document, I understand and fully agree to the following:";
+
+/** The party on the other side of this agreement, as printed on the form. */
+export const LANDLORD_ENTITY = "Brachtia Maju Resources PLT";
+export const LANDLORD_REG_NO = "202304003086 (LLP0037045-LGN)";
 
 /**
  * The exact words a signature is taken against.
@@ -89,7 +100,15 @@ export const DECLARATION_INTRO =
  */
 export function declarationBody(): string {
   const numbered = DECLARATION_TERMS.map((t, i) => `${i + 1}. ${t}`).join("\n");
-  return `PART 2: DECLARATION (${DECLARATION_VERSION})\n\n${DECLARATION_INTRO}\n\n${numbered}\n`;
+  return [
+    `PART 2: DECLARATION (${DECLARATION_VERSION})`,
+    `${LANDLORD_ENTITY} · Reg No ${LANDLORD_REG_NO}`,
+    "",
+    DECLARATION_INTRO,
+    "",
+    numbered,
+    "",
+  ].join("\n");
 }
 
 /** Names compared the way a person would: spacing and case do not matter. */

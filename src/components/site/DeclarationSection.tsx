@@ -5,7 +5,14 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { COST_TERMS, DECLARATION_INTRO, DECLARATION_TERMS, nameMatches } from "@/lib/declaration";
+import {
+  COST_TERMS,
+  DECLARATION_INTRO,
+  DECLARATION_TERMS,
+  LANDLORD_ENTITY,
+  LANDLORD_REG_NO,
+  nameMatches,
+} from "@/lib/declaration";
 import {
   getDeclarationByToken,
   signDeclarationByToken,
@@ -22,27 +29,42 @@ import {
 function printDeclaration(fullName: string, idNumber: string) {
   const esc = (v: string) =>
     v.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
-  const w = window.open("", "_blank", "width=820,height=900");
+  const w = window.open("", "_blank", "width=820,height=1000");
   if (!w) return;
-  const terms = DECLARATION_TERMS.map((t) => `<li>${t}</li>`).join("");
-  w.document.write(`<!doctype html><html><head><title>Brachtia Homes - Declaration</title>
+  const terms = DECLARATION_TERMS.map((t) => `<li>${esc(t)}</li>`).join("");
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8">
+<title>Brachtia Homes - Declaration</title>
 <style>
-  body { font: 12pt/1.5 Georgia, "Times New Roman", serif; margin: 32px; color: #111; }
-  h1 { font-size: 15pt; letter-spacing: .04em; }
-  ol { padding-left: 22px; } li { margin-bottom: 8px; }
-  .who { margin: 18px 0; }
-  .sign { display: flex; gap: 40px; margin-top: 44px; }
-  .sign div { flex: 1; border-top: 1px solid #111; padding-top: 6px; font-size: 10pt; }
+  @page { margin: 18mm; }
+  body { font: 10.5pt/1.45 Calibri, Arial, sans-serif; color: #000; margin: 0; }
+  h1 { font-size: 20pt; letter-spacing: .06em; margin: 0 0 14px; font-family: Georgia, serif; }
+  .who { margin: 0 0 10px; }
+  .rule { display: inline-block; border-bottom: 1px solid #000; min-width: 210px; }
+  ol { padding-left: 20px; margin: 10px 0 0; }
+  li { margin-bottom: 6px; text-align: justify; }
+  .sign { display: flex; gap: 26px; margin-top: 34px; page-break-inside: avoid; }
+  .sign div { flex: 1; }
+  .sign .role { min-height: 30px; }
+  .sign .line { border-top: 1px solid #000; margin-top: 34px; padding-top: 5px; }
+  footer { margin-top: 26px; border-top: 2px solid #2f6f5e; padding-top: 6px;
+           color: #2f6f5e; font-weight: 700; }
+  footer small { display: block; color: #444; font-weight: 400; }
 </style></head><body>
   <h1>PART 2: DECLARATION</h1>
-  <p class="who">I, <b>${esc(fullName) || "________________"}</b>,
-     NRIC / Passport No. <b>${esc(idNumber) || "________________"}</b>,</p>
-  <p>${DECLARATION_INTRO}</p>
+  <p class="who">I, <span class="rule">&nbsp;<b>${esc(fullName)}</b></span>
+     NRIC / Passport No. <span class="rule">&nbsp;<b>${esc(idNumber)}</b></span>,</p>
+  <p>${esc(DECLARATION_INTRO)}</p>
   <ol>${terms}</ol>
   <div class="sign">
-    <div>Student signature<br/>Name:<br/>Date:</div>
-    <div>Parent / guardian signature<br/>Name:<br/>Date:</div>
+    <div><div class="role">Student Signature</div>
+      <div class="line">Name:<br/>NRIC / PP No.:<br/>Date:</div></div>
+    <div><div class="role">Parents / Guardian Signature</div>
+      <div class="line">Name:<br/>NRIC / PP No.:<br/>Date:</div></div>
+    <div><div class="role">Landlord/Landlord's Authorized Person</div>
+      <div class="line">Name:<br/>NRIC / PP No.:<br/>Date:</div></div>
   </div>
+  <footer>${esc(LANDLORD_ENTITY)}
+    <small>Reg No : ${esc(LANDLORD_REG_NO)}</small></footer>
 </body></html>`);
   w.document.close();
   w.focus();
@@ -151,7 +173,7 @@ export function DeclarationSection({
     <section className="rounded-2xl border border-border bg-card p-5">
       <h2 className="text-sm font-semibold text-brand-deep">Declaration</h2>
       <p className="mt-0.5 text-xs text-muted-foreground">
-        Please read this before you sign. It is the agreement between you and Brachtia.
+        Please read this before you sign. It is the agreement between you and {LANDLORD_ENTITY}.
       </p>
 
       {/* the five numbers a student will want to know, before the wording */}
