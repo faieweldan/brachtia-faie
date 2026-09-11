@@ -65,7 +65,7 @@ function ResidentsListPage() {
     }
     // the Brachtia id and mobile are how staff actually look people up
     const haystack =
-      `${r.fullName} ${r.legacyId} ${r.email} ${r.studentId} ${r.mobile} ${r.idNumber}`.toLowerCase();
+      `${r.fullName} ${r.quickbooksId} ${r.email} ${r.studentId} ${r.mobile} ${r.idNumber}`.toLowerCase();
     if (q && !haystack.includes(q.trim().toLowerCase())) return false;
     return true;
   });
@@ -145,7 +145,7 @@ function ResidentsListPage() {
   function downloadProblems() {
     if (!report?.problems.length) return;
     const sheet = XLSX.utils.json_to_sheet(
-      report.problems.map((p) => ({ Row: p.row, StudentID: p.legacyId, Problem: p.reason })),
+      report.problems.map((p) => ({ Row: p.row, StudentID: p.quickbooksId, Problem: p.reason })),
     );
     const book = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(book, sheet, "Problems");
@@ -209,7 +209,7 @@ function ResidentsListPage() {
                   {report.problems.map((p, i) => (
                     <tr key={`${p.row}-${i}`}>
                       <td className="px-4 py-2 tabular-nums text-muted-foreground">{p.row}</td>
-                      <td className="px-4 py-2 font-medium">{p.legacyId || "—"}</td>
+                      <td className="px-4 py-2 font-medium">{p.quickbooksId || "—"}</td>
                       <td className="px-4 py-2 text-muted-foreground">{p.reason}</td>
                     </tr>
                   ))}
@@ -318,7 +318,6 @@ function ResidentsListPage() {
                 <thead className="bg-muted text-left text-xs text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 font-medium">Resident</th>
-                    <th className="px-3 py-2 font-medium">Resident ID</th>
                     <th className="px-3 py-2 font-medium">Placement</th>
                     <th className="px-3 py-2 font-medium">University</th>
                     <th className="px-3 py-2 font-medium">Tenancy</th>
@@ -345,11 +344,6 @@ function ResidentsListPage() {
                             {r.fullName || "Untitled resident"}
                           </Link>
                           <p className="text-xs text-muted-foreground">{r.email || "No email"}</p>
-                        </td>
-                        {/* Brachtia's own number - the one staff quote. The university's id
-                            arrives later, through the application form. */}
-                        <td className="px-3 py-2 tabular-nums text-muted-foreground">
-                          {r.legacyId || r.studentId || "—"}
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">
                           {placed

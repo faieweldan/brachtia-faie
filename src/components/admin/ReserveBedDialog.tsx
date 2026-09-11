@@ -25,7 +25,7 @@ import {
  * from the inventory side, where you are looking at the room rather than the
  * student.
  *
- * The reservation writes the resident's legacy id onto the bed, which is the
+ * The reservation writes the resident's QuickBooks id onto the bed, which is the
  * one record of a placement.
  */
 export function ReserveBedDialog({
@@ -55,7 +55,7 @@ export function ReserveBedDialog({
     const needle = q.trim().toLowerCase();
     const match = (r: Resident) =>
       !needle ||
-      `${r.fullName} ${r.legacyId} ${r.email} ${r.university}`.toLowerCase().includes(needle);
+      `${r.fullName} ${r.quickbooksId} ${r.email} ${r.university}`.toLowerCase().includes(needle);
 
     const waiting: { person: Resident; from?: undefined }[] = [];
     const placed: { person: Resident; from: string }[] = [];
@@ -177,7 +177,7 @@ function Group({
               <p className="truncate text-xs text-muted-foreground">
                 {from
                   ? `Currently in ${from}`
-                  : [person.legacyId && `ID ${person.legacyId}`, person.university, person.email]
+                  : [person.quickbooksId && `ID ${person.quickbooksId}`, person.university, person.email]
                       .filter(Boolean)
                       .join(" · ")}
               </p>

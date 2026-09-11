@@ -19,16 +19,16 @@ import { getResidentBilling, type BillingInvoice } from "@/lib/resident-billing.
  */
 export function ResidentPayments({
   residentId,
-  legacyId,
+  quickbooksId,
   tenancyEnd,
 }: {
   residentId: string;
-  legacyId?: string;
+  quickbooksId?: string;
   tenancyEnd?: string;
 }) {
   const { data, isLoading } = useQuery({
-    queryKey: ["resident-billing", residentId, legacyId],
-    queryFn: () => getResidentBilling({ data: { residentId, ...(legacyId ? { legacyId } : {}) } }),
+    queryKey: ["resident-billing", residentId, quickbooksId],
+    queryFn: () => getResidentBilling({ data: { residentId, ...(quickbooksId ? { quickbooksId } : {}) } }),
   });
 
   const [open, setOpen] = useState<Record<string, boolean>>({});

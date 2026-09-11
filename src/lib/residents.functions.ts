@@ -10,7 +10,7 @@ import type { Resident, ResidentDoc } from "@/lib/ops-store";
  * Same shape as homes.functions.ts: snake_case in Postgres, camelCase in
  * TypeScript, translated here and nowhere else.
  *
- * legacy_id ("00256") is what a re-upload matches on, so editing one student in
+ * quickbooks_id ("00256") is what a re-upload matches on, so editing one student in
  * the master list and uploading it again updates that student instead of
  * creating a second copy.
  */
@@ -30,7 +30,7 @@ function toResident(row: any): Resident {
   return {
     id: row.id,
     createdAt: row.created_at ?? "",
-    legacyId: str(row.legacy_id),
+    quickbooksId: str(row.quickbooks_id),
     enquiryId: row.enquiry_id ?? undefined,
     fullName: str(row.full_name),
     email: str(row.email),
@@ -83,7 +83,7 @@ function toResident(row: any): Resident {
 
 function toRow(r: Resident) {
   return {
-    legacy_id: r.legacyId ? r.legacyId : null,
+    quickbooks_id: r.quickbooksId ? r.quickbooksId : null,
     enquiry_id: isUuid(r.enquiryId) ? r.enquiryId : null,
     full_name: r.fullName ?? "",
     email: r.email ?? "",
@@ -161,11 +161,11 @@ export const saveResidentRow = createServerFn({ method: "POST" })
       ...(importBatchId ? { import_batch_id: importBatchId } : {}),
     };
 
-    // an existing uuid wins; otherwise legacy_id decides insert vs update
+    // an existing uuid wins; otherwise quickbooks_id decides insert vs update
     if (isUuid(resident.id)) row["id"] = resident.id;
 
-    const query = resident.legacyId
-      ? supabase.from("residents").upsert(row as any, { onConflict: "legacy_id" })
+    const query = resident.quickbooksId
+      ? supabase.from("residents").upsert(row as any, { onConflict: "quickbooks_id" })
       : supabase.from("residents").upsert(row as any);
 
     const { data: saved, error } = await query.select("*").single();
@@ -193,7 +193,7 @@ export type ImportReport = {
   placed: number;
   cleared: number;
   duplicates: number;
-  problems: { row: number; legacyId: string; reason: string }[];
+  problems: { row: number; quickbooksId: string; reason: string }[];
 };
 
 /**
@@ -316,7 +316,7 @@ function expandSharedRows(rows: ImportRow[]): { row: ImportRow; sharesWith?: str
   ];
 
   for (const row of rows) {
-    const rawIds = pick(row, "studentid", "student id", "resident id", "legacy_id");
+    const rawIds = pick(row, "studentid", "student id", "resident id", "quickbooks_id");
     const ids = rawIds.split(/[\s,]+/).filter(Boolean);
     if (ids.length < 2) {
       out.push({ row });
@@ -453,7 +453,7 @@ export const importResidents = createServerFn({ method: "POST" })
           if (v.active && v.active !== shape) {
             report.problems.push({
               row: 0,
-              legacyId: "",
+              quickbooksId: "",
               reason: `${unitNo} / ${letter}: the sheet has active lettings as both ${v.active} and ${shape} — ${shape} was used`,
             });
           }
@@ -544,7 +544,7 @@ export const importResidents = createServerFn({ method: "POST" })
     };
     const winnerFor = new Map<string, number>();
     rows.forEach((row, i) => {
-      const id = toLegacyId(pick(row, "studentid", "student id", "resident id", "legacy_id"));
+      const id = toLegacyId(pick(row, "studentid", "student id", "resident id", "quickbooks_id"));
       if (!id) return;
       const held = winnerFor.get(id);
       if (held === undefined || rank(row) >= rank(rows[held]!)) winnerFor.set(id, i);
@@ -568,12 +568,12 @@ export const importResidents = createServerFn({ method: "POST" })
      * quietly overwrite the earlier one and leave a student with no room and no
      * explanation - so the first claim keeps the bed and the second is reported.
      */
-    const claimedBy = new Map<string, { legacyId: string; row: number }>();
+    const claimedBy = new Map<string, { quickbooksId: string; row: number }>();
 
     for (let i = 0; i < rows.length; i += 1) {
       const row = rows[i]!;
       const sharesWith = expanded[i]?.sharesWith;
-      const legacyId = toLegacyId(pick(row, "studentid", "student id", "resident id", "legacy_id"));
+      const quickbooksId = toLegacyId(pick(row, "studentid", "student id", "resident id", "quickbooks_id"));
       const name = pick(row, "studentname", "student name", "full name", "name");
       const unitNo = pick(row, "unit", "unit_no", "unitno");
       const letter = pick(row, "room", "room_letter");
@@ -593,18 +593,18 @@ export const importResidents = createServerFn({ method: "POST" })
       // out - neither may leave the bed looking occupied.
       const freesTheBed = /^(inactive|vacant)$/i.test(rawStatus);
 
-      if (!legacyId || /^vacant$/i.test(name) || freesTheBed) {
+      if (!quickbooksId || /^vacant$/i.test(name) || freesTheBed) {
         if (bedId) bedsToClear.push(bedId);
-        if (!legacyId || /^vacant$/i.test(name)) continue;
+        if (!quickbooksId || /^vacant$/i.test(name)) continue;
         // still save the person; only the placement is dropped
       }
 
-      if (winnerFor.get(legacyId) !== i) {
+      if (winnerFor.get(quickbooksId) !== i) {
         report.duplicates += 1;
         report.problems.push({
           row: i + 2,
-          legacyId,
-          reason: `repeated StudentID - row ${(winnerFor.get(legacyId) ?? 0) + 2} was used instead`,
+          quickbooksId,
+          reason: `repeated StudentID - row ${(winnerFor.get(quickbooksId) ?? 0) + 2} was used instead`,
         });
         continue;
       }
@@ -618,7 +618,7 @@ export const importResidents = createServerFn({ method: "POST" })
       const payor = toPayor(sponsor, batch);
 
       const residentRow: Record<string, unknown> = {
-        legacy_id: legacyId,
+        quickbooks_id: quickbooksId,
         full_name: cleanName,
         email: pick(row, "email"),
         mobile: pick(row, "mobilenumber", "mobile number", "mobile", "phone"),
@@ -637,11 +637,11 @@ export const importResidents = createServerFn({ method: "POST" })
       // the uuid comes back from the write, and it is what the bed link stores
       const { data: saved, error } = await supabase
         .from("residents")
-        .upsert(residentRow as any, { onConflict: "legacy_id" })
+        .upsert(residentRow as any, { onConflict: "quickbooks_id" })
         .select("id")
         .single();
       if (error || !saved) {
-        report.problems.push({ row: i + 2, legacyId, reason: error?.message ?? "resident not saved" });
+        report.problems.push({ row: i + 2, quickbooksId, reason: error?.message ?? "resident not saved" });
         continue;
       }
       report.residents += 1;
@@ -654,7 +654,7 @@ export const importResidents = createServerFn({ method: "POST" })
       if (sharesWith) {
         report.problems.push({
           row: i + 2,
-          legacyId,
+          quickbooksId,
           reason: `shares the whole-unit letting at ${unitNo} with ${sharesWith} — saved, but only one occupant can be recorded on a bed until tenancies exist`,
         });
         continue;
@@ -664,7 +664,7 @@ export const importResidents = createServerFn({ method: "POST" })
         if (unitNo || letter || label) {
           report.problems.push({
             row: i + 2,
-            legacyId,
+            quickbooksId,
             reason: `no such bed: ${unitNo} / ${letter} / ${label} - resident saved, placement skipped`,
           });
         }
@@ -672,15 +672,15 @@ export const importResidents = createServerFn({ method: "POST" })
       }
 
       const heldBy = claimedBy.get(bedId);
-      if (heldBy && heldBy.legacyId !== legacyId) {
+      if (heldBy && heldBy.quickbooksId !== quickbooksId) {
         report.problems.push({
           row: i + 2,
-          legacyId,
-          reason: `${unitNo} / ${letter} / ${label} is already taken by ${heldBy.legacyId} on row ${heldBy.row} — resident saved, placement skipped`,
+          quickbooksId,
+          reason: `${unitNo} / ${letter} / ${label} is already taken by ${heldBy.quickbooksId} on row ${heldBy.row} — resident saved, placement skipped`,
         });
         continue;
       }
-      claimedBy.set(bedId, { legacyId, row: i + 2 });
+      claimedBy.set(bedId, { quickbooksId, row: i + 2 });
 
       const { error: bedErr } = await supabase
         .from("beds")
@@ -699,7 +699,7 @@ export const importResidents = createServerFn({ method: "POST" })
         } as any)
         .eq("id", bedId);
       if (bedErr) {
-        report.problems.push({ row: i + 2, legacyId, reason: bedErr.message });
+        report.problems.push({ row: i + 2, quickbooksId, reason: bedErr.message });
         continue;
       }
       report.placed += 1;

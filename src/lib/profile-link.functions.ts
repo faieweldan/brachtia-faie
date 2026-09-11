@@ -141,7 +141,7 @@ export const getProfileByToken = createServerFn({ method: "GET" })
 
     const { data: row, error } = await supabase
       .from("residents")
-      .select(`id, legacy_id, docs, ${EDITABLE.join(", ")}`)
+      .select(`id, quickbooks_id, docs, ${EDITABLE.join(", ")}`)
       .eq("id", found.link.resident_id)
       .single();
     if (error) throw new Error(error.message);

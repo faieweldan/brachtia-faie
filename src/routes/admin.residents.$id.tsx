@@ -252,7 +252,7 @@ function ResidentProfilePage() {
    */
   const isEmptyDraft =
     !form.fullName.trim() &&
-    !form.legacyId.trim() &&
+    !form.quickbooksId.trim() &&
     !form.email.trim() &&
     !placed &&
     !tenancy &&
@@ -346,7 +346,7 @@ function ResidentProfilePage() {
               <div className="mt-1.5 flex flex-wrap items-center gap-2">
                 <StatusPill status={stay.status} />
                 {[
-                  form.legacyId && `ID ${form.legacyId}`,
+                  form.quickbooksId && `ID ${form.quickbooksId}`,
                   form.university,
                   form.nationality,
                   form.gender,
@@ -822,7 +822,7 @@ function ResidentProfilePage() {
             action={editAction("placement")}
           >
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <ReadOnlyField label="Brachtia resident ID" value={form.legacyId} />
+              <ReadOnlyField label="QuickBooks ID" value={form.quickbooksId} />
               <Select
                 readOnly={!isEditing("placement")}
                 label="Assigned bed"
@@ -890,7 +890,7 @@ function ResidentProfilePage() {
         </TabsContent>
 
         <TabsContent value="payments" className="mt-4">
-          <ResidentPayments residentId={form.id} legacyId={form.legacyId} tenancyEnd={stay.end} />
+          <ResidentPayments residentId={form.id} quickbooksId={form.quickbooksId} tenancyEnd={stay.end} />
         </TabsContent>
       </Tabs>
     </div>

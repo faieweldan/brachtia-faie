@@ -60,7 +60,7 @@ const num = (v: unknown) => Number(v ?? 0) || 0;
 const isDeposit = (kind: string, label: string) => /deposit/i.test(kind) || /deposit/i.test(label);
 
 export const getResidentBilling = createServerFn({ method: "GET" })
-  .inputValidator((data: { residentId: string; legacyId?: string }) => data)
+  .inputValidator((data: { residentId: string; quickbooksId?: string }) => data)
   .handler(async ({ data }): Promise<ResidentBilling> => {
     const supabase = await admin();
     const empty: ResidentBilling = {
@@ -76,7 +76,7 @@ export const getResidentBilling = createServerFn({ method: "GET" })
     };
 
     // billing may be filed under either id, depending on when it was raised
-    const ids = [data.residentId, data.legacyId].filter(Boolean) as string[];
+    const ids = [data.residentId, data.quickbooksId].filter(Boolean) as string[];
     if (!ids.length) return empty;
 
     const { data: invoices, error } = await supabase
