@@ -502,16 +502,18 @@ export function residentForBed(residents: Resident[], bed: Bed): Resident | unde
  * known sponsors get a fixed code and anything else falls back to the first
  * word. The batch is kept because it is how Brachtia groups a sponsor's intake.
  */
+/** The sponsors the master list actually contains, plus the ones Brachtia is
+ *  likely to meet next. Anything unknown falls back to its first five letters. */
 const SPONSOR_CODES: Record<string, string> = {
   petronas: "PET",
   mara: "MARA",
+  kanagawa: "KNGW",
+  ydd: "YDD",
+  uni: "UNI",
+  hwum: "HWUM",
   jpa: "JPA",
   ptptn: "PTPTN",
   yayasan: "YYS",
-  telekom: "TM",
-  tnb: "TNB",
-  shell: "SHELL",
-  sime: "SIME",
 };
 
 export function sponsorLabel(raw?: string): string {

@@ -205,14 +205,19 @@ const DOC_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "appli
  * They do NOT hold the tenancy agreement or the stamped copy - Brachtia produces
  * those - so those stay out of this list.
  */
+/**
+ * Only what a student can supply on their own.
+ *
+ * The declaration form and the tenancy agreement are issued by Brachtia and
+ * signed later, and the balance is paid after the room is confirmed - asking
+ * for them here made the list look unfinished for everybody. They come back
+ * when there is a document to sign and a balance to pay.
+ */
 export const STUDENT_DOCS = [
   { key: "photo", label: "Passport size photo" },
   { key: "offer", label: "University offer letter" },
   { key: "id", label: "Passport / NRIC copy" },
-  { key: "declaration", label: "Signed declaration form" },
   { key: "booking_proof", label: "Booking fee payment proof" },
-  { key: "balance_proof", label: "Balance payment proof" },
-  { key: "signed_agreement", label: "Signed tenancy agreement" },
 ] as const;
 
 function safeExt(name: string, type: string) {

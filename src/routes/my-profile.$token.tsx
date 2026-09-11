@@ -15,12 +15,37 @@ import {
   type ProfileLinkFields,
 } from "@/lib/profile-link.functions";
 import { compressImage, readableSize } from "@/lib/compress";
+import {
+  COUNTRY_OPTIONS,
+  GENDER_OPTIONS,
+  LEVEL_OPTIONS,
+  MARITAL_OPTIONS,
+  RELATIONSHIP_OPTIONS,
+  UNIVERSITY_OPTIONS,
+  YES_NO_OPTIONS,
+  dialFor,
+  idLabelFor,
+  idPlaceholderFor,
+  COUNTRIES,
+  joinPhone,
+  splitPhone,
+} from "@/lib/reference-data";
 
 export const Route = createFileRoute("/my-profile/$token")({
   component: MyProfilePage,
 });
 
-type FieldDef = { key: keyof ProfileLinkFields; label: string; type?: string; wide?: boolean };
+type Option = { value: string; label: string };
+type FieldDef = {
+  key: keyof ProfileLinkFields;
+  label: string;
+  type?: string;
+  wide?: boolean;
+  /** a fixed list to choose from, instead of free text */
+  options?: Option[];
+  /** asked for as a dial code plus a number */
+  phone?: boolean;
+};
 
 /**
  * Every section is shown, prefilled and editable - not just the empty fields.
@@ -35,25 +60,26 @@ const SECTIONS: { title: string; hint?: string; fields: FieldDef[] }[] = [
     fields: [
       { key: "full_name", label: "Full name (as per passport / NRIC)" },
       { key: "email", label: "Email", type: "email" },
-      { key: "mobile", label: "Mobile number" },
+      { key: "mobile", label: "Mobile number", phone: true },
       { key: "dob", label: "Date of birth", type: "date" },
-      { key: "nationality", label: "Nationality" },
+      { key: "nationality", label: "Nationality", options: COUNTRY_OPTIONS },
+      // the label and the hint follow the nationality chosen above
       { key: "id_number", label: "Passport / NRIC number" },
-      { key: "gender", label: "Gender" },
-      { key: "marital_status", label: "Marital status" },
+      { key: "gender", label: "Gender", options: GENDER_OPTIONS },
+      { key: "marital_status", label: "Marital status", options: MARITAL_OPTIONS },
       { key: "race", label: "Race" },
       { key: "religion", label: "Religion" },
       { key: "address", label: "Home address", wide: true },
       { key: "postcode", label: "Postcode" },
       { key: "state", label: "State" },
-      { key: "country", label: "Country" },
+      { key: "country", label: "Country", options: COUNTRY_OPTIONS },
     ],
   },
   {
     title: "Your studies",
     fields: [
-      { key: "university", label: "University / college" },
-      { key: "level_of_study", label: "Level of study" },
+      { key: "university", label: "University / college", options: UNIVERSITY_OPTIONS },
+      { key: "level_of_study", label: "Level of study", options: LEVEL_OPTIONS },
       { key: "course", label: "Course / programme" },
       { key: "student_id", label: "University student ID" },
       { key: "graduation_year", label: "Expected graduation year" },
@@ -63,7 +89,11 @@ const SECTIONS: { title: string; hint?: string; fields: FieldDef[] }[] = [
     title: "Health",
     hint: "Only so we can help in an emergency.",
     fields: [
-      { key: "medical_condition", label: "Any medical condition or allergy? (yes / no)" },
+      {
+        key: "medical_condition",
+        label: "Any medical condition or allergy?",
+        options: YES_NO_OPTIONS,
+      },
       { key: "medical_detail", label: "Details", wide: true },
     ],
   },
@@ -72,30 +102,73 @@ const SECTIONS: { title: string; hint?: string; fields: FieldDef[] }[] = [
     hint: "Someone we can reach if we cannot reach you.",
     fields: [
       { key: "ec_name", label: "Full name" },
-      { key: "ec_relationship", label: "Relationship to you" },
-      { key: "ec_mobile", label: "Mobile number" },
+      { key: "ec_relationship", label: "Relationship to you", options: RELATIONSHIP_OPTIONS },
+      { key: "ec_mobile", label: "Mobile number", phone: true },
       { key: "ec_email", label: "Email", type: "email" },
       { key: "ec_address", label: "Address", wide: true },
       { key: "ec_postcode", label: "Postcode" },
       { key: "ec_state", label: "State" },
-      { key: "ec_country", label: "Country" },
+      { key: "ec_country", label: "Country", options: COUNTRY_OPTIONS },
     ],
   },
   {
     title: "Who pays the rent",
-    hint: "Leave blank if you pay it yourself.",
     fields: [
       { key: "payer_name", label: "Full name" },
-      { key: "payer_relationship", label: "Relationship to you" },
-      { key: "payer_mobile", label: "Mobile number" },
+      { key: "payer_relationship", label: "Relationship to you", options: RELATIONSHIP_OPTIONS },
+      { key: "payer_mobile", label: "Mobile number", phone: true },
       { key: "payer_email", label: "Email", type: "email" },
       { key: "payer_address", label: "Address", wide: true },
       { key: "payer_postcode", label: "Postcode" },
       { key: "payer_state", label: "State" },
-      { key: "payer_country", label: "Country" },
+      { key: "payer_country", label: "Country", options: COUNTRY_OPTIONS },
     ],
   },
 ];
+
+/**
+ * A phone number, asked for as a country code plus the rest.
+ *
+ * Students typed 012-345 6789, 60123456789 and +60 12 345 6789 for the same
+ * number. Splitting the code out makes the stored value consistent without
+ * making anyone think about formatting. The leading zero Malaysians write is
+ * dropped, because it is not part of an international number.
+ */
+function PhoneField({
+  value,
+  fallbackDial,
+  onChange,
+}: {
+  value: string;
+  fallbackDial: string;
+  onChange: (v: string) => void;
+}) {
+  const parts = splitPhone(value);
+  const dial = parts.dial || fallbackDial || "+60";
+  return (
+    <div className="flex gap-2">
+      <select
+        className="h-9 w-28 shrink-0 rounded-md border border-input bg-background px-2 text-sm"
+        value={dial}
+        onChange={(e) => onChange(joinPhone(e.target.value, parts.rest))}
+      >
+        {[...new Set(COUNTRIES.map((c) => c.dial))]
+          .sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))
+          .map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+      </select>
+      <Input
+        inputMode="tel"
+        placeholder="12 345 6789"
+        value={parts.rest}
+        onChange={(e) => onChange(joinPhone(dial, e.target.value))}
+      />
+    </div>
+  );
+}
 
 function MyProfilePage() {
   const { token } = Route.useParams();
@@ -239,21 +312,73 @@ function MyProfilePage() {
               {section.fields.map((f) => {
                 const value = values[f.key] ?? "";
                 const empty = !value.trim();
+
+                // a Malaysian is asked for an NRIC, everyone else a passport
+                const label =
+                  f.key === "id_number" ? idLabelFor(values["nationality"] ?? "") : f.label;
+
+                // A university outside the list is typed into the same field, so
+                // nothing new has to be stored. The dropdown reads back as
+                // "Other" whenever what is saved is not one of the known codes.
+                const knownUniversity = UNIVERSITY_OPTIONS.some((o) => o.value === value);
+                const otherUniversity = f.key === "university" && !!value && !knownUniversity;
+
+                // details are pointless unless there is a condition to detail
+                if (f.key === "medical_detail" && values["medical_condition"] !== "yes") {
+                  return null;
+                }
+
                 return (
                   <div key={f.key} className={`space-y-1.5 ${f.wide ? "sm:col-span-2" : ""}`}>
                     <Label className="text-xs text-muted-foreground">
-                      {f.label}
+                      {label}
                       {empty ? <span className="ml-1 text-brand">•</span> : null}
                     </Label>
+
                     {f.key === "medical_detail" ? (
                       <Textarea value={value} onChange={(e) => set(f.key, e.target.value)} />
+                    ) : f.phone ? (
+                      <PhoneField
+                        value={value}
+                        fallbackDial={dialFor(values["nationality"] ?? "")}
+                        onChange={(v) => set(f.key, v)}
+                      />
+                    ) : f.options ? (
+                      <select
+                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        value={otherUniversity ? "OTHER" : value}
+                        onChange={(e) =>
+                          // choosing Other clears the field so they can type
+                          set(f.key, e.target.value === "OTHER" ? "" : e.target.value)
+                        }
+                      >
+                        <option value="">Please choose</option>
+                        {f.options.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
                     ) : (
                       <Input
                         type={f.type ?? "text"}
                         value={value}
+                        placeholder={
+                          f.key === "id_number"
+                            ? idPlaceholderFor(values["nationality"] ?? "")
+                            : undefined
+                        }
                         onChange={(e) => set(f.key, e.target.value)}
                       />
                     )}
+
+                    {f.key === "university" && (otherUniversity || !value) ? (
+                      <Input
+                        placeholder="Not listed? Type your university or college"
+                        value={knownUniversity ? "" : value}
+                        onChange={(e) => set(f.key, e.target.value)}
+                      />
+                    ) : null}
                   </div>
                 );
               })}
