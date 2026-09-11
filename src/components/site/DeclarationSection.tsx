@@ -21,11 +21,12 @@ import {
 } from "@/lib/declaration.functions";
 
 /**
- * A printable copy, for the one signature this form cannot collect.
+ * A copy to keep, or to take to a parent or guardian.
  *
- * A parent or guardian is a second person; a student typing their name proves
- * nothing at all. Until a parent gets a link of their own, paper is the honest
- * route - and it is the one Brachtia already uses.
+ * It is not how the student signs - that happens here, and the record of it is
+ * stronger than a photograph of a signed page could be. It exists because a
+ * parent or guardian is a second person this form cannot reach, and because
+ * people like a copy of what they agreed to.
  */
 function printDeclaration(fullName: string, idNumber: string) {
   const esc = (v: string) =>
@@ -283,8 +284,8 @@ export function DeclarationSection({
         {blocker ? <p className="text-xs text-muted-foreground">{blocker}</p> : null}
       </div>
       <p className="mt-2 text-[11px] text-muted-foreground">
-        Only if Brachtia asked for a parent or guardian signature: print this, have it signed, then
-        upload the photo under Your documents above.
+        Signing here is your signature - nothing needs printing or sending back. The printed copy is
+        yours to keep, or for a parent or guardian if Brachtia has asked for one.
       </p>
     </section>
   );
