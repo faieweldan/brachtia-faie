@@ -3,19 +3,9 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Link2, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import {
-  COUNTRY_OPTIONS,
-  LEVEL_OPTIONS,
-  MARITAL_OPTIONS,
-  RELATIONSHIP_OPTIONS,
-  UNIVERSITY_OPTIONS,
-  graduationYearOptions,
-  idLabelFor,
-  normCountry,
-  normRelationship,
-  normUniversity,
-} from "@/lib/reference-data";
+import { idLabelFor } from "@/lib/reference-data";
 import { getDeclarationForResident } from "@/lib/declaration.functions";
+import { RESIDENT_SECTIONS, fieldShown, type ResidentField } from "@/lib/resident-fields";
 
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -34,7 +24,6 @@ import { TenancyCard } from "@/components/admin/TenancyCard";
 import { ResidentPayments } from "@/components/admin/ResidentPayments";
 import {
   DOC_TYPES,
-  GENDERS,
   PAY_METHODS,
   SCHEDULES,
   addTask,
@@ -103,10 +92,7 @@ function monthsBetween(start: string, end: string) {
 }
 
 const PROFILE_SECTIONS = [
-  { key: "personal", label: "Personal" },
-  { key: "academic", label: "Academic" },
-  { key: "emergency", label: "Emergency contact" },
-  { key: "payment", label: "Payor details" },
+  ...RESIDENT_SECTIONS.map((s) => ({ key: s.key, label: s.title })),
   { key: "documents", label: "Documents" },
   { key: "portal", label: "Portal access" },
 ];
@@ -553,299 +539,37 @@ function ResidentProfilePage() {
             </nav>
 
             <div className="min-w-0 flex-1 space-y-4">
-              <section id="sec-personal" ref={sectionRef("personal")} className="scroll-mt-24">
-                <Panel title="Personal" action={editAction("personal")}>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    <Text
-                      readOnly={!isEditing("personal")}
-                      label="Full name (per passport / NRIC)"
-                      value={form.fullName}
-                      onChange={(v) => set({ fullName: v })}
-                    />
-                    <Text
-                      readOnly={!isEditing("personal")}
-                      label="Email"
-                      type="email"
-                      value={form.email}
-                      onChange={(v) => set({ email: v })}
-                    />
-                    <Text
-                      readOnly={!isEditing("personal")}
-                      label="Mobile number"
-                      value={form.mobile}
-                      onChange={(v) => set({ mobile: v })}
-                    />
-                    <Text
-                      readOnly={!isEditing("personal")}
-                      label="Date of birth"
-                      type="date"
-                      value={form.dob}
-                      onChange={(v) => set({ dob: v })}
-                    />
-                    <Combo
-                      readOnly={!isEditing("personal")}
-                      label="Nationality"
-                      value={form.nationality}
-                      onChange={(v) => set({ nationality: v })}
-                      options={COUNTRY_OPTIONS}
-                      normalise={normCountry}
-                    />
-                    <Text
-                      readOnly={!isEditing("personal")}
-                      label={idLabelFor(form.nationality)}
-                      value={form.idNumber}
-                      onChange={(v) => set({ idNumber: v })}
-                    />
-                    <Select
-                      readOnly={!isEditing("personal")}
-                      label="Gender"
-                      value={form.gender}
-                      onChange={(v) => set({ gender: v })}
-                      options={GENDERS.filter((g) => g !== "Any")}
-                    />
-                    <Select
-                      readOnly={!isEditing("personal")}
-                      label="Marital status"
-                      value={form.maritalStatus}
-                      onChange={(v) => set({ maritalStatus: v })}
-                      options={MARITAL_OPTIONS}
-                    />
-                    <Text
-                      readOnly={!isEditing("personal")}
-                      label="Race"
-                      value={form.race}
-                      onChange={(v) => set({ race: v })}
-                    />
-                    <Text
-                      readOnly={!isEditing("personal")}
-                      label="Religion"
-                      value={form.religion}
-                      onChange={(v) => set({ religion: v })}
-                    />
-                    <Text
-                      readOnly={!isEditing("personal")}
-                      label="Address"
-                      value={form.address}
-                      onChange={(v) => set({ address: v })}
-                    />
-                    <Text
-                      readOnly={!isEditing("personal")}
-                      label="Postcode"
-                      value={form.postcode}
-                      onChange={(v) => set({ postcode: v })}
-                    />
-                    <Text
-                      readOnly={!isEditing("personal")}
-                      label="State"
-                      value={form.state}
-                      onChange={(v) => set({ state: v })}
-                    />
-                    <Combo
-                      readOnly={!isEditing("personal")}
-                      label="Country"
-                      value={form.country}
-                      onChange={(v) => set({ country: v })}
-                      options={COUNTRY_OPTIONS}
-                      normalise={normCountry}
-                    />
-                    <Select
-                      readOnly={!isEditing("personal")}
-                      label="Medical condition / allergy"
-                      value={form.medicalCondition}
-                      onChange={(v) => set({ medicalCondition: v })}
-                      options={[
-                        { value: "no", label: "No" },
-                        { value: "yes", label: "Yes" },
-                      ]}
-                    />
-                    <div className="sm:col-span-2 lg:col-span-3">
-                      <p className="mb-1.5 text-xs text-muted-foreground">Medical details</p>
-                      {isEditing("personal") ? (
-                        <Textarea
-                          value={form.medicalDetail}
-                          onChange={(e) => set({ medicalDetail: e.target.value })}
-                          placeholder="Conditions, allergies, medication…"
-                        />
-                      ) : (
-                        <p className="text-sm text-foreground">{form.medicalDetail || "—"}</p>
-                      )}
+              {/* one list drives both this page and the student's profile link,
+                  so a field renamed or removed here disappears there too */}
+              {RESIDENT_SECTIONS.map((s) => (
+                <section
+                  key={s.key}
+                  id={`sec-${s.key}`}
+                  ref={sectionRef(s.key)}
+                  className="scroll-mt-24"
+                >
+                  <Panel title={s.title} action={editAction(s.key)}>
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {s.fields
+                        .filter((f) =>
+                          fieldShown(f, (k) => {
+                            const twin = s.fields.find((x) => x.key === k);
+                            return twin ? String(form[twin.camel] ?? "") : "";
+                          }),
+                        )
+                        .map((f) => (
+                          <AdminField
+                            key={f.key}
+                            field={f}
+                            readOnly={!isEditing(s.key)}
+                            form={form}
+                            set={set}
+                          />
+                        ))}
                     </div>
-                  </div>
-                </Panel>
-              </section>
-
-              <section id="sec-academic" ref={sectionRef("academic")} className="scroll-mt-24">
-                <Panel title="Academic" action={editAction("academic")}>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    <Combo
-                      readOnly={!isEditing("academic")}
-                      label="University / college"
-                      value={form.university}
-                      onChange={(v) => set({ university: v })}
-                      options={UNIVERSITY_OPTIONS.filter((o) => o.value !== "OTHER")}
-                      normalise={normUniversity}
-                    />
-                    <Select
-                      readOnly={!isEditing("academic")}
-                      label="Level of study"
-                      value={form.levelOfStudy}
-                      onChange={(v) => set({ levelOfStudy: v })}
-                      options={LEVEL_OPTIONS}
-                    />
-                    <Text
-                      readOnly={!isEditing("academic")}
-                      label="Course / programme"
-                      value={form.course}
-                      onChange={(v) => set({ course: v })}
-                    />
-                    <Text
-                      readOnly={!isEditing("academic")}
-                      label="Student ID"
-                      value={form.studentId}
-                      onChange={(v) => set({ studentId: v })}
-                    />
-                    <Combo
-                      readOnly={!isEditing("academic")}
-                      label="Expected graduation year"
-                      value={form.graduationYear}
-                      onChange={(v) => set({ graduationYear: v })}
-                      options={graduationYearOptions()}
-                    />
-                  </div>
-                </Panel>
-              </section>
-
-              <section id="sec-emergency" ref={sectionRef("emergency")} className="scroll-mt-24">
-                <Panel title="Emergency contact" action={editAction("emergency")}>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    <Text
-                      readOnly={!isEditing("emergency")}
-                      label="Full name"
-                      value={form.ecName}
-                      onChange={(v) => set({ ecName: v })}
-                    />
-                    <Combo
-                      readOnly={!isEditing("emergency")}
-                      label="Relationship"
-                      value={form.ecRelationship}
-                      onChange={(v) => set({ ecRelationship: v })}
-                      options={RELATIONSHIP_OPTIONS}
-                      normalise={normRelationship}
-                    />
-                    <Text
-                      readOnly={!isEditing("emergency")}
-                      label="Mobile number"
-                      value={form.ecMobile}
-                      onChange={(v) => set({ ecMobile: v })}
-                    />
-                    <Text
-                      readOnly={!isEditing("emergency")}
-                      label="Email"
-                      type="email"
-                      value={form.ecEmail}
-                      onChange={(v) => set({ ecEmail: v })}
-                    />
-                    <Text
-                      readOnly={!isEditing("emergency")}
-                      label="Address"
-                      value={form.ecAddress}
-                      onChange={(v) => set({ ecAddress: v })}
-                    />
-                    <Text
-                      readOnly={!isEditing("emergency")}
-                      label="Postcode"
-                      value={form.ecPostcode}
-                      onChange={(v) => set({ ecPostcode: v })}
-                    />
-                    <Text
-                      readOnly={!isEditing("emergency")}
-                      label="State"
-                      value={form.ecState}
-                      onChange={(v) => set({ ecState: v })}
-                    />
-                    <Combo
-                      readOnly={!isEditing("emergency")}
-                      label="Country"
-                      value={form.ecCountry}
-                      onChange={(v) => set({ ecCountry: v })}
-                      options={COUNTRY_OPTIONS}
-                      normalise={normCountry}
-                    />
-                  </div>
-                </Panel>
-              </section>
-
-              <section id="sec-payment" ref={sectionRef("payment")} className="scroll-mt-24">
-                <Panel title="Payor details" action={editAction("payment")}>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    <Select
-                      readOnly={!isEditing("payment")}
-                      label="Payment method"
-                      value={form.payMethod}
-                      onChange={(v) => set({ payMethod: v })}
-                      options={PAY_METHODS}
-                    />
-                    <Select
-                      readOnly={!isEditing("payment")}
-                      label="Payment schedule"
-                      value={form.paySchedule}
-                      onChange={(v) => set({ paySchedule: v })}
-                      options={SCHEDULES.map((s) => ({ value: s.value, label: s.label }))}
-                    />
-                    <Text
-                      readOnly={!isEditing("payment")}
-                      label="Payor name"
-                      value={form.payerName}
-                      onChange={(v) => set({ payerName: v })}
-                    />
-                    <Combo
-                      readOnly={!isEditing("payment")}
-                      label="Relationship to resident"
-                      value={form.payerRelationship}
-                      onChange={(v) => set({ payerRelationship: v })}
-                      options={RELATIONSHIP_OPTIONS}
-                      normalise={normRelationship}
-                    />
-                    <Text
-                      readOnly={!isEditing("payment")}
-                      label="Payor mobile"
-                      value={form.payerMobile}
-                      onChange={(v) => set({ payerMobile: v })}
-                    />
-                    <Text
-                      readOnly={!isEditing("payment")}
-                      label="Payor email"
-                      type="email"
-                      value={form.payerEmail}
-                      onChange={(v) => set({ payerEmail: v })}
-                    />
-                    <Text
-                      readOnly={!isEditing("payment")}
-                      label="Payor address"
-                      value={form.payerAddress}
-                      onChange={(v) => set({ payerAddress: v })}
-                    />
-                    <Text
-                      readOnly={!isEditing("payment")}
-                      label="Payor postcode"
-                      value={form.payerPostcode}
-                      onChange={(v) => set({ payerPostcode: v })}
-                    />
-                    <Text
-                      readOnly={!isEditing("payment")}
-                      label="Payor state"
-                      value={form.payerState}
-                      onChange={(v) => set({ payerState: v })}
-                    />
-                    <Text
-                      readOnly={!isEditing("payment")}
-                      label="Payor country"
-                      value={form.payerCountry}
-                      onChange={(v) => set({ payerCountry: v })}
-                    />
-                  </div>
-                </Panel>
-              </section>
+                  </Panel>
+                </section>
+              ))}
 
               <section id="sec-documents" ref={sectionRef("documents")} className="scroll-mt-24">
                 <Panel
@@ -1008,6 +732,85 @@ function ResidentProfilePage() {
           />
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+/**
+ * One profile field on the admin page, drawn from the shared list.
+ *
+ * A list that staff may type past (a university not yet listed) gets the
+ * type-or-choose box; a closed list gets a plain dropdown.
+ */
+function AdminField({
+  field: f,
+  readOnly,
+  form,
+  set,
+}: {
+  field: ResidentField;
+  readOnly: boolean;
+  form: Resident;
+  set: (p: ResidentPatch) => void;
+}) {
+  const value = String(form[f.camel] ?? "");
+  const onChange = (v: string) => set({ [f.camel]: v } as ResidentPatch);
+  const label = f.kind === "id" ? idLabelFor(form.nationality) : f.label;
+  const wide = f.wide ? "sm:col-span-2 lg:col-span-3" : "";
+
+  if (f.kind === "long") {
+    return (
+      <div className={wide}>
+        <p className="mb-1.5 text-xs text-muted-foreground">{label}</p>
+        {readOnly ? (
+          <p className="text-sm text-foreground">{value || "—"}</p>
+        ) : (
+          <Textarea value={value} onChange={(e) => onChange(e.target.value)} placeholder={f.hint} />
+        )}
+      </div>
+    );
+  }
+
+  if (f.kind === "choice") {
+    const options =
+      f.key === "pay_method"
+        ? PAY_METHODS.map((m) => ({ value: m, label: m }))
+        : f.key === "pay_schedule"
+          ? SCHEDULES.map((s) => ({ value: s.value, label: s.label }))
+          : (f.options ?? []);
+    return (
+      <div className={wide}>
+        {f.normalise ? (
+          <Combo
+            readOnly={readOnly}
+            label={label}
+            value={value}
+            onChange={onChange}
+            options={options}
+            normalise={f.normalise}
+          />
+        ) : (
+          <Select
+            readOnly={readOnly}
+            label={label}
+            value={value}
+            onChange={onChange}
+            options={options}
+          />
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className={wide}>
+      <Text
+        readOnly={readOnly}
+        label={label}
+        type={f.kind === "email" ? "email" : f.kind === "date" ? "date" : "text"}
+        value={value}
+        onChange={onChange}
+      />
     </div>
   );
 }

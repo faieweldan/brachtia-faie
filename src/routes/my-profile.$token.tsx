@@ -16,162 +16,109 @@ import {
 } from "@/lib/profile-link.functions";
 import { compressImage, readableSize } from "@/lib/compress";
 import { DeclarationSection } from "@/components/site/DeclarationSection";
+import { ChoicePicker, DialPicker } from "@/components/site/ChoicePicker";
 import { getDeclarationByToken, type SignedDeclaration } from "@/lib/declaration.functions";
 import {
-  COUNTRY_OPTIONS,
-  GENDER_OPTIONS,
-  LEVEL_OPTIONS,
-  MARITAL_OPTIONS,
-  RELATIONSHIP_OPTIONS,
   UNIVERSITY_OPTIONS,
-  YES_NO_OPTIONS,
   dialFor,
-  graduationYearOptions,
   idLabelFor,
   idPlaceholderFor,
-  COUNTRIES,
   joinPhone,
   splitPhone,
 } from "@/lib/reference-data";
+import {
+  RESIDENT_SECTIONS,
+  emailProblem,
+  fieldShown,
+  formatNric,
+  nricProblem,
+  phoneDigits,
+  phoneProblem,
+  type ResidentField,
+} from "@/lib/resident-fields";
 
 export const Route = createFileRoute("/my-profile/$token")({
   component: MyProfilePage,
 });
 
-type Option = { value: string; label: string };
-type FieldDef = {
-  key: keyof ProfileLinkFields;
-  label: string;
-  type?: string;
-  wide?: boolean;
-  /** a fixed list to choose from, instead of free text */
-  options?: Option[];
-  /** asked for as a dial code plus a number */
-  phone?: boolean;
-};
+/**
+ * The same sections, titles and labels as the admin portal, minus what only
+ * staff set. Both read RESIDENT_SECTIONS, so they cannot drift apart again.
+ *
+ * Every field is shown, prefilled and editable - not just the empty ones. A
+ * student is the only person who can tell us the imported spelling of their
+ * name or passport number is wrong, and this is the one moment they are looking.
+ */
+const SECTIONS = RESIDENT_SECTIONS.map((s) => ({
+  ...s,
+  fields: s.fields.filter((f) => !f.staffOnly),
+})).filter((s) => s.fields.length > 0);
 
 /**
- * Every section is shown, prefilled and editable - not just the empty fields.
+ * A phone number on record, brought into "+60 123456789" shape.
  *
- * A student is the only person who can tell us the imported spelling of their
- * name or passport number is wrong, and this is the one moment they are looking.
- * Hiding what we already hold would throw that away.
+ * Imported numbers arrive as 014-5498243 or 60145498243. Without this the form
+ * would show the leading 0 in the box beside a +60 - the very thing it exists
+ * to stop.
  */
-const SECTIONS: { title: string; hint?: string; fields: FieldDef[] }[] = [
-  {
-    title: "About you",
-    fields: [
-      { key: "full_name", label: "Full name (as per passport / NRIC)" },
-      { key: "email", label: "Email", type: "email" },
-      { key: "mobile", label: "Mobile number", phone: true },
-      { key: "dob", label: "Date of birth", type: "date" },
-      { key: "nationality", label: "Nationality", options: COUNTRY_OPTIONS },
-      // the label and the hint follow the nationality chosen above
-      { key: "id_number", label: "Passport / NRIC number" },
-      { key: "gender", label: "Gender", options: GENDER_OPTIONS },
-      { key: "marital_status", label: "Marital status", options: MARITAL_OPTIONS },
-      { key: "race", label: "Race" },
-      { key: "religion", label: "Religion" },
-      { key: "address", label: "Home address", wide: true },
-      { key: "postcode", label: "Postcode" },
-      { key: "state", label: "State" },
-      { key: "country", label: "Country", options: COUNTRY_OPTIONS },
-    ],
-  },
-  {
-    title: "Your studies",
-    fields: [
-      { key: "university", label: "University / college", options: UNIVERSITY_OPTIONS },
-      { key: "level_of_study", label: "Level of study", options: LEVEL_OPTIONS },
-      { key: "course", label: "Course / programme" },
-      { key: "student_id", label: "University student ID" },
-      {
-        key: "graduation_year",
-        label: "Expected graduation year",
-        options: graduationYearOptions(),
-      },
-    ],
-  },
-  {
-    title: "Health",
-    hint: "Only so we can help in an emergency.",
-    fields: [
-      {
-        key: "medical_condition",
-        label: "Any medical condition or allergy?",
-        options: YES_NO_OPTIONS,
-      },
-      { key: "medical_detail", label: "Details", wide: true },
-    ],
-  },
-  {
-    title: "Emergency contact",
-    hint: "Someone we can reach if we cannot reach you.",
-    fields: [
-      { key: "ec_name", label: "Full name" },
-      { key: "ec_relationship", label: "Relationship to you", options: RELATIONSHIP_OPTIONS },
-      { key: "ec_mobile", label: "Mobile number", phone: true },
-      { key: "ec_email", label: "Email", type: "email" },
-      { key: "ec_address", label: "Address", wide: true },
-      { key: "ec_postcode", label: "Postcode" },
-      { key: "ec_state", label: "State" },
-      { key: "ec_country", label: "Country", options: COUNTRY_OPTIONS },
-    ],
-  },
-  {
-    title: "Who pays the rent",
-    fields: [
-      { key: "payer_name", label: "Full name" },
-      { key: "payer_relationship", label: "Relationship to you", options: RELATIONSHIP_OPTIONS },
-      { key: "payer_mobile", label: "Mobile number", phone: true },
-      { key: "payer_email", label: "Email", type: "email" },
-      { key: "payer_address", label: "Address", wide: true },
-      { key: "payer_postcode", label: "Postcode" },
-      { key: "payer_state", label: "State" },
-      { key: "payer_country", label: "Country", options: COUNTRY_OPTIONS },
-    ],
-  },
-];
+function tidyPhone(raw: string, fallbackDial: string): string {
+  const v = (raw ?? "").trim();
+  if (!v || v.startsWith("+")) return v;
+  const dial = fallbackDial || "+60";
+  let digits = v.replace(/\D/g, "");
+  // 60145498243 already carries the country code, just without the +
+  const code = dial.slice(1);
+  if (digits.startsWith(code) && digits.length > 10) digits = digits.slice(code.length);
+  return joinPhone(dial, phoneDigits(digits));
+}
+
+/** What is wrong with one field, or "" if nothing is. */
+function problemFor(f: ResidentField, values: ProfileLinkFields): string {
+  const value = values[f.key] ?? "";
+  if (f.kind === "email") return emailProblem(value);
+  if (f.kind === "phone") {
+    const { dial, rest } = splitPhone(value);
+    return phoneProblem(rest, dial);
+  }
+  if (f.kind === "id" && values["nationality"] === "MYS") return nricProblem(value);
+  // "yes" to a medical condition means nothing without saying which
+  if (f.key === "medical_detail" && values["medical_condition"] === "yes" && !value.trim())
+    return "Please tell us what the condition or allergy is.";
+  return "";
+}
 
 /**
  * A phone number, asked for as a country code plus the rest.
  *
- * Students typed 012-345 6789, 60123456789 and +60 12 345 6789 for the same
- * number. Splitting the code out makes the stored value consistent without
- * making anyone think about formatting. The leading zero Malaysians write is
- * dropped, because it is not part of an international number.
+ * The rest only takes digits, and a leading 0 is refused as it is typed: the
+ * code box already says +60, and 0 is not part of an international number.
  */
 function PhoneField({
   value,
   fallbackDial,
+  invalid,
   onChange,
+  onBlur,
 }: {
   value: string;
   fallbackDial: string;
+  invalid: boolean;
   onChange: (v: string) => void;
+  onBlur: () => void;
 }) {
   const parts = splitPhone(value);
   const dial = parts.dial || fallbackDial || "+60";
   return (
     <div className="flex gap-2">
-      <select
-        className="h-9 w-28 shrink-0 rounded-md border border-input bg-background px-2 text-sm"
-        value={dial}
-        onChange={(e) => onChange(joinPhone(e.target.value, parts.rest))}
-      >
-        {[...new Set(COUNTRIES.map((c) => c.dial))]
-          .sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))
-          .map((d) => (
-            <option key={d} value={d}>
-              {d}
-            </option>
-          ))}
-      </select>
+      <DialPicker value={dial} onChange={(d) => onChange(joinPhone(d, parts.rest))} />
       <Input
-        inputMode="tel"
-        placeholder="12 345 6789"
+        inputMode="numeric"
+        placeholder="123456789"
         value={parts.rest}
-        onChange={(e) => onChange(joinPhone(dial, e.target.value))}
+        aria-invalid={invalid}
+        className={invalid ? "border-destructive" : undefined}
+        onChange={(e) => onChange(joinPhone(dial, phoneDigits(e.target.value)))}
+        onBlur={onBlur}
       />
     </div>
   );
@@ -186,6 +133,8 @@ function MyProfilePage() {
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
   const [signed, setSigned] = useState<SignedDeclaration | null>(null);
+  // a field's problem is shown once they have left it, not mid-word
+  const [touched, setTouched] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -195,7 +144,14 @@ function MyProfilePage() {
         if (cancelled) return;
         if (!res.ok) setError(res.error);
         else {
-          setValues(res.values);
+          const dial = dialFor(res.values["nationality"] ?? "");
+          const v = { ...res.values };
+          for (const s of SECTIONS)
+            for (const f of s.fields)
+              if (f.kind === "phone") v[f.key] = tidyPhone(v[f.key] ?? "", dial);
+          if (v["nationality"] === "MYS" && v["id_number"])
+            v["id_number"] = formatNric(v["id_number"]);
+          setValues(v);
           setDocs(Object.fromEntries(res.docs.map((d) => [d.key, d.fileName])));
           const dec = await getDeclarationByToken({ data: { token } });
           if (!cancelled && dec.ok) setSigned(dec.signed);
@@ -209,10 +165,15 @@ function MyProfilePage() {
     };
   }, [token]);
 
-  const remaining = useMemo(() => {
-    if (!values) return 0;
-    return SECTIONS.flatMap((s) => s.fields).filter((f) => !(values[f.key] ?? "").trim()).length;
+  const shownFields = useMemo(() => {
+    if (!values) return [];
+    return SECTIONS.flatMap((s) => s.fields).filter((f) => fieldShown(f, (k) => values[k] ?? ""));
   }, [values]);
+
+  const remaining = values ? shownFields.filter((f) => !(values[f.key] ?? "").trim()).length : 0;
+  const problems = values
+    ? shownFields.map((f) => ({ f, msg: problemFor(f, values) })).filter((p) => p.msg)
+    : [];
 
   /** Photos are shrunk in the browser first - a phone photo of an IC is several MB. */
   async function uploadDoc(key: string, file: File) {
@@ -245,6 +206,12 @@ function MyProfilePage() {
 
   async function submit() {
     if (!values) return;
+    if (problems.length) {
+      // show every problem at once, and take them to the first
+      setTouched(new Set(problems.map((p) => p.f.key)));
+      document.getElementById(`f-${problems[0]!.f.key}`)?.scrollIntoView({ block: "center" });
+      return;
+    }
     setSaving(true);
     try {
       const res = await submitProfileByToken({ data: { token, values } });
@@ -295,6 +262,7 @@ function MyProfilePage() {
 
   const set = (key: keyof ProfileLinkFields, v: string) =>
     setValues((prev) => (prev ? { ...prev, [key]: v } : prev));
+  const touch = (key: string) => setTouched((t) => new Set(t).add(key));
 
   return (
     <Shell>
@@ -313,19 +281,17 @@ function MyProfilePage() {
 
       <div className="space-y-5">
         {SECTIONS.map((section) => (
-          <section key={section.title} className="rounded-2xl border border-border bg-card p-5">
+          <section key={section.key} className="rounded-2xl border border-border bg-card p-5">
             <h2 className="text-sm font-semibold text-brand-deep">{section.title}</h2>
-            {section.hint ? (
-              <p className="mt-0.5 text-xs text-muted-foreground">{section.hint}</p>
-            ) : null}
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               {section.fields.map((f) => {
+                if (!fieldShown(f, (k) => values[k] ?? "")) return null;
+
                 const value = values[f.key] ?? "";
                 const empty = !value.trim();
-
-                // a Malaysian is asked for an NRIC, everyone else a passport
-                const label =
-                  f.key === "id_number" ? idLabelFor(values["nationality"] ?? "") : f.label;
+                const malaysian = values["nationality"] === "MYS";
+                const problem = touched.has(f.key) ? problemFor(f, values) : "";
+                const label = f.kind === "id" ? idLabelFor(values["nationality"] ?? "") : f.label;
 
                 // A university outside the list is typed into the same field, so
                 // nothing new has to be stored. The dropdown reads back as
@@ -333,58 +299,71 @@ function MyProfilePage() {
                 const knownUniversity = UNIVERSITY_OPTIONS.some((o) => o.value === value);
                 const otherUniversity = f.key === "university" && !!value && !knownUniversity;
 
-                // details are pointless unless there is a condition to detail
-                if (f.key === "medical_detail" && values["medical_condition"] !== "yes") {
-                  return null;
-                }
-
                 return (
-                  <div key={f.key} className={`space-y-1.5 ${f.wide ? "sm:col-span-2" : ""}`}>
+                  <div
+                    key={f.key}
+                    id={`f-${f.key}`}
+                    className={`space-y-1.5 ${f.wide || f.kind === "long" ? "sm:col-span-2" : ""}`}
+                  >
                     <Label className="text-xs text-muted-foreground">
                       {label}
                       {empty ? <span className="ml-1 text-brand">•</span> : null}
                     </Label>
 
-                    {f.key === "medical_detail" ? (
-                      <Textarea value={value} onChange={(e) => set(f.key, e.target.value)} />
-                    ) : f.phone ? (
+                    {f.kind === "long" ? (
+                      <Textarea
+                        value={value}
+                        placeholder={f.hint}
+                        aria-invalid={!!problem}
+                        className={problem ? "border-destructive" : undefined}
+                        onChange={(e) => set(f.key, e.target.value)}
+                        onBlur={() => touch(f.key)}
+                      />
+                    ) : f.kind === "phone" ? (
                       <PhoneField
                         value={value}
                         fallbackDial={dialFor(values["nationality"] ?? "")}
+                        invalid={!!problem}
                         onChange={(v) => set(f.key, v)}
+                        onBlur={() => touch(f.key)}
                       />
-                    ) : f.options ? (
-                      <select
-                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                        value={otherUniversity ? "OTHER" : value}
-                        onChange={(e) =>
+                    ) : f.kind === "choice" ? (
+                      f.key === "university" ? (
+                        <ChoicePicker
+                          value={otherUniversity ? "OTHER" : value}
+                          options={UNIVERSITY_OPTIONS}
                           // choosing Other clears the field so they can type
-                          set(f.key, e.target.value === "OTHER" ? "" : e.target.value)
-                        }
-                      >
-                        <option value="">Please choose</option>
-                        {/* a value already on record that is not in the list -
-                            an older graduation year, say - is kept visible
-                            rather than silently blanked */}
-                        {value && !f.options.some((o) => o.value === value) && !otherUniversity ? (
-                          <option value={value}>{value}</option>
-                        ) : null}
-                        {f.options.map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </select>
+                          onChange={(v) => set(f.key, v === "OTHER" ? "" : v)}
+                        />
+                      ) : (
+                        <ChoicePicker
+                          value={value}
+                          options={f.options ?? []}
+                          onChange={(v) => set(f.key, v)}
+                        />
+                      )
                     ) : (
                       <Input
-                        type={f.type ?? "text"}
+                        type={f.kind === "email" ? "email" : f.kind === "date" ? "date" : "text"}
+                        inputMode={f.kind === "id" && malaysian ? "numeric" : undefined}
                         value={value}
                         placeholder={
-                          f.key === "id_number"
+                          f.kind === "id"
                             ? idPlaceholderFor(values["nationality"] ?? "")
                             : undefined
                         }
-                        onChange={(e) => set(f.key, e.target.value)}
+                        aria-invalid={!!problem}
+                        className={problem ? "border-destructive" : undefined}
+                        onChange={(e) =>
+                          set(
+                            f.key,
+                            // an NRIC is typed as digits; the dashes put themselves in
+                            f.kind === "id" && malaysian
+                              ? formatNric(e.target.value)
+                              : e.target.value,
+                          )
+                        }
+                        onBlur={() => touch(f.key)}
                       />
                     )}
 
@@ -395,6 +374,8 @@ function MyProfilePage() {
                         onChange={(e) => set(f.key, e.target.value)}
                       />
                     ) : null}
+
+                    {problem ? <p className="text-[11px] text-destructive">{problem}</p> : null}
                   </div>
                 );
               })}
@@ -403,7 +384,7 @@ function MyProfilePage() {
         ))}
 
         <section className="rounded-2xl border border-border bg-card p-5">
-          <h2 className="text-sm font-semibold text-brand-deep">Your documents</h2>
+          <h2 className="text-sm font-semibold text-brand-deep">Documents</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
             A clear phone photo is fine — we shrink it for you. PDFs work too.
           </p>
@@ -456,7 +437,13 @@ function MyProfilePage() {
         />
       </div>
 
-      <div className="sticky bottom-0 mt-5 flex justify-end border-t border-border bg-background py-4">
+      <div className="sticky bottom-0 mt-5 flex items-center justify-end gap-3 border-t border-border bg-background py-4">
+        {problems.length ? (
+          <p className="text-xs text-destructive">
+            {problems.length} field{problems.length === 1 ? "" : "s"} need
+            {problems.length === 1 ? "s" : ""} fixing
+          </p>
+        ) : null}
         <Button onClick={submit} disabled={saving}>
           {saving ? "Saving…" : "Save my details"}
         </Button>
