@@ -1,7 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 
-import { DECLARATION_VERSION, declarationBody, nameMatches } from "@/lib/declaration";
+import {
+  DECLARATION_TERMS,
+  DECLARATION_VERSION,
+  declarationBody,
+  nameMatches,
+} from "@/lib/declaration";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -134,13 +139,14 @@ export const signDeclarationByToken = createServerFn({ method: "POST" })
       .single();
     if (!resident) return { ok: false as const, error: "Resident not found." };
 
-    // agreement is one deliberate act, taken after the terms have been read to
-    // the end. whatever the browser sends is recorded, but the server decides
-    // whether it amounts to a signature
-    if (!data.agreedTerms?.["all_terms"]) {
+    // every term is ticked on its own - one tick for thirteen terms got ticked
+    // without reading. whatever the browser sends is recorded, but the server
+    // decides whether it amounts to a signature
+    const unticked = DECLARATION_TERMS.findIndex((_, i) => !data.agreedTerms?.[`term_${i + 1}`]);
+    if (unticked !== -1) {
       return {
         ok: false as const,
-        error: "Please confirm you have read and agree to all the terms before signing.",
+        error: `Please tick term ${unticked + 1} to confirm you have read it before signing.`,
       };
     }
 
