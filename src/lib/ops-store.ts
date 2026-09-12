@@ -10,6 +10,8 @@
  */
 import { useSyncExternalStore } from "react";
 
+import { RESIDENT_SECTIONS, fieldShown } from "@/lib/resident-fields";
+
 /* ---------------- Types ---------------- */
 
 export type BedStatus = "vacant" | "held" | "booked" | "active" | "notice";
@@ -635,31 +637,27 @@ export function blankResident(partial: Partial<Resident> = {}): Resident {
   };
 }
 
-export const REQUIRED_RESIDENT_FIELDS: (keyof Resident)[] = [
-  "fullName",
-  "email",
-  "mobile",
-  "dob",
-  "nationality",
-  "idNumber",
-  "gender",
-  "university",
-  "course",
-  "studentId",
-  "moveIn",
-  "leaseMonths",
-  "ecName",
-  "ecMobile",
-  "ecEmail",
-  "paySchedule",
-  "payerName",
-];
-
+/**
+ * How much of the profile is filled in, counted over the same fields the
+ * student is asked for on their profile link.
+ *
+ * This used to be its own hand-kept list of 17 fields. It missed everything
+ * added since (race, religion, address, the payor's details...) and counted
+ * move-in date, lease length and payment schedule, which are tenancy facts no
+ * student can fill in - so a student who completed their whole form could
+ * still sit at 80%. Reading RESIDENT_SECTIONS keeps it in step with the form.
+ */
 export function completeness(r: Resident) {
-  const missing = REQUIRED_RESIDENT_FIELDS.filter((k) => !String(r[k] ?? "").trim());
-  const pct = Math.round(
-    ((REQUIRED_RESIDENT_FIELDS.length - missing.length) / REQUIRED_RESIDENT_FIELDS.length) * 100,
+  const fields = RESIDENT_SECTIONS.flatMap((s) => s.fields).filter((f) => !f.staffOnly);
+  const byKey = new Map(fields.map((f) => [f.key, f.camel]));
+  const asked = fields.filter((f) =>
+    fieldShown(f, (k) => {
+      const camel = byKey.get(k);
+      return camel ? String(r[camel] ?? "") : "";
+    }),
   );
+  const missing = asked.map((f) => f.camel).filter((k) => !String(r[k] ?? "").trim());
+  const pct = asked.length ? Math.round(((asked.length - missing.length) / asked.length) * 100) : 0;
   return { pct, missing };
 }
 

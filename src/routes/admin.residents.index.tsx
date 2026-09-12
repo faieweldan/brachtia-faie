@@ -343,12 +343,19 @@ function ResidentsListPage() {
                           >
                             {r.fullName || "Untitled resident"}
                           </Link>
-                          <p className="text-xs text-muted-foreground">{r.email || "No email"}</p>
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">
-                          {placed
-                            ? `${placed.unit.unitNo} · Room ${placed.room.letter} · ${placed.bed.label}`
-                            : "Unassigned"}
+                          {placed ? (
+                            // where they are on top, how the room is sold underneath
+                            <div className="inline-flex flex-col items-center leading-tight">
+                              <span className="whitespace-nowrap text-foreground">
+                                {placed.unit.unitNo} · Room {placed.room.letter}
+                              </span>
+                              <span className="text-xs">{placed.bed.label}</span>
+                            </div>
+                          ) : (
+                            "Unassigned"
+                          )}
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">
                           {universityAbbr(r.university) || "—"}
@@ -357,10 +364,7 @@ function ResidentsListPage() {
                           {tenancy ? `${fmtDate(tenancy.start)} → ${fmtDate(tenancy.end)}` : "—"}
                         </td>
                         <td className="px-3 py-2">
-                          <StatusPill
-                            status={pct === 100 ? "paid" : "due"}
-                            label={`${pct}% complete`}
-                          />
+                          <StatusPill status={pct === 100 ? "paid" : "due"} label={`${pct}%`} />
                         </td>
                         <td className="px-3 py-2">{balance ? money(balance) : "—"}</td>
                       </tr>
