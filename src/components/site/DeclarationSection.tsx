@@ -109,18 +109,23 @@ export function DeclarationSection({
   }
 
   return (
-    <section className="rounded-2xl border border-border bg-card p-5">
-      <h2 className="text-sm font-semibold text-brand-deep">Declaration</h2>
-      <p className="mt-0.5 text-xs text-muted-foreground">
+    <section className="rounded-2xl border border-border bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-16px_rgba(16,24,40,0.18)] sm:p-6">
+      <h2 className="border-b border-border pb-3 text-base font-semibold tracking-tight text-brand-deep">
+        Declaration
+      </h2>
+      <p className="mt-3 text-sm text-muted-foreground">
         Please read each term and tick it. This is the agreement between you and {LANDLORD_ENTITY}.
       </p>
 
       <p className="mt-4 text-sm leading-relaxed text-foreground">{DECLARATION_INTRO}</p>
 
-      <ol className="mt-4 space-y-3">
+      {/* a contract, laid out as one: each term gets the full width of the page
+          and a rule of its own, rather than being packed into a list inside a
+          box. Reading it is the point, so nothing crowds it. */}
+      <ol className="mt-5 -mx-5 divide-y divide-border border-y border-border sm:-mx-6">
         {DECLARATION_TERMS.map((t, i) => (
           <li key={i}>
-            <label className="flex cursor-pointer items-start gap-3 text-sm leading-relaxed">
+            <label className="flex cursor-pointer items-start gap-4 px-5 py-4 transition-colors hover:bg-muted/40 sm:px-6">
               <input
                 type="checkbox"
                 className="mt-1 size-4 shrink-0 accent-brand"
@@ -129,8 +134,8 @@ export function DeclarationSection({
                   setTicked((prev) => prev.map((v, j) => (j === i ? e.target.checked : v)))
                 }
               />
-              <span className="text-muted-foreground">
-                <span className="mr-1 font-medium text-foreground">{i + 1}.</span>
+              <span className="text-sm leading-relaxed text-muted-foreground">
+                <span className="mr-1.5 font-semibold tabular-nums text-brand-deep">{i + 1}.</span>
                 {termRuns(t).map((r, j) => (
                   <span
                     key={j}
@@ -166,7 +171,7 @@ export function DeclarationSection({
         </div>
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center gap-3">
+      <div className="mt-6 flex flex-wrap items-center gap-3">
         <Button disabled={left > 0 || !nameOk || busy} onClick={() => void sign()}>
           {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
           Sign declaration
