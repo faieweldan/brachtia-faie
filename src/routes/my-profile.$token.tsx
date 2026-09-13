@@ -481,16 +481,27 @@ function MyProfilePage() {
         />
       </div>
 
-      <div className="sticky bottom-0 z-10 mt-5 -mx-4 flex items-center justify-end gap-3 border-t border-brand/20 bg-brand-tint/90 px-4 py-4 backdrop-blur-sm sm:mx-0 sm:rounded-t-xl sm:px-4">
-        {problems.length ? (
-          <p className="mr-auto text-xs font-medium text-destructive">
-            {problems.length} field{problems.length === 1 ? "" : "s"} need
-            {problems.length === 1 ? "s" : ""} fixing
-          </p>
-        ) : null}
-        <Button onClick={submit} disabled={saving} className="min-w-36">
-          {saving ? "Saving…" : "Save my details"}
-        </Button>
+      {/* The save button follows you down the page without walling off the
+          field behind it. A slab with an edge reads as a thing sitting on top;
+          a fade into the page colour lets the form run underneath and keeps
+          the button reachable at every scroll position. The strip ignores the
+          pointer so only the controls in it can be clicked. */}
+      <div className="pointer-events-none sticky bottom-0 z-10 -mx-4 mt-4 bg-gradient-to-t from-brand-tint via-brand-tint/85 to-transparent px-4 pb-4 pt-12 sm:mx-0">
+        <div className="pointer-events-auto flex items-center justify-end gap-3">
+          {problems.length ? (
+            <p className="mr-auto text-xs font-medium text-destructive">
+              {problems.length} field{problems.length === 1 ? "" : "s"} need
+              {problems.length === 1 ? "s" : ""} fixing
+            </p>
+          ) : null}
+          <Button
+            onClick={submit}
+            disabled={saving}
+            className="min-w-36 shadow-[0_2px_8px_rgba(16,24,40,0.12),0_12px_28px_-12px_rgba(16,24,40,0.35)]"
+          >
+            {saving ? "Saving…" : "Save my details"}
+          </Button>
+        </div>
       </div>
     </Shell>
   );
@@ -506,7 +517,7 @@ function MyProfilePage() {
  */
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="admin-ui min-h-screen bg-brand-tint/60">
+    <div className="admin-ui min-h-screen bg-brand-tint">
       <header className="border-b border-brand-deep/10 bg-brand-deep">
         <div className="mx-auto w-full max-w-3xl px-4 py-4">
           <p className="text-sm font-bold tracking-tight text-white">Brachtia Homes</p>
