@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
 import { listResidences } from "@/lib/admin.functions";
+import { NO_ROOM_TYPES, typesOfUnitType, unitTypeNames } from "@/lib/room-types";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -92,7 +93,7 @@ function UnitSetupPage() {
 
   const { data } = useQuery({ queryKey: ["admin", "residences"], queryFn: () => listResidences() });
   const residences: any[] = (data as any)?.residences ?? [];
-  const roomTypes: any[] = (data as any)?.rooms ?? [];
+  const roomTypes: any[] = (data as any)?.rooms ?? NO_ROOM_TYPES;
 
   const [openRes, setOpenRes] = useState<Record<string, boolean>>({});
 
@@ -131,11 +132,10 @@ function UnitSetupPage() {
    * one, and a residence with something else could not be described at all.
    * Website is where Brachtia says what a residence has, so it decides.
    */
-  const unitTypeOptions = useMemo(() => {
-    return Array.from(
-      new Set(typesForResidence.map((r) => String(r.unit_type ?? "").trim()).filter(Boolean)),
-    ).sort();
-  }, [typesForResidence]);
+  const unitTypeOptions = useMemo(
+    () => unitTypeNames(typesForResidence).sort(),
+    [typesForResidence],
+  );
 
   /**
    * An imported unit type, answered with the configured one.
@@ -147,14 +147,7 @@ function UnitSetupPage() {
    * so the settings win and the legacy name is never offered again.
    */
   function withConfiguredType(u: Unit): Unit {
-    const names = Array.from(
-      new Set(
-        roomTypes
-          .filter((r) => r.residence_id === u.residenceId)
-          .map((r) => String(r.unit_type ?? "").trim())
-          .filter(Boolean),
-      ),
-    );
+    const names = unitTypeNames(roomTypes.filter((r) => r.residence_id === u.residenceId));
     if (!u.unitType || names.includes(u.unitType)) return u;
     const match = names.find((n) => roomCountFor(n) === roomCountFor(u.unitType));
     return match ? { ...u, unitType: match } : u;
@@ -167,12 +160,10 @@ function UnitSetupPage() {
    * at different prices. Offering both inside one unit invites picking the
    * wrong one, and the rent follows the choice.
    */
-  const typesForUnitType = useMemo(() => {
-    const ofType = typesForResidence.filter(
-      (r) => String(r.unit_type ?? "").trim() === draft?.unitType,
-    );
-    return ofType.length ? ofType : typesForResidence;
-  }, [typesForResidence, draft?.unitType]);
+  const typesForUnitType = useMemo(
+    () => typesOfUnitType(typesForResidence, draft?.unitType),
+    [typesForResidence, draft?.unitType],
+  );
 
   /**
    * A room type carries two prices: the whole room as a single, and the per-bed
@@ -205,8 +196,7 @@ function UnitSetupPage() {
     // only the room types belonging to this unit type - a 3-bedroom unit must
     // not pick up Room A of the 4-bedroom, which is a different room at a
     // different price
-    const ofType = list.filter((r) => String(r.unit_type ?? "").trim() === unitType);
-    const pool = ofType.length ? ofType : list;
+    const pool = typesOfUnitType(list, unitType);
     return Array.from({ length: count }, (_, i) => {
       const letter = LETTERS[i] ?? String(i + 1);
       const match = pool.find((r) => (r.room_code ?? r.code) === letter) ?? pool[i] ?? null;

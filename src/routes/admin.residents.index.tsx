@@ -8,9 +8,9 @@ import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState, Panel, Select, StatusPill } from "@/components/admin/ops-ui";
+import { completeness } from "@/lib/resident-fields";
 import {
   blankResident,
-  completeness,
   findBedForResident,
   fmtDate,
   money,

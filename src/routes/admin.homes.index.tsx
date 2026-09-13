@@ -5,12 +5,18 @@ import { Building2, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react"
 import { toast } from "sonner";
 
 import { listResidences } from "@/lib/admin.functions";
+import {
+  NO_ROOM_TYPES,
+  bedRent,
+  collapseSingles,
+  unitTypeNames,
+  type SiteRoomType,
+} from "@/lib/room-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState, Panel, Select, StatusPill } from "@/components/admin/ops-ui";
 import { ReserveBedDialog } from "@/components/admin/ReserveBedDialog";
 import {
-  SOLD_AS_SINGLE,
   bedBlockedBy,
   type BedRow,
   type Unit,
@@ -18,11 +24,12 @@ import {
   residentForBed,
   GENDERS,
   allBeds,
+  isUnitSlot,
   roomCountFor,
   fmtDate,
   money,
-  updateBed,
   useOps,
+  vacateBed,
   type BedStatus,
   sponsorLabel,
   unitGender,
@@ -74,91 +81,6 @@ function UnitGenderChip({ unit, residents }: { unit: Unit; residents: Resident[]
   );
 }
 
-/**
- * What one bed costs, by the prices set in Website.
- *
- * A room carries two rates: the whole room to one person, and the per-bed rate
- * when it is shared. The stored room rent is a single number and could only
- * ever hold one of them, so every vacant twin was showing the single rate -
- * RM1,050 against a bed that is sold at RM550.
- *
- * The bed's own rent wins when it has one, because that is a real tenancy at an
- * agreed price (including anything bulk-uploaded) and must not move when the
- * price list changes. A vacant bed has no such promise, so it quotes today's
- * configured rate.
- */
-/** Only the part of a Website room type a price is read from. */
-type SiteRoomType = {
-  code: string;
-  residence_id?: string | undefined;
-  unit_type?: string | undefined;
-  occupancies?: string[] | undefined;
-  rent?: { long?: { single?: number | null; twin?: number | null } } | undefined;
-};
-
-/**
- * An empty twin room, offered as a single.
- *
- * While both beds are free the room can still be sold whole to one person, so
- * it is listed once as "Single" at the single rate. The moment either bed is
- * taken that choice is gone, and the room goes back to being twin beds at the
- * twin rate. Nothing is stored: the rows follow who is actually in the room.
- *
- * The admin keeps the last word. Reserving the single row reserves the first
- * bed, so a student who asked for a twin can be put in it and the room simply
- * becomes twin again.
- */
-function collapseSingles(
-  rows: BedRow[],
-  roomTypes: SiteRoomType[],
-): (BedRow & { asSingle: boolean })[] {
-  const byRoom = new Map<string, BedRow[]>();
-  for (const r of rows) byRoom.set(r.room.id, [...(byRoom.get(r.room.id) ?? []), r]);
-
-  const out: (BedRow & { asSingle: boolean })[] = [];
-  for (const group of byRoom.values()) {
-    const room = group[0]!.room;
-    const rt = roomTypes.find((t) => t.code === room.roomTypeCode);
-    const offersSingle = (rt?.occupancies ?? []).includes("single");
-
-    // already let to one person: that is one let, so it is one row. The bed
-    // held to keep the room empty is not a thing anybody can act on, and
-    // listing it only invites someone to release it by mistake.
-    const blocked = group.filter((g) => g.bed.holdFor === SOLD_AS_SINGLE);
-    if (blocked.length) {
-      const taken = group.find((g) => g.bed.holdFor !== SOLD_AS_SINGLE);
-      if (taken) out.push({ ...taken, asSingle: true });
-      else for (const g of group) out.push({ ...g, asSingle: false });
-      continue;
-    }
-
-    const wholeRoomFree = group.length > 1 && group.every((g) => g.bed.status === "vacant");
-    if (offersSingle && wholeRoomFree && room.letter.toLowerCase() !== "unit") {
-      out.push({ ...group[0]!, asSingle: true });
-    } else {
-      for (const g of group) out.push({ ...g, asSingle: false });
-    }
-  }
-  return out;
-}
-
-function bedRent(
-  roomTypes: SiteRoomType[],
-  unit: Unit,
-  room: { letter: string; occupancy: string; rent: number; roomTypeCode: string },
-  bed: { rent?: number | undefined },
-  asSingle = false,
-) {
-  if (bed.rent != null) return bed.rent;
-  if (room.letter.toLowerCase() === "unit") return unit.wholeUnitRent;
-  const rt = roomTypes.find((r) => r.code === room.roomTypeCode);
-  // a whole empty room quoted as a single is priced as one, whatever the room
-  // is normally sold as
-  const want = asSingle ? "single" : room.occupancy === "twin" ? "twin" : "single";
-  const rate = rt?.rent?.long?.[want];
-  return Number(rate) || room.rent;
-}
-
 function InventoryPage() {
   const { units, residents } = useOps();
   // the price list lives in Website; inventory quotes it rather than keeping
@@ -167,8 +89,8 @@ function InventoryPage() {
     queryKey: ["admin", "residences"],
     queryFn: () => listResidences(),
   });
-  const roomTypes: SiteRoomType[] = (site as { rooms?: SiteRoomType[] } | undefined)?.rooms ?? [];
-  const [reserving, setReserving] = useState<(BedRow & { asSingle?: boolean }) | null>(null);
+  const roomTypes = (site as { rooms?: SiteRoomType[] } | undefined)?.rooms ?? NO_ROOM_TYPES;
+  const [reserving, setReserving] = useState<(BedRow & { asSingle: boolean }) | null>(null);
   const [q, setQ] = useState("");
   const { residence } = Route.useSearch();
   const navigate = useNavigate();
@@ -194,9 +116,7 @@ function InventoryPage() {
   const unitTypeOptions = useMemo(() => {
     const residenceId = units.find((u) => u.residenceName === residence)?.residenceId;
     const list = residenceId ? roomTypes.filter((r) => r.residence_id === residenceId) : roomTypes;
-    return Array.from(
-      new Set(list.map((r) => String(r.unit_type ?? "").trim()).filter(Boolean)),
-    ).sort();
+    return unitTypeNames(list).sort();
   }, [units, residence, roomTypes]);
 
   const blockOptions = useMemo(
@@ -453,10 +373,8 @@ function InventoryPage() {
                   </p>
                 </div>
                 <span className="text-xs text-muted-foreground">
-                  {sellable.filter((r) => r.room.letter.toLowerCase() !== "unit").length} beds
-                  {sellable.some((r) => r.room.letter.toLowerCase() === "unit")
-                    ? " · lettable whole"
-                    : ""}
+                  {sellable.filter((r) => !isUnitSlot(r.room)).length} beds
+                  {sellable.some((r) => isUnitSlot(r.room)) ? " · lettable whole" : ""}
                 </span>
               </button>
 
@@ -480,9 +398,7 @@ function InventoryPage() {
                       {collapseSingles(sellable, roomTypes).map(({ room, bed, asSingle }) => (
                         <tr key={bed.id}>
                           <td className="px-4 py-2 font-medium">
-                            {room.letter.toLowerCase() === "unit"
-                              ? "Whole unit"
-                              : `Room ${room.letter}`}
+                            {isUnitSlot(room) ? "Whole unit" : `Room ${room.letter}`}
                           </td>
                           <td className="px-4 py-2">{asSingle ? "Single" : bed.label}</td>
                           <td className="px-4 py-2">
@@ -540,33 +456,7 @@ function InventoryPage() {
                                 size="sm"
                                 variant="ghost"
                                 onClick={() => {
-                                  updateBed(bed.id, {
-                                    status: "vacant",
-                                    residentId: undefined,
-                                    residentName: undefined,
-                                    // the student's own details leave with the
-                                    // student - an empty bed has no university
-                                    studentId: undefined,
-                                    university: undefined,
-                                    nationality: undefined,
-                                    gender: undefined,
-                                    holdFor: undefined,
-                                    holdUntil: undefined,
-                                    tenancyStart: undefined,
-                                    tenancyEnd: undefined,
-                                    rent: undefined,
-                                  });
-                                  // the room was let whole, so the bed it was
-                                  // blocking goes back on sale with it
-                                  for (const other of room.beds) {
-                                    if (other.id !== bed.id && other.holdFor === SOLD_AS_SINGLE) {
-                                      updateBed(other.id, {
-                                        status: "vacant",
-                                        holdFor: undefined,
-                                        holdUntil: undefined,
-                                      });
-                                    }
-                                  }
+                                  vacateBed(bed.id);
                                   toast.success("Bed released");
                                 }}
                               >
@@ -597,7 +487,7 @@ function InventoryPage() {
           bed={reserving.bed}
           residents={residents}
           units={units}
-          asSingle={!!reserving.asSingle}
+          asSingle={reserving.asSingle}
           singleRent={bedRent(roomTypes, reserving.unit, reserving.room, reserving.bed, true)}
           twinRent={bedRent(roomTypes, reserving.unit, reserving.room, reserving.bed, false)}
         />

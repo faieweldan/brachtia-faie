@@ -14,8 +14,10 @@ import {
 import {
   SOLD_AS_SINGLE,
   findBedForResident,
+  isUnitSlot,
   money,
   updateBed,
+  vacateBed,
   type Bed,
   type Resident,
   type Unit,
@@ -97,22 +99,7 @@ export function ReserveBedDialog({
   function reserve(person: Resident, from?: string) {
     // a move: empty the bed they are leaving, so nobody is in two places
     const current = findBedForResident(units, person);
-    if (current) {
-      updateBed(current.bed.id, {
-        status: "vacant",
-        residentId: undefined,
-        residentName: undefined,
-        // their university and nationality go with them, or the empty bed
-        // keeps describing someone who left
-        studentId: undefined,
-        university: undefined,
-        nationality: undefined,
-        gender: undefined,
-        tenancyStart: undefined,
-        tenancyEnd: undefined,
-        rent: undefined,
-      });
-    }
+    if (current) vacateBed(current.bed.id);
     updateBed(bed.id, {
       status: "held",
       residentId: person.id,
@@ -134,9 +121,7 @@ export function ReserveBedDialog({
     toast.success(
       from
         ? `${person.fullName || "Resident"} moved from ${from} to ${what}`
-        : whole
-          ? `Room ${room.letter} reserved for ${person.fullName || "resident"} as a single`
-          : `${bed.label} reserved for ${person.fullName || "resident"}`,
+        : `${what} reserved for ${person.fullName || "resident"}${whole ? " as a single" : ""}`,
     );
     onOpenChange(false);
     setQ("");
@@ -151,8 +136,7 @@ export function ReserveBedDialog({
           </DialogTitle>
           <DialogDescription>
             {unit.residenceName} · {unit.unitNo} ·{" "}
-            {room.letter.toLowerCase() === "unit" ? "Whole unit" : `Room ${room.letter}`} ·{" "}
-            {bed.label}
+            {isUnitSlot(room) ? "Whole unit" : `Room ${room.letter}`} · {bed.label}
           </DialogDescription>
         </DialogHeader>
 

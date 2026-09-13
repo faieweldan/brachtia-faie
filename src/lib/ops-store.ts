@@ -10,8 +10,6 @@
  */
 import { useSyncExternalStore } from "react";
 
-import { RESIDENT_SECTIONS, fieldShown } from "@/lib/resident-fields";
-
 /* ---------------- Types ---------------- */
 
 export type BedStatus = "vacant" | "held" | "booked" | "active" | "notice";
@@ -386,6 +384,10 @@ export async function deleteUnit(id: string) {
  */
 export const SOLD_AS_SINGLE = "Sold as single";
 
+export function isSoldAsSingle(bed: Bed) {
+  return bed.holdFor === SOLD_AS_SINGLE;
+}
+
 export type BedPatch = { [K in keyof Bed]?: Bed[K] | undefined };
 
 export function updateBed(bedId: string, patch: BedPatch) {
@@ -407,6 +409,39 @@ export function updateBed(bedId: string, patch: BedPatch) {
       })),
     })),
   }));
+}
+
+/** A bed with nobody in it: nothing held, and no student's details left behind. */
+const VACANT_BED: BedPatch = {
+  status: "vacant",
+  residentId: undefined,
+  residentName: undefined,
+  studentId: undefined,
+  university: undefined,
+  nationality: undefined,
+  gender: undefined,
+  holdFor: undefined,
+  holdUntil: undefined,
+  tenancyStart: undefined,
+  tenancyEnd: undefined,
+  rent: undefined,
+};
+
+/**
+ * Empty a bed. Releasing it, moving its student out and deactivating them all
+ * come down to this, so it is written once.
+ *
+ * It was written out by hand in three places, and they had already drifted:
+ * one left the student's university on the empty bed, another left a hold in
+ * place. If the room had been let whole, the bed kept empty for it goes back on
+ * sale too - otherwise it stays held for somebody who has gone.
+ */
+export function vacateBed(bedId: string) {
+  const room = state.units.flatMap((u) => u.rooms).find((r) => r.beds.some((b) => b.id === bedId));
+  updateBed(bedId, VACANT_BED);
+  for (const other of room?.beds ?? []) {
+    if (other.id !== bedId && isSoldAsSingle(other)) updateBed(other.id, VACANT_BED);
+  }
 }
 
 /**
@@ -454,17 +489,21 @@ const isTaken = (b: Bed) => TAKEN.includes(b.status);
  *   - the unit let as a whole -> every room in it is blocked
  *   - any room let            -> the whole-unit slot is blocked
  */
+/** The whole-unit letting is modelled as one more room, lettered "unit". */
+export function isUnitSlot(room: { letter: string }) {
+  return room.letter.toLowerCase() === "unit";
+}
+
 export function bedBlockedBy(unit: Unit, room: UnitRoom, bed: Bed): string {
   if (isTaken(bed)) return "";
-  const isUnitSlot = room.letter.toLowerCase() === "unit";
 
-  if (!isUnitSlot) {
-    const unitRoom = unit.rooms.find((r) => r.letter.toLowerCase() === "unit");
+  if (!isUnitSlot(room)) {
+    const unitRoom = unit.rooms.find(isUnitSlot);
     return unitRoom?.beds.some(isTaken) ? "whole unit let" : "";
   }
 
   for (const r of unit.rooms) {
-    if (r.letter.toLowerCase() === "unit") continue;
+    if (isUnitSlot(r)) continue;
     const t = r.beds.find(isTaken);
     if (t) return `Room ${r.letter} ${t.label} let`;
   }
@@ -648,30 +687,6 @@ export function blankResident(partial: Partial<Resident> = {}): Resident {
   };
 }
 
-/**
- * How much of the profile is filled in, counted over the same fields the
- * student is asked for on their profile link.
- *
- * This used to be its own hand-kept list of 17 fields. It missed everything
- * added since (race, religion, address, the payor's details...) and counted
- * move-in date, lease length and payment schedule, which are tenancy facts no
- * student can fill in - so a student who completed their whole form could
- * still sit at 80%. Reading RESIDENT_SECTIONS keeps it in step with the form.
- */
-export function completeness(r: Resident) {
-  const fields = RESIDENT_SECTIONS.flatMap((s) => s.fields).filter((f) => !f.staffOnly);
-  const byKey = new Map(fields.map((f) => [f.key, f.camel]));
-  const asked = fields.filter((f) =>
-    fieldShown(f, (k) => {
-      const camel = byKey.get(k);
-      return camel ? String(r[camel] ?? "") : "";
-    }),
-  );
-  const missing = asked.map((f) => f.camel).filter((k) => !String(r[k] ?? "").trim());
-  const pct = asked.length ? Math.round(((asked.length - missing.length) / asked.length) * 100) : 0;
-  return { pct, missing };
-}
-
 function mergeResident(resident: Resident, replaceId = resident.id) {
   setState((s) => ({
     ...s,
@@ -796,5 +811,4 @@ export const LEVELS = [
   "Other",
 ];
 
-export const UNIT_TYPES = ["4-bedroom", "3-bedroom", "2-bedroom", "Studio"];
 export const GENDERS = ["Female", "Male", "Any"];

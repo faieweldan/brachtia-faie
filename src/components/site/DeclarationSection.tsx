@@ -90,7 +90,7 @@ export function DeclarationSection({
     try {
       const agreedTerms = Object.fromEntries(ticked.map((t, i) => [`term_${i + 1}`, t]));
       const res = await signDeclarationByToken({
-        data: { token, signedName: typedName, agreedTerms, scrolledToEnd: true },
+        data: { token, signedName: typedName, agreedTerms },
       });
       if (!res.ok) {
         toast.error(res.error);

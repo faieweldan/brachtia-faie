@@ -26,7 +26,7 @@ import {
 
 type Option = { value: string; label: string };
 
-export type FieldKind =
+type FieldKind =
   | "text"
   | "email"
   | "date"
@@ -54,7 +54,7 @@ export type ResidentField = {
   hint?: string;
 };
 
-export type ResidentSection = {
+type ResidentSection = {
   key: string;
   title: string;
   fields: ResidentField[];
@@ -238,6 +238,43 @@ export function fieldShown(
   get: (key: keyof ProfileLinkFields) => string,
 ): boolean {
   return !f.showIf || get(f.showIf.key) === f.showIf.equals;
+}
+
+/* ---------------------------------------------------------------------------
+ * The same questions, asked of an admin Resident record.
+ *
+ * The admin page stores camelCase fields where the profile link sends column
+ * names, so these translate once rather than every caller writing its own
+ * lookup. Both lists are fixed, so they are built once, not per resident.
+ * ------------------------------------------------------------------------- */
+
+const ALL_FIELDS = RESIDENT_SECTIONS.flatMap((s) => s.fields);
+const STUDENT_FIELDS = ALL_FIELDS.filter((f) => !f.staffOnly);
+const CAMEL_BY_KEY = new Map(ALL_FIELDS.map((f) => [f.key, f.camel]));
+
+/** fieldShown, answered from a Resident rather than the profile link's values. */
+export function residentFieldShown(f: ResidentField, r: Resident): boolean {
+  return fieldShown(f, (k) => {
+    const camel = CAMEL_BY_KEY.get(k);
+    return camel ? String(r[camel] ?? "") : "";
+  });
+}
+
+/**
+ * How much of the profile is filled in, counted over the same fields the
+ * student is asked for on their profile link.
+ *
+ * This used to be its own hand-kept list of 17 fields. It missed everything
+ * added since (race, religion, address, the payor's details...) and counted
+ * move-in date, lease length and payment schedule, which are tenancy facts no
+ * student can fill in - so a student who completed their whole form could
+ * still sit at 80%. Reading RESIDENT_SECTIONS keeps it in step with the form.
+ */
+export function completeness(r: Resident) {
+  const asked = STUDENT_FIELDS.filter((f) => residentFieldShown(f, r));
+  const missing = asked.map((f) => f.camel).filter((k) => !String(r[k] ?? "").trim());
+  const pct = asked.length ? Math.round(((asked.length - missing.length) / asked.length) * 100) : 0;
+  return { pct, missing };
 }
 
 /* ---------------------------------------------------------------------------

@@ -169,6 +169,7 @@ function MyProfilePage() {
     if (!values) return [];
     return SECTIONS.flatMap((s) => s.fields).filter((f) => fieldShown(f, (k) => values[k] ?? ""));
   }, [values]);
+  const shownKeys = useMemo(() => new Set(shownFields.map((f) => f.key)), [shownFields]);
 
   const remaining = values ? shownFields.filter((f) => !(values[f.key] ?? "").trim()).length : 0;
   const filledPct = shownFields.length
@@ -177,6 +178,8 @@ function MyProfilePage() {
   const problems = values
     ? shownFields.map((f) => ({ f, msg: problemFor(f, values) })).filter((p) => p.msg)
     : [];
+  // worked out once, and read by both the count at the bottom and each field
+  const problemByKey = new Map(problems.map((p) => [p.f.key, p.msg]));
 
   /** Photos are shrunk in the browser first - a phone photo of an IC is several MB. */
   async function uploadDoc(key: string, file: File) {
@@ -324,12 +327,12 @@ function MyProfilePage() {
             </h2>
             <div className="mt-5 grid gap-x-5 gap-y-4 sm:grid-cols-2">
               {section.fields.map((f) => {
-                if (!fieldShown(f, (k) => values[k] ?? "")) return null;
+                if (!shownKeys.has(f.key)) return null;
 
                 const value = values[f.key] ?? "";
                 const empty = !value.trim();
                 const malaysian = values["nationality"] === "MYS";
-                const problem = touched.has(f.key) ? problemFor(f, values) : "";
+                const problem = touched.has(f.key) ? (problemByKey.get(f.key) ?? "") : "";
                 const label = f.kind === "id" ? idLabelFor(values["nationality"] ?? "") : f.label;
 
                 // A university outside the list is typed into the same field, so

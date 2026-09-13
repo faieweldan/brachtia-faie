@@ -32,14 +32,10 @@ export function ChoicePicker({
   value,
   onChange,
   options,
-  placeholder = "Please choose",
-  invalid,
 }: {
   value: string;
   onChange: (v: string) => void;
   options: Option[];
-  placeholder?: string;
-  invalid?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value);
@@ -49,14 +45,9 @@ export function ChoicePicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          role="combobox"
-          aria-expanded={open}
-          className={cn(triggerClass, invalid && "border-destructive")}
-        >
+        <button type="button" role="combobox" aria-expanded={open} className={triggerClass}>
           <span className={cn("flex-1 truncate", !shown && "text-muted-foreground")}>
-            {shown || placeholder}
+            {shown || "Please choose"}
           </span>
           <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
         </button>

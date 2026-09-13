@@ -5,7 +5,12 @@ import { toast } from "sonner";
 
 import { idLabelFor } from "@/lib/reference-data";
 import { getDeclarationForResident } from "@/lib/declaration.functions";
-import { RESIDENT_SECTIONS, fieldShown, type ResidentField } from "@/lib/resident-fields";
+import {
+  RESIDENT_SECTIONS,
+  completeness,
+  residentFieldShown,
+  type ResidentField,
+} from "@/lib/resident-fields";
 
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -29,7 +34,6 @@ import {
   addTask,
   allBeds,
   blankResident,
-  completeness,
   fmtDate,
   money,
   createTenancy,
@@ -39,6 +43,7 @@ import {
   saveResidentRecord,
   updateBed,
   useOps,
+  vacateBed,
   type BedStatus,
   type Resident,
   type ResidentPatch,
@@ -370,16 +375,7 @@ function ResidentProfilePage() {
     const bed = placed?.bed;
     try {
       await saveResidentRecord({ ...form, status: "Inactive" } as Resident);
-      if (bed) {
-        updateBed(bed.id, {
-          status: "vacant",
-          residentId: undefined,
-          residentName: undefined,
-          tenancyStart: undefined,
-          tenancyEnd: undefined,
-          rent: undefined,
-        });
-      }
+      if (bed) vacateBed(bed.id);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not deactivate resident");
       return;
@@ -551,12 +547,7 @@ function ResidentProfilePage() {
                   <Panel title={s.title} action={editAction(s.key)}>
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                       {s.fields
-                        .filter((f) =>
-                          fieldShown(f, (k) => {
-                            const twin = s.fields.find((x) => x.key === k);
-                            return twin ? String(form[twin.camel] ?? "") : "";
-                          }),
-                        )
+                        .filter((f) => residentFieldShown(f, form))
                         .map((f) => (
                           <AdminField
                             key={f.key}

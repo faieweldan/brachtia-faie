@@ -120,12 +120,7 @@ export const getDeclarationByToken = createServerFn({ method: "GET" })
 
 export const signDeclarationByToken = createServerFn({ method: "POST" })
   .inputValidator(
-    (data: {
-      token: string;
-      signedName: string;
-      agreedTerms: Record<string, boolean>;
-      scrolledToEnd: boolean;
-    }) => data,
+    (data: { token: string; signedName: string; agreedTerms: Record<string, boolean> }) => data,
   )
   .handler(async ({ data }) => {
     const supabase = await admin();
@@ -173,7 +168,9 @@ export const signDeclarationByToken = createServerFn({ method: "POST" })
       signed_name: data.signedName.trim(),
       signed_id_number: String(resident.id_number ?? ""),
       agreed_terms: data.agreedTerms ?? {},
-      scrolled_to_end: !!data.scrolledToEnd,
+      // the terms are no longer in a box to scroll: every one of them was ticked
+      // on the page itself, which the check above has just proved
+      scrolled_to_end: true,
       signed_ip: ip,
       signed_user_agent: headers?.get("user-agent") ?? "",
       profile_link_id: found.link.id,
