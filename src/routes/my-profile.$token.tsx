@@ -171,6 +171,9 @@ function MyProfilePage() {
   }, [values]);
 
   const remaining = values ? shownFields.filter((f) => !(values[f.key] ?? "").trim()).length : 0;
+  const filledPct = shownFields.length
+    ? Math.round(((shownFields.length - remaining) / shownFields.length) * 100)
+    : 0;
   const problems = values
     ? shownFields.map((f) => ({ f, msg: problemFor(f, values) })).filter((p) => p.msg)
     : [];
@@ -266,24 +269,53 @@ function MyProfilePage() {
 
   return (
     <Shell>
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-brand-deep">Your resident details</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold tracking-tight text-brand-deep sm:text-3xl">
+          Your resident details
+        </h1>
+        <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted-foreground">
           Please check everything below and fill in what is missing. If something we already have is
           wrong, just correct it.
         </p>
-        {remaining > 0 ? (
-          <p className="mt-3 inline-flex rounded-full bg-brand-tint px-3 py-1 text-xs font-medium text-brand-deep">
-            {remaining} field{remaining === 1 ? "" : "s"} still empty
-          </p>
+
+        {/* how far there is left to go, rather than a count nobody can place */}
+        {shownFields.length ? (
+          <div className="mt-5">
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="text-xs font-medium text-brand-deep">
+                {remaining > 0
+                  ? `${remaining} field${remaining === 1 ? "" : "s"} still empty`
+                  : "Everything is filled in"}
+              </p>
+              <p className="text-xs tabular-nums text-muted-foreground">{filledPct}%</p>
+            </div>
+            <div
+              role="progressbar"
+              aria-valuenow={filledPct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Profile completeness"
+              className="mt-2 h-1.5 overflow-hidden rounded-full bg-brand-tint"
+            >
+              <div
+                className="h-full rounded-full bg-brand transition-[width] duration-500 ease-out"
+                style={{ width: `${filledPct}%` }}
+              />
+            </div>
+          </div>
         ) : null}
       </div>
 
-      <div className="space-y-5">
+      <div className="space-y-4">
         {SECTIONS.map((section) => (
-          <section key={section.key} className="rounded-2xl border border-border bg-card p-5">
-            <h2 className="text-sm font-semibold text-brand-deep">{section.title}</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <section
+            key={section.key}
+            className="rounded-2xl border border-border bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-16px_rgba(16,24,40,0.18)] sm:p-6"
+          >
+            <h2 className="border-b border-border pb-3 text-base font-semibold tracking-tight text-brand-deep">
+              {section.title}
+            </h2>
+            <div className="mt-5 grid gap-x-5 gap-y-4 sm:grid-cols-2">
               {section.fields.map((f) => {
                 if (!fieldShown(f, (k) => values[k] ?? "")) return null;
 
@@ -305,9 +337,15 @@ function MyProfilePage() {
                     id={`f-${f.key}`}
                     className={`space-y-1.5 ${f.wide || f.kind === "long" ? "sm:col-span-2" : ""}`}
                   >
-                    <Label className="text-xs text-muted-foreground">
+                    <Label className="flex items-center gap-1.5 text-xs font-medium text-foreground/70">
                       {label}
-                      {empty ? <span className="ml-1 text-brand">•</span> : null}
+                      {empty ? (
+                        <span
+                          aria-hidden
+                          title="Still empty"
+                          className="size-1.5 rounded-full bg-brand"
+                        />
+                      ) : null}
                     </Label>
 
                     {f.kind === "long" ? (
@@ -437,14 +475,14 @@ function MyProfilePage() {
         />
       </div>
 
-      <div className="sticky bottom-0 mt-5 flex items-center justify-end gap-3 border-t border-border bg-background py-4">
+      <div className="sticky bottom-0 z-10 mt-5 -mx-4 flex items-center justify-end gap-3 border-t border-border bg-background/85 px-4 py-4 backdrop-blur-sm sm:mx-0 sm:px-0">
         {problems.length ? (
-          <p className="text-xs text-destructive">
+          <p className="mr-auto text-xs font-medium text-destructive">
             {problems.length} field{problems.length === 1 ? "" : "s"} need
             {problems.length === 1 ? "s" : ""} fixing
           </p>
         ) : null}
-        <Button onClick={submit} disabled={saving}>
+        <Button onClick={submit} disabled={saving} className="min-w-36">
           {saving ? "Saving…" : "Save my details"}
         </Button>
       </div>
