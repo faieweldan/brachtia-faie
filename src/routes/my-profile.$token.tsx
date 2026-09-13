@@ -510,20 +510,15 @@ function MyProfilePage() {
 /**
  * The page the form sits on.
  *
- * The green is the one Brachtia already owns, and it is spent where it means
- * something: the band at the top says whose form this is, and the tinted canvas
- * pushes the white cards forward so the thing being filled in is the brightest
- * surface on the page. Nothing decorative is painted green.
+ * No masthead: the site header already names Brachtia directly above this, and
+ * a second one only repeated itself and put a tagline on top of a form. What
+ * the green still does is work - the tinted canvas pushes the white cards
+ * forward so the thing being filled in is the brightest surface on the page,
+ * and the rest of it marks progress. Nothing decorative is painted green.
  */
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="admin-ui min-h-screen bg-brand-tint">
-      <header className="border-b border-brand-deep/10 bg-brand-deep">
-        <div className="mx-auto w-full max-w-3xl px-4 py-4">
-          <p className="text-sm font-bold tracking-tight text-white">Brachtia Homes</p>
-          <p className="text-xs text-white/70">Where you belong</p>
-        </div>
-      </header>
       <div className="mx-auto w-full max-w-3xl px-4 py-8">{children}</div>
     </div>
   );
