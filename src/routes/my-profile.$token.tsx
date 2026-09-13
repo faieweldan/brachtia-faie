@@ -269,25 +269,29 @@ function MyProfilePage() {
 
   return (
     <Shell>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight text-brand-deep sm:text-3xl">
+      {/* The green belongs to the page's own title, not to a second masthead:
+          it says what this page is and how far through it you are, and the
+          white cards below answer to it. Secondary text is the same white held
+          back, so it stays legible instead of going grey on a dark surface. */}
+      <div className="mb-6 rounded-2xl bg-brand-deep p-6 shadow-[0_1px_2px_rgba(16,24,40,0.06),0_16px_36px_-24px_rgba(16,24,40,0.55)] sm:p-7">
+        <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
           Your resident details
         </h1>
-        <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted-foreground">
+        <p className="mt-2 max-w-prose text-sm leading-relaxed text-white/80">
           Please check everything below and fill in what is missing. If something we already have is
           wrong, just correct it.
         </p>
 
         {/* how far there is left to go, rather than a count nobody can place */}
         {shownFields.length ? (
-          <div className="mt-5">
+          <div className="mt-6">
             <div className="flex items-baseline justify-between gap-3">
-              <p className="text-xs font-medium text-brand-deep">
+              <p className="text-xs font-medium text-white">
                 {remaining > 0
                   ? `${remaining} field${remaining === 1 ? "" : "s"} still empty`
                   : "Everything is filled in"}
               </p>
-              <p className="text-xs tabular-nums text-muted-foreground">{filledPct}%</p>
+              <p className="text-xs tabular-nums text-white/80">{filledPct}%</p>
             </div>
             <div
               role="progressbar"
@@ -295,10 +299,10 @@ function MyProfilePage() {
               aria-valuemin={0}
               aria-valuemax={100}
               aria-label="Profile completeness"
-              className="mt-2 h-1.5 overflow-hidden rounded-full bg-brand-tint"
+              className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/20"
             >
               <div
-                className="h-full rounded-full bg-brand transition-[width] duration-500 ease-out"
+                className="h-full rounded-full bg-brand-soft transition-[width] duration-500 ease-out"
                 style={{ width: `${filledPct}%` }}
               />
             </div>
