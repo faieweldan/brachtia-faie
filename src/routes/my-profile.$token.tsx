@@ -312,7 +312,9 @@ function MyProfilePage() {
             key={section.key}
             className="rounded-2xl border border-border bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-16px_rgba(16,24,40,0.18)] sm:p-6"
           >
-            <h2 className="border-b border-border pb-3 text-base font-semibold tracking-tight text-brand-deep">
+            {/* the rule under a heading is the brand's, so scanning the page
+                reads as one system rather than grey furniture */}
+            <h2 className="border-b-2 border-brand/25 pb-3 text-base font-semibold tracking-tight text-brand-deep">
               {section.title}
             </h2>
             <div className="mt-5 grid gap-x-5 gap-y-4 sm:grid-cols-2">
@@ -432,16 +434,20 @@ function MyProfilePage() {
               return (
                 <div
                   key={d.key}
-                  className="flex flex-wrap items-center gap-3 rounded-xl border border-border px-4 py-3"
+                  className={`flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 transition-colors ${
+                    have ? "border-brand/30 bg-brand-tint/40" : "border-border"
+                  }`}
                 >
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-foreground">{d.label}</p>
-                    <p className="truncate text-xs text-muted-foreground">
+                    <p
+                      className={`truncate text-xs ${have ? "text-brand-deep" : "text-muted-foreground"}`}
+                    >
                       {have ? have : "Not uploaded yet"}
                     </p>
                   </div>
                   <label className="cursor-pointer">
-                    <span className="inline-flex h-9 items-center rounded-md border border-border px-3 text-sm">
+                    <span className="inline-flex h-9 items-center rounded-md border border-brand/40 px-3 text-sm font-medium text-brand-deep transition-colors hover:bg-brand-tint">
                       {busyDoc === d.key ? "Uploading…" : have ? "Replace" : "Upload"}
                     </span>
                     <input
@@ -475,7 +481,7 @@ function MyProfilePage() {
         />
       </div>
 
-      <div className="sticky bottom-0 z-10 mt-5 -mx-4 flex items-center justify-end gap-3 border-t border-border bg-background/85 px-4 py-4 backdrop-blur-sm sm:mx-0 sm:px-0">
+      <div className="sticky bottom-0 z-10 mt-5 -mx-4 flex items-center justify-end gap-3 border-t border-brand/20 bg-brand-tint/90 px-4 py-4 backdrop-blur-sm sm:mx-0 sm:rounded-t-xl sm:px-4">
         {problems.length ? (
           <p className="mr-auto text-xs font-medium text-destructive">
             {problems.length} field{problems.length === 1 ? "" : "s"} need
@@ -490,13 +496,24 @@ function MyProfilePage() {
   );
 }
 
+/**
+ * The page the form sits on.
+ *
+ * The green is the one Brachtia already owns, and it is spent where it means
+ * something: the band at the top says whose form this is, and the tinted canvas
+ * pushes the white cards forward so the thing being filled in is the brightest
+ * surface on the page. Nothing decorative is painted green.
+ */
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="admin-ui min-h-screen bg-background px-4 py-8">
-      <div className="mx-auto w-full max-w-3xl">
-        <p className="mb-6 text-sm font-bold text-brand-deep">Brachtia Homes</p>
-        {children}
-      </div>
+    <div className="admin-ui min-h-screen bg-brand-tint/60">
+      <header className="border-b border-brand-deep/10 bg-brand-deep">
+        <div className="mx-auto w-full max-w-3xl px-4 py-4">
+          <p className="text-sm font-bold tracking-tight text-white">Brachtia Homes</p>
+          <p className="text-xs text-white/70">Where you belong</p>
+        </div>
+      </header>
+      <div className="mx-auto w-full max-w-3xl px-4 py-8">{children}</div>
     </div>
   );
 }

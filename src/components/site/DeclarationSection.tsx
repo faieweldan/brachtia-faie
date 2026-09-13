@@ -125,7 +125,13 @@ export function DeclarationSection({
       <ol className="mt-5 -mx-5 divide-y divide-border border-y border-border sm:-mx-6">
         {DECLARATION_TERMS.map((t, i) => (
           <li key={i}>
-            <label className="flex cursor-pointer items-start gap-4 px-5 py-4 transition-colors hover:bg-muted/40 sm:px-6">
+            {/* a ticked term tints, so progress down a long contract is visible
+                at a glance and the unread ones stand out */}
+            <label
+              className={`flex cursor-pointer items-start gap-4 px-5 py-4 transition-colors sm:px-6 ${
+                ticked[i] ? "bg-brand-tint/70" : "hover:bg-muted/40"
+              }`}
+            >
               <input
                 type="checkbox"
                 className="mt-1 size-4 shrink-0 accent-brand"
