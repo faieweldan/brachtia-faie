@@ -375,6 +375,17 @@ export async function deleteUnit(id: string) {
   }
 }
 
+/**
+ * Why the other bed in a twin room cannot be sold: the room was let whole, to
+ * one person, at the single rate.
+ *
+ * A student paying for a room is not paying for a bed, so the second bed has to
+ * stop being sellable - otherwise someone else gets put in the room they bought.
+ * It is written into the hold that already exists rather than a new column, so
+ * nothing has to change in the database, and releasing the room clears it.
+ */
+export const SOLD_AS_SINGLE = "Sold as single";
+
 export type BedPatch = { [K in keyof Bed]?: Bed[K] | undefined };
 
 export function updateBed(bedId: string, patch: BedPatch) {

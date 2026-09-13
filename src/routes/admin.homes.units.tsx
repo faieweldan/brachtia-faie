@@ -11,7 +11,6 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { EmptyState, Panel, Select, Text } from "@/components/admin/ops-ui";
 import {
-  UNIT_TYPES,
   bedsFor,
   blankRoom,
   deleteUnit,
@@ -124,6 +123,58 @@ function UnitSetupPage() {
   );
 
   /**
+   * The unit types this residence actually has, taken from its room types in
+   * Website.
+   *
+   * The list used to be four fixed strings - 4-bedroom, 3-bedroom, 2-bedroom,
+   * Studio - written in the code. A residence with no 2-bedrooms still offered
+   * one, and a residence with something else could not be described at all.
+   * Website is where Brachtia says what a residence has, so it decides.
+   */
+  const unitTypeOptions = useMemo(() => {
+    return Array.from(
+      new Set(typesForResidence.map((r) => String(r.unit_type ?? "").trim()).filter(Boolean)),
+    ).sort();
+  }, [typesForResidence]);
+
+  /**
+   * An imported unit type, answered with the configured one.
+   *
+   * The spreadsheet wrote "3-bedroom"; Website calls the same thing
+   * "3-Bedroom Apartment". Left alone, both appear in the list and staff can
+   * pick the one nothing is priced against. Matching on the number of bedrooms
+   * swaps the old spelling for the configured one the moment a unit is opened,
+   * so the settings win and the legacy name is never offered again.
+   */
+  function withConfiguredType(u: Unit): Unit {
+    const names = Array.from(
+      new Set(
+        roomTypes
+          .filter((r) => r.residence_id === u.residenceId)
+          .map((r) => String(r.unit_type ?? "").trim())
+          .filter(Boolean),
+      ),
+    );
+    if (!u.unitType || names.includes(u.unitType)) return u;
+    const match = names.find((n) => roomCountFor(n) === roomCountFor(u.unitType));
+    return match ? { ...u, unitType: match } : u;
+  }
+
+  /**
+   * The room types belonging to the unit type being edited.
+   *
+   * The Arc has a Room A in its 3-bedroom and another Room A in its 4-bedroom,
+   * at different prices. Offering both inside one unit invites picking the
+   * wrong one, and the rent follows the choice.
+   */
+  const typesForUnitType = useMemo(() => {
+    const ofType = typesForResidence.filter(
+      (r) => String(r.unit_type ?? "").trim() === draft?.unitType,
+    );
+    return ofType.length ? ofType : typesForResidence;
+  }, [typesForResidence, draft?.unitType]);
+
+  /**
    * A room type carries two prices: the whole room as a single, and the per-bed
    * rate when it is shared. Which one applies depends on how the room is being
    * let, so the caller passes that in - reading the default here priced every
@@ -151,9 +202,14 @@ function UnitSetupPage() {
   /** Rooms (and their room types) are generated from the unit type. */
   function buildRooms(unitType: string, list: any[]): UnitRoom[] {
     const count = roomCountFor(unitType);
+    // only the room types belonging to this unit type - a 3-bedroom unit must
+    // not pick up Room A of the 4-bedroom, which is a different room at a
+    // different price
+    const ofType = list.filter((r) => String(r.unit_type ?? "").trim() === unitType);
+    const pool = ofType.length ? ofType : list;
     return Array.from({ length: count }, (_, i) => {
       const letter = LETTERS[i] ?? String(i + 1);
-      const match = list.find((r) => (r.room_code ?? r.code) === letter) ?? list[i] ?? null;
+      const match = pool.find((r) => (r.room_code ?? r.code) === letter) ?? pool[i] ?? null;
       const room = blankRoom(letter);
       if (!match) return room;
       const { occ, rent } = typeInfo(list, match.code);
@@ -342,7 +398,10 @@ function UnitSetupPage() {
             label="Unit type"
             value={draft.unitType}
             onChange={applyType}
-            options={UNIT_TYPES}
+            options={unitTypeOptions}
+            placeholder={
+              unitTypeOptions.length ? "Select" : "Add room types for this residence in Website"
+            }
           />
         </div>
 
@@ -395,12 +454,12 @@ function UnitSetupPage() {
                     label="Room type"
                     value={room.roomTypeCode}
                     onChange={(v) => applyRoomType(room.id, v)}
-                    options={typesForResidence.map((t) => ({
+                    options={typesForUnitType.map((t) => ({
                       value: t.code,
                       label: t.name,
                     }))}
                     placeholder={
-                      typesForResidence.length ? "Select room type" : "No room types set up"
+                      typesForUnitType.length ? "Select room type" : "No room types set up"
                     }
                   />
 
@@ -543,7 +602,11 @@ function UnitSetupPage() {
                                   : `${u.rooms.length} rooms / ${u.rooms.reduce((n, r) => n + r.beds.length, 0)} beds`}
                               </p>
                             </div>
-                            <Button size="sm" variant="outline" onClick={() => setDraft(u)}>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setDraft(withConfiguredType(u))}
+                            >
                               Edit
                             </Button>
                             <Button

@@ -318,7 +318,7 @@ function ResidentsListPage() {
                 <thead className="bg-muted text-left text-xs text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 font-medium">Resident</th>
-                    <th className="px-3 py-2 font-medium">Placement</th>
+                    <th className="px-3 py-2 text-center font-medium">Placement</th>
                     <th className="px-3 py-2 font-medium">University</th>
                     <th className="px-3 py-2 font-medium">Tenancy</th>
                     <th className="px-3 py-2 font-medium">Profile</th>
@@ -344,7 +344,7 @@ function ResidentsListPage() {
                             {r.fullName || "Untitled resident"}
                           </Link>
                         </td>
-                        <td className="px-3 py-2 text-muted-foreground">
+                        <td className="px-3 py-2 text-center text-muted-foreground">
                           {placed ? (
                             // where they are on top, how the room is sold underneath
                             <div className="inline-flex flex-col items-center leading-tight">

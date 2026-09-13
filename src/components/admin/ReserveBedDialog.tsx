@@ -12,7 +12,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  SOLD_AS_SINGLE,
   findBedForResident,
+  money,
   updateBed,
   type Bed,
   type Resident,
@@ -36,6 +38,9 @@ export function ReserveBedDialog({
   bed,
   residents,
   units,
+  asSingle = false,
+  singleRent = 0,
+  twinRent = 0,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -44,8 +49,21 @@ export function ReserveBedDialog({
   bed: Bed;
   residents: Resident[];
   units: Unit[];
+  /** the room is empty and was listed as a single, so the choice is still open */
+  asSingle?: boolean;
+  singleRent?: number;
+  twinRent?: number;
 }) {
   const [q, setQ] = useState("");
+  /**
+   * Whole room or one bed - the same click means both, so it is asked here.
+   *
+   * The row said "Single", but a student who wanted a twin can be put in the
+   * same room; the admin only knows which at this moment. Whole room blocks the
+   * other bed, one bed leaves it for sale.
+   */
+  const [mode, setMode] = useState<"single" | "twin">("single");
+  const others = room.beds.filter((b) => b.id !== bed.id);
 
   /**
    * Someone who already has a bed can still be chosen - that is a room move -
@@ -84,6 +102,12 @@ export function ReserveBedDialog({
         status: "vacant",
         residentId: undefined,
         residentName: undefined,
+        // their university and nationality go with them, or the empty bed
+        // keeps describing someone who left
+        studentId: undefined,
+        university: undefined,
+        nationality: undefined,
+        gender: undefined,
         tenancyStart: undefined,
         tenancyEnd: undefined,
         rent: undefined,
@@ -97,10 +121,22 @@ export function ReserveBedDialog({
       nationality: person.nationality || undefined,
       gender: person.gender || undefined,
     });
+
+    // let whole: the other bed stops being sellable, because it was sold too
+    const whole = asSingle && mode === "single";
+    if (whole) {
+      for (const b of others) {
+        updateBed(b.id, { status: "held", holdFor: SOLD_AS_SINGLE, holdUntil: undefined });
+      }
+    }
+
+    const what = whole ? `Room ${room.letter}` : bed.label;
     toast.success(
       from
-        ? `${person.fullName || "Resident"} moved from ${from} to ${bed.label}`
-        : `${bed.label} reserved for ${person.fullName || "resident"}`,
+        ? `${person.fullName || "Resident"} moved from ${from} to ${what}`
+        : whole
+          ? `Room ${room.letter} reserved for ${person.fullName || "resident"} as a single`
+          : `${bed.label} reserved for ${person.fullName || "resident"}`,
     );
     onOpenChange(false);
     setQ("");
@@ -119,6 +155,32 @@ export function ReserveBedDialog({
             {bed.label}
           </DialogDescription>
         </DialogHeader>
+
+        {/* the price says which is which - no sentence needed */}
+        {asSingle ? (
+          <div className="flex gap-2">
+            {(
+              [
+                { value: "single", label: "Single", rent: singleRent },
+                { value: "twin", label: "Twin", rent: twinRent },
+              ] as const
+            ).map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => setMode(o.value)}
+                className={`flex-1 rounded-xl border px-3 py-2 text-center transition-colors ${
+                  mode === o.value
+                    ? "border-brand-deep bg-brand-deep text-white"
+                    : "border-border bg-card"
+                }`}
+              >
+                <span className="block text-sm font-medium">{o.label}</span>
+                <span className="block text-xs opacity-70">{money(o.rent)}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         <div className="relative">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -177,7 +239,11 @@ function Group({
               <p className="truncate text-xs text-muted-foreground">
                 {from
                   ? `Currently in ${from}`
-                  : [person.quickbooksId && `ID ${person.quickbooksId}`, person.university, person.email]
+                  : [
+                      person.quickbooksId && `ID ${person.quickbooksId}`,
+                      person.university,
+                      person.email,
+                    ]
                       .filter(Boolean)
                       .join(" · ")}
               </p>
