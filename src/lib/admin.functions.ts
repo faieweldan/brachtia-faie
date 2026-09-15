@@ -124,6 +124,92 @@ export const updateEnquiry = createServerFn({ method: "POST" })
     if (data.message !== undefined) patch["message"] = data.message;
     if (data.heardAbout !== undefined) patch["heard_about"] = data.heardAbout;
     if (data.heardAboutOther !== undefined) patch["heard_about_other"] = data.heardAboutOther;
+
+    const stayChanged = [
+      data.residenceSlug,
+      data.roomCode,
+      data.roomName,
+      data.unitType,
+      data.occupancy,
+      data.term,
+      data.moveIn,
+      data.moveOut,
+      data.paymentTerm,
+    ].some((value) => value !== undefined);
+
+    if (stayChanged) {
+      const { data: current, error: currentError } = await supabase
+        .from("enquiries")
+        .select("*")
+        .eq("id", data.id)
+        .maybeSingle();
+      if (currentError) throw new Error(currentError.message);
+      if (!current) throw new Error("Booking not found");
+
+      const residenceSlug = String(patch["residence_slug"] ?? current.residence_slug ?? "");
+      const roomCode = String(patch["room_code"] ?? current.room_code ?? "");
+      const occupancy = String(patch["occupancy"] ?? current.occupancy ?? "single");
+      const moveIn = String(patch["move_in"] ?? current.move_in ?? "");
+      const moveOut = String(patch["move_out"] ?? current.move_out ?? "");
+      const paymentTerm = String(patch["payment_term"] ?? current.payment_term ?? "bimonthly");
+
+      const { data: residence, error: residenceError } = await supabase
+        .from("residences")
+        .select("*")
+        .eq("slug", residenceSlug)
+        .maybeSingle();
+      if (residenceError) throw new Error(residenceError.message);
+
+      if (residence && roomCode) {
+        const { data: room, error: roomError } = await supabase
+          .from("room_types")
+          .select("*")
+          .eq("residence_id", residence.id)
+          .eq("code", roomCode)
+          .maybeSingle();
+        if (roomError) throw new Error(roomError.message);
+
+        if (room) {
+          const { stayQuote, termForRange } = await import("@/data/properties");
+          const { rowToProperty, rowToRoomType } = await import("@/lib/site-mappers");
+          const property = rowToProperty(residence);
+          const roomType = rowToRoomType(room, residenceSlug);
+          const term = moveIn && moveOut
+            ? termForRange(moveIn, moveOut)
+            : String(patch["term"] ?? current.term ?? "long");
+          const rent = Number(roomType.rent[term as "long" | "short"]?.[occupancy as "single" | "twin"] ?? 0);
+          const selectedAddonIds = Array.isArray(current.addons) ? current.addons : [];
+          const selectedAddons = (property.addons ?? []).filter((addon) => selectedAddonIds.includes(addon.id));
+          const quote = moveIn && moveOut && rent
+            ? stayQuote(
+                property,
+                rent,
+                term as "long" | "short",
+                moveIn,
+                moveOut,
+                paymentTerm as "bimonthly" | "quarterly" | "full",
+                selectedAddons,
+              )
+            : null;
+
+          patch["unit_type"] = room.unit_type;
+          patch["room_name"] = room.name;
+          patch["term"] = term;
+          patch["monthly_rent"] = rent;
+          patch["first_payment"] = quote?.totalUpfront ?? 0;
+          patch["quote_snapshot"] = {
+            ...(current.quote_snapshot && typeof current.quote_snapshot === "object" ? current.quote_snapshot : {}),
+            property,
+            room: roomType,
+            occupancy,
+            term,
+            moveIn,
+            moveOut,
+            quote,
+          };
+        }
+      }
+    }
     const { error } = await supabase.from("enquiries").update(patch as any).eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
