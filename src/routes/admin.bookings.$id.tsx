@@ -93,7 +93,7 @@ const fullDateTime = (d?: string | null) =>
 
 function hasSnapshot(row: any) {
   const q = row?.quote_snapshot;
-  return Boolean(q && q.property && q.room && q.quote);
+  return Boolean(q && q.property && q.room && (q.quote || (q.moveIn && q.moveOut)));
 }
 
 function genderChip(gender?: string) {
