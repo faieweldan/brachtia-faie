@@ -780,6 +780,24 @@ function BookingDetail() {
             onSave={() => setEditingStay(false)}
             fields={stayFields}
             row={row}
+            onSaveFields={(changes) => {
+              const patch: Record<string, unknown> = {};
+              for (const [k, v] of Object.entries(changes)) patch[FIELD_KEY_MAP[k] ?? k] = v;
+              const roomName = changes["room_name"];
+              if (roomName !== undefined) {
+                const unitType = String(changes["unit_type"] ?? row.unit_type ?? "");
+                const match = (roomOptions ?? []).find(
+                  (option) => option.name === roomName && (!unitType || option.unit_type === unitType),
+                );
+                if (match) patch["roomCode"] = match.code;
+              }
+              const residenceName = changes["residence_name"];
+              if (residenceName !== undefined) {
+                const match = (resOptions ?? []).find((option) => option.name === residenceName);
+                if (match) patch["residenceSlug"] = match.slug;
+              }
+              mutate.mutate(patch);
+            }}
             onSaveField={(k, v) => {
               const mapped = FIELD_KEY_MAP[k] ?? k;
               const patch: Record<string, unknown> = { [mapped]: v };
@@ -1419,6 +1437,7 @@ function EditableCard({
   fields,
   row,
   onSaveField,
+  onSaveFields,
   resOptions,
   roomOptions,
   extra,
@@ -1431,6 +1450,7 @@ function EditableCard({
   fields: readonly (readonly [string, string, string])[];
   row: any;
   onSaveField: (key: string, value: unknown) => void;
+  onSaveFields?: (changes: Record<string, string>) => void;
   resOptions: { id: string; slug: string; name: string }[];
   roomOptions?: { code: string; room_code: string; name: string; unit_type: string; occupancies: string[] }[];
   extra?: [string, React.ReactNode][];
@@ -1448,17 +1468,20 @@ function EditableCard({
   }
 
   function save() {
+    const changes: Record<string, string> = {};
     for (const [k] of fields) {
-      if (draft[k] !== String(row[k] ?? "")) onSaveField(k, draft[k]);
+      if (draft[k] !== String(row[k] ?? "")) changes[k] = draft[k] ?? "";
     }
     // save the paired "Other" free-text for heard fields
     for (const [k, , kind] of fields) {
       if (kind === "heard") {
         const otherKey = `${k}_other`;
         if ((draft[otherKey] ?? "") !== String(row[otherKey] ?? ""))
-          onSaveField(otherKey, draft[otherKey] ?? "");
+          changes[otherKey] = draft[otherKey] ?? "";
       }
     }
+    if (onSaveFields) onSaveFields(changes);
+    else for (const [key, value] of Object.entries(changes)) onSaveField(key, value);
     onSave();
   }
 
