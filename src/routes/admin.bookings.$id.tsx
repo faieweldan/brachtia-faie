@@ -338,7 +338,35 @@ function BookingDetail() {
     setDownloading(true);
     try {
       const { downloadStayQuote } = await import("@/lib/quote-pdf");
-      await downloadStayQuote({ ...r.quote_snapshot, reference: r.reference });
+      const snap = r.quote_snapshot as any;
+      let quote = snap.quote;
+      if (!quote) {
+        // Older enquiries were saved without a computed quote — rebuild it.
+        const { stayQuote, termForRange } = await import("@/data/properties");
+        const moveIn = snap.moveIn || r.move_in;
+        const moveOut = snap.moveOut || r.move_out;
+        const occupancy = snap.occupancy || r.occupancy || "single";
+        const term = snap.term || (moveIn && moveOut ? termForRange(moveIn, moveOut) : "long");
+        const rent = Number(r.monthly_rent) || snap.room?.rent?.[term]?.[occupancy];
+        if (!moveIn || !moveOut || !rent) {
+          toast.error("This enquiry is missing dates or a rate — add them in Stay Details first");
+          return;
+        }
+        quote = stayQuote(
+          snap.property,
+          rent,
+          term,
+          moveIn,
+          moveOut,
+          (r.payment_term as any) || "full",
+          [],
+        );
+        snap.term = term;
+        snap.occupancy = occupancy;
+        snap.moveIn = moveIn;
+        snap.moveOut = moveOut;
+      }
+      await downloadStayQuote({ ...snap, quote, reference: r.reference });
     } catch (err) {
       console.error(err);
       toast.error("Could not build the quotation");
