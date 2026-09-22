@@ -46,7 +46,17 @@ export const pick = (row: ImportRow, ...keys: readonly string[]) => {
  * Only a trailing bracket that mentions a dropdown is taken off, so a name that
  * genuinely carries brackets keeps them.
  */
-export const withoutHint = (v: string) => v.replace(/\s*\([^)]*dropdown[^)]*\)\s*$/i, "").trim();
+export const withoutHint = (v: string) => {
+  const cleaned = v.replace(/\s*\([^)]*dropdown[^)]*\)\s*$/i, "").trim();
+  /*
+   * Sometimes the cell is the instruction and nothing else - "Dropdown (MMU,
+   * HWUM, CityU, UoC, Others)" in a University column, where the brackets hold
+   * the choices rather than the word. There is no answer in front to keep, and
+   * leaving it would file somebody under a university called "Dropdown", so it
+   * is read as blank. Blank is true; a guess would not be.
+   */
+  return /^dropdown\b/i.test(cleaned) ? "" : cleaned;
+};
 
 /**
  * The sheet's cells as one object per row, keyed by lower-case header.
