@@ -155,7 +155,7 @@ function waNumber(phone: string) {
 
 function hasSnapshot(row: any) {
   const q = row?.quote_snapshot;
-  return Boolean(q && q.property && q.room && q.quote);
+  return Boolean(q && q.property && q.room && (q.quote || (q.moveIn && q.moveOut)));
 }
 
 function genderChip(gender?: string) {
@@ -546,7 +546,35 @@ function BookingDetail() {
     setDownloading(true);
     try {
       const { downloadStayQuote } = await import("@/lib/quote-pdf");
-      await downloadStayQuote({ ...r.quote_snapshot, reference: r.reference });
+      const snap = r.quote_snapshot as any;
+      let quote = snap.quote;
+      if (!quote) {
+        // Older enquiries were saved without a computed quote — rebuild it.
+        const { stayQuote, termForRange } = await import("@/data/properties");
+        const moveIn = snap.moveIn || r.move_in;
+        const moveOut = snap.moveOut || r.move_out;
+        const occupancy = snap.occupancy || r.occupancy || "single";
+        const term = snap.term || (moveIn && moveOut ? termForRange(moveIn, moveOut) : "long");
+        const rent = Number(r.monthly_rent) || snap.room?.rent?.[term]?.[occupancy];
+        if (!moveIn || !moveOut || !rent) {
+          toast.error("This enquiry is missing dates or a rate — add them in Stay Details first");
+          return;
+        }
+        quote = stayQuote(
+          snap.property,
+          rent,
+          term,
+          moveIn,
+          moveOut,
+          (r.payment_term as any) || "full",
+          [],
+        );
+        snap.term = term;
+        snap.occupancy = occupancy;
+        snap.moveIn = moveIn;
+        snap.moveOut = moveOut;
+      }
+      await downloadStayQuote({ ...snap, quote, reference: r.reference });
     } catch (err) {
       console.error(err);
       toast.error("Could not build the quotation");
@@ -2309,6 +2337,7 @@ function EditableCard({
   fields,
   row,
   onSaveField,
+  onSaveFields,
   resOptions,
   roomOptions,
   extra,
@@ -2321,6 +2350,7 @@ function EditableCard({
   fields: readonly (readonly [string, string, string])[];
   row: any;
   onSaveField: (key: string, value: unknown) => void;
+  onSaveFields?: (changes: Record<string, string>) => void;
   resOptions: { id: string; slug: string; name: string }[];
   roomOptions?: {
     code: string;
@@ -2344,17 +2374,20 @@ function EditableCard({
   }
 
   function save() {
+    const changes: Record<string, string> = {};
     for (const [k] of fields) {
-      if (draft[k] !== String(row[k] ?? "")) onSaveField(k, draft[k]);
+      if (draft[k] !== String(row[k] ?? "")) changes[k] = draft[k] ?? "";
     }
     // save the paired "Other" free-text for heard fields
     for (const [k, , kind] of fields) {
       if (kind === "heard") {
         const otherKey = `${k}_other`;
         if ((draft[otherKey] ?? "") !== String(row[otherKey] ?? ""))
-          onSaveField(otherKey, draft[otherKey] ?? "");
+          changes[otherKey] = draft[otherKey] ?? "";
       }
     }
+    if (onSaveFields) onSaveFields(changes);
+    else for (const [key, value] of Object.entries(changes)) onSaveField(key, value);
     onSave();
   }
 
