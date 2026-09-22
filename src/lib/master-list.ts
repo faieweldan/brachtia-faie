@@ -31,6 +31,24 @@ export const pick = (row: ImportRow, ...keys: readonly string[]) => {
 };
 
 /**
+ * The dropdown's instruction, pasted into the cell instead of an answer.
+ *
+ * The master list's Gender and Nationality columns carry a hint - "(Dropdown,
+ * Male & Female only)" - and it sometimes ends up inside the cell itself:
+ * "Male (Dropdown, Male & Female only)", "MYS (dropdown)". The real answer is
+ * still there, in front of it.
+ *
+ * Left alone, that resident is saved with a gender the database cannot read, so
+ * the trigger passes them over and they never get a resident ID - and nobody
+ * notices until somebody counts. Exactly that happened to one real resident
+ * (00188, found 22 Sept 2026), who had to be corrected by hand.
+ *
+ * Only a trailing bracket that mentions a dropdown is taken off, so a name that
+ * genuinely carries brackets keeps them.
+ */
+export const withoutHint = (v: string) => v.replace(/\s*\([^)]*dropdown[^)]*\)\s*$/i, "").trim();
+
+/**
  * The sheet's cells as one object per row, keyed by lower-case header.
  *
  * The master list has a banner row above the real headers, so the header row is
@@ -58,7 +76,9 @@ export function rowsFromGrid(grid: unknown[][], firstRow = 1) {
   const out: { row: ImportRow; sheetRow: number }[] = [];
   grid.slice(headerIdx + 1).forEach((cells, i) => {
     const row: ImportRow = {};
-    for (const [h, c] of firstCol) row[h] = String(cells[c] ?? "").trim();
+    // every cell comes through here, so the hint is stripped once rather than
+    // at each column that happens to carry one
+    for (const [h, c] of firstCol) row[h] = withoutHint(String(cells[c] ?? ""));
     if (Object.values(row).some((v) => v !== "")) {
       out.push({ row, sheetRow: firstRow + headerIdx + 1 + i });
     }
