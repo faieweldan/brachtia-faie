@@ -1,7 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarCheck, CheckCircle2, Loader2, MapPin, MessageCircle, Video } from "lucide-react";
+import {
+  ArrowRight,
+  CalendarCheck,
+  CheckCircle2,
+  Loader2,
+  MapPin,
+  MessageCircle,
+  Video,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { getViewingLink, confirmViewingFromLink } from "@/lib/public.functions";
@@ -53,7 +61,9 @@ function ViewingLinkPage() {
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [slot, setSlot] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [done, setDone] = useState<{ slot: string } | null>(null);
+  // either a time they picked, or their decision not to view it at all
+  const [done, setDone] = useState<{ slot: string } | { skipped: true } | null>(null);
+  const [skipping, setSkipping] = useState(false);
 
   const linkQuery = useQuery({
     queryKey: ["viewing-link", token],
@@ -99,6 +109,29 @@ function ViewingLinkPage() {
     }
   }
 
+  /**
+   * They have seen enough and want the invoice.
+   *
+   * A viewing is offered, not required, and making somebody book a slot they
+   * will not attend just to move on is how a booking stalls here for a week.
+   */
+  async function skip() {
+    setSkipping(true);
+    try {
+      const { skipViewingFromLink } = await import("@/lib/public.functions");
+      const res = await skipViewingFromLink({ data: { token } });
+      if (!res.ok) {
+        toast.error("This link is no longer valid");
+        return;
+      }
+      setDone({ skipped: true });
+    } catch {
+      toast.error("Could not take you to the booking");
+    } finally {
+      setSkipping(false);
+    }
+  }
+
   if (linkQuery.isLoading) {
     return (
       <section className="mx-auto max-w-2xl px-4 py-20 text-center text-muted-foreground">
@@ -134,18 +167,27 @@ function ViewingLinkPage() {
         <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-brand-soft">
           <CheckCircle2 className="size-7 text-brand" />
         </div>
-        <h1 className="mt-5 text-3xl font-extrabold text-brand-deep">Viewing confirmed</h1>
-        <p className="mt-3 text-muted-foreground">
-          {mode === "virtual" ? "Video tour" : "Viewing"} on{" "}
-          <strong className="text-foreground">
-            {new Date(done.slot).toLocaleDateString("en-MY", {
-              weekday: "long",
-              day: "numeric",
-              month: "long",
-            })}
-          </strong>{" "}
-          at <strong className="text-foreground">{formatSlot(done.slot)}</strong>.
-        </p>
+        <h1 className="mt-5 text-3xl font-extrabold text-brand-deep">
+          {"slot" in done ? "Viewing confirmed" : "We'll send your invoice"}
+        </h1>
+        {"slot" in done ? (
+          <p className="mt-3 text-muted-foreground">
+            {mode === "virtual" ? "Video tour" : "Viewing"} on{" "}
+            <strong className="text-foreground">
+              {new Date(done.slot).toLocaleDateString("en-MY", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+              })}
+            </strong>{" "}
+            at <strong className="text-foreground">{formatSlot(done.slot)}</strong>.
+          </p>
+        ) : (
+          <p className="mt-3 text-muted-foreground">
+            No viewing needed — we&apos;ll send your booking invoice shortly. You can still ask for
+            a viewing at any time.
+          </p>
+        )}
         <p className="mt-2 text-sm text-muted-foreground">
           Booking ID {booking["reference"]} · {booking["residence_name"]}
         </p>
@@ -158,13 +200,57 @@ function ViewingLinkPage() {
       <span className="inline-flex items-center gap-2 rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-brand-deep">
         <CalendarCheck className="size-3.5" /> Booking ID {booking["reference"]}
       </span>
+      {/* The good news first, then the choice. "Pick your viewing time" assumed
+          they had already decided to view it, which is the thing this page is
+          actually asking them. */}
       <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-brand-deep sm:text-4xl">
-        Pick your viewing time
+        Good news — your room is available! 🎉
       </h1>
       <p className="mt-3 max-w-2xl text-muted-foreground">
-        Hi {booking["full_name"]?.split(" ")[0]}, choose a date and a time that suits you. Your
-        details are already with us — nothing to fill in again.
+        Hi {booking["full_name"]?.split(" ")[0]}, your details are already with us — nothing to fill
+        in again.
       </p>
+
+      {/*
+        The choice, put where Book a viewing puts its own: at the top, as one
+        box, with the recommended path as the button and the way past it as a
+        quiet link beside it.
+        It sat at the foot of the right-hand column before, under an OR rule -
+        which made a student read the whole page to find out they did not have
+        to book anything at all.
+      */}
+      <div className="mt-6 grid gap-3 rounded-2xl border border-brand/30 bg-brand-tint/50 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-4 sm:p-5">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-brand-deep">Want to see it first?</p>
+          <p className="mt-1 hidden text-sm text-muted-foreground sm:block">
+            Most residents schedule a quick viewing before making their reservation — but you can go
+            straight to your booking if you have seen enough.
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground sm:hidden">
+            Most residents view first — or go straight to your booking.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            className="rounded-full"
+            onClick={() =>
+              document
+                .getElementById("pick-a-date")
+                ?.scrollIntoView({ behavior: "smooth", block: "center" })
+            }
+          >
+            Schedule a viewing <ArrowRight className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            className="rounded-full text-muted-foreground"
+            disabled={saving || skipping}
+            onClick={() => void skip()}
+          >
+            {skipping ? <Loader2 className="size-4 animate-spin" /> : null} Reserve without viewing
+          </Button>
+        </div>
+      </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1.15fr_1fr]">
         {/* Left: static details + date */}
@@ -209,7 +295,8 @@ function ViewingLinkPage() {
             </div>
           </div>
 
-          <div className="space-y-2">
+          {/* what the box at the top sends them to */}
+          <div id="pick-a-date" className="scroll-mt-24 space-y-2">
             <Label>Pick a date</Label>
             <div className="rounded-2xl border border-border p-2">
               <Calendar
@@ -269,9 +356,10 @@ function ViewingLinkPage() {
           >
             {saving ? <Loader2 className="size-4 animate-spin" /> : null} Confirm viewing
           </Button>
-          <p className="text-xs text-muted-foreground">
-            Need help? WhatsApp us on +6012-330 6815.
-          </p>
+
+          {/* the way past a viewing is offered once, in the box at the top -
+              asking the same question twice on one screen reads as two questions */}
+          <p className="text-xs text-muted-foreground">Need help? WhatsApp us on +6012-330 6815.</p>
         </div>
       </div>
     </section>

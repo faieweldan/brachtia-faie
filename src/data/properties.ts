@@ -1,3 +1,4 @@
+import { SCHEDULES } from "@/lib/reference-data";
 import arcCyberjayaAsset from "@/assets/arc-cyberjaya-v2.png.asset.json";
 import arcPool from "@/assets/arc-pool.jpg";
 import arcPoolNewAsset from "@/assets/arc-pool-new.jpg.asset.json";
@@ -898,11 +899,24 @@ export type StayQuote = {
   monthlyAfter: number;
 };
 
-export type PaymentTerm = "bimonthly" | "quarterly" | "full";
+/*
+ * How often rent is paid - the same six cycles the rest of the system knows
+ * (SCHEDULES in reference-data), so a cycle read off the master list has
+ * somewhere to land. The sheet holds MONTHLY, BI-MONTHLY, QUARTERLY,
+ * HALF-YEARLY, SEMI-ANNUALLY, ANNUALLY and FULLY - half-yearly and
+ * semi-annually being one cycle written two ways, kept as semi-annual.
+ *
+ * What the public website offers is a shorter list StayCalculator keeps for
+ * itself, so widening this does not change what a student is shown.
+ */
+export type PaymentTerm = "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual" | "full";
 
 export const paymentTermLabel: Record<PaymentTerm, string> = {
+  monthly: "Monthly",
   bimonthly: "Bi-monthly",
   quarterly: "Quarterly",
+  semiannual: "Semi-annually",
+  annual: "Annually",
   full: "Full term",
 };
 
@@ -946,8 +960,17 @@ export function stayQuote(
   const first = schedule[0];
   const lines: CostLine[] = [];
 
+  /*
+   * How many months the first payment covers, read from the one list of
+   * schedules rather than named again here. The line this replaces ended
+   * "... : 2", so any cycle it did not name - monthly, semi-annually,
+   * annually - was quietly billed as bi-monthly instead of failing anywhere
+   * anyone would see it.
+   */
   const cycleMonths =
-    paymentTerm === "full" ? schedule.length : paymentTerm === "quarterly" ? 3 : 2;
+    paymentTerm === "full"
+      ? schedule.length
+      : (SCHEDULES.find((s) => s.value === paymentTerm)?.months ?? 2);
   const covered = Math.min(Math.max(cycleMonths, 1), schedule.length);
 
   if (first) {

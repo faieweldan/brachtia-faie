@@ -41,6 +41,8 @@ export type StayState = {
   room: RoomType | undefined;
   quote: StayQuote | null;
   paymentTerm: PaymentTerm;
+  /** the add-ons chosen, by name - saved on the booking */
+  addons: string[];
 };
 
 
@@ -144,6 +146,7 @@ export default function StayCalculator({
     room: selected,
     quote,
     paymentTerm: effectiveTerm,
+    addons: chosenAddons.map((a) => a.label),
   };
 
 

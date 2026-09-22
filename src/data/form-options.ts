@@ -46,7 +46,9 @@ export const ENQUIRY_STATUS = [
   { value: "viewing_first", label: "No, I'd like to view first" },
 ];
 
-export const GENDERS = ["Female", "Male", "Prefer not to say"];
+// rooms and units are allocated by gender, so a stay cannot be placed without
+// one - there is no third answer the allocation could act on
+export const GENDERS = ["Female", "Male"];
 
 export const STAFF = ["Syazwani", "Norfadirah", "Valsala"];
 

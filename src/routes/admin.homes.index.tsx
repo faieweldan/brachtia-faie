@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 import { listResidences } from "@/lib/admin.functions";
+import { releaseBookingFor } from "@/lib/billing-client";
 import {
   NO_ROOM_TYPES,
   bedRent,
@@ -16,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState, Panel, Select, StatusPill } from "@/components/admin/ops-ui";
 import { ReserveBedDialog } from "@/components/admin/ReserveBedDialog";
+import { UnitGenderMark } from "@/components/admin/GenderMark";
 import {
   bedBlockedBy,
   type BedRow,
@@ -32,7 +34,7 @@ import {
   vacateBed,
   type BedStatus,
   sponsorLabel,
-  unitGender,
+  residentIdOf,
 } from "@/lib/ops-store";
 
 /**
@@ -47,6 +49,8 @@ export const Route = createFileRoute("/admin/homes/")({
   component: InventoryPage,
   validateSearch: (search: Record<string, unknown>) => ({
     residence: typeof search["residence"] === "string" ? search["residence"] : "",
+    // the unit to open at - how a resident's placement links straight to their bed
+    ...(typeof search["unit"] === "string" && search["unit"] ? { unit: search["unit"] } : {}),
   }),
 });
 
@@ -54,35 +58,55 @@ const STATUSES: { value: BedStatus; label: string }[] = [
   { value: "vacant", label: "Vacant" },
   { value: "held", label: "Reserved" },
   { value: "booked", label: "Booked" },
-  { value: "active", label: "Active" },
-  { value: "notice", label: "Notice / expiring" },
+  // checked in and living there. A bed still marked "notice" is occupied too
+  { value: "active", label: "Occupied" },
 ];
 
+/**
+ * The status pills. Vacant is also split by room, because "a free twin bed" and
+ * "a free single room" are different questions - "vacant:twin" is a vacant bed
+ * in a twin room.
+ *
+ * All three splits are listed, so they add up to Vacant. Whole-unit beds were
+ * left out and their vacancies belonged to no split, which made the splits look
+ * wrong against the total rather than incomplete.
+ */
+const PILLS: { value: string; label: string }[] = [
+  { value: "vacant", label: "Vacant" },
+  { value: "vacant:single", label: "Vacant single" },
+  { value: "vacant:twin", label: "Vacant twin" },
+  { value: "vacant:unit", label: "Vacant whole unit" },
+  ...STATUSES.slice(1),
+];
+
+/** The four inventory statuses: a bed still marked "notice" counts as occupied. */
+const inventoryStatus = (status: BedStatus) => (status === "notice" ? "active" : status);
+
 function UnitGenderChip({ unit, residents }: { unit: Unit; residents: Resident[] }) {
-  const g = unitGender(unit, residents);
-  if (!g) return <span>{unit.gender || "Any"}</span>;
-  if (g === "Mixed") {
-    return (
-      <span className="rounded-full bg-amber-100 px-2 text-[11px] font-bold text-amber-700">
-        Mixed
-      </span>
-    );
-  }
-  const letter = g === "Male" ? "M" : "F";
-  return (
-    <span
-      className={`inline-flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
-        letter === "M" ? "bg-blue-100 text-blue-700" : "bg-pink-100 text-pink-700"
-      }`}
-      title={`${g} - set by the first resident to move in`}
-    >
-      {letter}
-    </span>
-  );
+  return <UnitGenderMark unit={unit} residents={residents} empty={<span>Any</span>} />;
 }
 
 function InventoryPage() {
   const { units, residents } = useOps();
+  const queryClient = useQueryClient();
+
+  /**
+   * A bed held for a booking follows the booking rule: a student who has paid
+   * keeps the bed until they are moved, and an unpaid booking loses its invoice
+   * along with the room. A bed with no booking behind it is simply emptied.
+   */
+  async function release(bed: { id: string; enquiryId?: string | undefined }) {
+    if (bed.enquiryId) {
+      const released = await releaseBookingFor(
+        queryClient,
+        bed.enquiryId,
+        "This student has paid, so the bed is kept. To move them, Reserve another bed and pick them there.",
+      );
+      if (!released) return;
+    }
+    vacateBed(bed.id);
+    toast.success("Bed released");
+  }
   // the price list lives in Website; inventory quotes it rather than keeping
   // its own copy
   const { data: site } = useQuery({
@@ -92,7 +116,7 @@ function InventoryPage() {
   const roomTypes = (site as { rooms?: SiteRoomType[] } | undefined)?.rooms ?? NO_ROOM_TYPES;
   const [reserving, setReserving] = useState<(BedRow & { asSingle: boolean }) | null>(null);
   const [q, setQ] = useState("");
-  const { residence } = Route.useSearch();
+  const { residence, unit: focusUnit } = Route.useSearch();
   const navigate = useNavigate();
   const setResidence = (v: string) =>
     void navigate({ to: "/admin/homes", search: { residence: v } });
@@ -138,13 +162,15 @@ function InventoryPage() {
       if (letter && room.letter !== letter) return false;
       if (occupancy && room.occupancy !== occupancy) return false;
       if (gender && unit.gender !== gender) return false;
-      if (status && bed.status !== status) return false;
+      const [wantStatus, wantOccupancy] = status.split(":");
+      if (wantStatus && inventoryStatus(bed.status) !== wantStatus) return false;
+      if (wantOccupancy && room.occupancy !== wantOccupancy) return false;
       if (from && bed.tenancyEnd && bed.tenancyEnd < from) return false;
       if (to && bed.tenancyStart && bed.tenancyStart > to) return false;
       if (q) {
         const hay =
           `${unit.code} ${unit.unitNo} ${room.letter} ${bed.label} ${bed.residentName ?? ""} ${
-            bed.university ?? ""
+            bed.status === "vacant" ? "" : (bed.university ?? "")
           }`.toLowerCase();
         if (!hay.includes(q.toLowerCase())) return false;
       }
@@ -162,12 +188,38 @@ function InventoryPage() {
     return Array.from(map.entries());
   }, [rows]);
 
+  /**
+   * Arriving from a resident's placement: open where their unit is.
+   *
+   * The router puts a new page at the top once it has drawn, so a scroll made
+   * straight away is undone - it waits a moment, then jumps (no animation to be
+   * interrupted). Once per unit, so working on the page does not keep pulling it back.
+   */
+  const scrolledTo = useRef("");
+  const focusDrawn = grouped.some(([unitId]) => unitId === focusUnit);
+  useEffect(() => {
+    if (!focusUnit || !focusDrawn || scrolledTo.current === focusUnit) return;
+    const timer = window.setTimeout(() => {
+      document.getElementById(`unit-${focusUnit}`)?.scrollIntoView({ block: "center" });
+      scrolledTo.current = focusUnit;
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [focusUnit, focusDrawn]);
+
   // the pills count the residence being looked at, not every bed Brachtia owns
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
-    for (const { unit, bed } of allBeds(units)) {
+    for (const { unit, room, bed } of allBeds(units)) {
       if (residence && unit.residenceName !== residence) continue;
-      c[bed.status] = (c[bed.status] ?? 0) + 1;
+      c["all"] = (c["all"] ?? 0) + 1;
+      const s = inventoryStatus(bed.status);
+      c[s] = (c[s] ?? 0) + 1;
+      // every vacant bed falls in one split, whatever its room is sold as, so
+      // the splits add up to Vacant
+      if (bed.status === "vacant" && room.occupancy) {
+        const key = `vacant:${room.occupancy}`;
+        c[key] = (c[key] ?? 0) + 1;
+      }
     }
     return c;
   }, [units, residence]);
@@ -259,9 +311,9 @@ function InventoryPage() {
             status === "" ? "border-brand-deep bg-brand-deep text-white" : "border-border bg-card"
           }`}
         >
-          All · {STATUSES.reduce((n, s) => n + (counts[s.value] ?? 0), 0)}
+          All · {counts["all"] ?? 0}
         </button>
-        {STATUSES.map((s) => (
+        {PILLS.map((s) => (
           <button
             key={s.value}
             type="button"
@@ -349,7 +401,13 @@ function InventoryPage() {
           const sellable = unitRows.filter(({ unit: u, room, bed }) => !bedBlockedBy(u, room, bed));
           const expanded = open[unitId] !== false;
           return (
-            <div key={unitId} className="overflow-hidden rounded-2xl border border-border bg-card">
+            <div
+              key={unitId}
+              id={`unit-${unitId}`}
+              className={`overflow-hidden rounded-2xl border bg-card ${
+                unitId === focusUnit ? "border-brand ring-2 ring-brand/30" : "border-border"
+              }`}
+            >
               <button
                 type="button"
                 onClick={() => setOpen((o) => ({ ...o, [unitId]: !expanded }))}
@@ -362,7 +420,8 @@ function InventoryPage() {
                 )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-brand-deep">
-                    {unit.residenceName} · {unit.unitNo}
+                    {/* the residence is named at the top of the page */}
+                    {unit.unitNo}
                   </p>
                   <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
                     <span className="truncate">
@@ -385,7 +444,7 @@ function InventoryPage() {
                       <tr>
                         <th className="px-4 py-2 font-medium">Room</th>
                         <th className="px-4 py-2 font-medium">Bed</th>
-                        <th className="px-4 py-2 font-medium">Status</th>
+                        <th className="px-4 py-2 font-medium">Inventory status</th>
                         <th className="px-4 py-2 font-medium">Resident</th>
                         <th className="px-4 py-2 font-medium">University</th>
                         <th className="px-4 py-2 font-medium">Sponsor</th>
@@ -402,7 +461,12 @@ function InventoryPage() {
                           </td>
                           <td className="px-4 py-2">{asSingle ? "Single" : bed.label}</td>
                           <td className="px-4 py-2">
-                            <StatusPill status={bed.status} />
+                            <StatusPill
+                              status={inventoryStatus(bed.status)}
+                              label={
+                                inventoryStatus(bed.status) === "active" ? "Occupied" : undefined
+                              }
+                            />
                             {bed.status === "held" && bed.holdUntil ? (
                               <span className="ml-2 text-xs text-muted-foreground">
                                 till {fmtDate(bed.holdUntil)}
@@ -420,12 +484,20 @@ function InventoryPage() {
                                   className="text-brand-deep underline-offset-2 hover:underline"
                                 >
                                   {person.fullName || bed.residentName}
+                                  {residentIdOf(person) ? (
+                                    <span className="block text-xs tabular-nums text-muted-foreground">
+                                      {residentIdOf(person)}
+                                    </span>
+                                  ) : null}
                                 </Link>
                               );
                             })()}
                           </td>
                           <td className="px-4 py-2 text-muted-foreground">
-                            {bed.university ?? "—"}
+                            {/* a vacant bed has nobody to study anywhere - nothing left over shows */}
+                            {bed.status === "vacant"
+                              ? "—"
+                              : residentForBed(residents, bed)?.university || bed.university || "—"}
                           </td>
                           <td className="px-4 py-2 text-muted-foreground">
                             {(() => {
@@ -452,14 +524,7 @@ function InventoryPage() {
                                 Reserve
                               </Button>
                             ) : (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  vacateBed(bed.id);
-                                  toast.success("Bed released");
-                                }}
-                              >
+                              <Button size="sm" variant="ghost" onClick={() => void release(bed)}>
                                 Release
                               </Button>
                             )}

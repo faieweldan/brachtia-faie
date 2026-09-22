@@ -21,7 +21,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AreaField, Field, RowList, Section, StringList, TextField } from "@/components/admin/fields";
+import {
+  AreaField,
+  Field,
+  RowList,
+  Section,
+  StringList,
+  TextField,
+} from "@/components/admin/fields";
 import { GalleryEditor, ImageList } from "@/components/admin/GalleryEditor";
 import { ImageField } from "@/components/admin/ImageUploader";
 
@@ -77,6 +84,7 @@ const EDITABLE_KEYS = [
   "single_bed_options",
   "fee_config",
   "addons",
+  "unit_rates",
 ];
 
 const NAV = [
@@ -87,6 +95,7 @@ const NAV = [
   { id: "terms", label: "Terms & fees" },
   { id: "addons", label: "Add-ons" },
   { id: "rooms", label: "Room types" },
+  { id: "whole-unit", label: "Whole unit" },
 ];
 
 const num = (v: string) => (v.trim() === "" ? null : Number(v));
@@ -166,7 +175,9 @@ function ResidenceEditor() {
               <ArrowLeft className="mr-1 size-3.5" /> All residences
             </Link>
           </Button>
-          <h1 className="truncate text-xl font-semibold text-brand-deep">{form.name || "Residence"}</h1>
+          <h1 className="truncate text-xl font-semibold text-brand-deep">
+            {form.name || "Residence"}
+          </h1>
           <p className="text-xs text-muted-foreground">/{form.slug}</p>
         </div>
         <div className="flex items-center gap-4">
@@ -220,10 +231,22 @@ function ResidenceEditor() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <TextField label="Name" value={form.name} onChange={(v) => set("name", v)} />
                 <TextField label="Slug (URL)" value={form.slug} onChange={(v) => set("slug", v)} />
-                <TextField label="Location" value={form.location} onChange={(v) => set("location", v)} />
-                <TextField label="Tagline" value={form.tagline} onChange={(v) => set("tagline", v)} />
+                <TextField
+                  label="Location"
+                  value={form.location}
+                  onChange={(v) => set("location", v)}
+                />
+                <TextField
+                  label="Tagline"
+                  value={form.tagline}
+                  onChange={(v) => set("tagline", v)}
+                />
               </div>
-              <AreaField label="Summary" value={form.summary ?? ""} onChange={(v) => set("summary", v)} />
+              <AreaField
+                label="Summary"
+                value={form.summary ?? ""}
+                onChange={(v) => set("summary", v)}
+              />
               <StringList
                 label="Description paragraphs"
                 items={form.description ?? []}
@@ -314,7 +337,11 @@ function ResidenceEditor() {
                   value={form.coords?.lng}
                   onChange={(v) => set("coords", { ...(form.coords ?? {}), lng: Number(v || 0) })}
                 />
-                <TextField label="Waze link" value={form.waze_url} onChange={(v) => set("waze_url", v)} />
+                <TextField
+                  label="Waze link"
+                  value={form.waze_url}
+                  onChange={(v) => set("waze_url", v)}
+                />
               </div>
               <RowList<Place>
                 label="Nearby universities"
@@ -355,7 +382,10 @@ function ResidenceEditor() {
                     {(["long", "short"] as const).map((t) => {
                       const on = (form.contract_terms ?? []).includes(t);
                       return (
-                        <label key={t} className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <label
+                          key={t}
+                          className="flex items-center gap-2 text-xs text-muted-foreground"
+                        >
                           <Switch
                             checked={on}
                             onCheckedChange={(v) =>
@@ -391,9 +421,7 @@ function ResidenceEditor() {
                             onCheckedChange={(v) =>
                               set(
                                 "payment_terms",
-                                v
-                                  ? [...list, t.key]
-                                  : list.filter((x) => x !== t.key),
+                                v ? [...list, t.key] : list.filter((x) => x !== t.key),
                               )
                             }
                           />
@@ -436,7 +464,10 @@ function ResidenceEditor() {
                         onChange={(e) =>
                           set("fee_config", {
                             ...fees,
-                            [term]: { ...(fees?.[term] ?? {}), [f.key]: Number(e.target.value || 0) },
+                            [term]: {
+                              ...(fees?.[term] ?? {}),
+                              [f.key]: Number(e.target.value || 0),
+                            },
                           })
                         }
                       />
@@ -460,11 +491,20 @@ function ResidenceEditor() {
               </div>
             </Section>
 
-            <Section id="addons" title="Add-ons" description="Optional extras students can add in the cost calculator.">
+            <Section
+              id="addons"
+              title="Add-ons"
+              description="Optional extras students can add in the cost calculator."
+            >
               <AddonsEditor items={form.addons ?? []} onChange={(v) => set("addons", v)} />
             </Section>
 
             <RoomsSection residenceId={id} rooms={rooms} />
+            <WholeUnitRates
+              rooms={rooms}
+              value={(form.unit_rates ?? {}) as Record<string, any>}
+              onChange={(v) => set("unit_rates", v)}
+            />
           </div>
         </div>
       </div>
@@ -521,6 +561,183 @@ function blankRoom(residenceId: string, sortOrder: number) {
     furnishing: [],
     sort_order: sortOrder,
   };
+}
+
+/**
+ * What a whole apartment is let for, per unit type.
+ *
+ * A whole unit is one let of the apartment, so its rent belongs to the unit type
+ * rather than to any one room in it: set it for the 3-Bedroom and every 3-bedroom
+ * room carries it, while the 4-Bedroom keeps its own. Kept once here, so the
+ * rooms of one unit type can never disagree about what their apartment costs.
+ *
+ * The unit types of the room types below are always listed. A unit type can also
+ * be added here - a 5-bedroom priced before its rooms are set up.
+ */
+function WholeUnitRates({
+  rooms,
+  value,
+  onChange,
+}: {
+  rooms: any[];
+  value: Record<string, any>;
+  onChange: (v: Record<string, any>) => void;
+}) {
+  const [editing, setEditing] = useState<{ unitType: string; was: string } | null>(null);
+
+  const fromRooms = Array.from(
+    new Set(rooms.map((r) => String(r.unit_type ?? "").trim()).filter(Boolean)),
+  );
+  const unitTypes = Array.from(new Set([...fromRooms, ...Object.keys(value)])).sort((a, b) =>
+    a.localeCompare(b),
+  );
+  const rateOf = (unitType: string, term: string) => value[unitType]?.[term] ?? null;
+
+  /** Renaming one carries its rates across; a blank name is dropped. */
+  function saveEdit(next: { unitType: string; was: string; long: string; short: string }) {
+    const rates = { long: num(next.long), short: num(next.short) };
+    const out = { ...value };
+    if (next.was && next.was !== next.unitType) delete out[next.was];
+    if (next.unitType.trim()) out[next.unitType.trim()] = rates;
+    onChange(out);
+    setEditing(null);
+  }
+
+  return (
+    <Section
+      id="whole-unit"
+      title="Whole unit rents"
+      description="Letting a whole apartment to one party. Blank means it is not offered."
+      action={
+        <Button size="sm" onClick={() => setEditing({ unitType: "", was: "" })}>
+          <Plus className="mr-1 size-4" /> Add unit type
+        </Button>
+      }
+    >
+      {unitTypes.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No unit types yet - they come from the room types below, or add one here.
+        </p>
+      ) : (
+        <div className="divide-y divide-border overflow-hidden rounded-md border border-border">
+          {unitTypes.map((unitType) => (
+            <div key={unitType} className="flex flex-wrap items-center gap-3 p-3">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-brand-deep">{unitType}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {fromRooms.includes(unitType) ? "From its room types" : "Added here"}
+                </p>
+              </div>
+              <div className="text-right text-xs text-muted-foreground">
+                <p>12-mo: {rateOf(unitType, "long") ?? "—"}</p>
+                <p>Short: {rateOf(unitType, "short") ?? "—"}</p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setEditing({ unitType, was: unitType })}
+              >
+                Edit
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label={`Clear ${unitType} whole unit rents`}
+                onClick={() => {
+                  if (!confirm(`Clear the whole unit rents for ${unitType}?`)) return;
+                  const out = { ...value };
+                  delete out[unitType];
+                  onChange(out);
+                }}
+              >
+                <Trash2 className="size-4 text-destructive" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {editing ? (
+        <WholeUnitRateDialog
+          unitType={editing.unitType}
+          was={editing.was}
+          fixedName={fromRooms.includes(editing.unitType)}
+          long={rateOf(editing.unitType, "long")}
+          short={rateOf(editing.unitType, "short")}
+          onCancel={() => setEditing(null)}
+          onSave={saveEdit}
+        />
+      ) : null}
+    </Section>
+  );
+}
+
+/** One unit type's whole-apartment rents, opened from Edit. */
+function WholeUnitRateDialog({
+  unitType,
+  was,
+  fixedName,
+  long,
+  short,
+  onCancel,
+  onSave,
+}: {
+  unitType: string;
+  was: string;
+  /** the name comes from its room types, so it is shown rather than typed */
+  fixedName: boolean;
+  long: number | null;
+  short: number | null;
+  onCancel: () => void;
+  onSave: (v: { unitType: string; was: string; long: string; short: string }) => void;
+}) {
+  const [name, setName] = useState(unitType);
+  const [longRent, setLongRent] = useState(long == null ? "" : String(long));
+  const [shortRent, setShortRent] = useState(short == null ? "" : String(short));
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onCancel()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{was ? `Whole unit · ${was}` : "Add unit type"}</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {fixedName ? (
+            <p className="text-sm text-muted-foreground">
+              The rent for a whole {name}, let to one party.
+            </p>
+          ) : (
+            <TextField label="Unit type" value={name} onChange={setName} />
+          )}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextField
+              label="12-month (RM)"
+              type="number"
+              value={longRent}
+              onChange={setLongRent}
+            />
+            <TextField label="Short (RM)" type="number" value={shortRent} onChange={setShortRent} />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Blank means a whole unit is not offered for that term.
+          </p>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button
+            disabled={!name.trim()}
+            onClick={() => onSave({ unitType: name, was, long: longRent, short: shortRent })}
+          >
+            Done
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function RoomsSection({ residenceId, rooms }: { residenceId: string; rooms: any[] }) {
@@ -580,8 +797,12 @@ function RoomsSection({ residenceId, rooms }: { residenceId: string; rooms: any[
                 </p>
               </div>
               <div className="text-right text-xs text-muted-foreground">
-                <p>12-mo: {rate(r, "long", "single") ?? "—"} / {rate(r, "long", "twin") ?? "—"}</p>
-                <p>Short: {rate(r, "short", "single") ?? "—"} / {rate(r, "short", "twin") ?? "—"}</p>
+                <p>
+                  12-mo: {rate(r, "long", "single") ?? "—"} / {rate(r, "long", "twin") ?? "—"}
+                </p>
+                <p>
+                  Short: {rate(r, "short", "single") ?? "—"} / {rate(r, "short", "twin") ?? "—"}
+                </p>
               </div>
               <Button size="sm" variant="outline" onClick={() => setEditing({ ...r })}>
                 Edit
@@ -610,10 +831,22 @@ function RoomsSection({ residenceId, rooms }: { residenceId: string; rooms: any[
             <div className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <TextField label="Name" value={editing.name} onChange={(v) => set("name", v)} />
-                <TextField label="Unit type" value={editing.unit_type} onChange={(v) => set("unit_type", v)} />
-                <TextField label="Room code (A, B…)" value={editing.room_code} onChange={(v) => set("room_code", v)} />
+                <TextField
+                  label="Unit type"
+                  value={editing.unit_type}
+                  onChange={(v) => set("unit_type", v)}
+                />
+                <TextField
+                  label="Room code (A, B…)"
+                  value={editing.room_code}
+                  onChange={(v) => set("room_code", v)}
+                />
                 <TextField label="Admin tag" value={editing.tag} onChange={(v) => set("tag", v)} />
-                <TextField label="Internal code (unique)" value={editing.code} onChange={(v) => set("code", v)} />
+                <TextField
+                  label="Internal code (unique)"
+                  value={editing.code}
+                  onChange={(v) => set("code", v)}
+                />
                 <TextField
                   label="Sort order"
                   type="number"
@@ -635,7 +868,11 @@ function RoomsSection({ residenceId, rooms }: { residenceId: string; rooms: any[
                   value={editing.size_sqft ?? ""}
                   onChange={(v) => set("size_sqft", num(v))}
                 />
-                <TextField label="Size label" value={editing.size_label ?? ""} onChange={(v) => set("size_label", v)} />
+                <TextField
+                  label="Size label"
+                  value={editing.size_label ?? ""}
+                  onChange={(v) => set("size_label", v)}
+                />
                 <Field label="Bathroom">
                   <select
                     className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
@@ -650,7 +887,10 @@ function RoomsSection({ residenceId, rooms }: { residenceId: string; rooms: any[
 
               <div className="flex flex-wrap items-center gap-6">
                 <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Switch checked={!!editing.has_view} onCheckedChange={(v) => set("has_view", v)} />
+                  <Switch
+                    checked={!!editing.has_view}
+                    onCheckedChange={(v) => set("has_view", v)}
+                  />
                   Has a view
                 </label>
                 <Input
@@ -669,7 +909,14 @@ function RoomsSection({ residenceId, rooms }: { residenceId: string; rooms: any[
               </div>
 
               <div className="rounded-md border border-border p-3">
-                <p className="mb-2 text-xs font-semibold text-brand-deep">Monthly rent per person (RM)</p>
+                <p className="mb-1 text-xs font-semibold text-brand-deep">
+                  Monthly rent per person (RM)
+                </p>
+                {/* a whole apartment is one let, so its rent is set once per unit
+                    type under Whole unit rents, not on each room in it */}
+                <p className="mb-2 text-[11px] text-muted-foreground">
+                  For a whole apartment, see Whole unit rents.
+                </p>
                 <div className="grid gap-3 sm:grid-cols-4">
                   {(["long", "short"] as const).map((term) =>
                     (["single", "twin"] as const).map((occ) => (
@@ -688,7 +935,10 @@ function RoomsSection({ residenceId, rooms }: { residenceId: string; rooms: any[
               <Field label="Occupancies offered">
                 <div className="flex gap-6 pt-2">
                   {(["single", "twin"] as const).map((o) => (
-                    <label key={o} className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <label
+                      key={o}
+                      className="flex items-center gap-2 text-xs text-muted-foreground"
+                    >
                       <Switch
                         checked={(editing.occupancies ?? []).includes(o)}
                         onCheckedChange={(v) =>
@@ -733,7 +983,11 @@ function RoomsSection({ residenceId, rooms }: { residenceId: string; rooms: any[
                   onChange={(v) => set("gallery", v)}
                 />
               </div>
-              <StringList label="Shared in the apartment" items={editing.features ?? []} onChange={(v) => set("features", v)} />
+              <StringList
+                label="Shared in the apartment"
+                items={editing.features ?? []}
+                onChange={(v) => set("features", v)}
+              />
               <StringList
                 label="In your room"
                 items={editing.furnishing ?? []}
@@ -775,7 +1029,11 @@ type AddonRow = {
 };
 
 const slugify = (v: string) =>
-  v.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `addon-${Date.now()}`;
+  v
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "") || `addon-${Date.now()}`;
 
 function AddonsEditor({
   items,

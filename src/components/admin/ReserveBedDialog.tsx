@@ -4,6 +4,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { GenderMark, UnitGenderMark } from "@/components/admin/GenderMark";
 import {
   Dialog,
   DialogContent,
@@ -16,12 +17,14 @@ import {
   findBedForResident,
   isUnitSlot,
   money,
+  unitAccepts,
   updateBed,
   vacateBed,
   type Bed,
   type Resident,
   type Unit,
   type UnitRoom,
+  residentIdOf,
 } from "@/lib/ops-store";
 
 /**
@@ -75,13 +78,17 @@ export function ReserveBedDialog({
     const needle = q.trim().toLowerCase();
     const match = (r: Resident) =>
       !needle ||
-      `${r.fullName} ${r.quickbooksId} ${r.email} ${r.university}`.toLowerCase().includes(needle);
+      `${r.fullName} ${r.residentCode} ${r.quickbooksId} ${r.email} ${r.university}`
+        .toLowerCase()
+        .includes(needle);
 
     const waiting: { person: Resident; from?: undefined }[] = [];
     const placed: { person: Resident; from: string }[] = [];
     for (const r of residents) {
       if (!match(r)) continue;
       if (r.status && r.status.toLowerCase() === "inactive") continue;
+      // men and women never share a unit, so only those this unit can take are offered
+      if (!unitAccepts(unit, residents, r.gender)) continue;
       const row = findBedForResident(units, r);
       if (row) {
         if (row.bed.id === bed.id) continue; // already in this very bed
@@ -94,7 +101,7 @@ export function ReserveBedDialog({
       }
     }
     return { waiting: waiting.slice(0, 40), placed: placed.slice(0, 20) };
-  }, [residents, units, q, bed.id]);
+  }, [residents, units, unit, q, bed.id]);
 
   function reserve(person: Resident, from?: string) {
     // a move: empty the bed they are leaving, so nobody is in two places
@@ -134,9 +141,13 @@ export function ReserveBedDialog({
           <DialogTitle className="text-base font-bold text-brand-deep">
             Reserve this bed
           </DialogTitle>
-          <DialogDescription>
-            {unit.residenceName} · {unit.unitNo} ·{" "}
-            {isUnitSlot(room) ? "Whole unit" : `Room ${room.letter}`} · {bed.label}
+          <DialogDescription className="flex flex-wrap items-center gap-2">
+            <span>
+              {unit.residenceName} · {unit.unitNo} ·{" "}
+              {isUnitSlot(room) ? "Whole unit" : `Room ${room.letter}`} · {bed.label}
+            </span>
+            {/* the unit's gender, to match against the students below */}
+            <UnitGenderMark unit={unit} residents={residents} />
           </DialogDescription>
         </DialogHeader>
 
@@ -220,16 +231,19 @@ function Group({
               <p className="truncate text-sm font-medium text-foreground">
                 {person.fullName || "Unnamed resident"}
               </p>
-              <p className="truncate text-xs text-muted-foreground">
-                {from
-                  ? `Currently in ${from}`
-                  : [
-                      person.quickbooksId && `ID ${person.quickbooksId}`,
-                      person.university,
-                      person.email,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
+              <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                <GenderMark gender={person.gender} />
+                <span className="truncate">
+                  {from
+                    ? `Currently in ${from}`
+                    : [
+                        residentIdOf(person) && `ID ${residentIdOf(person)}`,
+                        person.university,
+                        person.email,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                </span>
               </p>
             </div>
             <Button size="sm" variant="outline" onClick={() => onPick(person, from)}>

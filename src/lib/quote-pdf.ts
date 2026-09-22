@@ -58,7 +58,7 @@ export type QuoteInput = {
   };
 };
 
-export async function downloadStayQuote(input: QuoteInput) {
+async function buildQuote(input: QuoteInput) {
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
 
@@ -69,13 +69,23 @@ export async function downloadStayQuote(input: QuoteInput) {
     doc = build(jsPDF, autoTable, input, s);
     if (doc.getNumberOfPages() === 1) break;
   }
+  return doc;
+}
 
+export function quoteFileName(input: QuoteInput) {
   const safe = (str: string) => str.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
-  doc.save(
-    input.reference
-      ? `Brachtia-Quote-${safe(input.reference)}.pdf`
-      : `Brachtia-Quote-${safe(input.property.name)}-${safe(input.room.name)}-${input.moveIn}.pdf`,
-  );
+  return input.reference
+    ? `Brachtia-Quote-${safe(input.reference)}.pdf`
+    : `Brachtia-Quote-${safe(input.property.name)}-${safe(input.room.name)}-${input.moveIn}.pdf`;
+}
+
+export async function downloadStayQuote(input: QuoteInput) {
+  (await buildQuote(input)).save(quoteFileName(input));
+}
+
+/** The quote as a PDF link for showing it in the page - revoke it once closed. */
+export async function quotePdfUrl(input: QuoteInput) {
+  return URL.createObjectURL((await buildQuote(input)).output("blob"));
 }
 
 function build(

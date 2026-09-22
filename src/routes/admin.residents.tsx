@@ -7,7 +7,7 @@ export const Route = createFileRoute("/admin/residents")({
 const SUB_TABS = [
   { to: "/admin/residents", label: "Residents", exact: true },
   
-  { to: "/admin/residents/payments", label: "Payments & AR" },
+  { to: "/admin/residents/payments", label: "Collections" },
 ];
 
 function ResidentsLayout() {

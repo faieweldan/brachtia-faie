@@ -11,6 +11,7 @@ import {
   findBed,
   fmtDate,
   money,
+  residentIdOf,
   saveTenancy,
   updateBed,
   useOps,
@@ -71,6 +72,14 @@ function TenanciesPage() {
                 <p className="truncate text-sm font-semibold text-brand-deep">
                   {resident?.fullName || "Resident"}
                 </p>
+                {/* The ID they are known by here, on the agreement as on the
+                    invoice and the receipt. It sits with the name rather than
+                    the room: it says who this is, not where they are. */}
+                {resident && residentIdOf(resident) ? (
+                  <p className="truncate text-xs tabular-nums text-muted-foreground">
+                    {residentIdOf(resident)}
+                  </p>
+                ) : null}
                 <p className="truncate text-xs text-muted-foreground">
                   {placed
                     ? `${placed.unit.residenceName} · ${placed.unit.unitNo} · Room ${placed.room.letter} · ${placed.bed.label}`

@@ -64,7 +64,7 @@ const STATUS_LABEL: Record<string, string> = {
   pending: "Pending",
   confirmed: "Confirmed",
   completed: "Completed",
-  no_show: "No Show",
+  no_show: "No show",
   cancelled: "Cancelled",
 };
 
@@ -774,7 +774,7 @@ function AppointmentsPage() {
             <>
               <DialogHeader className="space-y-1">
                 <DialogTitle className="flex flex-wrap items-center gap-2 text-lg">
-                  {form.id ? (form.full_name || "Appointment Details") : "New Appointment"}
+                  {form.id ? (form.full_name || "Appointment details") : "New appointment"}
                   {form.id ? (
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
@@ -788,7 +788,7 @@ function AppointmentsPage() {
                 <p className="text-sm text-muted-foreground">
                   {typeBySlug.get(form.type_slug)?.name ?? "Appointment"}
                   {" ("}
-                  {form.mode === "virtual" ? "Virtual" : "In Person"}
+                  {form.mode === "virtual" ? "Virtual" : "In person"}
                   {")"}
                 </p>
               </DialogHeader>
@@ -988,7 +988,7 @@ function AppointmentsPage() {
 
                           <label className="space-y-1">
                             <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                              <User className="h-3.5 w-3.5" /> Assigned Staff
+                              <User className="h-3.5 w-3.5" /> Assigned staff
                             </span>
                             <select
                               className={`${selectClass} w-full`}
@@ -1022,7 +1022,7 @@ function AppointmentsPage() {
 
                           <div className="space-y-1 sm:col-span-2">
                             <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                              <Link2 className="h-3.5 w-3.5" /> Linked To
+                              <Link2 className="h-3.5 w-3.5" /> Linked to
                             </span>
                             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/50 px-3 py-2">
                               <span className="text-foreground">
@@ -1056,7 +1056,7 @@ function AppointmentsPage() {
                                     ? "Close"
                                     : form.enquiry_id || form.resident_id
                                       ? "Change"
-                                      : "Link Booking / Resident"}
+                                      : "Link booking / resident"}
                                 </button>
                                 {form.enquiry_id || form.resident_id ? (
                                   <button
@@ -1145,7 +1145,7 @@ function AppointmentsPage() {
                             params={{ id: form.enquiry_id }}
                             className="text-xs font-medium text-brand-deep underline underline-offset-2"
                           >
-                            Edit in Booking
+                            Edit in booking
                           </Link>
                         ) : null}
                       </header>
@@ -1161,7 +1161,7 @@ function AppointmentsPage() {
                           </div>
                         ) : null}
                         <div className="grid gap-3 sm:grid-cols-2">
-                          <Field label="Full Name">
+                          <Field label="Full name">
                             {readOnly ? (
                               <ReadValue>{form.full_name}</ReadValue>
                             ) : (
@@ -1264,10 +1264,10 @@ function AppointmentsPage() {
                     <section className="overflow-hidden rounded-xl border border-border">
                       <header className="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5 text-sm font-semibold text-foreground">
                         <FileText className="h-4 w-4 text-muted-foreground" />
-                        Enquiry Details
+                        Enquiry details
                       </header>
                       <div className="grid gap-3 p-4 sm:grid-cols-2">
-                        <Field label="Availability Enquiry?">
+                        <Field label="Availability enquiry?">
                           {readOnly ? (
                             <ReadValue>
                               {ENQUIRY_STATUS.find((s) => s.value === form.enquiry_status)?.label ??
@@ -1326,7 +1326,7 @@ function AppointmentsPage() {
                       <header className="flex items-center justify-between gap-2 border-b border-border bg-muted/40 px-4 py-2.5 text-sm font-semibold text-foreground">
                         <span className="flex items-center gap-2">
                           <Luggage className="h-4 w-4 text-muted-foreground" />
-                          Stay Requirements
+                          Stay requirements
                         </span>
                         {readOnly ? (
                           <Link
@@ -1334,7 +1334,7 @@ function AppointmentsPage() {
                             params={{ id: form.enquiry_id }}
                             className="text-xs font-medium text-brand-deep underline underline-offset-2"
                           >
-                            View in Booking
+                            View in booking
                           </Link>
                         ) : null}
                       </header>
@@ -1450,11 +1450,11 @@ function AppointmentsPage() {
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={copyInvite}>
                 <MessageCircle className="mr-1.5 h-4 w-4" />
-                Copy Invite
+                Copy invite
               </Button>
               <Button size="sm" variant="outline" onClick={downloadIcs}>
                 <CalendarDays className="mr-1.5 h-4 w-4" />
-                Add to Calendar
+                Add to calendar
               </Button>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -1466,7 +1466,7 @@ function AppointmentsPage() {
                     className="text-rose-600 hover:text-rose-700"
                     onClick={() => submit({ status: "cancelled" })}
                   >
-                    Cancel Appointment
+                    Cancel appointment
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => remove.mutate(form.id!)}>
                     Delete
@@ -1474,7 +1474,7 @@ function AppointmentsPage() {
                 </>
               ) : null}
               <Button size="sm" onClick={() => submit()} disabled={save.isPending}>
-                {save.isPending ? "Saving…" : form?.id ? "Save Changes" : "Create appointment"}
+                {save.isPending ? "Saving…" : form?.id ? "Save changes" : "Create appointment"}
               </Button>
             </div>
           </DialogFooter>

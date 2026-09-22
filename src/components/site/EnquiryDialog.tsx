@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
 import {
@@ -23,7 +23,8 @@ import {
 } from "@/data/properties";
 import { countryByIso, type Country } from "@/data/countries";
 import CountryCombobox from "@/components/site/CountryCombobox";
-import { submitEnquiry } from "@/lib/public.functions";
+import { checkEnquiryDuplicate, submitEnquiry, type EnquiryInput } from "@/lib/public.functions";
+import { STATUS_OPTIONS } from "@/lib/reference-data";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,10 +48,8 @@ const staySchema = z.object({
   moveOut: z.string().min(1, "Select your move-out date"),
 });
 
-const leadSchema = z.object({
+const leadBase = z.object({
   name: z.string().trim().min(2, "Enter your full name").max(100),
-  university: z.string().trim().min(2, "Select your university").max(120),
-  intake: z.string().trim().min(4, "Select your intake").max(20),
   nationality: z.string().trim().min(2, "Select your nationality").max(60),
   gender: z.string().trim().min(1, "Select your gender").max(30),
   heardAbout: z.string().trim().min(1, "Tell us how you heard about us").max(120),
@@ -58,6 +57,37 @@ const leadSchema = z.object({
   mobile: z.string().trim().min(9, "Enter a valid mobile number").max(30),
   message: z.string().trim().max(1000).optional(),
 });
+
+/**
+ * Only what is on the screen is checked.
+ *
+ * Someone working is never shown a university or an intake, so requiring them
+ * would fail a form they cannot see to fix - the commonest way a conditional
+ * field goes wrong, and invisible until somebody picks the other answer.
+ */
+const leadSchemaFor = (status: string, selfEmployed: boolean) =>
+  status === "student"
+    ? leadBase.extend({
+        university: z.string().trim().min(2, "Select your university").max(120),
+        intake: z.string().trim().min(4, "Select your intake").max(20),
+      })
+    : leadBase.extend({
+        university: z.string().trim().max(120).optional(),
+        intake: z.string().trim().max(40).optional(),
+        // nobody freelancing has an organisation to name, so the tick box excuses
+        // it - the job title is still asked, and says more than a blank company
+        company: selfEmployed
+          ? z.string().trim().max(120).optional()
+          : z.string().trim().min(2, "Where do you work?").max(120),
+        occupation: z.string().trim().min(2, "What do you do?").max(120),
+      });
+
+type Lead = z.infer<typeof leadBase> & {
+  university?: string | undefined;
+  intake?: string | undefined;
+  company?: string | undefined;
+  occupation?: string | undefined;
+};
 
 export type EnquiryStay = {
   room?: RoomType | undefined;
@@ -68,6 +98,8 @@ export type EnquiryStay = {
   moveOut: string;
   quote?: StayQuote | null | undefined;
   paymentTerm?: PaymentTerm | undefined;
+  /** the add-ons chosen, by name */
+  addons?: string[] | undefined;
 };
 
 function FieldError({ msg }: { msg?: string | undefined }) {
@@ -96,7 +128,31 @@ export default function EnquiryDialog({
   const [open, setOpen] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
-  const [lead, setLead] = useState<z.infer<typeof leadSchema> | null>(null);
+  const [lead, setLead] = useState<Lead | null>(null);
+  // studying or working - asked first, because it decides what else is asked
+  const [status, setStatus] = useState("");
+  /*
+   * Where they work. `company` is held here rather than read off the form so
+   * that ticking self-employed can empty it - a disabled input still submits
+   * whatever was typed before it was disabled.
+   */
+  const [company, setCompany] = useState("");
+  const [selfEmployed, setSelfEmployed] = useState(false);
+  /*
+   * A repeat is warned about, never blocked. The notice is what the student is
+   * shown; the payload beside it is the submission they already filled in, held
+   * so that "Send it anyway" does not make them fill it in again.
+   */
+  const [dupNotice, setDupNotice] = useState("");
+  const [pending, setPending] = useState<EnquiryInput | null>(null);
+  const [sending, setSending] = useState(false);
+  /*
+   * One key for one submission, kept across a warning and a retry. The unique
+   * index on it in the database is what actually stops a double-click becoming
+   * two enquiries - a disabled button cannot stop a request that was already
+   * sent, or a tab that was refreshed mid-flight.
+   */
+  const submissionKey = useRef("");
   const [downloading, setDownloading] = useState(false);
   const [reference, setReference] = useState("");
   const [dialIso, setDialIso] = useState("MY");
@@ -145,6 +201,47 @@ export default function EnquiryDialog({
       setUniversityOther("");
       setHeardChoice("");
       setHeardOther("");
+      setStatus("");
+      setCompany("");
+      setSelfEmployed(false);
+      setDupNotice("");
+      setPending(null);
+      setSending(false);
+      // a fresh dialog is a fresh submission, so it gets its own key
+      submissionKey.current = "";
+    }
+  }
+
+  /**
+   * Send it. Split out of the form handler so that "Send it anyway" can post
+   * the very same payload after the warning, rather than validating and
+   * rebuilding it a second time and risking the two drifting apart.
+   */
+  async function send(payload: EnquiryInput) {
+    setSending(true);
+    try {
+      const res = await submitEnquiry({ data: payload });
+      // only tell the student it is sent once it really is
+      if (!res?.ok) {
+        toast.error("Could not send your enquiry", {
+          description: "Please try again, or WhatsApp us.",
+        });
+        return;
+      }
+      if (res.reference) setReference(res.reference);
+      setDupNotice("");
+      setPending(null);
+      setSubmitted(true);
+      toast.success("Enquiry sent", {
+        description: "We'll confirm availability within 24 hours.",
+      });
+    } catch (err: unknown) {
+      console.error(err);
+      toast.error("Could not send your enquiry", {
+        description: err instanceof Error ? err.message : "Please try again, or WhatsApp us.",
+      });
+    } finally {
+      setSending(false);
     }
   }
 
@@ -164,8 +261,8 @@ export default function EnquiryDialog({
         ...(reference ? { reference } : {}),
         lead: {
           name: lead.name,
-          university: lead.university,
-          intake: lead.intake,
+          university: lead.university ?? "",
+          intake: lead.intake ?? "",
           nationality: lead.nationality,
           gender: lead.gender,
           email: lead.email,
@@ -231,7 +328,10 @@ export default function EnquiryDialog({
                 next["moveOut"] = "Move-out must be after move-in";
               }
 
-              const leadParsed = leadSchema.safeParse(raw);
+              // what is asked depends on the answer above, so the rules do too
+              if (!status) next["currentStatus"] = "Tell us if you are studying or working";
+
+              const leadParsed = leadSchemaFor(status, selfEmployed).safeParse(raw);
               if (!leadParsed.success) {
                 for (const issue of leadParsed.error.issues)
                   next[String(issue.path[0])] = issue.message;
@@ -252,74 +352,90 @@ export default function EnquiryDialog({
               }
 
               setErrors({});
-              const leadData = leadParsed.success ? leadParsed.data : null;
+              // typed as Lead, not left to inference: the schema is a union of a
+              // student's and a worker's, so the fields only one of them carries
+              // are optional here rather than absent from half the union
+              const leadData: Lead | null = leadParsed.success ? leadParsed.data : null;
               setLead(leadData);
               if (leadData) {
-                await submitEnquiry({
-                  data: {
-                    residenceSlug: property.slug,
-                    residenceName: property.name,
-                    roomCode: room?.id ?? raw["roomId"] ?? "",
-                    roomName: room?.name ?? "",
-                    unitType: room?.unitType ?? "",
+                // one key for this submission, made once and kept through a
+                // warning and any retry
+                if (!submissionKey.current) {
+                  submissionKey.current =
+                    globalThis.crypto?.randomUUID?.() ??
+                    `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+                }
+                // nothing stale: someone working sends no university and no
+                // intake, whatever a hidden field held before they switched
+                const studying = status === "student";
+                const uni = studying ? (leadData.university ?? "") : "";
+                const intake = studying ? (leadData.intake ?? "") : "";
+
+                const payload: EnquiryInput = {
+                  residenceSlug: property.slug,
+                  residenceName: property.name,
+                  roomCode: room?.id ?? raw["roomId"] ?? "",
+                  roomName: room?.name ?? "",
+                  unitType: room?.unitType ?? "",
+                  occupancy: occupancy ?? raw["occupancy"] ?? "single",
+                  moveIn: stay.moveIn,
+                  moveOut: stay.moveOut,
+                  term: stay.term ?? "long",
+                  paymentTerm: stay.paymentTerm ?? "bimonthly",
+                  monthlyRent: quote?.monthlyAfter ?? 0,
+                  firstPayment: quote?.totalUpfront ?? 0,
+                  addons: stay.addons ?? [],
+                  fullName: leadData.name,
+                  email: leadData.email,
+                  phone: leadData.mobile,
+                  nationality: leadData.nationality,
+                  currentStatus: status,
+                  // only what applies: a student sends no employer, and somebody
+                  // freelancing sends no company
+                  company: studying || selfEmployed ? "" : (leadData.company ?? ""),
+                  occupation: studying ? "" : (leadData.occupation ?? ""),
+                  university: uni,
+                  intake,
+                  gender: leadData.gender,
+                  heardAbout: heardChoice,
+                  heardAboutOther: heardChoice === "Other" ? heardOther.trim() : "",
+                  message: leadData.message ?? "",
+                  idempotencyKey: submissionKey.current,
+                  quoteSnapshot: {
+                    property,
+                    room,
                     occupancy: occupancy ?? raw["occupancy"] ?? "single",
+                    term: stay.term ?? "long",
                     moveIn: stay.moveIn,
                     moveOut: stay.moveOut,
-                    term: stay.term ?? "long",
-                    paymentTerm: stay.paymentTerm ?? "bimonthly",
-                    monthlyRent: quote?.monthlyAfter ?? 0,
-                    firstPayment: quote?.totalUpfront ?? 0,
-                    fullName: leadData.name,
-                    email: leadData.email,
-                    phone: leadData.mobile,
-                    nationality: leadData.nationality,
-                    university: leadData.university,
-                    intake: leadData.intake,
-                    gender: leadData.gender,
-                    heardAbout: heardChoice,
-                    heardAboutOther: heardChoice === "Other" ? heardOther.trim() : "",
-                    message: leadData.message ?? "",
-                    quoteSnapshot: {
-                      property,
-                      room,
-                      occupancy: occupancy ?? raw["occupancy"] ?? "single",
-                      term: stay.term ?? "long",
-                      moveIn: stay.moveIn,
-                      moveOut: stay.moveOut,
-                      quote,
-                      lead: {
-                        name: leadData.name,
-                        university: leadData.university,
-                        intake: leadData.intake,
-                        nationality: leadData.nationality,
-                        gender: leadData.gender,
-                        email: leadData.email,
-                        mobile: leadData.mobile,
-                      },
+                    quote,
+                    lead: {
+                      name: leadData.name,
+                      university: uni,
+                      intake,
+                      nationality: leadData.nationality,
+                      gender: leadData.gender,
+                      email: leadData.email,
+                      mobile: leadData.mobile,
                     },
                   },
-                })
-                  .then((res) => {
-                    // only tell the student it is sent once it really is
-                    if (!res?.ok) {
-                      toast.error("Could not send your enquiry", {
-                        description: "Please try again, or WhatsApp us.",
-                      });
-                      return;
-                    }
-                    if (res.reference) setReference(res.reference);
-                    setSubmitted(true);
-                    toast.success("Enquiry sent", {
-                      description: "We'll confirm availability within 24 hours.",
-                    });
-                  })
-                  .catch((err: unknown) => {
-                    console.error(err);
-                    toast.error("Could not send your enquiry", {
-                      description:
-                        err instanceof Error ? err.message : "Please try again, or WhatsApp us.",
-                    });
-                  });
+                };
+
+                /*
+                 * Enquired already today? They are told once and it stops here.
+                 * They decide - "Send it anyway" posts this very payload, and a
+                 * lookup that fails never costs anyone their enquiry.
+                 */
+                const seen = await checkEnquiryDuplicate({
+                  data: { email: leadData.email, phone: leadData.mobile },
+                }).catch(() => ({ duplicate: false as const, notice: "" }));
+                if (seen.duplicate) {
+                  setDupNotice(seen.notice);
+                  setPending(payload);
+                  return;
+                }
+
+                await send(payload);
               }
             }}
           >
@@ -523,64 +639,148 @@ export default function EnquiryDialog({
                 </div>
               </section>
 
-              {/* Study details */}
+              {/* Current status - asked before anything about study, because it
+                  decides whether there is anything to ask */}
               <section className="space-y-4">
                 <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-                  Study details
+                  Current status
+                </p>
+                <div className="space-y-1.5">
+                  <Label htmlFor="en-status">Are you studying or working?</Label>
+                  <select
+                    id="en-status"
+                    className={fieldClass}
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                    data-invalid={errors["currentStatus"] ? "true" : undefined}
+                  >
+                    <option value="" disabled>
+                      Select
+                    </option>
+                    {STATUS_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                  <FieldError msg={errors["currentStatus"]} />
+                </div>
+
+                {/* Where they work. Only once they have said they are working -
+                    asking a student for a job title is how a form gets abandoned. */}
+                {status === "employed" ? (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="en-company">Company / Organisation</Label>
+                      <Input
+                        id="en-company"
+                        name="company"
+                        className="h-11 rounded-xl"
+                        maxLength={120}
+                        value={company}
+                        disabled={selfEmployed}
+                        placeholder={selfEmployed ? "Not needed" : "Where you work"}
+                        onChange={(e) => setCompany(e.target.value)}
+                        data-invalid={errors["company"] ? "true" : undefined}
+                      />
+                      {/* somebody freelancing has no organisation to name, and
+                          inventing one is worse than saying so */}
+                      <label className="mt-1 flex cursor-pointer items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="size-4 shrink-0 accent-brand"
+                          checked={selfEmployed}
+                          onChange={(e) => {
+                            setSelfEmployed(e.target.checked);
+                            if (e.target.checked) setCompany("");
+                          }}
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          I&apos;m self-employed or freelance
+                        </span>
+                      </label>
+                      <FieldError msg={errors["company"]} />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="en-occupation">Occupation / Job Title</Label>
+                      <Input
+                        id="en-occupation"
+                        name="occupation"
+                        className="h-11 rounded-xl"
+                        maxLength={120}
+                        placeholder="e.g. Software engineer"
+                        data-invalid={errors["occupation"] ? "true" : undefined}
+                      />
+                      <FieldError msg={errors["occupation"]} />
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+
+              {/* Study details, for a student. Nationality, gender and how they
+                  heard of us are asked of everybody, so they stay either way. */}
+              <section className="space-y-4">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                  {status === "student" ? "Study details" : "About you"}
                 </p>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="en-uni">University</Label>
-                    <select
-                      id="en-uni"
-                      className={fieldClass}
-                      value={universityChoice}
-                      onChange={(e) => setUniversityChoice(e.target.value)}
-                      data-invalid={errors["university"] ? "true" : undefined}
-                    >
-                      <option value="" disabled>
-                        Select
-                      </option>
-                      {universities.map((u) => (
-                        <option key={u} value={u}>
-                          {u}
-                        </option>
-                      ))}
-                    </select>
-                    {universityChoice === "Other" && (
-                      <Input
-                        className="mt-2 h-11 rounded-xl"
-                        placeholder="Your university"
-                        maxLength={120}
-                        value={universityOther}
-                        onChange={(e) => setUniversityOther(e.target.value)}
-                      />
-                    )}
-                    <input type="hidden" name="university" value={universityValue} />
-                    <FieldError msg={errors["university"]} />
-                  </div>
+                  {status === "student" ? (
+                    <>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="en-uni">University</Label>
+                        <select
+                          id="en-uni"
+                          className={fieldClass}
+                          value={universityChoice}
+                          onChange={(e) => setUniversityChoice(e.target.value)}
+                          data-invalid={errors["university"] ? "true" : undefined}
+                        >
+                          <option value="" disabled>
+                            Select
+                          </option>
+                          {universities.map((u) => (
+                            <option key={u} value={u}>
+                              {u}
+                            </option>
+                          ))}
+                        </select>
+                        {universityChoice === "Other" && (
+                          <Input
+                            className="mt-2 h-11 rounded-xl"
+                            placeholder="Your university"
+                            maxLength={120}
+                            value={universityOther}
+                            onChange={(e) => setUniversityOther(e.target.value)}
+                          />
+                        )}
+                        <input type="hidden" name="university" value={universityValue} />
+                        <FieldError msg={errors["university"]} />
+                      </div>
 
-                  <div className="space-y-1.5">
-                    <Label htmlFor="en-intake">Intake</Label>
-                    <select
-                      id="en-intake"
-                      name="intake"
-                      className={fieldClass}
-                      defaultValue=""
-                      data-invalid={errors["intake"] ? "true" : undefined}
-                    >
-                      <option value="" disabled>
-                        Select month & year
-                      </option>
-                      {intakes.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                    <FieldError msg={errors["intake"]} />
-                  </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="en-intake">Intake</Label>
+                        <select
+                          id="en-intake"
+                          name="intake"
+                          className={fieldClass}
+                          defaultValue=""
+                          data-invalid={errors["intake"] ? "true" : undefined}
+                        >
+                          <option value="" disabled>
+                            Select month & year
+                          </option>
+                          {intakes.map((m) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          ))}
+                        </select>
+                        <FieldError msg={errors["intake"]} />
+                      </div>
+                    </>
+                  ) : null}
 
                   <div className="space-y-1.5">
                     <Label htmlFor="en-nat">Nationality</Label>
@@ -664,8 +864,36 @@ export default function EnquiryDialog({
             </div>
 
             <div className="border-t bg-card px-6 py-4">
-              <Button type="submit" size="lg" className="w-full">
-                Submit enquiry
+              {/* a warning, not a wall - they are told, and they decide */}
+              {dupNotice ? (
+                <div className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+                  <p className="text-sm leading-relaxed text-amber-900">{dupNotice}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={sending}
+                      onClick={() => pending && void send(pending)}
+                    >
+                      {sending ? "Sending…" : "Continue anyway"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={sending}
+                      onClick={() => {
+                        setDupNotice("");
+                        setPending(null);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+              <Button type="submit" size="lg" className="w-full" disabled={sending}>
+                {sending ? "Sending…" : "Submit enquiry"}
               </Button>
               <p className="mt-2 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
                 <ShieldCheck className="size-3.5 text-brand" />

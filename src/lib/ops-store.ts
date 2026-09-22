@@ -5,8 +5,10 @@
  * Writes update memory first so the UI stays instant, then persist in the
  * background and reconcile with whatever the server saved.
  *
- * Residents / tenancies / payments / tasks are still front-end only and are
- * mirrored to localStorage until their tables exist.
+ * Residents are in Supabase too (residents.functions.ts), and so is money -
+ * invoices and payments are read from resident-billing.functions.ts. Tenancies
+ * and tasks are still front-end only, mirrored to localStorage until their
+ * tables exist.
  */
 import { useSyncExternalStore } from "react";
 
@@ -75,6 +77,11 @@ export type Resident = {
   enquiryId?: string | undefined;
   /** Brachtia's own resident number, e.g. "00256". Blank for in-app signups. */
   quickbooksId: string;
+  /**
+   * The resident ID given by the database - YYTG####, e.g. 26IF0042. Blank for
+   * a resident who keeps their Brachtia ID, or until gender and nationality are known.
+   */
+  residentCode: string;
   // personal
   fullName: string;
   email: string;
@@ -90,6 +97,8 @@ export type Resident = {
   maritalStatus: string;
   race: string;
   religion: string;
+  /** "student" | "employed" - decides whether academic or employment is asked */
+  currentStatus: string;
   // academic
   university: string;
   levelOfStudy: string;
@@ -97,6 +106,11 @@ export type Resident = {
   studentId: string;
   graduationYear: string;
   sponsor: string;
+  // employment - asked instead of the academic questions
+  company: string;
+  occupation: string;
+  industry: string;
+  employmentType: string;
   // housing & health
   unitId?: string | undefined;
   roomId?: string | undefined;
@@ -158,23 +172,6 @@ export type Tenancy = {
   stampedFile?: string | undefined;
 };
 
-export type Payment = {
-  id: string;
-  residentId: string;
-  tenancyId?: string | undefined;
-  kind: "booking_fee" | "deposit" | "rent" | "other";
-  label: string;
-  periodFrom: string;
-  periodTo: string;
-  amount: number;
-  dueDate: string;
-  paidDate?: string | undefined;
-  method?: string | undefined;
-  reference?: string | undefined;
-  proofFile?: string | undefined;
-  status: "due" | "paid" | "partial" | "overdue";
-};
-
 export type Task = {
   id: string;
   type: "agreement" | "checkin" | "stamping" | "payment" | "hold";
@@ -190,7 +187,6 @@ export type OpsState = {
   units: Unit[];
   residents: Resident[];
   tenancies: Tenancy[];
-  payments: Payment[];
   tasks: Task[];
   taTemplate?: { fileName: string; uploadedAt: string } | undefined;
 };
@@ -199,7 +195,6 @@ const EMPTY: OpsState = {
   units: [],
   residents: [],
   tenancies: [],
-  payments: [],
   tasks: [],
 };
 
@@ -425,6 +420,9 @@ const VACANT_BED: BedPatch = {
   tenancyStart: undefined,
   tenancyEnd: undefined,
   rent: undefined,
+  // the booking it was held for, too - left behind, the booking still showed
+  // the released room as its own
+  enquiryId: undefined,
 };
 
 /**
@@ -448,8 +446,20 @@ export function vacateBed(bedId: string) {
  * Re-configure a room: single <-> twin <-> whole unit. The beds are rebuilt to
  * match. An occupied bed is carried over into the first slot so a conversion
  * never loses a resident.
+ *
+ * `freeBed` is applied, in the same change and the same save, to the first bed
+ * nobody is in - never over a resident carried into the first slot. Reserving a
+ * single room as a twin needs this: the beds are rebuilt with new ids, so a hold
+ * written separately afterwards landed on a bed that no longer existed.
+ *
+ * The save is returned, so a caller can wait for it and say when it failed -
+ * before, a failed save quietly put the room back and the page still said done.
  */
-export function convertRoomOccupancy(roomId: string, occupancy: Occupancy) {
+export function convertRoomOccupancy(
+  roomId: string,
+  occupancy: Occupancy,
+  freeBed?: BedPatch,
+): Promise<void> {
   setState((s) => ({
     ...s,
     units: s.units.map((u) => ({
@@ -458,24 +468,26 @@ export function convertRoomOccupancy(roomId: string, occupancy: Occupancy) {
         if (r.id !== roomId || r.occupancy === occupancy) return r;
         const fresh = bedsFor(occupancy);
         const keep = r.beds.find((b) => b.status !== "vacant");
-        const beds = keep ? [{ ...keep, label: fresh[0]!.label }, ...fresh.slice(1)] : fresh;
+        const beds = [keep ? { ...keep, label: fresh[0]!.label } : fresh[0]!, ...fresh.slice(1)];
+        const free = keep ? 1 : 0;
+        if (freeBed && beds[free]) beds[free] = { ...beds[free], ...freeBed } as Bed;
         return { ...r, occupancy, beds };
       }),
     })),
   }));
 
   const owner = state.units.find((u) => u.rooms.some((r) => r.id === roomId));
-  if (owner) {
-    void (async () => {
-      try {
-        const { saveUnitRow } = await import("@/lib/homes.functions");
-        const saved = await saveUnitRow({ data: { unit: owner } });
-        mergeUnit(saved, owner.id);
-      } catch {
-        void refreshUnits();
-      }
-    })();
-  }
+  if (!owner) return Promise.resolve();
+  return (async () => {
+    try {
+      const { saveUnitRow } = await import("@/lib/homes.functions");
+      const saved = await saveUnitRow({ data: { unit: owner } });
+      mergeUnit(saved, owner.id);
+    } catch (err) {
+      void refreshUnits();
+      throw err;
+    }
+  })();
 }
 
 const TAKEN: BedStatus[] = ["held", "booked", "active", "notice"];
@@ -593,7 +605,8 @@ export function sponsorLabel(raw?: string): string {
 export function unitGender(unit: Unit, residents: Resident[]): "Male" | "Female" | "Mixed" | "" {
   const seen = new Set<string>();
   for (const { bed } of allBeds([unit])) {
-    if (!bed.residentId && !bed.residentName) continue;
+    // a bed held for a booking counts too - that student is coming
+    if (!bed.residentId && !bed.residentName && !bed.enquiryId) continue;
     const person = residentForBed(residents, bed);
     const g = (person?.gender || bed.gender || "").trim().charAt(0).toUpperCase();
     if (g === "M" || g === "F") seen.add(g);
@@ -602,6 +615,24 @@ export function unitGender(unit: Unit, residents: Resident[]): "Male" | "Female"
   if (seen.has("M")) return "Male";
   if (seen.has("F")) return "Female";
   return "";
+}
+
+/**
+ * Whether a student may be placed in this unit.
+ *
+ * Men and women never share a unit. The unit's own "reserved for" setting has
+ * to allow the student, and so does everyone already living in it or holding a
+ * bed there - an empty unit set to Any takes either. Every place a person is put
+ * in a bed asks this, so a mixed unit cannot be made from any of them. A student
+ * with no gender on record is not stopped: there is nothing to check.
+ */
+export function unitAccepts(unit: Unit, residents: Resident[], gender: string | undefined) {
+  const g = (gender ?? "").trim().charAt(0).toUpperCase();
+  if (g !== "M" && g !== "F") return true;
+  const reserved = (unit.gender ?? "").trim().charAt(0).toUpperCase();
+  if ((reserved === "M" || reserved === "F") && reserved !== g) return false;
+  const taken = unitGender(unit, residents);
+  return taken === "" || (taken !== "Mixed" && taken.charAt(0) === g);
 }
 
 /**
@@ -619,24 +650,37 @@ export function findBedForResident(
   return byLink ?? findBed(units, resident.bedId);
 }
 
+/**
+ * When a resident's stay starts and ends, from the best record there is.
+ *
+ * A tenancy made in this app wins. Most residents came from the master list
+ * instead, whose dates sit on the bed - and a resident not yet placed still has
+ * the move-in date they gave. The list and the resident page both read this, so
+ * one cannot show dates the other has not got.
+ */
+export function stayDates(
+  tenancy: Pick<Tenancy, "start" | "end"> | undefined,
+  placed: BedRow | undefined,
+  resident: { moveIn?: string | undefined },
+) {
+  return {
+    start: tenancy?.start || placed?.bed.tenancyStart || resident.moveIn || "",
+    end: tenancy?.end || placed?.bed.tenancyEnd || "",
+  };
+}
+
 /* ---------------- Resident helpers ---------------- */
 
-export const DOC_TYPES: { key: string; label: string }[] = [
-  { key: "photo", label: "Passport size photo" },
-  { key: "offer", label: "University offer letter" },
-  { key: "id", label: "Passport / NRIC" },
-  { key: "declaration", label: "Signed declaration form" },
-  { key: "agreement", label: "Tenancy agreement" },
-  { key: "stamped", label: "Stamped tenancy agreement" },
-  { key: "booking_proof", label: "Booking fee payment proof" },
-  { key: "balance_proof", label: "Balance payment proof" },
-];
+/** The ID a resident goes by: the new resident ID, or the Brachtia ID they already had. */
+export const residentIdOf = (r: Pick<Resident, "residentCode" | "quickbooksId">) =>
+  r.residentCode || r.quickbooksId;
 
 export function blankResident(partial: Partial<Resident> = {}): Resident {
   return {
     id: uid(),
     createdAt: new Date().toISOString(),
     quickbooksId: "",
+    residentCode: "",
     fullName: "",
     email: "",
     mobile: "",
@@ -651,12 +695,17 @@ export function blankResident(partial: Partial<Resident> = {}): Resident {
     maritalStatus: "",
     race: "",
     religion: "",
+    currentStatus: "",
     university: "",
     levelOfStudy: "",
     course: "",
     studentId: "",
     graduationYear: "",
     sponsor: "",
+    company: "",
+    occupation: "",
+    industry: "",
+    employmentType: "",
     occupancy: "",
     moveIn: "",
     leaseMonths: "",
@@ -721,7 +770,6 @@ export async function deleteResident(id: string) {
     ...s,
     residents: s.residents.filter((r) => r.id !== id),
     tenancies: s.tenancies.filter((t) => t.residentId !== id),
-    payments: s.payments.filter((p) => p.residentId !== id),
   }));
   try {
     const { deleteResidentRow } = await import("@/lib/residents.functions");
@@ -783,24 +831,11 @@ export function deleteTask(id: string) {
   setState((s) => ({ ...s, tasks: s.tasks.filter((t) => t.id !== id) }));
 }
 
-export function addPayment(payment: Omit<Payment, "id">) {
-  setState((s) => ({ ...s, payments: [...s.payments, { id: uid(), ...payment }] }));
-}
-
-export function savePayment(payment: Payment) {
-  setState((s) => ({ ...s, payments: s.payments.map((p) => (p.id === payment.id ? payment : p)) }));
-}
-
 export function setTaTemplate(fileName: string) {
   setState((s) => ({ ...s, taTemplate: { fileName, uploadedAt: new Date().toISOString() } }));
 }
 
-export const SCHEDULES = [
-  { value: "bimonthly", label: "Bi-monthly (every 2 months)", months: 2 },
-  { value: "quarterly", label: "Quarterly (every 3 months)", months: 3 },
-  { value: "semiannual", label: "Semi-annually (every 6 months)", months: 6 },
-  { value: "full", label: "Full term", months: 0 },
-];
+export { SCHEDULES } from "@/lib/reference-data";
 
 export const PAY_METHODS = ["DuitNow QR Pay", "Bank Transfer", "Cheque", "Cash"];
 

@@ -14,7 +14,12 @@ export type SiteRoomType = {
   residence_id?: string | undefined;
   unit_type?: string | undefined;
   occupancies?: string[] | undefined;
-  rent?: { long?: { single?: number | null; twin?: number | null } } | undefined;
+  rent?:
+    | {
+        long?: { single?: number | null; twin?: number | null };
+        short?: { single?: number | null; twin?: number | null };
+      }
+    | undefined;
 };
 
 /** One empty list for every page still loading, so their memos hold still. */
@@ -53,7 +58,10 @@ export function typesOfUnitType<T extends HasUnitType>(list: T[], unitType?: str
  * The bed's own rent wins when it has one, because that is a real tenancy at an
  * agreed price (including anything bulk-uploaded) and must not move when the
  * price list changes. A vacant bed has no such promise, so it quotes today's
- * configured rate.
+ * configured rate - for the term of the stay, since a short stay is priced
+ * higher than a 12-month one. Without a term, or where Website has set no rate
+ * for it, the 12-month rate is used, and 0 means the price list has no rate at
+ * all for that room and occupancy.
  */
 export function bedRent(
   roomTypes: SiteRoomType[],
@@ -61,6 +69,7 @@ export function bedRent(
   room: Pick<UnitRoom, "letter" | "occupancy" | "rent" | "roomTypeCode">,
   bed: { rent?: number | undefined },
   asSingle = false,
+  term: "long" | "short" = "long",
 ) {
   if (bed.rent != null) return bed.rent;
   if (isUnitSlot(room)) return unit.wholeUnitRent;
@@ -68,7 +77,48 @@ export function bedRent(
   // a whole empty room quoted as a single is priced as one, whatever the room
   // is normally sold as
   const want = asSingle ? "single" : room.occupancy === "twin" ? "twin" : "single";
-  return Number(rt?.rent?.long?.[want]) || room.rent;
+  return Number(rt?.rent?.[term]?.[want]) || Number(rt?.rent?.long?.[want]) || room.rent;
+}
+
+/**
+ * Whether a room type is sold for a stay of this length.
+ *
+ * Website prices each room type by term - 12-month and short - and a blank rate
+ * there means the option is not offered, not that it is free. So a room with no
+ * short-term rate cannot take a short stay at all: the site leaves it out of its
+ * price table, and admin must not book one into it either.
+ *
+ * With an occupancy, that occupancy alone decides; without one, the room offers
+ * the term if any occupancy it is sold at has a rate.
+ */
+export function offersTerm(
+  type: SiteRoomType,
+  term: "long" | "short",
+  occupancy?: string | undefined,
+) {
+  const rates = (type.rent?.[term] ?? {}) as Record<string, number | null | undefined>;
+  const wanted = occupancy ? [occupancy] : (type.occupancies ?? ["single", "twin"]);
+  return wanted.some((o) => Number(rates[o]) > 0);
+}
+
+/**
+ * The rent for a whole apartment of this unit type, as Website prices it.
+ *
+ * A whole unit is let to one party, so it is one rent for the apartment rather
+ * than a rate per person - and it is the same rent whichever of that unit type's
+ * rooms you look at. So it is kept once, against the unit type on the residence,
+ * not copied onto each of its room types where four copies of one price would
+ * drift apart. A particular unit can still be priced differently in Homes.
+ *
+ * `unit_rates` is shaped { "3-Bedroom Apartment": { long: 2400, short: 2800 } }.
+ */
+export function wholeUnitRate(
+  residence: { unit_rates?: unknown } | null | undefined,
+  unitType: string,
+  term: "long" | "short",
+) {
+  const rates = (residence?.unit_rates ?? {}) as Record<string, Record<string, unknown>>;
+  return Number(rates?.[unitType]?.[term]) || 0;
 }
 
 /**

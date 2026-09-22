@@ -2,6 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Link2, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { refreshMoney } from "@/lib/billing-client";
 
 import { idLabelFor } from "@/lib/reference-data";
 import { getDeclarationForResident } from "@/lib/declaration.functions";
@@ -27,8 +38,8 @@ import {
 } from "@/components/admin/ops-ui";
 import { TenancyCard } from "@/components/admin/TenancyCard";
 import { ResidentPayments } from "@/components/admin/ResidentPayments";
+import { STUDENT_DOCS, studentDocLabel } from "@/lib/resident-documents";
 import {
-  DOC_TYPES,
   PAY_METHODS,
   SCHEDULES,
   addTask,
@@ -40,13 +51,17 @@ import {
   deleteResident,
   findBed,
   findBedForResident,
+  refreshResidents,
+  refreshUnits,
   saveResidentRecord,
+  stayDates,
   updateBed,
   useOps,
   vacateBed,
   type BedStatus,
   type Resident,
   type ResidentPatch,
+  residentIdOf,
 } from "@/lib/ops-store";
 
 function initials(name: string) {
@@ -104,6 +119,12 @@ const PROFILE_SECTIONS = [
 
 export const Route = createFileRoute("/admin/residents/$id")({
   component: ResidentProfilePage,
+  // the tab to open on - a booking's Record Payment lands straight on Payments
+  validateSearch: (search: Record<string, unknown>) => ({
+    ...(search["tab"] === "tenancy" || search["tab"] === "payments"
+      ? { tab: search["tab"] as "tenancy" | "payments" }
+      : {}),
+  }),
 });
 
 /**
@@ -158,17 +179,22 @@ function DeclarationStatus({ residentId }: { residentId: string }) {
 function ResidentProfilePage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
-  const { residents, units, tenancies, payments } = useOps();
+  const { residents, units, tenancies } = useOps();
   // "new" is a resident that does not exist yet: the form is filled in first and
   // the row is only created on save, so an abandoned form leaves nothing behind
   const isNew = id === "new";
   const stored = residents.find((r) => r.id === id);
   const [form, setForm] = useState<Resident | null>(isNew ? blankResident() : (stored ?? null));
-  const [tab, setTab] = useState("profile");
+  const { tab: startTab } = Route.useSearch();
+  const [tab, setTab] = useState<string>(startTab ?? "profile");
   const [active, setActive] = useState("personal");
   // sections are read-only until the pencil is clicked
   const [editing, setEditing] = useState<Record<string, boolean>>({});
   const [linking, setLinking] = useState(false);
+  const queryClient = useQueryClient();
+  // deleting a former resident for good asks for their name to be typed back
+  const [deleting, setDeleting] = useState(false);
+  const [confirmName, setConfirmName] = useState("");
   const isEditing = (key: string) => !!editing[key];
   const editAction = (key: string) => (
     <Button
@@ -305,27 +331,23 @@ function ResidentProfilePage() {
   // the stay summary: the tenancy record if there is one, otherwise whatever the
   // bed placement and the profile already know
   const stay = {
-    start: tenancy?.start || placed?.bed.tenancyStart || form.moveIn || "",
-    end: tenancy?.end || placed?.bed.tenancyEnd || "",
+    ...stayDates(tenancy, placed, form),
     rent: tenancy?.rent || placed?.bed.rent || placed?.room.rent || 0,
     status: (placed?.bed.status ?? "vacant") as BedStatus,
-    get duration() {
+    get duration(): string {
       return monthsBetween(this.start, this.end);
     },
   };
 
   /**
-   * A blank row is an accident, not a record: no name, no Brachtia id, no bed,
-   * no tenancy, no payments. Nothing points at it, so removing it loses nothing.
-   * Anyone with real data is deactivated instead.
+   * A blank row is an accident, not a record: no name, no Brachtia id, no email,
+   * no bed, no tenancy. Nothing points at it, so removing it loses nothing.
+   * Anyone with real data is deactivated instead. (Billing needs no check of its
+   * own: an invoice only reaches a resident from a booking, and a booking always
+   * carries the student's name.)
    */
   const isEmptyDraft =
-    !form.fullName.trim() &&
-    !form.quickbooksId.trim() &&
-    !form.email.trim() &&
-    !placed &&
-    !tenancy &&
-    !payments.some((p) => p.residentId === form.id);
+    !form.fullName.trim() && !form.quickbooksId.trim() && !form.email.trim() && !placed && !tenancy;
 
   /**
    * A link the student opens to check and complete their own profile. It writes
@@ -367,9 +389,9 @@ function ResidentProfilePage() {
   }
 
   /**
-   * Residents are never deleted - they are history, and a deleted one would
-   * leave payments and agreements pointing at nothing. Deactivating marks them
-   * inactive and frees the bed they held.
+   * A current resident is never deleted - they are history, and a deleted one
+   * would leave payments and agreements pointing at nothing. Deactivating marks
+   * them inactive and frees the bed they held.
    */
   async function deactivate() {
     const bed = placed?.bed;
@@ -381,6 +403,30 @@ function ResidentProfilePage() {
       return;
     }
     toast.success("Resident deactivated");
+    void navigate({ to: "/admin/residents" });
+  }
+
+  /**
+   * Former residents with no QuickBooks id are test data - real residents from
+   * the master list all carry one - so only they can be deleted for good, with
+   * their invoices and payments. The server checks the same rules again.
+   */
+  const isFormer = (form.status || "").toLowerCase() === "inactive";
+  const canDelete = isFormer && !form.quickbooksId.trim();
+  const nameTyped = confirmName.trim().toLowerCase() === form.fullName.trim().toLowerCase();
+
+  async function deleteForever() {
+    if (!form) return;
+    try {
+      const { deleteFormerResident } = await import("@/lib/residents.functions");
+      await deleteFormerResident({ data: { id: form.id, confirmName } });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not delete resident");
+      return;
+    }
+    setDeleting(false);
+    await Promise.all([refreshResidents(), refreshUnits(), refreshMoney(queryClient)]);
+    toast.success("Resident deleted");
     void navigate({ to: "/admin/residents" });
   }
 
@@ -406,7 +452,7 @@ function ResidentProfilePage() {
               <div className="mt-1.5 flex flex-wrap items-center gap-2">
                 <StatusPill status={stay.status} />
                 {[
-                  form.quickbooksId && `ID ${form.quickbooksId}`,
+                  residentIdOf(form) && `ID ${residentIdOf(form)}`,
                   form.university,
                   form.nationality,
                   form.gender,
@@ -424,26 +470,72 @@ function ResidentProfilePage() {
             </div>
           </div>
 
+          {/*
+            A real resident's record is not ended from this header: each section
+            saves its own edits, and a record with a Brachtia ID behind it is not
+            something to deactivate on the way past. Only a record made here with
+            no Brachtia ID - a test - can still be deactivated and deleted.
+          */}
           <div className="flex shrink-0 items-center gap-1">
-            <Button size="sm" onClick={save}>
-              Save
-            </Button>
             {isEmptyDraft ? (
               <Button size="sm" variant="outline" onClick={discard}>
                 <Trash2 className="mr-1 size-3.5" /> Discard
               </Button>
-            ) : (
+            ) : !isFormer && !form.quickbooksId.trim() ? (
               <Button size="sm" variant="outline" onClick={deactivate}>
                 Deactivate
               </Button>
-            )}
+            ) : canDelete ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-destructive"
+                onClick={() => {
+                  setConfirmName("");
+                  setDeleting(true);
+                }}
+              >
+                <Trash2 className="mr-1 size-3.5" /> Delete
+              </Button>
+            ) : null}
           </div>
+
+          <Dialog open={deleting} onOpenChange={setDeleting}>
+            <DialogContent className="admin-ui">
+              <DialogHeader>
+                <DialogTitle className="text-base font-bold text-brand-deep">
+                  Delete {form.fullName || "this resident"}?
+                </DialogTitle>
+                <DialogDescription>
+                  Their profile, invoices, payments, receipts and uploaded files are removed for
+                  good. This cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">Type their name to confirm</p>
+                <Input
+                  autoFocus
+                  value={confirmName}
+                  onChange={(e) => setConfirmName(e.target.value)}
+                  placeholder={form.fullName}
+                  aria-label="Resident name"
+                />
+              </div>
+              <Button
+                variant="destructive"
+                disabled={!nameTyped}
+                onClick={() => void deleteForever()}
+              >
+                Delete for good
+              </Button>
+            </DialogContent>
+          </Dialog>
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-border pt-4 sm:grid-cols-4 lg:grid-cols-7">
           {[
             { label: "Residence", value: placed?.unit.residenceName },
-            { label: "Unit", value: placed?.unit.unitNo },
+            { label: "Unit number", value: placed?.unit.unitNo },
             {
               label: "Room / bed",
               value: placed ? `Room ${placed.room.letter} · ${placed.bed.label}` : undefined,
@@ -530,14 +622,16 @@ function ResidentProfilePage() {
                 onClick={copyProfileLink}
               >
                 <Link2 className="mr-1.5 size-3.5" />
-                {linking ? "Preparing…" : "Copy profile link"}
+                {linking ? "Preparing…" : "Application Form Link"}
               </Button>
             </nav>
 
             <div className="min-w-0 flex-1 space-y-4">
               {/* one list drives both this page and the student's profile link,
                   so a field renamed or removed here disappears there too */}
-              {RESIDENT_SECTIONS.map((s) => (
+              {RESIDENT_SECTIONS.filter((s) =>
+                s.fields.some((f) => residentFieldShown(f, form)),
+              ).map((s) => (
                 <section
                   key={s.key}
                   id={`sec-${s.key}`}
@@ -567,12 +661,16 @@ function ResidentProfilePage() {
                   title="Documents"
                   description="Uploads are recorded locally for now — file storage comes with the backend pass."
                 >
-                  {DOC_TYPES.map((d) => {
+                  {/* the documents the form asks the student for - one list, so
+                      the admin page cannot ask for more than the student is shown */}
+                  {STUDENT_DOCS.map((d) => {
                     const doc = form.docs.find((x) => x.key === d.key);
+                    // named the way the student form names it: IC copy or passport copy
+                    const label = studentDocLabel(d.key, form.nationality);
                     return (
                       <DocumentRow
                         key={d.key}
-                        label={d.label}
+                        label={label}
                         fileName={doc?.fileName}
                         uploadedAt={doc?.uploadedAt}
                         onUpload={(name) =>
@@ -581,7 +679,7 @@ function ResidentProfilePage() {
                               ...form.docs.filter((x) => x.key !== d.key),
                               {
                                 key: d.key,
-                                label: d.label,
+                                label,
                                 fileName: name,
                                 uploadedAt: new Date().toISOString(),
                               },
@@ -628,7 +726,10 @@ function ResidentProfilePage() {
             action={editAction("placement")}
           >
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <ReadOnlyField label="QuickBooks ID" value={form.quickbooksId} />
+              <ReadOnlyField
+                label="Resident ID"
+                value={residentIdOf(form) || "Given once gender and nationality are saved"}
+              />
               <Select
                 readOnly={!isEditing("placement")}
                 label="Assigned bed"
@@ -720,6 +821,24 @@ function ResidentProfilePage() {
             residentId={form.id}
             quickbooksId={form.quickbooksId}
             tenancyEnd={stay.end}
+            details={{
+              // their resident ID, or the Brachtia ID they kept when the
+              // database has not given them one yet
+              residentCode: residentIdOf(form),
+              fullName: form.fullName,
+              email: form.email,
+              phone: form.mobile,
+              university: form.university,
+              nationality: form.nationality,
+              residenceName: placed?.unit.residenceName ?? "",
+              roomName: placed ? `Unit ${placed.unit.unitNo} · Room ${placed.room.letter}` : "",
+              occupancy: placed?.room.occupancy ?? "",
+              tenancyStart: stay.start || "",
+              tenancyEnd: stay.end || "",
+              monthlyRent: Number(stay.rent) || 0,
+              // the Payment schedule field in Payor details
+              paymentFrequency: form.paySchedule,
+            }}
           />
         </TabsContent>
       </Tabs>

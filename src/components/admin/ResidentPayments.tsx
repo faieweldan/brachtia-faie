@@ -1,38 +1,83 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, ChevronDown, Loader2, Plus } from "lucide-react";
+import {
+  CalendarClock,
+  ChevronDown,
+  DoorOpen,
+  Eye,
+  Loader2,
+  Plus,
+  Receipt,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Panel, StatusPill } from "@/components/admin/ops-ui";
+import { Panel } from "@/components/admin/ops-ui";
+import { CollectedBar, Figure, TonePill } from "@/components/admin/billing-ui";
+import { paymentStateOf } from "@/lib/payment-status";
+import { PdfPreviewButton } from "@/components/admin/PdfPreview";
+import {
+  ResidentInvoiceDialog,
+  type ResidentDetails,
+} from "@/components/admin/ResidentInvoiceDialog";
+import { TONE, sumBy, type Tone } from "@/lib/billing-tone";
+import { invoiceRef } from "@/lib/invoice-category";
+import { getResidentRent } from "@/lib/rental-schedule.functions";
+import { RentalScheduleDialog } from "@/components/admin/RentalScheduleDialog";
 import { fmtDate, money } from "@/lib/ops-store";
 import { getResidentBilling, type BillingInvoice } from "@/lib/resident-billing.functions";
+import {
+  ProofLink,
+  RecordPaymentDialog,
+  type PayableInvoice,
+} from "@/components/admin/RecordPaymentDialog";
 
 /**
  * A resident's money, shown the way an admin thinks about it.
  *
- * Four questions, in the order they come up over a tenancy: what did they pay to
- * move in, is their rent up to date, is anything else owed, and what happens at
- * check-out. Each answers itself in one line and only opens up when asked.
+ * The totals and how much of it is in, then four lines in the order they come
+ * up over a tenancy: moving in, rent, anything extra, checkout. Each line says
+ * its state with a colour before any word is read, and opens only when there is
+ * more to see.
  *
  * Nothing accounting-shaped on the surface - no ageing, no debit and credit.
  * That detail lives one click down, inside the invoice.
  */
+
 export function ResidentPayments({
   residentId,
   quickbooksId,
   tenancyEnd,
+  details,
 }: {
   residentId: string;
   quickbooksId?: string;
   tenancyEnd?: string;
+  /** who they are and their stay - a new invoice is filled in from it */
+  details: ResidentDetails;
 }) {
   const { data, isLoading } = useQuery({
     queryKey: ["resident-billing", residentId, quickbooksId],
-    queryFn: () => getResidentBilling({ data: { residentId, ...(quickbooksId ? { quickbooksId } : {}) } }),
+    queryFn: () =>
+      getResidentBilling({ data: { residentId, ...(quickbooksId ? { quickbooksId } : {}) } }),
   });
 
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const toggle = (k: string) => setOpen((o) => ({ ...o, [k]: !o[k] }));
+  const [paying, setPaying] = useState<PayableInvoice | null>(null);
+  // a new invoice: rent or a charge
+  const [raising, setRaising] = useState<{ as: "rental" | "charge" } | null>(null);
+  // a scheduled rent invoice being changed before it is billed
+  const [editingRent, setEditingRent] = useState<BillingInvoice | null>(null);
+  // the rent terms admin confirmed for the current tenancy - none means setup is needed
+  const { data: rent } = useQuery({
+    queryKey: ["resident-rent", residentId],
+    queryFn: () => getResidentRent({ data: { residentId } }),
+  });
+  const [settingSchedule, setSettingSchedule] = useState(false);
+  const pay = (inv: BillingInvoice) =>
+    setPaying({ id: inv.id, number: inv.number, outstanding: inv.outstanding, owner: residentId });
 
   const frequency = useMemo(() => {
     const f = data?.paymentFrequency ?? "";
@@ -62,181 +107,378 @@ export function ResidentPayments({
   const charges = b?.groups.charge ?? [];
   const checkout = b?.groups.checkout ?? [];
 
-  const initialOutstanding = initial.reduce((n, i) => n + i.outstanding, 0);
-  const rentalOutstanding = rental.reduce((n, i) => n + i.outstanding, 0);
-  const chargeOutstanding = charges.reduce((n, i) => n + i.outstanding, 0);
-  const nextRental = rental.find((i) => i.outstanding > 0);
+  const billed = b?.billed ?? 0;
+  const collected = b?.collected ?? 0;
+  const outstanding = b?.outstanding ?? 0;
+
+  const initialDue = sumBy(initial, "outstanding");
+  const rentalDue = sumBy(rental, "outstanding");
+  const chargeDue = sumBy(charges, "outstanding");
+  const initialCredit = sumBy(initial, "credit");
+
+  // what the resident page does not know is read off their first invoice
+  const first = initial[0]?.doc;
+  const invoiceDetails: ResidentDetails = {
+    ...details,
+    residentCode: details.residentCode || first?.resident_code || "",
+    residenceName: details.residenceName || first?.residence_name || "",
+    roomName: details.roomName || first?.room_name || "",
+    occupancy: details.occupancy || first?.occupancy || "",
+    tenancyStart: details.tenancyStart || first?.tenancy_start || "",
+    tenancyEnd: details.tenancyEnd || first?.tenancy_end || "",
+    monthlyRent: details.monthlyRent || b?.monthlyRent || 0,
+    paymentFrequency: details.paymentFrequency || b?.paymentFrequency || "bimonthly",
+  };
+  const lastRentEnd =
+    rental
+      .map((i) => i.periodEnd)
+      .filter(Boolean)
+      .sort()
+      .at(-1) ?? "";
+
+  // rent: the invoices billed for this tenancy, then the ones made ahead that are
+  // not billed yet - every one to the end of the tenancy, each billed on its own day
+  const today = new Date().toISOString().slice(0, 10);
+  const schedule = rent?.schedule ?? null;
+  const tenancyId = rent?.tenancy?.id ?? "";
+  const forTenancy = (i: BillingInvoice) => !i.tenancyId || !tenancyId || i.tenancyId === tenancyId;
+  const issuedRent = rental.filter(forTenancy);
+  const scheduledRent = (b?.scheduled ?? []).filter(forTenancy);
+  const lastIssuedEnd =
+    issuedRent
+      .map((i) => i.periodEnd.slice(0, 10))
+      .filter(Boolean)
+      .sort()
+      .at(-1) ?? "";
+  const rentRows = [...issuedRent, ...scheduledRent].sort((x, y) =>
+    (x.periodStart || x.issuedAt).localeCompare(y.periodStart || y.issuedAt),
+  );
+  const nextRent = rentRows.find((r) => r.scheduled || r.outstanding > 0);
+  // "Past Due" is the word the status model uses; this read "Overdue" until the
+  // five states landed, which would have left the count silently empty for ever
+  const overdue = rentRows.filter((r) => rentState(r, today).label === "Past Due");
+  const nextDue = nextRent ? nextRent.dueDate : (b?.nextDue ?? "");
+
+  const chargeBilled = sumBy(charges, "total");
+  const chargeCollected = sumBy(charges, "paid");
 
   return (
     <div className="space-y-4">
-      {/* the whole picture in three numbers and one line */}
+      {/* the whole picture: three numbers, and how much of it is in */}
       <Panel>
-        <div className="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-border bg-border">
-          <Figure label="Billed" value={money(b?.billed ?? 0)} />
-          <Figure label="Collected" value={money(b?.collected ?? 0)} tone="text-emerald-700" />
-          <Figure
-            label="Outstanding"
-            value={money(b?.outstanding ?? 0)}
-            tone={(b?.outstanding ?? 0) > 0 ? "text-amber-700" : undefined}
-          />
+        <div className="flex flex-wrap items-start gap-4">
+          <div className="grid flex-1 gap-4 sm:grid-cols-3">
+            <Figure label="Billed" value={money(billed)} />
+            <Figure label="Collected" value={money(collected)} tone="done" />
+            <Figure
+              label="Outstanding"
+              value={money(outstanding)}
+              tone={outstanding > 0 ? "due" : undefined}
+            />
+          </div>
+          <Button size="sm" variant="outline" onClick={() => setRaising({ as: "rental" })}>
+            <Plus className="size-4" /> Generate invoice
+          </Button>
         </div>
-        {(b?.credit ?? 0) > 0 ? (
-          <p className="mt-3 rounded-xl bg-sky-50 px-3 py-2 text-xs text-sky-900">
-            {money(b!.credit)} paid beyond what was billed — not yet refunded or carried forward.
-          </p>
-        ) : null}
-        <p className="mt-3 text-xs text-muted-foreground">
+
+        <CollectedBar billed={billed} collected={collected}>
           {[
-            b?.monthlyRent ? `Monthly rent ${money(b.monthlyRent)}` : null,
+            b?.monthlyRent ? `${money(b.monthlyRent)} / month` : null,
             frequency || null,
-            b?.nextDue ? `Next payment ${fmtDate(b.nextDue)}` : null,
+            nextDue ? `Next ${fmtDate(nextDue)}` : null,
           ]
             .filter(Boolean)
-            .join(" · ") || "No billing raised yet"}
-        </p>
+            .join(" · ") || "No billing yet"}
+        </CollectedBar>
+
+        {(b?.credit ?? 0) > 0 ? (
+          <p className="mt-3 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-900">
+            {money(b!.credit)} in credit
+          </p>
+        ) : null}
       </Panel>
 
-      <Card
-        index="01"
-        title="Initial payment"
-        hint="Booking fee, advance rental and deposits"
-        status={
-          initial.length === 0
-            ? "Not raised"
-            : initialOutstanding > 0
-              ? `${money(initialOutstanding)} due`
-              : "Completed"
-        }
-        done={initial.length > 0 && initialOutstanding === 0}
-        detail={
-          initial.length
-            ? `${money(initial.reduce((n, i) => n + i.total, 0))} billed · ${money(
-                initial.reduce((n, i) => n + i.paid, 0),
-              )} collected${
-                initial.reduce((n, i) => n + i.credit, 0) > 0
-                  ? ` · ${money(initial.reduce((n, i) => n + i.credit, 0))} in credit`
-                  : ""
-              }`
-            : "Raised from the booking when the student accepts"
-        }
-        open={!!open["initial"]}
-        onToggle={initial.length ? () => toggle("initial") : undefined}
-      >
-        {initial.map((inv) => (
-          <InvoiceDetail key={inv.id} invoice={inv} />
-        ))}
-      </Card>
-
-      <Card
-        index="02"
-        title="Rental payments"
-        hint="Recurring rental payments"
-        status={
-          rentalOutstanding > 0
-            ? `${money(rentalOutstanding)} due`
-            : rental.length
-              ? "Up to date"
-              : "Not started"
-        }
-        done={rental.length > 0 && rentalOutstanding === 0}
-        detail={
-          nextRental
-            ? `Next: ${periodLabel(nextRental)}${nextRental.dueDate ? ` · Due ${fmtDate(nextRental.dueDate)}` : ""}`
-            : rental.length
-              ? "Nothing outstanding"
-              : "Rental invoices appear here once raised"
-        }
-        open={!!open["rental"]}
-        onToggle={rental.length ? () => toggle("rental") : undefined}
-      >
-        <table className="w-full text-left text-sm">
-          <thead className="bg-muted text-xs text-muted-foreground">
-            <tr>
-              <th className="px-4 py-2 font-medium">Period</th>
-              <th className="px-4 py-2 font-medium">Amount</th>
-              <th className="px-4 py-2 font-medium">Invoice</th>
-              <th className="px-4 py-2 font-medium">Payment</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {rental.map((inv) => (
-              <tr key={inv.id}>
-                <td className="px-4 py-2">{periodLabel(inv)}</td>
-                <td className="px-4 py-2 tabular-nums">{money(inv.total)}</td>
-                <td className="px-4 py-2 text-muted-foreground">
-                  {inv.status === "draft" ? "Scheduled" : "Sent"}
-                </td>
-                <td className="px-4 py-2">
-                  {inv.outstanding === 0 ? (
-                    <span className="text-emerald-700">Paid</span>
-                  ) : inv.status === "draft" ? (
-                    <span className="text-muted-foreground">Upcoming</span>
-                  ) : (
-                    <span className="text-amber-700">{money(inv.outstanding)} due</span>
-                  )}
-                </td>
-              </tr>
+      {/* the four stages of a tenancy's money, one line each */}
+      <Panel className="overflow-hidden p-0">
+        <div className="divide-y divide-border">
+          <Row
+            icon={Wallet}
+            title="Initial payment"
+            tone={initial.length === 0 ? "idle" : initialDue > 0 ? "due" : "done"}
+            status={
+              initial.length === 0
+                ? "Not raised"
+                : initialDue > 0
+                  ? `${money(initialDue)} due`
+                  : "Completed"
+            }
+            detail={
+              initial.length
+                ? `${money(sumBy(initial, "total"))} billed · ${money(sumBy(initial, "paid"))} collected${
+                    initialCredit > 0 ? ` · ${money(initialCredit)} credit` : ""
+                  }`
+                : ""
+            }
+            open={!!open["initial"]}
+            onToggle={initial.length ? () => toggle("initial") : undefined}
+          >
+            {initial.map((inv) => (
+              <InvoiceDetail key={inv.id} invoice={inv} onPay={() => pay(inv)} />
             ))}
-          </tbody>
-        </table>
-      </Card>
+          </Row>
 
-      <Card
-        index="03"
-        title="Additional charges"
-        hint="One-off charges during the tenancy"
-        status={
-          chargeOutstanding > 0
-            ? `${money(chargeOutstanding)} outstanding`
-            : "No outstanding charges"
-        }
-        done={charges.length > 0 && chargeOutstanding === 0}
-        detail={
-          charges.length
-            ? `${charges.length} charge${charges.length === 1 ? "" : "s"} · ${money(
-                charges.reduce((n, i) => n + i.total, 0),
-              )} billed · ${money(charges.reduce((n, i) => n + i.paid, 0))} collected`
-            : "No additional charges"
-        }
-        open={!!open["charge"]}
-        onToggle={charges.length ? () => toggle("charge") : undefined}
-        action={
-          <Button size="sm" variant="outline" disabled>
-            <Plus className="mr-1 size-3.5" /> Add charge
-          </Button>
-        }
-      >
-        {charges.map((inv) => (
-          <InvoiceDetail key={inv.id} invoice={inv} />
-        ))}
-      </Card>
+          <Row
+            icon={CalendarClock}
+            title="Rental payments"
+            tone={
+              overdue.length
+                ? "late"
+                : !schedule || rentalDue > 0
+                  ? "due"
+                  : rentRows.length
+                    ? "done"
+                    : "idle"
+            }
+            status={
+              overdue.length
+                ? `${overdue.length} overdue`
+                : !schedule
+                  ? "Setup required"
+                  : rentalDue > 0
+                    ? `${money(rentalDue)} due`
+                    : scheduledRent.length
+                      ? "Scheduled"
+                      : rentRows.length
+                        ? "Up to date"
+                        : "Not started"
+            }
+            detail={
+              !schedule
+                ? "The rent, payment schedule or tenancy dates are missing"
+                : nextRent
+                  ? `Next: ${spanLabel(
+                      nextRent.periodStart.slice(0, 10),
+                      nextRent.periodEnd.slice(0, 10),
+                    )} · Due ${fmtDate(nextRent.dueDate)}${
+                      nextRent.scheduled ? ` · Bills ${fmtDate(nextRent.billOn)}` : ""
+                    }`
+                  : ""
+            }
+            open={!!open["rental"]}
+            onToggle={rentRows.length ? () => toggle("rental") : undefined}
+            action={
+              <Button
+                size="sm"
+                variant={schedule ? "ghost" : "outline"}
+                className="h-8 shrink-0"
+                onClick={() => setSettingSchedule(true)}
+              >
+                {schedule ? "Edit schedule" : "Set payment schedule"}
+              </Button>
+            }
+          >
+            <table className="w-full text-left text-xs sm:text-sm">
+              <thead className="text-xs text-muted-foreground">
+                <tr>
+                  {/* headings kept to one line and no wider than their own data -
+                      eight columns of generous padding pushed Period off the
+                      left edge, so the first thing you needed was the first
+                      thing you could not see */}
+                  <th className="whitespace-nowrap px-3 py-2 font-medium">Period</th>
+                  <th className="whitespace-nowrap px-3 py-2 font-medium">Amount</th>
+                  <th className="whitespace-nowrap px-3 py-2 font-medium">Invoiced</th>
+                  <th className="whitespace-nowrap px-3 py-2 font-medium">Due</th>
+                  <th className="whitespace-nowrap px-3 py-2 font-medium">Invoice no.</th>
+                  <th className="whitespace-nowrap px-3 py-2 font-medium">Status</th>
+                  <th className="whitespace-nowrap px-3 py-2 font-medium">Overdue</th>
+                  <th className="px-3 py-2" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {rentRows.map((inv) => {
+                  const state = rentState(inv, today);
+                  return (
+                    <tr key={inv.id}>
+                      <td className="whitespace-nowrap px-3 py-2">
+                        {spanLabel(inv.periodStart.slice(0, 10), inv.periodEnd.slice(0, 10))}
+                        {inv.edited ? (
+                          <span className="ml-1.5 text-xs text-muted-foreground">edited</span>
+                        ) : null}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+                        {money(inv.total)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
+                        {inv.scheduled ? "—" : fmtDate(inv.issuedAt)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
+                        {fmtDate(inv.dueDate)}
+                      </td>
+                      {/* the number opens the invoice - staff were reading it off
+                          the row and hunting for the document somewhere else */}
+                      <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
+                        {inv.scheduled ? (
+                          `Bills ${fmtDate(inv.billOn)}`
+                        ) : (
+                          <PdfPreviewButton
+                            variant="ghost"
+                            className="h-7 px-1.5 text-xs font-medium text-brand-deep"
+                            title={`Invoice ${inv.number}`}
+                            fileName={`Brachtia-${inv.number}.pdf`}
+                            build={async () =>
+                              (await import("@/lib/invoice-pdf")).invoicePdfUrl(inv.doc)
+                            }
+                          >
+                            {invoiceRef(inv.number, inv.type)}
+                          </PdfPreviewButton>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <TonePill tone={state.tone}>{state.label}</TonePill>
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 tabular-nums text-muted-foreground">
+                        {state.daysOverdue > 0 ? `${state.daysOverdue} days` : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {inv.scheduled ? (
+                          <Button size="sm" variant="outline" onClick={() => setEditingRent(inv)}>
+                            Edit
+                          </Button>
+                        ) : inv.outstanding > 0 ? (
+                          <Button size="sm" variant="outline" onClick={() => pay(inv)}>
+                            Record payment
+                          </Button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Row>
 
-      <Card
-        index="04"
-        title="Check-out settlement"
-        hint="Deposits, deductions and final settlement"
-        status={checkout.length ? "In progress" : "Not started"}
-        detail={
-          checkout.length
-            ? `${money(b?.depositsHeld ?? 0)} refundable deposits held`
-            : [
-                tenancyEnd ? `Tenancy ends ${fmtDate(tenancyEnd)}` : null,
-                (b?.depositsHeld ?? 0) > 0
-                  ? `${money(b!.depositsHeld)} refundable deposits held`
-                  : null,
-              ]
-                .filter(Boolean)
-                .join(" · ") || "Available closer to check-out"
-        }
-        open={!!open["checkout"]}
-        onToggle={checkout.length ? () => toggle("checkout") : undefined}
-      >
-        {checkout.map((inv) => (
-          <InvoiceDetail key={inv.id} invoice={inv} />
-        ))}
-      </Card>
+          <Row
+            icon={Receipt}
+            title="Additional charges"
+            tone={chargeDue > 0 ? "due" : charges.length ? "done" : "idle"}
+            status={chargeDue > 0 ? `${money(chargeDue)} due` : charges.length ? "Settled" : "None"}
+            detail={
+              charges.length
+                ? `${charges.length} charge${charges.length === 1 ? "" : "s"} · ${money(
+                    chargeBilled,
+                  )} billed · ${money(chargeCollected)} collected · ${money(chargeDue)} outstanding`
+                : "No additional charges"
+            }
+            open={!!open["charge"]}
+            onToggle={charges.length ? () => toggle("charge") : undefined}
+            action={
+              <Button
+                size="icon"
+                variant="ghost"
+                className="size-8"
+                onClick={() => setRaising({ as: "charge" })}
+                aria-label="Add charge"
+              >
+                <Plus className="size-4" />
+              </Button>
+            }
+          >
+            {charges.map((inv) => (
+              <InvoiceDetail key={inv.id} invoice={inv} onPay={() => pay(inv)} />
+            ))}
+          </Row>
+
+          <Row
+            icon={DoorOpen}
+            title="Checkout settlement"
+            tone={checkout.length ? "due" : "idle"}
+            status={checkout.length ? "In progress" : "Not started"}
+            detail={[
+              tenancyEnd ? `Ends ${fmtDate(tenancyEnd)}` : null,
+              (b?.depositsHeld ?? 0) > 0 ? `${money(b!.depositsHeld)} deposits held` : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+            open={!!open["checkout"]}
+            onToggle={checkout.length ? () => toggle("checkout") : undefined}
+          >
+            {checkout.map((inv) => (
+              <InvoiceDetail key={inv.id} invoice={inv} onPay={() => pay(inv)} />
+            ))}
+          </Row>
+        </div>
+      </Panel>
+
+      <RecordPaymentDialog
+        key={paying?.id ?? "none"}
+        invoice={paying}
+        onClose={() => setPaying(null)}
+      />
+
+      {raising ? (
+        <ResidentInvoiceDialog
+          open
+          startAs={raising.as}
+          {...(tenancyId ? { tenancyId } : {})}
+          residentId={residentId}
+          details={invoiceDetails}
+          lastRentEnd={lastRentEnd}
+          onClose={() => setRaising(null)}
+          onCreated={(type) => setOpen((o) => ({ ...o, [type]: true }))}
+        />
+      ) : null}
+
+      {editingRent ? (
+        <ResidentInvoiceDialog
+          key={editingRent.id}
+          open
+          startAs="rental"
+          editing={editingRent}
+          residentId={residentId}
+          details={invoiceDetails}
+          lastRentEnd={lastRentEnd}
+          onClose={() => setEditingRent(null)}
+          onCreated={() => setOpen((o) => ({ ...o, rental: true }))}
+        />
+      ) : null}
+
+      {settingSchedule ? (
+        <RentalScheduleDialog
+          residentId={residentId}
+          tenancy={rent?.tenancy ?? null}
+          schedule={schedule}
+          details={details}
+          lastIssuedEnd={lastIssuedEnd}
+          advance={rent?.advance ?? { amount: 0, rent: 0 }}
+          onClose={() => setSettingSchedule(false)}
+        />
+      ) : null}
     </div>
   );
+}
+
+/**
+ * Where a rent invoice's money stands, in the five words staff use for it.
+ *
+ * The rules live in payment-status so that this table, and anything else that
+ * shows a status, cannot drift apart - and so the edges (paid after its due
+ * date, due in exactly a week) are covered by tests rather than by reading.
+ */
+function rentState(inv: BillingInvoice, today: string) {
+  const state = paymentStateOf(inv, today);
+  return { label: state.status, tone: state.tone, daysOverdue: state.daysOverdue };
+}
+
+function spanLabel(start: string, end: string) {
+  if (!start) return "—";
+  const short = (d: string) =>
+    new Date(`${d}T00:00:00Z`).toLocaleDateString("en-MY", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+  return end ? `${short(start)} – ${short(end)}` : short(start);
 }
 
 function periodLabel(inv: BillingInvoice) {
@@ -248,96 +490,106 @@ function periodLabel(inv: BillingInvoice) {
     : short(inv.periodStart);
 }
 
-function Figure({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: string | undefined;
-}) {
-  return (
-    <div className="bg-card px-4 py-3">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className={`text-lg font-semibold tabular-nums ${tone ?? "text-brand-deep"}`}>{value}</p>
-    </div>
-  );
-}
-
-/** One of the four. Says its answer in a line; opens only when there is more. */
-function Card({
-  index,
+/** One of the four. Its colour says the state; it opens only when there is more. */
+function Row({
+  icon: Icon,
   title,
-  hint,
   status,
+  tone,
   detail,
-  done,
   open,
   onToggle,
   action,
   children,
 }: {
-  index: string;
+  icon: LucideIcon;
   title: string;
-  hint: string;
   status: string;
+  tone: Tone;
   detail: string;
-  done?: boolean;
   open: boolean;
   onToggle?: (() => void) | undefined;
   action?: React.ReactNode;
   children?: React.ReactNode;
 }) {
   return (
-    <Panel className="p-0">
-      <div className="flex flex-wrap items-start gap-3 p-5">
-        <span className="mt-0.5 text-xs font-semibold tabular-nums text-muted-foreground">
-          {index}
+    <div>
+      <div className="flex items-center gap-3 px-5 py-3.5">
+        <span
+          className={`flex size-9 shrink-0 items-center justify-center rounded-full ${TONE[tone].icon}`}
+        >
+          <Icon className="size-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-semibold text-brand-deep">{title}</p>
-            {done ? <CheckCircle2 className="size-4 text-emerald-600" /> : null}
-          </div>
-          <p className="text-xs text-muted-foreground">{hint}</p>
-          <p className="mt-1.5 text-sm text-foreground">{detail}</p>
+          <p className="text-sm font-semibold text-brand-deep">{title}</p>
+          {detail ? <p className="truncate text-xs text-muted-foreground">{detail}</p> : null}
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="text-sm font-medium text-foreground">{status}</span>
-          {action}
-          {onToggle ? (
-            <Button size="sm" variant="ghost" onClick={onToggle}>
-              <ChevronDown className={`size-4 transition-transform ${open ? "rotate-180" : ""}`} />
-            </Button>
-          ) : null}
-        </div>
+        <TonePill tone={tone}>{status}</TonePill>
+        {action}
+        {onToggle ? (
+          <Button
+            size="icon"
+            variant="ghost"
+            className="size-8 shrink-0"
+            onClick={onToggle}
+            aria-expanded={open}
+            aria-label={open ? `Hide ${title}` : `Show ${title}`}
+          >
+            <ChevronDown className={`size-4 transition-transform ${open ? "rotate-180" : ""}`} />
+          </Button>
+        ) : (
+          // keeps the pills lined up down the list
+          <span className="size-8 shrink-0" aria-hidden />
+        )}
       </div>
       {open && children ? (
-        <div className="border-t border-border">
+        <div className="border-t border-border bg-muted/30">
           <div className="overflow-x-auto">{children}</div>
         </div>
       ) : null}
-    </Panel>
+    </div>
   );
 }
 
-/** The accounting, one level down, only when asked for. */
-function InvoiceDetail({ invoice }: { invoice: BillingInvoice }) {
+/** The accounting, one level down, only when asked for - the resident tab and Collections both open it. */
+export function InvoiceDetail({ invoice, onPay }: { invoice: BillingInvoice; onPay: () => void }) {
+  // its own, because this is exported and drawn outside the page that holds one
+  const state = paymentStateOf(invoice, new Date().toISOString().slice(0, 10));
   return (
     <div className="space-y-3 p-5">
       <div className="flex flex-wrap items-center gap-2">
-        <p className="text-sm font-medium text-brand-deep">{invoice.number}</p>
-        <StatusPill
-          status={invoice.outstanding === 0 ? "active" : "notice"}
-          label={invoice.outstanding === 0 ? "Paid" : "Outstanding"}
-        />
-        {invoice.issuedAt ? (
+        <p className="text-sm font-medium text-brand-deep">
+          {invoice.scheduled ? "Not billed yet" : invoiceRef(invoice.number, invoice.type)}
+        </p>
+        <PdfPreviewButton
+          size="icon"
+          variant="ghost"
+          className="size-7"
+          aria-label={`View invoice ${invoice.number}`}
+          title={`Invoice ${invoice.number}`}
+          fileName={`Brachtia-${invoice.number}.pdf`}
+          build={async () => (await import("@/lib/invoice-pdf")).invoicePdfUrl(invoice.doc)}
+        >
+          <Eye className="size-4" />
+        </PdfPreviewButton>
+        {/* the same five words as the rental table and Collections - this said
+            "Unpaid" where they said "Invoiced" for the very same invoice */}
+        <TonePill tone={state.tone}>{state.status}</TonePill>
+        {invoice.scheduled ? (
+          <span className="text-xs text-muted-foreground">
+            Bills {fmtDate(invoice.billOn)} · Due {fmtDate(invoice.dueDate)}
+          </span>
+        ) : invoice.issuedAt ? (
           <span className="text-xs text-muted-foreground">Issued {fmtDate(invoice.issuedAt)}</span>
+        ) : null}
+        {invoice.outstanding > 0 && !invoice.scheduled ? (
+          <Button size="sm" variant="outline" className="ml-auto" onClick={onPay}>
+            Record payment
+          </Button>
         ) : null}
       </div>
 
-      <ul className="divide-y divide-border rounded-xl border border-border">
+      <ul className="divide-y divide-border rounded-xl border border-border bg-card">
         {invoice.items.map((item, i) => (
           <li
             key={`${item.label}-${i}`}
@@ -354,30 +606,65 @@ function InvoiceDetail({ invoice }: { invoice: BillingInvoice }) {
       </ul>
 
       {invoice.payments.length ? (
-        <div>
-          <p className="mb-1.5 text-xs text-muted-foreground">Payments</p>
-          <ul className="divide-y divide-border rounded-xl border border-border">
-            {invoice.payments.map((p) => (
+        <ul className="divide-y divide-border rounded-xl border border-border bg-card">
+          {invoice.payments.map((p) => {
+            const receipt = invoice.receipts.find((r) => r.paymentId === p.id);
+            return (
               <li key={p.id} className="flex items-center justify-between px-4 py-2 text-sm">
                 <span className="text-muted-foreground">
+                  {p.description ? `${p.description} · ` : ""}
                   {fmtDate(p.paidOn)}
                   {p.method ? ` · ${p.method}` : ""}
                   {p.reference ? ` · ${p.reference}` : ""}
+                  {receipt ? ` · ${receipt.number}` : ""}
                 </span>
-                <span className="tabular-nums text-emerald-700">{money(p.amount)}</span>
+                <span className="flex items-center gap-3">
+                  <ProofLink path={p.proofPath} />
+                  <span className="tabular-nums text-emerald-700">{money(p.amount)}</span>
+                  {receipt ? (
+                    <PdfPreviewButton
+                      size="icon"
+                      variant="ghost"
+                      className="size-7"
+                      aria-label={`View receipt ${receipt.number}`}
+                      title={`Receipt ${receipt.number}`}
+                      fileName={`Brachtia-${receipt.number}.pdf`}
+                      build={async () =>
+                        (await import("@/lib/invoice-pdf")).receiptPdfUrl({
+                          number: receipt.number,
+                          issued_at: receipt.issuedAt,
+                          invoiceNumber: invoice.number,
+                          full_name: invoice.doc.full_name,
+                          ...(invoice.doc.resident_code
+                            ? { resident_code: invoice.doc.resident_code }
+                            : {}),
+                          amount: receipt.amount,
+                          balance_after: receipt.balanceAfter,
+                          method: p.method,
+                          reference: p.reference,
+                          paid_on: p.paidOn,
+                          description: p.description,
+                          paid_to_date: receipt.paidToDate,
+                        })
+                      }
+                    >
+                      <Eye className="size-4" />
+                    </PdfPreviewButton>
+                  ) : null}
+                </span>
               </li>
-            ))}
-          </ul>
-        </div>
+            );
+          })}
+        </ul>
       ) : null}
 
       {invoice.credit > 0 ? (
-        <p className="text-xs text-sky-900">{money(invoice.credit)} paid beyond this invoice.</p>
+        <p className="text-xs text-sky-900">{money(invoice.credit)} paid beyond this invoice</p>
       ) : null}
 
       {invoice.depositsHeld > 0 ? (
         <p className="text-xs text-muted-foreground">
-          Refundable deposits held: {money(invoice.depositsHeld)}
+          {money(invoice.depositsHeld)} refundable deposits held
         </p>
       ) : null}
     </div>

@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { STUDENT_DOCS, studentDocLabel } from "@/lib/resident-documents";
 import {
-  STUDENT_DOCS,
   getProfileByToken,
   submitProfileByToken,
   uploadDocumentByToken,
@@ -53,6 +53,35 @@ const SECTIONS = RESIDENT_SECTIONS.map((s) => ({
   ...s,
   fields: s.fields.filter((f) => !f.staffOnly),
 })).filter((s) => s.fields.length > 0);
+
+/**
+ * When the student pays for themselves, the payor's details are their own.
+ * Asking for the same email and number a second time is how the two end up
+ * disagreeing, so they are copied across instead of typed again.
+ *
+ * Out here rather than in the component: it never changes, so it is not
+ * something an effect has to watch.
+ */
+/**
+ * Who pays. Blank until they answer - a default here would mirror somebody's
+ * details into the payor fields without them ever saying so.
+ */
+type PayorMode = "" | "self" | "other";
+
+const PAYOR_CHOICES: { value: Exclude<PayorMode, "">; label: string; hint: string }[] = [
+  { value: "self", label: "Myself", hint: "We use the details you gave above" },
+  { value: "other", label: "Someone else", hint: "A parent, guardian or sponsor" },
+];
+
+const PAYOR_FROM_MINE: [keyof ProfileLinkFields, keyof ProfileLinkFields][] = [
+  ["payer_name", "full_name"],
+  ["payer_mobile", "mobile"],
+  ["payer_email", "email"],
+  ["payer_address", "address"],
+  ["payer_postcode", "postcode"],
+  ["payer_state", "state"],
+  ["payer_country", "country"],
+];
 
 /**
  * A phone number on record, brought into "+60 123456789" shape.
@@ -133,8 +162,33 @@ function MyProfilePage() {
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
   const [signed, setSigned] = useState<SignedDeclaration | null>(null);
+  // the ID they go by at Brachtia - shown, never edited, and not their university student ID
+  const [residentCode, setResidentCode] = useState("");
   // a field's problem is shown once they have left it, not mid-word
   const [touched, setTouched] = useState<Set<string>>(new Set());
+
+  // remembered, not worked out from whether the two sides match: two empty
+  // fields match, which is not the same as having been answered
+  const [payorMode, setPayorMode] = useState<PayorMode>("");
+
+  // while "Myself" stands the payor follows the details above, so an address
+  // filled in afterwards still reaches it - copying once left those blank
+  useEffect(() => {
+    if (payorMode !== "self") return;
+    setValues((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev };
+      let changed = false;
+      for (const [to, from] of PAYOR_FROM_MINE) {
+        const mine = prev[from] ?? "";
+        if ((prev[to] ?? "") !== mine) {
+          next[to] = mine;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [payorMode, values]);
 
   useEffect(() => {
     let cancelled = false;
@@ -152,7 +206,19 @@ function MyProfilePage() {
           if (v["nationality"] === "MYS" && v["id_number"])
             v["id_number"] = formatNric(v["id_number"]);
           setValues(v);
+          // a student coming back to a form whose payor already matches keeps
+          // the tick, rather than finding it cleared
+          // read back from what was saved: "Self" is the answer itself, and a
+          // payor already on record means somebody else is paying
+          const mirrored =
+            !!(v["full_name"] ?? "").trim() &&
+            PAYOR_FROM_MINE.every(([to, from]) => (v[to] ?? "") === (v[from] ?? ""));
+          const anyPayor = PAYOR_FROM_MINE.some(([to]) => (v[to] ?? "").trim());
+          setPayorMode(
+            v["payer_relationship"] === "Self" || mirrored ? "self" : anyPayor ? "other" : "",
+          );
           setDocs(Object.fromEntries(res.docs.map((d) => [d.key, d.fileName])));
+          setResidentCode(res.residentCode);
           const dec = await getDeclarationByToken({ data: { token } });
           if (!cancelled && dec.ok) setSigned(dec.signed);
         }
@@ -165,10 +231,21 @@ function MyProfilePage() {
     };
   }, [token]);
 
+  /*
+   * Every field actually being asked for, in one list.
+   *
+   * The payor gate belongs here and not only where the fields are drawn: this
+   * list is what counts the progress bar, what "N fields need fixing" counts,
+   * and what the save is refused on. Left out, a student paying for themselves
+   * is held back by seven fields they cannot see - the same mistake as
+   * validating a hidden field on the enquiry form.
+   */
   const shownFields = useMemo(() => {
     if (!values) return [];
-    return SECTIONS.flatMap((s) => s.fields).filter((f) => fieldShown(f, (k) => values[k] ?? ""));
-  }, [values]);
+    return SECTIONS.flatMap((s) =>
+      s.key === "payment" && payorMode !== "other" ? [] : s.fields,
+    ).filter((f) => fieldShown(f, (k) => values[k] ?? ""));
+  }, [values, payorMode]);
   const shownKeys = useMemo(() => new Set(shownFields.map((f) => f.key)), [shownFields]);
 
   const remaining = values ? shownFields.filter((f) => !(values[f.key] ?? "").trim()).length : 0;
@@ -270,6 +347,27 @@ function MyProfilePage() {
     setValues((prev) => (prev ? { ...prev, [key]: v } : prev));
   const touch = (key: string) => setTouched((t) => new Set(t).add(key));
 
+  /**
+   * "Myself" hands the copying to the effect above and answers the relationship
+   * on their behalf; "Someone else" gives the payor fields back, empty, so they
+   * can be filled in for whoever is really paying.
+   */
+  const choosePayor = (mode: Exclude<PayorMode, "">) => {
+    setPayorMode(mode);
+    setValues((prev) => {
+      if (!prev) return prev;
+      // "Myself" answers the relationship too - it is not asked again below
+      if (mode === "self") return { ...prev, payer_relationship: "Self" };
+      // somebody else: the fields come back empty, and the relationship is
+      // cleared so they pick a real one rather than inheriting "Self"
+      return {
+        ...prev,
+        payer_relationship: "",
+        ...Object.fromEntries(PAYOR_FROM_MINE.map(([to]) => [to, ""])),
+      };
+    });
+  };
+
   return (
     <Shell>
       {/* No block. A slab of solid green outweighed the white cards it was
@@ -281,6 +379,12 @@ function MyProfilePage() {
         <h1 className="text-2xl font-bold tracking-tight text-brand-deep sm:text-3xl">
           Your resident details
         </h1>
+        {residentCode ? (
+          <p className="mt-1.5 text-sm text-foreground">
+            Resident ID{" "}
+            <span className="font-semibold tabular-nums text-brand-deep">{residentCode}</span>
+          </p>
+        ) : null}
         {/* the muted grey lands at 4.4:1 on the tinted page, a hair under the
             4.5:1 body minimum, and fading the foreground only made it lighter -
             alpha over a light page raises lightness. So: the full foreground. */}
@@ -315,7 +419,19 @@ function MyProfilePage() {
       </div>
 
       <div className="space-y-4">
-        {SECTIONS.map((section) => (
+        {/* a section whose questions are all put away - Employment for a
+            student, Academic for someone working - is not a heading over
+            nothing, so it is not drawn at all */}
+        {/*
+          A section whose questions are all put away - Employment for a student,
+          Academic for someone working - is not a heading over nothing, so it is
+          not drawn at all. Payment is the exception: it carries the question of
+          who is paying, which is what puts its fields on the screen in the first
+          place, so it stays even when it has no fields to show.
+        */}
+        {SECTIONS.filter(
+          (s) => s.key === "payment" || s.fields.some((f) => shownKeys.has(f.key)),
+        ).map((section) => (
           <section
             key={section.key}
             className="rounded-2xl border border-border bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-16px_rgba(16,24,40,0.18)] sm:p-6"
@@ -325,8 +441,73 @@ function MyProfilePage() {
             <h2 className="border-b-2 border-brand/25 pb-3 text-base font-semibold tracking-tight text-brand-deep">
               {section.title}
             </h2>
-            <div className="mt-5 grid gap-x-5 gap-y-4 sm:grid-cols-2">
+            {/*
+              Only worth offering once they have said they pay for themselves.
+              It tints when on, the way a ticked declaration term does, so the
+              state of the section is readable without reading the box.
+            */}
+            {/*
+              The question before the fields, not a tick beside them: who pays
+              decides whether there is anything else to ask at all. Answering
+              "Myself" states back what we already hold instead of asking for
+              the same name, number and address a second time - which is how
+              the two ended up disagreeing.
+            */}
+            {/*
+              Asked before the payor's details, not after: whether there is a
+              second person to ask about decides whether any of it is asked at
+              all. Answering "Myself" copies the details above rather than
+              asking for the same name, number and address again - which is how
+              the two ended up disagreeing. Kept small: one question, not a section.
+            */}
+            {section.key === "payment" ? (
+              <div className="mt-4">
+                <p className="text-xs font-medium text-foreground/70">
+                  Who will be making the payment?
+                </p>
+                <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
+                  {PAYOR_CHOICES.map((o) => {
+                    const on = payorMode === o.value;
+                    return (
+                      <label
+                        key={o.value}
+                        className={`flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2 transition-colors ${
+                          on
+                            ? "border-brand/40 bg-brand-tint/60"
+                            : "border-border hover:bg-muted/40"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="payor-mode"
+                          className="size-3.5 shrink-0 accent-brand"
+                          checked={on}
+                          onChange={() => choosePayor(o.value)}
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium leading-tight text-brand-deep">
+                            {o.label}
+                          </span>
+                          <span className="block text-[11px] leading-snug text-muted-foreground">
+                            {o.hint}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+            {/* empty when the payor is themselves - no top margin then, or the
+                question above it sits over a gap with nothing under it */}
+            <div
+              className={`grid gap-x-5 gap-y-4 sm:grid-cols-2 ${
+                section.fields.some((f) => shownKeys.has(f.key)) ? "mt-5" : ""
+              }`}
+            >
               {section.fields.map((f) => {
+                // shownKeys already knows about the payor gate, so a field hidden
+                // here is a field nothing else is counting either
                 if (!shownKeys.has(f.key)) return null;
 
                 const value = values[f.key] ?? "";
@@ -398,7 +579,9 @@ function MyProfilePage() {
                         placeholder={
                           f.kind === "id"
                             ? idPlaceholderFor(values["nationality"] ?? "")
-                            : undefined
+                            : // a field's own hint, where it has one - it was
+                              // only reaching the long boxes before
+                              f.hint
                         }
                         aria-invalid={!!problem}
                         className={problem ? "border-destructive" : undefined}
@@ -447,7 +630,10 @@ function MyProfilePage() {
                   }`}
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-foreground">{d.label}</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {/* follows the nationality picked above, like the ID number does */}
+                      {studentDocLabel(d.key, values["nationality"] ?? "")}
+                    </p>
                     <p
                       className={`truncate text-xs ${have ? "text-brand-deep" : "text-muted-foreground"}`}
                     >

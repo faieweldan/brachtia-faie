@@ -298,7 +298,7 @@ function SettingsPage() {
     <div className="space-y-6">
       {/* 1. Appointment types */}
       <section className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="text-sm font-semibold text-brand-deep">Appointment Types</h2>
+        <h2 className="text-sm font-semibold text-brand-deep">Appointment types</h2>
         <p className="mt-1 text-xs italic text-muted-foreground">
           Manage appointment types and how long each appointment takes.
         </p>
@@ -376,33 +376,33 @@ function SettingsPage() {
           }}
         >
           <Plus className="mr-1 size-4" />
-          Add Appointment Type
+          Add appointment type
         </Button>
       </section>
 
       {/* 2. Weekly availability */}
       <section className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="text-sm font-semibold text-brand-deep">Weekly Availability</h2>
+        <h2 className="text-sm font-semibold text-brand-deep">Weekly availability</h2>
         <p className="mt-1 text-xs italic text-muted-foreground">
           Set the standard days and times appointments can be scheduled. Add more than one range a
           day to exclude breaks such as lunch.
         </p>
         <AvailabilityGrid grid={grids[1] ?? emptyGrid()} onChange={(g) => setGrid(1, g)} />
         <Button size="sm" className="mt-4" onClick={() => saveGroup(1)}>
-          Save Availability
+          Save availability
         </Button>
       </section>
 
       {/* 3. Booking capacity */}
       <section className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="text-sm font-semibold text-brand-deep">Booking Capacity</h2>
+        <h2 className="text-sm font-semibold text-brand-deep">Booking capacity</h2>
         <p className="mt-1 text-xs italic text-muted-foreground">
           Add capacity when more than one appointment can take place at the same time.
         </p>
 
         <div className="mt-4 rounded-lg border border-border p-3">
           <p className="text-sm font-medium text-foreground">Capacity 1 — Primary</p>
-          <p className="text-xs text-muted-foreground">Uses the standard Weekly Availability.</p>
+          <p className="text-xs text-muted-foreground">Uses the standard Weekly availability.</p>
         </div>
 
         {groups
@@ -465,7 +465,7 @@ function SettingsPage() {
 
         <Button size="sm" variant="outline" className="mt-4" onClick={addCapacity}>
           <Plus className="mr-1 size-4" />
-          Add Capacity
+          Add capacity
         </Button>
       </section>
 
@@ -558,7 +558,7 @@ function SettingsPage() {
         ) : (
           <Button size="sm" variant="outline" className="mt-4" onClick={() => setBlockOpen(true)}>
             <Plus className="mr-1 size-4" />
-            Block Date or Time
+            Block date or time
           </Button>
         )}
 
@@ -604,7 +604,7 @@ function SettingsPage() {
         </div>
 
         <p className="mt-5 border-t border-border pt-4 text-xs text-muted-foreground">
-          Available slots are calculated from Weekly Availability plus any additional capacity,
+          Available slots are calculated from Weekly availability plus any additional capacity,
           minus existing appointments and blocked times. The appointment type&apos;s duration
           decides how much time each booking occupies.
         </p>

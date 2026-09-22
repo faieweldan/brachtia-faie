@@ -17,7 +17,8 @@ export const BANK = {
   swift: "RHBBMYKL",
 };
 
-export type InvoiceItem = { label: string; kind: string; amount: number };
+/** amount is the price of one; the line is worth quantity x amount. */
+export type InvoiceItem = { label: string; kind: string; amount: number; quantity?: number };
 
 export type InvoiceDoc = {
   number: string;
@@ -27,6 +28,8 @@ export type InvoiceDoc = {
   due_date?: string | null;
   reference?: string | null;
   full_name: string;
+  /** the ID the resident goes by - their resident ID, or the Brachtia ID they kept */
+  resident_code?: string;
   email: string;
   phone: string;
   university?: string;
@@ -38,17 +41,35 @@ export type InvoiceDoc = {
   tenancy_end?: string | null;
   monthly_rent: number;
   payment_frequency: string;
+  /** what the invoice is - it decides whether the rental terms are stated at all */
+  kind?: "initial" | "rental" | "charge" | "checkout";
   total: number;
   deposits_total: number;
   notes?: string;
   items: InvoiceItem[];
+  /** paid to date - the booking fee first. Shown with the balance when above zero */
+  paid?: number;
+  /** what the invoice is for - "Rental", "Charges". The initial payment by default */
+  heading?: string;
+  /** the period a rental invoice covers, already written out */
+  period?: string;
+  /** print the standard terms, and what falls due next - Lav, 21 Sept 2026 */
+  show_terms?: boolean;
+  next_payment_date?: string | null;
+  next_payment_amount?: number | null;
+  /** the rent before its discount, what came off ("20%"), and why - Lav, 17 Sept 2026 */
+  list_rent?: number | null;
+  discount_label?: string;
+  discount_note?: string;
 };
 
 const FREQ_LABEL: Record<string, string> = {
+  monthly: "Monthly",
   bimonthly: "Bi-monthly",
   quarterly: "Quarterly",
+  semiannual: "Semi-annually",
+  annual: "Annually",
   full: "Full term",
-  monthly: "Monthly",
 };
 
 /** Brachtia mark, same geometry as the quote PDF. */
@@ -150,7 +171,7 @@ async function buildInvoice(inv: InvoiceDoc) {
   const issued = inv.issued_at ? new Date(inv.issued_at) : new Date();
   const invDate = inv.invoice_date ? new Date(inv.invoice_date) : issued;
   const terms = inv.payment_terms || "NET15";
-  const termDays = terms === "NET30" ? 30 : 15;
+  const termDays = Number(/NET\s*(\d+)/i.exec(terms)?.[1] ?? 15);
   const due = inv.due_date
     ? new Date(inv.due_date)
     : new Date(invDate.getTime() + termDays * 86400000);
@@ -170,6 +191,8 @@ async function buildInvoice(inv: InvoiceDoc) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   y += 12;
+  // the resident ID used to sit here, in the grey line - it is a row in the
+  // details below now, where it is read rather than skimmed past
   doc.text([inv.email, inv.phone].filter(Boolean).join("  ·  "), M, y);
   y += 14;
 
@@ -186,13 +209,36 @@ async function buildInvoice(inv: InvoiceDoc) {
     styles: infoStyles,
     columnStyles: infoCols,
     body: [
+      // who the invoice is for comes before what they are renting - and it is a
+      // row of its own, not a word in the grey line under the name, because it
+      // is the number accounts match a payment back to. Their resident ID, or
+      // the Brachtia ID they kept when they have no new one - Lav, 21 Sept 2026
+      ...(inv.resident_code ? [["Resident ID", inv.resident_code]] : []),
       ["Residence", inv.residence_name || "—"],
       ["Room", inv.room_name || "—"],
       ["Occupancy", inv.occupancy === "twin" ? "Twin sharing (per pax)" : "Single"],
       ["Tenancy", `${formatDate(inv.tenancy_start ?? "")} — ${formatDate(inv.tenancy_end ?? "")}`],
-      ["Monthly rent", formatRM(inv.monthly_rent)],
-      ["Payment frequency", FREQ_LABEL[inv.payment_frequency] ?? inv.payment_frequency],
+      // the rental terms - what the rent is, and how often it is paid. A charge
+      // for a broken air conditioner is not rent and is not on a cycle, so they
+      // are left off it entirely rather than printed as blanks - Lav, 21 Sept 2026
+      ...(inv.kind === "charge" || inv.kind === "checkout"
+        ? []
+        : [
+            ["Monthly rent", formatRM(inv.monthly_rent)],
+            // the rent above prices the whole invoice; this says what was taken
+            // off the set price to reach it, and why
+            ...(inv.list_rent && inv.discount_label
+              ? [
+                  [
+                    "Discount",
+                    `${inv.discount_label} off ${formatRM(inv.list_rent)}${inv.discount_note ? ` · ${inv.discount_note}` : ""}`,
+                  ],
+                ]
+              : []),
+            ["Payment frequency", FREQ_LABEL[inv.payment_frequency] ?? inv.payment_frequency],
+          ]),
       ["Payment terms", terms],
+      ...(inv.period ? [["Period", inv.period]] : []),
       ...(inv.university ? [["University", inv.university]] : []),
     ],
   });
@@ -201,8 +247,16 @@ async function buildInvoice(inv: InvoiceDoc) {
   doc.setTextColor(...GREEN);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10.5);
-  doc.text("Initial payment", M, y);
+  doc.text(inv.heading ?? "Initial payment", M, y);
   y += 6;
+
+  /*
+   * How many, and the price of one, are only asked on an additional charge -
+   * two damaged chairs, three months of a fee. Rent and the initial payment are
+   * each one thing at one price, so those two columns would print "1" and then
+   * the same amount twice on every line, which reads like a mistake.
+   */
+  const itemised = inv.kind === "charge" || inv.kind === "checkout";
 
   autoTable(doc, {
     startY: y,
@@ -210,17 +264,47 @@ async function buildInvoice(inv: InvoiceDoc) {
     theme: "grid",
     headStyles: { fillColor: PEACH, textColor: GREEN, fontStyle: "bold", fontSize: 8.5 },
     styles: { fontSize: 8.5, cellPadding: 4.5, lineColor: [230, 226, 220], lineWidth: 0.5 },
-    columnStyles: { 1: { halign: "right", cellWidth: 105 } },
-    head: [["Item", "Amount"]],
-    body: inv.items.map((l) => [
-      l.kind === "refundable" ? `${l.label}  (refundable)` : l.label,
-      formatRM(l.amount),
-    ]),
-    foot: [["Total Initial Payment", formatRM(inv.total)]],
+    // how an invoice is normally read: what it is, how many, the price of one,
+    // and what that comes to
+    columnStyles: itemised
+      ? {
+          1: { halign: "right", cellWidth: 40 },
+          2: { halign: "right", cellWidth: 86 },
+          3: { halign: "right", cellWidth: 96 },
+        }
+      : { 1: { halign: "right", cellWidth: 96 } },
+    head: itemised ? [["Item", "Qty", "Unit price", "Amount"]] : [["Item", "Amount"]],
+    body: inv.items.map((l) => {
+      const many = Math.max(1, Math.round(Number(l.quantity) || 1));
+      const label = l.kind === "refundable" ? `${l.label}  (refundable)` : l.label;
+      // the line is still worth quantity x amount whether or not it is shown
+      return itemised
+        ? [label, String(many), formatRM(l.amount), formatRM(l.amount * many)]
+        : [label, formatRM(l.amount * many)];
+    }),
+    foot: [
+      itemised
+        ? [
+            inv.heading ? `Total ${inv.heading}` : "Total Initial Payment",
+            "",
+            "",
+            formatRM(inv.total),
+          ]
+        : [inv.heading ? `Total ${inv.heading}` : "Total Initial Payment", formatRM(inv.total)],
+    ],
     showFoot: "lastPage",
-    footStyles: { fillColor: PEACH, textColor: GREEN, fontStyle: "bold", fontSize: 10, halign: "left" },
+    footStyles: {
+      fillColor: PEACH,
+      textColor: GREEN,
+      fontStyle: "bold",
+      fontSize: 10,
+      halign: "left",
+    },
     didParseCell: (data: any) => {
-      if (data.section === "foot" && data.column.index === 1) data.cell.styles.halign = "right";
+      // the total sits in the last column, whichever shape the table took
+      const lastCol = itemised ? 3 : 1;
+      if (data.section === "foot" && data.column.index === lastCol)
+        data.cell.styles.halign = "right";
     },
   });
 
@@ -228,7 +312,29 @@ async function buildInvoice(inv: InvoiceDoc) {
   doc.setTextColor(...MUTED);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.text(`Refundable deposits included: ${formatRM(inv.deposits_total)}`, M, y);
+  /*
+   * Deposits are taken once, on the initial payment. Rent and additional
+   * charges carry none, so this printed "RM0.00" on every one of them and
+   * invited the question of which deposit was meant.
+   */
+  const showsDeposits = !inv.kind || inv.kind === "initial";
+  if (showsDeposits) {
+    doc.text(`Refundable deposits included: ${formatRM(inv.deposits_total)}`, M, y);
+  }
+  // the same invoice, updated as money comes in: what is paid, and what is left
+  if (inv.paid && inv.paid > 0) {
+    // only leave room for the line above when there actually was one
+    if (showsDeposits) y += 16;
+    doc.setTextColor(...GREEN);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.text(`Paid to date: ${formatRM(inv.paid)}`, M, y);
+    y += 13;
+    doc.text(`Balance due: ${formatRM(Math.max(inv.total - inv.paid, 0))}`, M, y);
+    doc.setTextColor(...MUTED);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+  }
   if (inv.notes) {
     y += 11;
     doc.text(doc.splitTextToSize(inv.notes, W - M * 2), M, y);
@@ -266,6 +372,57 @@ async function buildInvoice(inv: InvoiceDoc) {
     }
   }
 
+  /*
+   * The terms, when admin asked for them. Last on the page on purpose: the
+   * money and how to pay it are what the invoice is for, and six clauses above
+   * them would push the account number off the first page.
+   *
+   * autoTable rather than hand-drawn text, so a clause that runs long wraps and
+   * carries onto a second page instead of printing over the footer.
+   */
+  if (inv.show_terms) {
+    const { INVOICE_TERMS, INVOICE_TERMS_HEADING } = await import("@/lib/invoice-terms");
+    y = doc.lastAutoTable.finalY + 22;
+
+    autoTable(doc, {
+      startY: y,
+      margin: { left: M, right: M, bottom: FOOT },
+      theme: "plain",
+      styles: { fontSize: 7.5, cellPadding: { top: 2, bottom: 2, left: 0, right: 0 } },
+      columnStyles: {
+        0: { cellWidth: 16, textColor: MUTED },
+        1: { textColor: [60, 60, 58] as [number, number, number] },
+      },
+      head: [[{ content: INVOICE_TERMS_HEADING, colSpan: 2 }]],
+      headStyles: {
+        fillColor: false as never,
+        textColor: GREEN,
+        fontStyle: "bold",
+        fontSize: 9.5,
+        cellPadding: { top: 0, bottom: 5, left: 0, right: 0 },
+      },
+      body: INVOICE_TERMS.map((clause, i) => [`${i + 1}.`, clause]),
+    });
+
+    // what falls due next - the line that saves the follow-up call
+    const nextDate = inv.next_payment_date ? formatDate(inv.next_payment_date) : "";
+    const nextAmount =
+      inv.next_payment_amount != null && inv.next_payment_amount > 0
+        ? formatRM(inv.next_payment_amount)
+        : "";
+    if (nextDate || nextAmount) {
+      y = doc.lastAutoTable.finalY + 12;
+      doc.setTextColor(...GREEN);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      if (nextDate) {
+        doc.text(`Next Payment Due: ${nextDate}`, M, y);
+        y += 12;
+      }
+      if (nextAmount) doc.text(`Next Payment Amount: ${nextAmount}`, M, y);
+    }
+  }
+
   footer(doc, "Payment confirms your booking. Deposits are refundable per the tenancy agreement.");
   return doc;
 }
@@ -275,10 +432,13 @@ export async function downloadInvoice(inv: InvoiceDoc) {
   doc.save(`Brachtia-${inv.number}.pdf`);
 }
 
-export async function previewInvoice(inv: InvoiceDoc) {
+/**
+ * The invoice as a PDF link that lives in this browser tab only, for showing it
+ * inside the system instead of downloading it. Revoke it once it is closed.
+ */
+export async function invoicePdfUrl(inv: InvoiceDoc) {
   const doc = await buildInvoice(inv);
-  const url = doc.output("bloburl");
-  window.open(url, "_blank");
+  return URL.createObjectURL(doc.output("blob"));
 }
 
 export type ReceiptDoc = {
@@ -286,14 +446,20 @@ export type ReceiptDoc = {
   issued_at?: string | null;
   invoiceNumber: string;
   full_name: string;
+  /** the ID the resident goes by */
+  resident_code?: string;
   amount: number;
   balance_after: number;
   method?: string;
   reference?: string;
   paid_on?: string | null;
+  /** what the money was for - "Booking fee" */
+  description?: string;
+  /** paid on the invoice once this payment was in - older receipts have none */
+  paid_to_date?: number | null;
 };
 
-export async function downloadReceipt(rec: ReceiptDoc) {
+async function buildReceipt(rec: ReceiptDoc) {
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
   const doc: any = new jsPDF({ unit: "pt", format: "a4" });
@@ -323,14 +489,102 @@ export async function downloadReceipt(rec: ReceiptDoc) {
     },
     body: [
       ["Received from", rec.full_name || "—"],
+      ...(rec.resident_code ? [["Resident ID", rec.resident_code]] : []),
+      ...(rec.description ? [["For", rec.description]] : []),
       ["Invoice", rec.invoiceNumber],
       ["Payment date", formatDate(rec.paid_on ?? "")],
       ["Method", rec.method || "—"],
       ["Reference", rec.reference || "—"],
+      ...(rec.paid_to_date != null ? [["Paid to date", formatRM(rec.paid_to_date)]] : []),
       ["Balance remaining", formatRM(rec.balance_after)],
     ],
   });
 
   footer(doc, "This receipt is computer generated and valid without signature.");
-  doc.save(`Brachtia-${rec.number}.pdf`);
+  return doc;
+}
+
+/** The receipt as a PDF link, the same way as invoicePdfUrl. */
+export async function receiptPdfUrl(rec: ReceiptDoc) {
+  const doc = await buildReceipt(rec);
+  return URL.createObjectURL(doc.output("blob"));
+}
+
+/** A payment proof as it was uploaded - a photo of the bank slip, or a PDF. */
+export type ProofFile = { name: string; type: string; blob: Blob };
+
+function dataUrlOf(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Could not read the file"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** The proof photo on its own page, fitted to the paper and kept in proportion. */
+async function buildProofPage(proof: ProofFile, rec: ReceiptDoc) {
+  const { jsPDF } = await import("jspdf");
+  const doc: any = new jsPDF({ unit: "pt", format: "a4" });
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const M = 44;
+
+  const band = header(doc, "Proof of payment", [rec.number, formatDate(rec.paid_on ?? "")]);
+  const url = await dataUrlOf(proof.blob);
+  const props = doc.getImageProperties(url);
+  const top = band + 30;
+  // whichever runs out first - the width or the height - decides the scale
+  const scale = Math.min((W - M * 2) / props.width, (H - top - 54) / props.height);
+  const w = props.width * scale;
+  const h = props.height * scale;
+  doc.addImage(url, W / 2 - w / 2, top, w, h, undefined, "FAST");
+
+  footer(doc, "The bank slip as the student sent it.");
+  return doc;
+}
+
+/**
+ * One document for the welcome message: the updated invoice, then the receipt,
+ * then the proof of payment - so the student opens a single file and scrolls
+ * through all three instead of juggling attachments.
+ *
+ * Each part is built as its own PDF the way it always was, and the pages are
+ * stitched together at the end; a proof that is already a PDF is merged whole,
+ * a photo gets a page of its own. A proof that cannot be read is left out
+ * rather than losing the invoice and receipt with it.
+ */
+export async function welcomePackPdfUrl(pack: {
+  invoice: InvoiceDoc;
+  receipt: ReceiptDoc;
+  proof?: ProofFile | null;
+}) {
+  const { PDFDocument } = await import("pdf-lib");
+  const out = await PDFDocument.create();
+
+  async function append(bytes: ArrayBuffer) {
+    const src = await PDFDocument.load(bytes);
+    const pages = await out.copyPages(src, src.getPageIndices());
+    for (const page of pages) out.addPage(page);
+  }
+
+  await append((await buildInvoice(pack.invoice)).output("arraybuffer"));
+  await append((await buildReceipt(pack.receipt)).output("arraybuffer"));
+
+  const proof = pack.proof;
+  if (proof) {
+    const isPdf = /pdf/i.test(proof.type) || /\.pdf$/i.test(proof.name);
+    try {
+      await append(
+        isPdf
+          ? await proof.blob.arrayBuffer()
+          : (await buildProofPage(proof, pack.receipt)).output("arraybuffer"),
+      );
+    } catch {
+      /* an unreadable proof must not cost the student their invoice */
+    }
+  }
+
+  const bytes = await out.save();
+  return URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" }));
 }

@@ -36,11 +36,11 @@ function SettingsPage() {
 
       <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
         <Panel
-          title="Tenancy Agreement template"
+          title="Tenancy agreement template"
           description="One template is used for every tenancy. Upload the final PDF when it's ready."
         >
           <DocumentRow
-            label="Tenancy Agreement (PDF)"
+            label="Tenancy agreement (PDF)"
             fileName={taTemplate?.fileName}
             uploadedAt={taTemplate?.uploadedAt}
             onUpload={(name) => {
@@ -68,7 +68,7 @@ function SettingsPage() {
         <Panel title="Preview" description="Placeholder — one page only.">
           <div className="aspect-[1/1.414] w-full overflow-hidden rounded-xl border border-border bg-white p-5 text-[9px] leading-relaxed text-neutral-700 shadow-sm">
             <p className="text-center text-[11px] font-bold uppercase tracking-wide text-neutral-900">
-              Tenancy Agreement
+              Tenancy agreement
             </p>
             <p className="mt-3">
               THIS AGREEMENT is made on {"{{agreement_date}}"} between <b>Brachtia Homes</b> (“the Landlord”) and{" "}

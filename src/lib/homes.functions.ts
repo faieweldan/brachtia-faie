@@ -133,6 +133,13 @@ export const saveUnitRow = createServerFn({ method: "POST" })
     const supabase = await admin();
     const { unit, importBatchId } = data;
 
+    // a unit is let whole (one "Unit" bed) or by room - never both. Every screen
+    // keeps to this, and this refuses anything that did not
+    const slots = unit.rooms.filter((r) => r.letter.toLowerCase() === "unit");
+    if (slots.length && slots.length !== unit.rooms.length) {
+      throw new Error(`${unit.unitNo}: a unit is let either whole or by room, not both`);
+    }
+
     const unitRow = {
       residence_id: unit.residenceId,
       code: unit.code,
@@ -141,7 +148,8 @@ export const saveUnitRow = createServerFn({ method: "POST" })
       floor: unit.floor ?? "",
       unit_type: unit.unitType ?? "",
       gender: unit.gender ?? "",
-      whole_unit: !!unit.wholeUnit,
+      // whether it is let whole follows from its rooms, so the two cannot disagree
+      whole_unit: slots.length > 0,
       whole_unit_rent: unit.wholeUnitRent ?? 0,
       notes: unit.notes ?? "",
       ...(importBatchId ? { import_batch_id: importBatchId } : {}),

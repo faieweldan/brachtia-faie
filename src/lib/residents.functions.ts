@@ -1,6 +1,25 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { normCountry, normGender, normUniversity } from "@/lib/reference-data";
+import {
+  BED_LABELS,
+  COL,
+  bedKey,
+  expandSharedRows,
+  num,
+  pick,
+  roomKey,
+  normUnit,
+  roomPlan,
+  splitBatch,
+  studentIdOf,
+  isResidentCode,
+  toDate,
+  toPayor,
+  toSchedule,
+  winnersById,
+  type ImportRow,
+} from "@/lib/master-list";
 
 import type { Resident, ResidentDoc } from "@/lib/ops-store";
 
@@ -33,6 +52,8 @@ function toResident(row: any): Resident {
     id: row.id,
     createdAt: row.created_at ?? "",
     quickbooksId: str(row.quickbooks_id),
+    // given by the database - read here, never written back
+    residentCode: str(row.resident_code),
     enquiryId: row.enquiry_id ?? undefined,
     fullName: str(row.full_name),
     email: str(row.email),
@@ -48,12 +69,17 @@ function toResident(row: any): Resident {
     maritalStatus: str(row.marital_status),
     race: str(row.race),
     religion: str(row.religion),
+    currentStatus: str(row.current_status),
     university: str(row.university),
     levelOfStudy: str(row.level_of_study),
     course: str(row.course),
     studentId: str(row.student_id),
     graduationYear: str(row.graduation_year),
     sponsor: str(row.sponsor),
+    company: str(row.company),
+    occupation: str(row.occupation),
+    industry: str(row.industry),
+    employmentType: str(row.employment_type),
     occupancy: str(row.occupancy),
     moveIn: str(row.move_in),
     leaseMonths: str(row.lease_months),
@@ -101,12 +127,17 @@ function toRow(r: Resident) {
     marital_status: r.maritalStatus ?? "",
     race: r.race ?? "",
     religion: r.religion ?? "",
+    current_status: r.currentStatus ?? "",
     university: r.university ?? "",
     level_of_study: r.levelOfStudy ?? "",
     course: r.course ?? "",
     student_id: r.studentId ?? "",
     graduation_year: r.graduationYear ?? "",
     sponsor: r.sponsor ?? "",
+    company: r.company ?? "",
+    occupation: r.occupation ?? "",
+    industry: r.industry ?? "",
+    employment_type: r.employmentType ?? "",
     occupancy: r.occupancy ?? "",
     move_in: r.moveIn ?? "",
     lease_months: r.leaseMonths ?? "",
@@ -185,9 +216,116 @@ export const deleteResidentRow = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/* ---------------- master-list import ---------------- */
+/**
+ * Delete a former resident for good, with everything their money left behind.
+ *
+ * Not for real residents: an invoice or receipt once issued is a financial
+ * record, and former residents are kept. This clears test data, so it refuses
+ * anyone still current, anyone with a QuickBooks id (every real resident from
+ * the master list has one), and any name not typed back exactly. The checks run
+ * here, on the server, not only on the page.
+ */
+export const deleteFormerResident = createServerFn({ method: "POST" })
+  .inputValidator((data: { id: string; confirmName: string }) => data)
+  .handler(async ({ data }) => {
+    if (!isUuid(data.id)) throw new Error("Resident not found");
+    const supabase = await admin();
+    const { data: row } = await supabase
+      .from("residents")
+      .select("*")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!row) throw new Error("Resident not found");
+    if (str(row.status).toLowerCase() !== "inactive") {
+      throw new Error("Only a former resident can be deleted. Deactivate them first.");
+    }
+    // quickbooks_id is still legacy_id on a database that has not had its rename
+    if (str(row.quickbooks_id ?? row.legacy_id).trim()) {
+      throw new Error(
+        "This resident has a QuickBooks ID - a real record, so it cannot be deleted.",
+      );
+    }
+    if (data.confirmName.trim().toLowerCase() !== str(row.full_name).trim().toLowerCase()) {
+      throw new Error("The name typed does not match.");
+    }
 
-export type ImportRow = Record<string, string>;
+    // their money: filed under them, or under the booking they came from
+    const [byResident, byBooking] = await Promise.all([
+      supabase.from("invoices").select("id").eq("resident_id", row.id),
+      row.enquiry_id
+        ? supabase.from("invoices").select("id").eq("enquiry_id", row.enquiry_id)
+        : Promise.resolve({ data: [] }),
+    ]);
+    const invoiceIds = [
+      ...new Set([...(byResident.data ?? []), ...(byBooking.data ?? [])].map((i: any) => i.id)),
+    ];
+
+    const { data: payments } = invoiceIds.length
+      ? await supabase.from("payments").select("proof_path").in("invoice_id", invoiceIds)
+      : { data: [] };
+    const paths = [
+      ...(payments ?? []).map((p: any) => str(p.proof_path)),
+      ...(Array.isArray(row.docs) ? row.docs.map((d: any) => str(d?.path)) : []),
+    ].filter(Boolean);
+    // uploads now go to the private documents bucket; proofs attached on a
+    // booking before that were saved as residence photos and served from
+    // /api/public/photo/ - both are removed
+    const PHOTO_URL = "/api/public/photo/";
+    const docFiles = paths.filter((p) => !p.startsWith("/") && !/^https?:/i.test(p));
+    const photoFiles = paths
+      .filter((p) => p.startsWith(PHOTO_URL))
+      .map((p) => p.slice(PHOTO_URL.length));
+
+    // children before parents: a receipt points at a payment, a payment at an invoice
+    if (invoiceIds.length) {
+      for (const table of ["receipts", "payments", "invoice_items"] as const) {
+        const { error } = await supabase.from(table).delete().in("invoice_id", invoiceIds);
+        if (error) throw new Error(error.message);
+      }
+      const { error } = await supabase.from("invoices").delete().in("id", invoiceIds);
+      if (error) throw new Error(error.message);
+    }
+
+    // a missing file or bucket must not leave the resident half-deleted, so
+    // storage errors are not thrown
+    const { DOC_BUCKET } = await import("@/lib/resident-documents");
+    await Promise.all([
+      docFiles.length ? supabase.storage.from(DOC_BUCKET).remove(docFiles) : null,
+      photoFiles.length ? supabase.storage.from("residence-photos").remove(photoFiles) : null,
+    ]);
+
+    // the booking stays - it is the enquiry - but no longer points at them
+    await supabase.from("enquiries").update({ resident_id: "" }).eq("resident_id", row.id);
+
+    // a bed they still hold is emptied properly, university and all - left to
+    // the database, it would only lose the link and keep their details
+    const { error: bedErr } = await supabase
+      .from("beds")
+      .update({
+        status: "vacant",
+        resident_id: null,
+        resident_name: null,
+        student_id: null,
+        university: null,
+        nationality: null,
+        gender: null,
+        hold_for: null,
+        hold_until: null,
+        enquiry_id: null,
+        tenancy_start: null,
+        tenancy_end: null,
+        rent: null,
+      })
+      .eq("resident_id", row.id);
+    if (bedErr) throw new Error(bedErr.message);
+
+    // their profile link and signature go with them
+    const { error } = await supabase.from("residents").delete().eq("id", row.id);
+    if (error) throw new Error(error.message);
+    return { ok: true, invoices: invoiceIds.length };
+  });
+
+/* ---------------- master-list import ---------------- */
 
 export type ImportReport = {
   batchId?: string;
@@ -198,81 +336,11 @@ export type ImportReport = {
   problems: { row: number; quickbooksId: string; reason: string }[];
 };
 
-/**
- * Excel stores an id like 00949 as the number 949, which arrives as "949" or
- * "949.0" once its leading zeros are gone. Brachtia's ids are five digits, so a
- * bare number is padded back.
- */
-function toLegacyId(raw: string) {
-  const v = raw.trim();
-  if (!v) return "";
-  const m = /^(\d+)(?:\.0+)?$/.exec(v);
-  return m ? m[1]!.padStart(5, "0") : v;
-}
-
-const pick = (row: ImportRow, ...keys: string[]) => {
-  for (const k of keys) {
-    const v = row[k];
-    if (v != null && String(v).trim() !== "") return String(v).trim();
-  }
-  return "";
-};
-
-/** "1-Jan-24", "2024-01-01" and Excel serials all become "YYYY-MM-DD" or "". */
-function toDate(raw: string): string {
-  const v = raw.trim();
-  if (!v) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
-  if (/^\d+(\.\d+)?$/.test(v)) {
-    // Excel serial: day 1 is 1900-01-01, with the well-known 1900 leap-year bug
-    const d = new Date(Date.UTC(1899, 11, 30) + Number(v) * 86400000);
-    return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
-  }
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
-}
-
 /** The sheet writes M / F; the app stores the words the dropdown offers.
  *  Shared with the student form and the admin page so all three agree. */
 function toGender(raw: string) {
   return normGender(raw).value;
 }
-
-/**
- * "(B1)" / "(B2)" / "(B3)" in a student's name is a sponsor intake batch - in
- * this data, always PETRONAS. It describes the sponsorship, not the person, so
- * it is lifted off the name and carried on the payor instead.
- */
-function splitBatch(fullName: string) {
-  const m = /\((B\d+)\)/i.exec(fullName);
-  if (!m) return { name: fullName.trim(), batch: "" };
-  return {
-    name: fullName
-      .replace(m[0], "")
-      .replace(/\s{2,}/g, " ")
-      .trim(),
-    batch: m[1]!.toUpperCase(),
-  };
-}
-
-/**
- * Sponsor is who pays. Anything other than "SELF" (MARA, PETRONAS, a university)
- * is a third party.
- *
- * "SELF" only tells us there is no sponsor - it does not say who transfers the
- * money, which is often a parent. Leaving the payor blank there keeps the field
- * honest until someone fills it in; a wrong name would end up on an invoice.
- */
-function toPayor(sponsor: string, batch: string) {
-  const v = sponsor.trim();
-  if (!v || v.toUpperCase() === "SELF") return { name: "", relationship: "" };
-  return { name: batch ? `${v} (${batch})` : v, relationship: "Sponsor" };
-}
-
-const num = (raw: string) => {
-  const n = Number(String(raw).replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(n) && n !== 0 ? n : null;
-};
 
 /**
  * Import the Brachtia master list.
@@ -289,67 +357,10 @@ const num = (raw: string) => {
  *     room move); ties fall back to the later row, and the loser is reported
  *   - a unit / room / bed that does not exist -> the resident is still saved,
  *     the placement is skipped and reported. Never guess at a bed.
+ *   - rooms are set up from the lettings in force; a unit nobody lives in follows
+ *     its latest letting, and a unit is let whole or by room - never both
+ *   - a current resident is never emptied out by an older row for the same bed
  */
-/**
- * A whole-unit letting is one tenancy shared by several students, and the sheet
- * packs them into a single row: ids separated by spaces, everything else by line
- * breaks.
- *
- *   StudentID   "00357   00358   00359   00360"
- *   StudentName "Liew Jie Sheng\nNg Jun Wei\n…"
- *
- * Each is a real person with their own passport and phone, so the row is split
- * into one row per student. Only the first is placed on the bed - a bed records
- * one occupant - and the rest are reported, because sharing a letting needs the
- * tenancies table to be modelled properly.
- */
-function expandSharedRows(rows: ImportRow[]): { row: ImportRow; sharesWith?: string }[] {
-  const out: { row: ImportRow; sharesWith?: string }[] = [];
-  const perLine = [
-    "studentname",
-    "student name",
-    "email",
-    "mobilenumber",
-    "mobile number",
-    "idnumber",
-    "id number",
-  ];
-
-  for (const row of rows) {
-    const rawIds = pick(row, "studentid", "student id", "resident id", "quickbooks_id");
-    const ids = rawIds.split(/[\s,]+/).filter(Boolean);
-    if (ids.length < 2) {
-      out.push({ row });
-      continue;
-    }
-
-    const lines: Record<string, string[]> = {};
-    for (const key of perLine) {
-      const v = row[key];
-      if (v)
-        lines[key] = String(v)
-          .split("\n")
-          .map((x) => x.trim());
-    }
-
-    const names = lines["studentname"] ?? lines["student name"] ?? [];
-    ids.forEach((id, i) => {
-      const copy: ImportRow = { ...row };
-      copy["studentid"] = id;
-      for (const key of perLine) {
-        const parts = lines[key];
-        if (parts) copy[key] = parts[i] ?? "";
-      }
-      const others = names.filter((_, j) => j !== i).filter(Boolean);
-      out.push({
-        row: copy,
-        ...(i > 0 || others.length ? { sharesWith: others.join(", ") } : {}),
-      });
-    });
-  }
-  return out;
-}
-
 export const importResidents = createServerFn({ method: "POST" })
   .inputValidator((data: { rows: ImportRow[]; filename?: string }) => data)
   .handler(async ({ data }): Promise<ImportReport> => {
@@ -361,22 +372,6 @@ export const importResidents = createServerFn({ method: "POST" })
       duplicates: 0,
       problems: [],
     };
-
-    /**
-     * The sheet writes A-23A-3A where the inventory holds A-23A-03A - the same
-     * unit, padded differently. Every numeric-leading part is padded to two
-     * digits so both spellings land on the same key.
-     */
-    const normUnit = (raw: string) =>
-      raw
-        .trim()
-        .toUpperCase()
-        .split("-")
-        .map((part) => {
-          const m = /^(\d+)([A-Z]*)$/.exec(part);
-          return m ? `${m[1]!.padStart(2, "0")}${m[2]}` : part;
-        })
-        .join("-");
 
     // the bed map: "unitno|letter|label" -> bed id
     const { data: units } = await supabase.from("units").select("id, unit_no");
@@ -390,9 +385,9 @@ export const importResidents = createServerFn({ method: "POST" })
         { unitNo: unitById.get(r.unit_id) ?? "", letter: String(r.letter) },
       ]),
     );
-    const { data: beds } = await supabase.from("beds").select("id, room_id, label, resident_id");
-    const bedKey = (unitNo: string, letter: string, label: string) =>
-      `${normUnit(unitNo)}|${letter}|${label}`.toLowerCase().replace(/\s+/g, " ").trim();
+    const { data: beds } = await supabase
+      .from("beds")
+      .select("id, room_id, label, resident_id, enquiry_id");
     const bedIdByKey = new Map<string, string>();
     for (const b of beds ?? []) {
       const room = roomById.get((b as any).room_id);
@@ -405,10 +400,7 @@ export const importResidents = createServerFn({ method: "POST" })
     const roomIdByKey = new Map<string, string>();
     for (const r of rooms ?? []) {
       const unitNo = unitById.get((r as any).unit_id) ?? "";
-      roomIdByKey.set(
-        `${normUnit(unitNo)}|${String((r as any).letter)}`.toLowerCase().trim(),
-        (r as any).id,
-      );
+      roomIdByKey.set(roomKey(unitNo, String((r as any).letter)), (r as any).id);
     }
     const bedsByRoom = new Map<string, { id: string; label: string; taken: boolean }[]>();
     for (const b of beds ?? []) {
@@ -416,60 +408,133 @@ export const importResidents = createServerFn({ method: "POST" })
       list.push({
         id: (b as any).id,
         label: String((b as any).label),
-        taken: !!(b as any).resident_id,
+        // someone living there, or a booking holding it
+        taken: !!(b as any).resident_id || !!(b as any).enquiry_id,
       });
       bedsByRoom.set((b as any).room_id, list);
     }
 
+    const unitIdByKey = new Map<string, string>(
+      (units ?? []).map((u: any) => [normUnit(String(u.unit_no)).toLowerCase(), u.id as string]),
+    );
+    let roomsList = ((rooms ?? []) as any[]).map((r) => ({
+      id: r.id as string,
+      unit_id: r.unit_id as string,
+      letter: String(r.letter),
+    }));
+    const isSlotLetter = (letter: string) => letter.toLowerCase() === "unit";
+
     /**
-     * Nobody has touched the website yet, so every room's configuration comes
-     * from this sheet too - including the configuration of a room that already
-     * has someone in it. The sheet decides, and the app follows.
+     * Every room is set up BEFORE anyone is placed, from roomPlan: the lettings in
+     * force first, and a unit nobody lives in now follows its latest letting -
+     * never a mix, because the sheet is a history of people coming and going.
      *
-     * So the rooms are settled BEFORE anyone is placed. An Active row wins,
-     * because that is the letting in force; otherwise whichever shape the sheet
-     * uses most often for that room.
+     * Whatever that history says, a unit is let whole (one Unit bed) or by room,
+     * never both. Rooms of the other kind are removed - unless someone who stays
+     * after this upload is in one, when the unit is left as it is and reported.
      */
-    function wantedFor(label: string) {
-      if (/^single$/i.test(label)) return { occupancy: "single", labels: ["Single"] };
-      if (/^unit$/i.test(label)) return { occupancy: "unit", labels: ["Unit"] };
-      return { occupancy: "twin", labels: ["Twin 1", "Twin 2"] };
-    }
-
     async function applyRoomConfigs(rows: ImportRow[]) {
-      type Vote = { active: string | null; counts: Record<string, number> };
-      const votes = new Map<string, Vote>();
-
-      for (const row of rows) {
-        const unitNo = pick(row, "unit", "unit_no", "unitno");
-        const letter = pick(row, "room", "room_letter");
-        const label = pick(row, "bed", "bed_label");
-        if (!unitNo || !letter || !label) continue;
-        const shape = wantedFor(label).occupancy;
-        const key = `${normUnit(unitNo)}|${letter}`.toLowerCase().trim();
-        const v = votes.get(key) ?? { active: null, counts: {} };
-        v.counts[shape] = (v.counts[shape] ?? 0) + 1;
-        if (/^active$/i.test(pick(row, "status"))) {
-          if (v.active && v.active !== shape) {
-            report.problems.push({
-              row: 0,
-              quickbooksId: "",
-              reason: `${unitNo} / ${letter}: the sheet has active lettings as both ${v.active} and ${shape} — ${shape} was used`,
-            });
-          }
-          v.active = shape;
-        }
-        votes.set(key, v);
+      const { units: kinds, shapes, conflicts, clashes } = roomPlan(rows);
+      for (const c of conflicts) {
+        report.problems.push({
+          row: c.index + 2,
+          quickbooksId: studentIdOf(rows[c.index]!),
+          reason: `${c.unitNo} / ${c.letter}: current lettings as both ${c.was} and ${c.used} — ${c.used} was used`,
+        });
+      }
+      for (const c of clashes) {
+        report.problems.push({
+          row: c.index + 2,
+          quickbooksId: studentIdOf(rows[c.index]!),
+          reason: `${c.unitNo} is let by room, so it cannot also be let whole — this whole-unit letting was not placed`,
+        });
       }
 
-      for (const [key, v] of votes) {
+      // beds this upload empties anyway: someone in one of them is not in the way
+      const emptied = new Set<string>();
+      for (const row of rows) {
+        const gone =
+          !studentIdOf(row) ||
+          /^vacant$/i.test(pick(row, ...COL.name)) ||
+          /^(inactive|vacant)$/i.test(pick(row, ...COL.status));
+        if (gone)
+          emptied.add(
+            bedKey(pick(row, ...COL.unit), pick(row, ...COL.room), pick(row, ...COL.bed)),
+          );
+      }
+
+      for (const [key, kind] of kinds) {
+        const unitId = unitIdByKey.get(key);
+        if (!unitId) continue;
+        const unitNo = unitById.get(unitId) ?? "";
+        const unitRooms = roomsList.filter((r) => r.unit_id === unitId);
+        const drop = unitRooms.filter((r) =>
+          kind === "whole" ? !isSlotLetter(r.letter) : isSlotLetter(r.letter),
+        );
+        const inTheWay = drop.some((r) =>
+          (bedsByRoom.get(r.id) ?? []).some(
+            (b) => b.taken && !emptied.has(bedKey(unitNo, r.letter, b.label)),
+          ),
+        );
+        if (inTheWay) {
+          report.problems.push({
+            row: 0,
+            quickbooksId: "",
+            reason: `${unitNo}: the sheet lets it ${kind === "whole" ? "whole" : "by room"}, but someone who stays is in a bed that would go — the unit was left as it is`,
+          });
+          continue;
+        }
+
+        if (drop.length) {
+          const ids = drop.map((r) => r.id);
+          await supabase.from("beds").delete().in("room_id", ids);
+          await supabase.from("rooms").delete().in("id", ids);
+          for (const r of drop) {
+            roomIdByKey.delete(roomKey(unitNo, r.letter));
+            for (const b of bedsByRoom.get(r.id) ?? []) {
+              bedIdByKey.delete(bedKey(unitNo, r.letter, b.label));
+            }
+            bedsByRoom.delete(r.id);
+          }
+          roomsList = roomsList.filter((r) => !ids.includes(r.id));
+        }
+
+        if (kind === "whole" && !unitRooms.some((r) => isSlotLetter(r.letter))) {
+          const { data: made } = await supabase
+            .from("rooms")
+            .insert({
+              unit_id: unitId,
+              letter: "Unit",
+              occupancy: "unit",
+              room_type_code: "",
+              rent: 0,
+              sort_order: 0,
+            } as any)
+            .select("id")
+            .single();
+          if (made) {
+            const { data: bed } = await supabase
+              .from("beds")
+              .insert({ room_id: made.id, label: "Unit", status: "vacant", sort_order: 0 } as any)
+              .select("id")
+              .single();
+            roomsList.push({ id: made.id, unit_id: unitId, letter: "Unit" });
+            roomIdByKey.set(roomKey(unitNo, "Unit"), made.id);
+            bedsByRoom.set(made.id, bed ? [{ id: bed.id, label: "Unit", taken: false }] : []);
+            if (bed) bedIdByKey.set(bedKey(unitNo, "Unit", "Unit"), bed.id);
+          }
+        }
+
+        await supabase
+          .from("units")
+          .update({ whole_unit: kind === "whole" } as any)
+          .eq("id", unitId);
+      }
+
+      for (const [key, shape] of shapes) {
         const roomId = roomIdByKey.get(key);
         if (!roomId) continue;
-        const shape =
-          v.active ?? Object.entries(v.counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "twin";
-        const labels = wantedFor(
-          shape === "single" ? "Single" : shape === "unit" ? "Unit" : "Twin 1",
-        ).labels;
+        const labels = BED_LABELS[shape];
 
         const existing = bedsByRoom.get(roomId) ?? [];
         const same =
@@ -533,22 +598,8 @@ export const importResidents = createServerFn({ method: "POST" })
 
     await applyRoomConfigs(rows);
 
-    // A repeated StudentID is a room move, not a typo, so one row has to win.
-    // Status decides it - an Active row beats an Inactive one however they are
-    // ordered - and the later row only wins when the two rank the same.
-    const rank = (row: ImportRow) => {
-      const s = pick(row, "status").toLowerCase();
-      if (s === "active") return 2;
-      if (s === "inactive") return 0;
-      return 1; // blank or anything else sits between the two
-    };
-    const winnerFor = new Map<string, number>();
-    rows.forEach((row, i) => {
-      const id = toLegacyId(pick(row, "studentid", "student id", "resident id", "quickbooks_id"));
-      if (!id) return;
-      const held = winnerFor.get(id);
-      if (held === undefined || rank(row) >= rank(rows[held]!)) winnerFor.set(id, i);
-    });
+    // a repeated StudentID is a room move, so one row has to win
+    const winnerFor = winnersById(rows);
 
     const batch = await supabase
       .from("import_batches")
@@ -573,16 +624,14 @@ export const importResidents = createServerFn({ method: "POST" })
     for (let i = 0; i < rows.length; i += 1) {
       const row = rows[i]!;
       const sharesWith = expanded[i]?.sharesWith;
-      const quickbooksId = toLegacyId(
-        pick(row, "studentid", "student id", "resident id", "quickbooks_id"),
-      );
-      const name = pick(row, "studentname", "student name", "full name", "name");
-      const unitNo = pick(row, "unit", "unit_no", "unitno");
-      const letter = pick(row, "room", "room_letter");
-      const label = pick(row, "bed", "bed_label");
+      const quickbooksId = studentIdOf(row);
+      const name = pick(row, ...COL.name);
+      const unitNo = pick(row, ...COL.unit);
+      const letter = pick(row, ...COL.room);
+      const label = pick(row, ...COL.bed);
       const bedId = bedIdByKey.get(bedKey(unitNo, letter, label));
 
-      const rawStatus = pick(row, "status");
+      const rawStatus = pick(row, ...COL.status);
       /**
        * "Vacant" describes the bed, not the person. Someone whose bed is vacant
        * is not a current resident, so they are recorded as Inactive - otherwise
@@ -611,9 +660,22 @@ export const importResidents = createServerFn({ method: "POST" })
         continue;
       }
 
-      const tenancyStart = toDate(pick(row, "tenancy start", "tenancy_start", "move in"));
-      const tenancyEnd = toDate(pick(row, "tenancy end", "tenancy_end"));
-      const rent = num(pick(row, "monthly rent", "rent"));
+      const tenancyStart = toDate(pick(row, ...COL.start));
+      const tenancyEnd = toDate(pick(row, ...COL.end));
+      const rent = num(pick(row, ...COL.rent));
+      for (const [label, keys, date] of [
+        ["tenancy start", COL.start, tenancyStart],
+        ["tenancy end", COL.end, tenancyEnd],
+      ] as const) {
+        const raw = pick(row, ...keys);
+        if (raw && !date) {
+          report.problems.push({
+            row: i + 2,
+            quickbooksId,
+            reason: `${label} "${raw}" cannot be read - saved empty, worth checking`,
+          });
+        }
+      }
 
       const sponsor = pick(row, "sponsor");
       const { name: cleanName, batch } = splitBatch(name);
@@ -640,8 +702,10 @@ export const importResidents = createServerFn({ method: "POST" })
         });
       }
 
+      // a resident ID (26IF0042) names a resident already in the system; it is not a Brachtia ID
+      const byCode = isResidentCode(quickbooksId);
       const residentRow: Record<string, unknown> = {
-        quickbooks_id: quickbooksId,
+        ...(byCode ? {} : { quickbooks_id: quickbooksId }),
         full_name: cleanName,
         email: pick(row, "email"),
         mobile: pick(row, "mobilenumber", "mobile number", "mobile", "phone"),
@@ -652,17 +716,44 @@ export const importResidents = createServerFn({ method: "POST" })
         sponsor,
         payer_name: payor.name,
         payer_relationship: payor.relationship,
+        // what the sheet says they pay on - without it the tenancy has no cycle
+        // and no rent invoice can be scheduled for it
+        pay_schedule: toSchedule(pick(row, ...COL.frequency)),
         status,
         move_in: tenancyStart,
         ...(batchId ? { import_batch_id: batchId } : {}),
       };
 
       // the uuid comes back from the write, and it is what the bed link stores
-      const { data: saved, error } = await supabase
-        .from("residents")
-        .upsert(residentRow as any, { onConflict: "quickbooks_id" })
-        .select("id")
-        .single();
+      let existingByCode: { id: string } | null = null;
+      if (byCode) {
+        const { data: found } = await supabase
+          .from("residents")
+          .select("id")
+          .eq("resident_code", quickbooksId.toUpperCase())
+          .maybeSingle();
+        existingByCode = found ?? null;
+        if (!existingByCode) {
+          report.problems.push({
+            row: i + 2,
+            quickbooksId,
+            reason: `resident ID ${quickbooksId} is not in the system - a resident ID is given when a resident is created, so this row was skipped`,
+          });
+          continue;
+        }
+      }
+      const { data: saved, error } = await (existingByCode
+        ? supabase
+            .from("residents")
+            .update(residentRow as any)
+            .eq("id", existingByCode.id)
+            .select("id")
+            .single()
+        : supabase
+            .from("residents")
+            .upsert(residentRow as any, { onConflict: "quickbooks_id" })
+            .select("id")
+            .single());
       if (error || !saved) {
         report.problems.push({
           row: i + 2,
@@ -732,7 +823,11 @@ export const importResidents = createServerFn({ method: "POST" })
       report.placed += 1;
     }
 
-    if (bedsToClear.length) {
+    // the sheet lists the student who left a bed before the one who came after -
+    // so a bed a current resident took in this upload is never emptied by the
+    // older row for it
+    const toClear = [...new Set(bedsToClear)].filter((id) => !claimedBy.has(id));
+    if (toClear.length) {
       const { error } = await supabase
         .from("beds")
         .update({
@@ -747,8 +842,8 @@ export const importResidents = createServerFn({ method: "POST" })
           tenancy_end: null,
           rent: null,
         } as any)
-        .in("id", bedsToClear);
-      if (!error) report.cleared = bedsToClear.length;
+        .in("id", toClear);
+      if (!error) report.cleared = toClear.length;
     }
 
     return report;

@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { ArrowRight, ChevronDown, ChevronUp, Search } from "lucide-react";
 
 import { useOps, allBeds } from "@/lib/ops-store";
@@ -13,12 +14,35 @@ import {
   STAGE_ORDER,
   STAGE_PILL,
   actionLabel,
+  listActionLabel,
   nextActionFor,
   slaText,
   stageLabel,
   type ActionKey,
 } from "@/lib/bookings-pipeline";
-import { listEnquiries, listAppointments } from "@/lib/admin.functions";
+import {
+  listEnquiries,
+  listAppointments,
+  listNotDuplicates,
+  dismissDuplicate,
+} from "@/lib/admin.functions";
+import { normaliseEmail, normaliseName, normalisePhone } from "@/lib/enquiry-duplicates";
+
+/** Finished with: it shows its stage and carries no duplicate marks at all. */
+const row_isClosed = (row: { status?: string }) => String(row.status ?? "") === "closed";
+
+/** Ten to a page - about a screenful, and enough to see a morning's enquiries. */
+const PAGE_SIZE = 10;
+
+/**
+ * A booking that looks like the same person, as seen from one particular row.
+ *
+ * Only open bookings are ever in here. Closing one as a duplicate settles it
+ * everywhere at once: it drops out of this list on every row that resembled
+ * it, and what it duplicates is told on its own page instead. Four rows for
+ * one student become three the moment one of them is dealt with.
+ */
+type Lookalike = { id: string; reference: string };
 import { Input } from "@/components/ui/input";
 
 export const Route = createFileRoute("/admin/bookings/")({
@@ -32,13 +56,18 @@ const shortDate = (d?: string | null) =>
 
 function BookingsTable() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const ops = useOps();
 
   const [query, setQuery] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
+  // which rows have been asked to show what was closed against them - kept shut
+  // by default, or a reference on two lines doubles the height of every row
+  const [openDuplicates, setOpenDuplicates] = useState<Record<string, boolean>>({});
   const [staffFilter, setStaffFilter] = useState("all");
   const [actionFilter, setActionFilter] = useState("all");
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "quote_id", dir: -1 });
+  const [page, setPage] = useState(1);
 
   const { data = [], isLoading } = useQuery({
     queryKey: ["admin", "enquiries"],
@@ -65,20 +94,85 @@ function BookingsTable() {
       .sort((x, y) => new Date(x.starts_at).getTime() - new Date(y.starts_at).getTime())[0];
   }
 
-  function runAction(row: any, action: ActionKey) {
-    switch (action) {
-      case "check_availability":
-      case "schedule_viewing":
-      case "complete_viewing":
-      case "generate_invoice":
-      case "confirm_payment":
-      case "create_resident":
-      case "view_resident":
-        void navigate({ to: "/admin/bookings/$id", params: { id: row.id } });
-        return;
-      default:
-        void navigate({ to: "/admin/bookings/$id", params: { id: row.id } });
+  /** Pairs staff have already said are different people. */
+  const { data: notDuplicates = [] } = useQuery({
+    queryKey: ["admin", "not-duplicates"],
+    queryFn: () => listNotDuplicates(),
+  });
+
+  const dismiss = useMutation({
+    mutationFn: (input: { aId: string; bId: string }) => dismissDuplicate({ data: input }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin", "not-duplicates"] }),
+    onError: () => toast.error("Could not save that"),
+  });
+
+  /**
+   * Every booking that looks like the same person as this one, both ways round.
+   *
+   * Indexed rather than compared: three maps of email, phone and name to the
+   * rows carrying them, then each row takes the union of its own three keys.
+   * Comparing all five hundred rows against each other would be a quarter of a
+   * million comparisons on every keystroke in the search box.
+   *
+   * It is symmetric on purpose - if A shows B, C and D, then C shows A, B and
+   * D. A student who enquired four times is four rows, and whichever one staff
+   * happen to open should show the other three.
+   */
+  const lookalikesById = useMemo(() => {
+    const byKey = new Map<string, string[]>();
+    const add = (key: string, id: string) => {
+      if (!key) return;
+      byKey.set(key, [...(byKey.get(key) ?? []), id]);
+    };
+    for (const row of data as any[]) {
+      // A closed booking is settled, so it is nobody's lookalike any more. It
+      // never enters the index, which is what takes it off the other rows too -
+      // close B and A, C and D stop listing it in the same breath.
+      if (row_isClosed(row)) continue;
+      const id = String(row.id);
+      add(`e:${normaliseEmail(row.email ?? "")}`, id);
+      add(`p:${normalisePhone(row.phone ?? "")}`, id);
+      add(`n:${normaliseName(row.full_name ?? "")}`, id);
     }
+
+    // the pairs already dismissed, looked up the same way round every time
+    const pairKey = (a: string, b: string) => [a, b].sort().join("|");
+    const dismissed = new Set(
+      (notDuplicates as { a_id: string; b_id: string }[]).map((p) => pairKey(p.a_id, p.b_id)),
+    );
+
+    // the reference is the whole of a chip, and every id reached here is open
+    const referenceById = new Map<string, string>(
+      (data as any[]).map((r) => [String(r.id), String(r.reference ?? "")]),
+    );
+    const map = new Map<string, Lookalike[]>();
+    for (const row of data as any[]) {
+      // and it carries no list of its own: a closed booking shows its stage
+      if (row_isClosed(row)) continue;
+      const id = String(row.id);
+      const mates = new Set<string>();
+      for (const key of [
+        `e:${normaliseEmail(row.email ?? "")}`,
+        `p:${normalisePhone(row.phone ?? "")}`,
+        `n:${normaliseName(row.full_name ?? "")}`,
+      ]) {
+        for (const other of byKey.get(key) ?? []) {
+          if (other !== id && !dismissed.has(pairKey(id, other))) mates.add(other);
+        }
+      }
+      if (mates.size) {
+        map.set(
+          id,
+          [...mates].map((m) => ({ id: m, reference: referenceById.get(m) ?? "" })),
+        );
+      }
+    }
+    return map;
+  }, [data, notDuplicates]);
+
+  // every next action is done on the booking itself, so they all open it
+  function runAction(row: any, _action: ActionKey) {
+    void navigate({ to: "/admin/bookings/$id", params: { id: row.id } });
   }
 
   const decorated = (data as any[]).map((r) => {
@@ -99,11 +193,19 @@ function BookingsTable() {
         (d) => d.viewing && new Date(d.viewing.starts_at).getTime() > Date.now(),
       ).length,
     },
-    { label: "Awaiting payment", value: decorated.filter((d) => d.row.status === "awaiting_fee").length },
+    {
+      label: "Awaiting payment",
+      value: decorated.filter((d) => d.row.status === "awaiting_payment").length,
+    },
   ];
 
   const rows = decorated
     .filter(({ row, next }) => {
+      /*
+       * A booking closed as a duplicate stays in this list. It is not hidden -
+       * its stage says Closed, which is the whole story, and hiding it meant
+       * staff could not see what had been done with it without changing filter.
+       */
       if (stageFilter !== "all" && row.status !== stageFilter) return false;
       if (staffFilter !== "all" && (row.assigned_staff || "") !== staffFilter) return false;
       if (actionFilter !== "all" && next.action !== actionFilter) return false;
@@ -167,6 +269,16 @@ function BookingsTable() {
     return { line1: line1 || "—", line2 };
   };
 
+  /*
+   * Ten rows at a time. The page is clamped rather than stored back: narrowing
+   * the filters while on page 5 would otherwise leave an empty list with no
+   * obvious way back, and clamping keeps that honest without an effect that
+   * fights the user's own clicks.
+   */
+  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const current = Math.min(page, pageCount);
+  const pageRows = rows.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
+
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <div>
@@ -228,7 +340,7 @@ function BookingsTable() {
           <option value="all">All next actions</option>
           {ACTIONS.filter((a) => a.value !== "none").map((a) => (
             <option key={a.value} value={a.value}>
-              {a.label}
+              {listActionLabel(a.value)}
             </option>
           ))}
         </select>
@@ -236,9 +348,9 @@ function BookingsTable() {
 
       <div className="overflow-x-auto rounded-2xl border border-border bg-card">
         <div className="min-w-[1120px]">
-          <div className="grid grid-cols-[0.7fr_1.5fr_1.4fr_0.7fr_0.9fr_0.9fr_0.5fr_0.7fr_1.1fr] gap-3 border-b border-border px-4 py-2.5 text-[11px] font-semibold text-muted-foreground">
+          <div className="grid grid-cols-[minmax(8.5rem,0.8fr)_1.4fr_1.4fr_0.7fr_0.9fr_0.9fr_0.5fr_0.7fr_1.1fr] gap-3 border-b border-border px-4 py-2.5 text-[11px] font-semibold text-muted-foreground">
             <SortHead label="Quote ID" sortKey="quote_id" />
-            <SortHead label="Student" sortKey="student" />
+            <SortHead label="Name" sortKey="student" />
             <span className="uppercase tracking-wide">Requirements</span>
             <SortHead label="Move-in" sortKey="move_in" />
             <span className="uppercase tracking-wide">Room assigned</span>
@@ -253,17 +365,85 @@ function BookingsTable() {
           ) : rows.length === 0 ? (
             <p className="p-4 text-sm text-muted-foreground">No enquiries match these filters.</p>
           ) : (
-            rows.map(({ row: r, next, sla }) => (
+            pageRows.map(({ row: r, next, sla }) => (
               <div
                 key={r.id}
                 role="button"
                 tabIndex={0}
                 onClick={() => navigate({ to: "/admin/bookings/$id", params: { id: r.id } })}
                 onKeyDown={(e) => e.key === "Enter" && navigate({ to: "/admin/bookings/$id", params: { id: r.id } })}
-                className="grid cursor-pointer grid-cols-[0.7fr_1.5fr_1.4fr_0.7fr_0.9fr_0.9fr_0.5fr_0.7fr_1.1fr] items-center gap-3 border-b border-border px-4 py-3 text-sm transition-colors last:border-0 hover:bg-muted/60"
+                className="grid cursor-pointer grid-cols-[minmax(8.5rem,0.8fr)_1.4fr_1.4fr_0.7fr_0.9fr_0.9fr_0.5fr_0.7fr_1.1fr] items-center gap-3 border-b border-border px-4 py-3 text-sm transition-colors last:border-0 hover:bg-muted/60"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-[11px] font-semibold text-brand-deep">{r.reference || "—"}</p>
+                  {/* the whole reference, not the first two thirds of it - it is
+                      the one thing on the row staff read out to each other */}
+                  <p className="whitespace-nowrap text-[11px] font-semibold text-brand-deep">
+                    {r.reference || "—"}
+                  </p>
+                  {/*
+                    A closed booking says so in its Stage and nothing else. What
+                    it duplicates is told on its own page, where somebody has
+                    gone to look - spreading it across every row that resembles
+                    it was the thing that made this list hard to read.
+                  */}
+                  {row_isClosed(r) ? null : (lookalikesById.get(String(r.id)) ?? []).length ? (
+                    // Shares an email, a phone or a name with these. Shut by
+                    // default - one line saying there is something to look at,
+                    // opened when somebody wants to know what. Each reference
+                    // opens that booking; the X beside it says they are not the
+                    // same person, and stops the pair being marked again.
+                    <span className="mt-0.5 flex flex-wrap items-center gap-1">
+                      <button
+                        type="button"
+                        title="Shares an email, phone or name with these bookings"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenDuplicates((o) => ({ ...o, [r.id]: !o[r.id] }));
+                        }}
+                        className="rounded-full border border-sky-300 bg-sky-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-sky-800 hover:bg-sky-100"
+                      >
+                        {(lookalikesById.get(String(r.id)) ?? []).length} duplicate
+                        {(lookalikesById.get(String(r.id)) ?? []).length === 1 ? "" : "s"}
+                      </button>
+                      {openDuplicates[r.id]
+                        ? (lookalikesById.get(String(r.id)) ?? []).map((d) => (
+                            <span
+                              key={d.id}
+                              className="inline-flex items-center overflow-hidden rounded-full border border-sky-200"
+                            >
+                              <button
+                                type="button"
+                                title={`Open ${d.reference || "this booking"}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void navigate({
+                                    to: "/admin/bookings/$id",
+                                    params: { id: d.id },
+                                  });
+                                }}
+                                className="px-1.5 py-px text-[9px] font-medium text-sky-800 underline-offset-2 hover:bg-sky-50 hover:underline"
+                              >
+                                {d.reference || "—"}
+                              </button>
+                              {/* every one of these is open, so every one can be
+                                  dismissed - a closed booking is not here to ask */}
+                              <button
+                                type="button"
+                                title="Not the same person — stop marking these two"
+                                aria-label={`${d.reference} is not a duplicate`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  dismiss.mutate({ aId: String(r.id), bId: d.id });
+                                }}
+                                className="border-l border-sky-200 px-1 py-px text-[9px] text-muted-foreground hover:bg-rose-50 hover:text-rose-700"
+                              >
+                                ✕
+                              </button>
+                            </span>
+                          ))
+                        : null}
+                    </span>
+                  ) : null}
                   <p className="text-[10px] text-muted-foreground">
                     {r.created_at
                       ? new Date(r.created_at).toLocaleDateString("en-MY", {
@@ -331,7 +511,7 @@ function BookingsTable() {
                     }}
                     className="flex items-center gap-1 text-left text-xs font-semibold text-brand-deep hover:underline"
                   >
-                    {next.label}
+                    {listActionLabel(next.action)}
                     <ArrowRight className="size-3.5" />
                   </button>
                 )}
@@ -339,6 +519,38 @@ function BookingsTable() {
             ))
           )}
         </div>
+
+        {/* Only once there is more than one page - a pager under a short list
+            is noise that says nothing. */}
+        {rows.length > PAGE_SIZE ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3">
+            <p className="text-xs text-muted-foreground">
+              {(current - 1) * PAGE_SIZE + 1}–{Math.min(current * PAGE_SIZE, rows.length)} of{" "}
+              {rows.length}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={current <= 1}
+                onClick={() => setPage(current - 1)}
+                className="rounded-full border border-border px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <p className="text-xs text-muted-foreground">
+                Page {current} of {pageCount}
+              </p>
+              <button
+                type="button"
+                disabled={current >= pageCount}
+                onClick={() => setPage(current + 1)}
+                className="rounded-full border border-border px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

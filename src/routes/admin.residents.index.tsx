@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState, Panel, Select, StatusPill } from "@/components/admin/ops-ui";
 import { completeness } from "@/lib/resident-fields";
+import { rowsFromGrid } from "@/lib/master-list";
+import { useBillingLedger } from "@/lib/billing-client";
 import {
   blankResident,
   findBedForResident,
@@ -17,6 +19,7 @@ import {
   refreshResidents,
   refreshUnits,
   saveResidentRecord,
+  stayDates,
   useOps,
 } from "@/lib/ops-store";
 import { universityAbbr } from "@/data/form-options";
@@ -27,7 +30,18 @@ export const Route = createFileRoute("/admin/residents/")({
 
 function ResidentsListPage() {
   const navigate = useNavigate();
-  const { residents, units, tenancies, payments } = useOps();
+  const { residents, units, tenancies } = useOps();
+  // what each resident owes, from the same invoices as Collections
+  const { rows: ledger } = useBillingLedger();
+  const owed = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const l of ledger) {
+      if (l.residentId && l.outstanding > 0) {
+        m.set(l.residentId, (m.get(l.residentId) ?? 0) + l.outstanding);
+      }
+    }
+    return m;
+  }, [ledger]);
   const [q, setQ] = useState("");
   const [view, setView] = useState<"active" | "inactive" | "all">("active");
   const [university, setUniversity] = useState("");
@@ -65,7 +79,7 @@ function ResidentsListPage() {
     }
     // the Brachtia id and mobile are how staff actually look people up
     const haystack =
-      `${r.fullName} ${r.quickbooksId} ${r.email} ${r.studentId} ${r.mobile} ${r.idNumber}`.toLowerCase();
+      `${r.fullName} ${r.residentCode} ${r.quickbooksId} ${r.email} ${r.studentId} ${r.mobile} ${r.idNumber}`.toLowerCase();
     if (q && !haystack.includes(q.trim().toLowerCase())) return false;
     return true;
   });
@@ -85,31 +99,16 @@ function ResidentsListPage() {
       const book = XLSX.read(await file.arrayBuffer(), { type: "array" });
       const sheetName = book.SheetNames[0];
       const sheet = sheetName ? book.Sheets[sheetName] : undefined;
-      // the master list has a banner row above the real headers
       const grid: unknown[][] = sheet
         ? (XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as unknown[][])
         : [];
-      const headerIdx = grid.findIndex((r) =>
-        r.some((c) => String(c).trim().toLowerCase() === "studentid"),
-      );
-      if (headerIdx === -1) {
+      // read the same way the dry run reads it (scripts/check-master-list.ts)
+      const parsed = rowsFromGrid(grid);
+      if (!parsed) {
         toast.error("No StudentID column found - is this the master list?");
         return;
       }
-      const headers = (grid[headerIdx] ?? []).map((c) => String(c).trim().toLowerCase());
-      // the master list repeats several header names (Status, Tenancy Start,
-      // Tenancy End, Duration, Payment Frequency, Remarks). The first block is
-      // the live one, so a later column must never overwrite it.
-      const firstCol = new Map<string, number>();
-      headers.forEach((h, i) => {
-        if (h && !firstCol.has(h)) firstCol.set(h, i);
-      });
-      const rows = grid.slice(headerIdx + 1).map((r) => {
-        const out: Record<string, string> = {};
-        for (const [h, i] of firstCol) out[h] = String(r[i] ?? "").trim();
-        return out;
-      });
-      const withData = rows.filter((r) => Object.values(r).some((v) => v !== ""));
+      const withData = parsed.map((p) => p.row);
       if (!withData.length) {
         toast.error("That file has no rows");
         return;
@@ -314,10 +313,12 @@ function ResidentsListPage() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[860px] text-sm">
+              <table className="w-full min-w-[980px] text-sm">
                 <thead className="bg-muted text-left text-xs text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 font-medium">Resident</th>
+                    <th className="px-3 py-2 font-medium">Resident ID</th>
+                    <th className="px-3 py-2 font-medium">QuickBooks ID</th>
                     <th className="px-3 py-2 text-center font-medium">Placement</th>
                     <th className="px-3 py-2 font-medium">University</th>
                     <th className="px-3 py-2 font-medium">Tenancy</th>
@@ -328,10 +329,12 @@ function ResidentsListPage() {
                 <tbody className="divide-y divide-border">
                   {rows.map((r) => {
                     const placed = findBedForResident(units, r);
-                    const tenancy = tenancies.find((t) => t.residentId === r.id);
-                    const balance = payments
-                      .filter((p) => p.residentId === r.id && p.status !== "paid")
-                      .reduce((n, p) => n + p.amount, 0);
+                    const stay = stayDates(
+                      tenancies.find((t) => t.residentId === r.id),
+                      placed,
+                      r,
+                    );
+                    const balance = owed.get(r.id) ?? 0;
                     const pct = completeness(r).pct;
                     return (
                       <tr key={r.id}>
@@ -344,15 +347,35 @@ function ResidentsListPage() {
                             {r.fullName || "Untitled resident"}
                           </Link>
                         </td>
+                        {/* The two IDs are kept apart, each in its own column: the
+                            resident ID this system gives, and the QuickBooks ID an
+                            older resident came in with. Shown side by side because
+                            one resident can hold both and staff are asked for
+                            whichever the other system knows them by. Neither is the
+                            university's student ID. */}
+                        <td className="whitespace-nowrap px-3 py-2 tabular-nums text-muted-foreground">
+                          {r.residentCode || "—"}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2 tabular-nums text-muted-foreground">
+                          {r.quickbooksId || "—"}
+                        </td>
                         <td className="px-3 py-2 text-center text-muted-foreground">
                           {placed ? (
-                            // where they are on top, how the room is sold underneath
-                            <div className="inline-flex flex-col items-center leading-tight">
-                              <span className="whitespace-nowrap text-foreground">
+                            // where they are on top, how the room is sold underneath - and a
+                            // way straight to that unit in Homes
+                            <Link
+                              to="/admin/homes"
+                              search={{
+                                residence: placed.unit.residenceName,
+                                unit: placed.unit.id,
+                              }}
+                              className="group inline-flex flex-col items-center leading-tight"
+                            >
+                              <span className="whitespace-nowrap text-foreground underline-offset-2 group-hover:text-brand-deep group-hover:underline">
                                 {placed.unit.unitNo} · Room {placed.room.letter}
                               </span>
                               <span className="text-xs">{placed.bed.label}</span>
-                            </div>
+                            </Link>
                           ) : (
                             "Unassigned"
                           )}
@@ -361,7 +384,13 @@ function ResidentsListPage() {
                           {universityAbbr(r.university) || "—"}
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">
-                          {tenancy ? `${fmtDate(tenancy.start)} → ${fmtDate(tenancy.end)}` : "—"}
+                          {stay.start || stay.end ? (
+                            <span className="whitespace-nowrap">
+                              {fmtDate(stay.start)} → {fmtDate(stay.end)}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
                         </td>
                         <td className="px-3 py-2">
                           <StatusPill status={pct === 100 ? "paid" : "due"} label={`${pct}%`} />

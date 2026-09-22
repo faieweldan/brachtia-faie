@@ -40,11 +40,18 @@ const EDITABLE = [
   "religion",
   "medical_condition",
   "medical_detail",
+  // what they are doing now - it decides whether the academic or the
+  // employment answers below are asked for at all
+  "current_status",
   "university",
   "level_of_study",
   "course",
   "student_id",
   "graduation_year",
+  "company",
+  "occupation",
+  "industry",
+  "employment_type",
   "ec_name",
   "ec_relationship",
   "ec_mobile",
@@ -141,7 +148,7 @@ export const getProfileByToken = createServerFn({ method: "GET" })
 
     const { data: row, error } = await supabase
       .from("residents")
-      .select(`id, quickbooks_id, docs, ${EDITABLE.join(", ")}`)
+      .select(`id, quickbooks_id, resident_code, enquiry_id, docs, ${EDITABLE.join(", ")}`)
       .eq("id", found.link.resident_id)
       .single();
     if (error) throw new Error(error.message);
@@ -154,13 +161,39 @@ export const getProfileByToken = createServerFn({ method: "GET" })
 
     const values: ProfileLinkFields = {};
     for (const key of EDITABLE) values[key] = row[key] == null ? "" : String(row[key]);
+
+    /*
+     * What they told us when they enquired, used only where the profile has no
+     * answer of its own. The application is the final word - anything already
+     * saved wins, and everything pre-filled here stays editable.
+     */
+    if (!values.current_status && row.enquiry_id) {
+      const { data: enquiry } = await supabase
+        .from("enquiries")
+        .select("current_status, university")
+        .eq("id", row.enquiry_id)
+        .maybeSingle();
+      if (enquiry) {
+        values.current_status = String(enquiry.current_status ?? "");
+        // their intake is not their graduation year, so only the institution
+        // comes across - the two say different things
+        if (!values.university) values.university = String(enquiry.university ?? "");
+      }
+    }
     const docs = Array.isArray(row.docs)
       ? (row.docs as any[]).map((d) => ({
           key: String(d?.key ?? ""),
           fileName: String(d?.fileName ?? ""),
         }))
       : [];
-    return { ok: true as const, values, docs, residentId: row.id as string };
+    return {
+      ok: true as const,
+      values,
+      docs,
+      residentId: row.id as string,
+      // the ID they go by - not their university student ID, which is one of the fields
+      residentCode: String(row.resident_code || row.quickbooks_id || ""),
+    };
   });
 
 export const submitProfileByToken = createServerFn({ method: "POST" })
@@ -193,38 +226,8 @@ export const submitProfileByToken = createServerFn({ method: "POST" })
 
 /* ---------------- documents ---------------- */
 
-const DOC_BUCKET = "resident-documents";
-const MAX_DOC_BYTES = 8 * 1024 * 1024;
-const DOC_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"];
-
-/**
- * The documents a student may upload. Anything else is refused.
- *
- * The test is who actually holds the file, not which screen it was listed under.
- * A student has their own photo, offer letter, passport and payment receipts.
- * They do NOT hold the tenancy agreement or the stamped copy - Brachtia produces
- * those - so those stay out of this list.
- */
-/**
- * Only what a student can supply on their own.
- *
- * The declaration form and the tenancy agreement are issued by Brachtia and
- * signed later, and the balance is paid after the room is confirmed - asking
- * for them here made the list look unfinished for everybody. They come back
- * when there is a document to sign and a balance to pay.
- */
-export const STUDENT_DOCS = [
-  { key: "photo", label: "Passport size photo" },
-  { key: "offer", label: "University offer letter" },
-  { key: "id", label: "Passport / NRIC copy" },
-  { key: "booking_proof", label: "Booking fee payment proof" },
-] as const;
-
-function safeExt(name: string, type: string) {
-  const fromName = /\.([a-z0-9]{1,5})$/i.exec(name)?.[1]?.toLowerCase();
-  if (fromName) return fromName;
-  return type === "application/pdf" ? "pdf" : "jpg";
-}
+// which documents a student is asked for, what may be uploaded and where it is
+// kept all live in resident-documents.ts, shared with the form and the admin page
 
 /**
  * Upload one document against a profile link.
@@ -240,6 +243,8 @@ export const uploadDocumentByToken = createServerFn({ method: "POST" })
     const token = String(data.get("token") ?? "");
     const key = String(data.get("key") ?? "");
     const file = data.get("file");
+    const { DOC_BUCKET, DOC_MIME_TYPES, MAX_DOC_BYTES, STUDENT_DOCS, safeExt, studentDocLabel } =
+      await import("@/lib/resident-documents");
 
     const found = await residentForToken(supabase, token);
     if ("error" in found) return { ok: false as const, error: found.error };
@@ -248,7 +253,7 @@ export const uploadDocumentByToken = createServerFn({ method: "POST" })
     if (!(file instanceof File)) return { ok: false as const, error: "No file provided." };
     if (file.size > MAX_DOC_BYTES)
       return { ok: false as const, error: "That file is larger than 8MB." };
-    if (file.type && !DOC_TYPES.includes(file.type))
+    if (file.type && !DOC_MIME_TYPES.includes(file.type))
       return { ok: false as const, error: "Please upload a photo or a PDF." };
 
     const residentId = found.link.resident_id as string;
@@ -261,11 +266,12 @@ export const uploadDocumentByToken = createServerFn({ method: "POST" })
     // record it on the resident, replacing any earlier file of the same kind
     const { data: row } = await supabase
       .from("residents")
-      .select("docs")
+      .select("docs, nationality")
       .eq("id", residentId)
       .single();
     const docs = Array.isArray(row?.docs) ? (row!.docs as any[]) : [];
-    const label = STUDENT_DOCS.find((d) => d.key === key)!.label;
+    // the ID copy is recorded as what it is - an IC copy or a passport copy
+    const label = studentDocLabel(key, String(row?.nationality ?? ""));
     const next = [
       ...docs.filter((d) => d?.key !== key),
       { key, label, fileName: file.name, path, uploadedAt: new Date().toISOString() },

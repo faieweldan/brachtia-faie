@@ -51,7 +51,7 @@ const NAV: { to: string; label: string; icon: typeof Inbox; exact?: boolean }[] 
   { to: "/admin/homes", label: "Homes", icon: Building2 },
   { to: "/admin/residents", label: "Residents", icon: Users },
   { to: "/admin/tasks", label: "Tasks", icon: CheckSquare },
-  { to: "/admin/appointments", label: "Appointment Manager", icon: CalendarDays },
+  { to: "/admin/appointments", label: "Appointment", icon: CalendarDays },
   { to: "/admin/website", label: "Website", icon: Globe },
   { to: "/admin/settings", label: "Settings", icon: Settings },
 ];
@@ -70,7 +70,7 @@ function AdminLayout() {
       {/* fixed rail: the shell is exactly one screen tall, so the nav cannot
           scroll away - only the pane on the right moves */}
       <aside className="admin-rail hidden h-full w-60 shrink-0 flex-col overflow-y-auto p-4 text-white/70 md:flex">
-        <p className="px-2 text-sm font-bold text-white">Brachtia Admin</p>
+        <p className="px-2 text-sm font-bold text-white">Brachtia admin</p>
         <nav className="mt-6 space-y-1">
           {NAV.map((item) => {
             const active = item.exact ? pathname === item.to : pathname.startsWith(item.to);

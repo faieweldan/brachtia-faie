@@ -107,10 +107,80 @@ export function dialFor(code: string): string {
   return COUNTRIES.find((c) => c.code === code)?.dial ?? "";
 }
 
+/**
+ * What the applicant is doing now - the question both forms ask first.
+ *
+ * Brachtia is not only for students: a working person has no university and no
+ * intake, and asking for them is how a form gets abandoned. The answer decides
+ * whether the Academic or the Employment questions are asked at all.
+ *
+ * Lower-case values, like the yes/no answers, because this one is read by code
+ * to decide what to show rather than printed on a document.
+ */
+export const STATUS_OPTIONS = [
+  { value: "student", label: "Student" },
+  { value: "employed", label: "Employed / Self-Employed" },
+];
+
+export const EMPLOYMENT_TYPE_OPTIONS = [
+  { value: "Full-Time", label: "Full-Time" },
+  { value: "Part-Time", label: "Part-Time" },
+  { value: "Contract", label: "Contract" },
+  { value: "Internship", label: "Internship" },
+  { value: "Self-Employed", label: "Self-Employed" },
+];
+
+/** Broad enough to place anybody, short enough to pick from. Not compulsory. */
+export const INDUSTRY_OPTIONS = [
+  { value: "Accounting / Finance", label: "Accounting / Finance" },
+  { value: "Banking / Insurance", label: "Banking / Insurance" },
+  { value: "Construction / Property", label: "Construction / Property" },
+  { value: "Education / Training", label: "Education / Training" },
+  { value: "Engineering", label: "Engineering" },
+  { value: "Government / Public sector", label: "Government / Public sector" },
+  { value: "Healthcare / Medical", label: "Healthcare / Medical" },
+  { value: "Hospitality / Tourism", label: "Hospitality / Tourism" },
+  { value: "Information Technology", label: "Information Technology" },
+  { value: "Legal", label: "Legal" },
+  { value: "Manufacturing", label: "Manufacturing" },
+  { value: "Media / Creative", label: "Media / Creative" },
+  { value: "Oil & Gas / Energy", label: "Oil & Gas / Energy" },
+  { value: "Retail / Sales", label: "Retail / Sales" },
+  { value: "Telecommunications", label: "Telecommunications" },
+  { value: "Transport / Logistics", label: "Transport / Logistics" },
+  { value: "Other", label: "Other" },
+];
+
 /** Malaysians are asked for an NRIC; everybody else for a passport number. */
 export function idLabelFor(nationality: string): string {
   return nationality === "MYS" ? "NRIC number" : "Passport number";
 }
+
+/**
+ * The document that goes with that number - the same rule, so a student asked
+ * for an NRIC number is never asked to upload a passport, and the other way round.
+ */
+export function idDocLabelFor(nationality: string): string {
+  return nationality === "MYS" ? "MyKad / NRIC copy" : "Passport copy";
+}
+
+/**
+ * How often rent is paid. A plain list with no store behind it, so the resident
+ * page and the server that creates residents from bookings offer the same plans.
+ */
+export const SCHEDULES = [
+  // monthly is what most of the master list is on, and the rent engine has
+  // always understood it - it was simply missing from the list staff pick from,
+  // so an imported resident had a cycle nobody could choose or correct
+  { value: "monthly", label: "Monthly", months: 1 },
+  { value: "bimonthly", label: "Bi-monthly (every 2 months)", months: 2 },
+  { value: "quarterly", label: "Quarterly (every 3 months)", months: 3 },
+  { value: "semiannual", label: "Semi-annually (every 6 months)", months: 6 },
+  // the master list uses ANNUALLY and FULLY as different answers, so they are
+  // different things: once a year, against the whole tenancy paid up front
+  { value: "annual", label: "Annually (every 12 months)", months: 12 },
+  { value: "full", label: "Full term", months: 0 },
+];
 
 export function idPlaceholderFor(nationality: string): string {
   return nationality === "MYS" ? "e.g. 010203-14-5678" : "as printed on your passport";
@@ -119,6 +189,48 @@ export function idPlaceholderFor(nationality: string): string {
 export const GENDER_OPTIONS = [
   { value: "Male", label: "Male" },
   { value: "Female", label: "Female" },
+];
+
+/**
+ * Race, as Brachtia asks it. A fixed list so the same answer is not written
+ * five ways ("Malay", "malay", "Melayu") and cannot be counted.
+ *
+ * A resident whose record already holds something off this list keeps it - the
+ * field shows what is on record rather than blanking it, so nothing is lost by
+ * opening the form.
+ */
+export const RACE_OPTIONS = [
+  { value: "Malay", label: "Malay" },
+  { value: "Chinese", label: "Chinese" },
+  { value: "Indian", label: "Indian" },
+  { value: "Bumiputera (Sabah/Sarawak)", label: "Bumiputera (Sabah/Sarawak)" },
+  { value: "Other Asian", label: "Other Asian" },
+  { value: "African", label: "African" },
+  { value: "Middle Eastern", label: "Middle Eastern" },
+  { value: "European", label: "European" },
+  { value: "Other", label: "Other" },
+  { value: "Prefer not to say", label: "Prefer not to say" },
+];
+
+/**
+ * Religion, as Brachtia asks it. A fixed list for the same reason as race: typed
+ * answers arrived as "islam", "Muslim", "ISLAM" and "Islam " for one thing, and
+ * a column spelt five ways cannot be counted.
+ *
+ * "Other" is the end of the question, not the start of another one - nobody is
+ * asked to type what it was. Anything already on record that is not on this list
+ * is kept and shown, the same way race keeps an older answer.
+ */
+export const RELIGION_OPTIONS = [
+  { value: "Islam", label: "Islam" },
+  { value: "Christianity", label: "Christianity" },
+  { value: "Buddhism", label: "Buddhism" },
+  { value: "Hinduism", label: "Hinduism" },
+  { value: "Sikhism", label: "Sikhism" },
+  { value: "Taoism", label: "Taoism" },
+  { value: "Other", label: "Other" },
+  { value: "No Religion / None", label: "No Religion / None" },
+  { value: "Prefer not to say", label: "Prefer not to say" },
 ];
 
 export const MARITAL_OPTIONS = [
@@ -140,12 +252,19 @@ export const UNIVERSITY_OPTIONS = [
   { value: "OTHER", label: "Other - I will type it" },
 ];
 
+/*
+ * Level of study. The labels say what a student would call it; the values are
+ * the shorter words already on record and in the master list, so relabelling
+ * these does not rewrite a single stored answer - the same rule race and the
+ * payment schedules follow. normLevel maps the spellings onto these values.
+ */
 export const LEVEL_OPTIONS = [
-  { value: "Foundation", label: "Foundation" },
+  { value: "Foundation", label: "Foundation / Pre-University" },
   { value: "Diploma", label: "Diploma" },
-  { value: "Undergraduate", label: "Undergraduate" },
-  { value: "Master", label: "Master" },
-  { value: "Doctorate", label: "Doctorate" },
+  { value: "Undergraduate", label: "Bachelor's Degree" },
+  { value: "Master", label: "Master's Degree" },
+  { value: "Doctorate", label: "Doctorate (PhD)" },
+  { value: "Other", label: "Other" },
 ];
 
 /**
@@ -168,6 +287,16 @@ export const RELATIONSHIP_OPTIONS = [
   { value: "Sponsor", label: "Sponsor" },
   { value: "Self", label: "Self" },
 ];
+
+/**
+ * The same list, without "Self" - for the payor.
+ *
+ * Whether somebody else is paying at all is asked before this, so answering it
+ * again here can only contradict it: "Someone else, who is Self" says nothing.
+ * A record that already holds Self keeps it and still shows it, because the
+ * pickers fall back to whatever is stored when it is not on the list.
+ */
+export const PAYOR_RELATIONSHIP_OPTIONS = RELATIONSHIP_OPTIONS.filter((o) => o.value !== "Self");
 
 export const YES_NO_OPTIONS = [
   { value: "no", label: "No" },
@@ -246,37 +375,114 @@ export function normUniversity(raw: string): Normalised {
 }
 
 /** Accepts the ISO-3 code the sheet uses, a country name, or a 2-letter code. */
+/** What a person is called, for every country in the list - the master list
+ *  mostly writes "Sudanese", not "Sudan" or "SDN". */
+const DEMONYMS: Record<string, string> = {
+  MYS: "malaysian",
+  AFG: "afghan",
+  DZA: "algerian",
+  AUS: "australian",
+  AUT: "austrian",
+  BHR: "bahraini",
+  BGD: "bangladeshi",
+  BEL: "belgian",
+  BRA: "brazilian",
+  BRN: "bruneian",
+  KHM: "cambodian",
+  CMR: "cameroonian",
+  CAN: "canadian",
+  TCD: "chadian",
+  CHN: "chinese",
+  COL: "colombian",
+  CON: "congolese",
+  EGY: "egyptian",
+  ERI: "eritrean",
+  ETH: "ethiopian",
+  FRA: "french",
+  GAB: "gabonese",
+  DEU: "german",
+  GHA: "ghanaian",
+  GUI: "guinean",
+  HKG: "hongkonger",
+  IND: "indian",
+  IDN: "indonesian",
+  IRN: "iranian",
+  IRQ: "iraqi",
+  IRL: "irish",
+  ITA: "italian",
+  JPN: "japanese",
+  JOR: "jordanian",
+  KAZ: "kazakh",
+  KEN: "kenyan",
+  KOR: "korean",
+  KWT: "kuwaiti",
+  LAO: "lao",
+  LBY: "libyan",
+  MDG: "malagasy",
+  MDV: "maldivian",
+  MLI: "malian",
+  MRT: "mauritanian",
+  MUS: "mauritian",
+  MAR: "moroccan",
+  MOZ: "mozambican",
+  MMR: "burmese",
+  NPL: "nepali",
+  NLD: "dutch",
+  NZL: "new zealander",
+  NGA: "nigerian",
+  OMN: "omani",
+  PAK: "pakistani",
+  PSE: "palestinian",
+  PHL: "filipino",
+  POL: "polish",
+  QAT: "qatari",
+  RUS: "russian",
+  RWA: "rwandan",
+  SAU: "saudi",
+  SEN: "senegalese",
+  SGP: "singaporean",
+  SOM: "somali",
+  ZAF: "south african",
+  ESP: "spanish",
+  LKA: "sri lankan",
+  SDN: "sudanese",
+  SWE: "swedish",
+  CHE: "swiss",
+  SYR: "syrian",
+  TWN: "taiwanese",
+  TZA: "tanzanian",
+  THA: "thai",
+  TUN: "tunisian",
+  TUR: "turkish",
+  UGA: "ugandan",
+  ARE: "emirati",
+  GBR: "british",
+  USA: "american",
+  UZB: "uzbek",
+  VNM: "vietnamese",
+  YEM: "yemeni",
+  ZMB: "zambian",
+  ZWE: "zimbabwean",
+};
+
 const COUNTRY_ALIASES: Record<string, string> = {
-  malaysian: "MYS",
+  ...Object.fromEntries(Object.entries(DEMONYMS).map(([code, word]) => [word, code])),
   my: "MYS",
-  chinese: "CHN",
   cn: "CHN",
-  indian: "IND",
   in: "IND",
-  french: "FRA",
   fr: "FRA",
-  indonesian: "IDN",
   id: "IDN",
-  pakistani: "PAK",
   pk: "PAK",
-  japanese: "JPN",
   jp: "JPN",
-  burmese: "MMR",
   mm: "MMR",
-  bangladeshi: "BGD",
   bd: "BGD",
-  nigerian: "NGA",
   ng: "NGA",
-  german: "DEU",
   de: "DEU",
   // a non-standard code the sheet uses for Germany
   ger: "DEU",
-  kenyan: "KEN",
   ke: "KEN",
-  british: "GBR",
   uk: "GBR",
   gb: "GBR",
-  american: "USA",
   us: "USA",
 };
 
@@ -287,7 +493,7 @@ export function normCountry(raw: string): Normalised {
   if (COUNTRIES.some((c) => c.code === upper)) return hit(upper);
   const byName = COUNTRIES.find((c) => c.name.toLowerCase() === v.toLowerCase());
   if (byName) return hit(byName.code);
-  const alias = COUNTRY_ALIASES[v.toLowerCase()];
+  const alias = COUNTRY_ALIASES[v.toLowerCase().replace(/\s+/g, " ")];
   if (alias) return hit(alias);
   return keep(v);
 }

@@ -122,7 +122,7 @@ export function DeclarationSection({
       {/* a contract, laid out as one: each term gets the full width of the page
           and a rule of its own, rather than being packed into a list inside a
           box. Reading it is the point, so nothing crowds it. */}
-      <ol className="mt-5 -mx-5 divide-y divide-border border-y border-border sm:-mx-6">
+      <ul className="mt-5 -mx-5 divide-y divide-border border-y border-border sm:-mx-6">
         {DECLARATION_TERMS.map((t, i) => (
           <li key={i}>
             {/* a ticked term tints, so progress down a long contract is visible
@@ -140,8 +140,9 @@ export function DeclarationSection({
                   setTicked((prev) => prev.map((v, j) => (j === i ? e.target.checked : v)))
                 }
               />
+              {/* the tick box is what marks a term off, so a number beside it
+                  only repeats the count the boxes already give */}
               <span className="text-sm leading-relaxed text-muted-foreground">
-                <span className="mr-1.5 font-semibold tabular-nums text-brand-deep">{i + 1}.</span>
                 {termRuns(t).map((r, j) => (
                   <span
                     key={j}
@@ -156,7 +157,7 @@ export function DeclarationSection({
             </label>
           </li>
         ))}
-      </ol>
+      </ul>
 
       {/* the signature. the evidence is the record, not the look of it */}
       <div className="mt-6 grid gap-4 sm:grid-cols-2">

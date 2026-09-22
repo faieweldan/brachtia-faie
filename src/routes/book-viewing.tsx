@@ -31,6 +31,7 @@ import {
   fieldClass,
 } from "@/components/site/form-fields";
 import { countryByIso, type Country } from "@/data/countries";
+import { STATUS_OPTIONS } from "@/lib/reference-data";
 import {
   ENQUIRY_STATUS,
   GENDERS,
@@ -41,18 +42,47 @@ import {
 } from "@/data/form-options";
 import { z } from "zod";
 
-const leadSchema = z.object({
+const leadBase = z.object({
   name: z.string().trim().min(2, "Enter your full name").max(100),
   email: z.string().trim().email("Enter a valid email").max(255),
   mobile: z.string().trim().min(7, "Enter your mobile number").max(30),
-  university: z.string().trim().min(2, "Select your university").max(160),
-  intake: z.string().trim().min(1, "Select your intake").max(40),
   nationality: z.string().trim().min(2, "Select your nationality").max(80),
   gender: z.string().trim().min(1, "Select your gender").max(30),
   enquiryStatus: z.string().trim().min(1, "Let us know").max(40),
   heardAbout: z.string().trim().min(1, "Tell us how you heard about us").max(120),
   notes: z.string().trim().max(1000).optional(),
 });
+
+/**
+ * Only what is on the screen is checked - the same rule the enquiry form
+ * follows. Someone working is never shown a university or an intake, so
+ * requiring them would fail a form they cannot see to fix, which is the
+ * commonest way a conditional field goes wrong and is invisible until somebody
+ * picks the other answer.
+ */
+const leadSchemaFor = (status: string, selfEmployed: boolean) =>
+  status === "student"
+    ? leadBase.extend({
+        university: z.string().trim().min(2, "Select your university").max(160),
+        intake: z.string().trim().min(1, "Select your intake").max(40),
+      })
+    : leadBase.extend({
+        university: z.string().trim().max(160).optional(),
+        intake: z.string().trim().max(40).optional(),
+        // nobody freelancing has an organisation to name, so the tick box
+        // excuses it - the job title is still asked, and says more
+        company: selfEmployed
+          ? z.string().trim().max(120).optional()
+          : z.string().trim().min(2, "Where do you work?").max(120),
+        occupation: z.string().trim().min(2, "What do you do?").max(120),
+      });
+
+type Lead = z.infer<typeof leadBase> & {
+  university?: string | undefined;
+  intake?: string | undefined;
+  company?: string | undefined;
+  occupation?: string | undefined;
+};
 
 const title = "Book a Viewing | Brachtia Homes Student Accommodation";
 const description =
@@ -107,6 +137,16 @@ function BookViewingPage() {
   const [nationalityIso, setNationalityIso] = useState<string | undefined>(undefined);
   const [universityChoice, setUniversityChoice] = useState("");
   const [universityOther, setUniversityOther] = useState("");
+  // studying or working - asked first, because it decides what else is asked
+  const [status, setStatus] = useState("");
+  /*
+   * Where they work. Held here rather than read off the form so that ticking
+   * self-employed can empty it - a disabled input still submits whatever was
+   * typed before it was disabled. Named employerName because `company` in this
+   * file is Brachtia's own details, imported at the top.
+   */
+  const [employerName, setEmployerName] = useState("");
+  const [selfEmployed, setSelfEmployed] = useState(false);
   const [heardChoice, setHeardChoice] = useState("");
   const [heardOther, setHeardOther] = useState("");
   const [enquiryStatus, setEnquiryStatus] = useState("");
@@ -347,8 +387,10 @@ function BookViewingPage() {
               const form = e.currentTarget;
               const fd = new FormData(form);
               const raw = Object.fromEntries(fd.entries()) as Record<string, string>;
-              const parsed = leadSchema.safeParse(raw);
+              const parsed = leadSchemaFor(status, selfEmployed).safeParse(raw);
               const next: Record<string, string> = {};
+              // asked first, and nothing below it makes sense until it is answered
+              if (!status) next["currentStatus"] = "Tell us if you are studying or working";
               if (!parsed.success) {
                 for (const issue of parsed.error.issues)
                   next[String(issue.path[0])] = issue.message;
@@ -375,7 +417,7 @@ function BookViewingPage() {
                 toast.error("Pick a date and time first");
                 return;
               }
-              const lead = parsed.success ? parsed.data : null;
+              const lead = parsed.success ? (parsed.data as Lead) : null;
               if (!lead) return;
               setSaving(true);
               try {
@@ -395,9 +437,18 @@ function BookViewingPage() {
                     fullName: lead.name,
                     email: lead.email,
                     phone: lead.mobile,
-                    university: lead.university,
+                    currentStatus: status,
+                    /*
+                     * Only the side of the form they were actually shown. A
+                     * student who first picked Employed and changed their mind
+                     * must not arrive carrying a job title nobody asked them
+                     * to confirm.
+                     */
+                    university: status === "student" ? (lead.university ?? "") : "",
+                    intake: status === "student" ? (lead.intake ?? "") : "",
+                    company: status === "employed" && !selfEmployed ? (lead.company ?? "") : "",
+                    occupation: status === "employed" ? (lead.occupation ?? "") : "",
                     nationality: lead.nationality,
-                    intake: lead.intake,
                     gender: lead.gender,
                     heardAbout: heardChoice,
                     heardAboutOther: heardChoice === "Other" ? heardOther.trim() : "",
@@ -458,50 +509,138 @@ function BookViewingPage() {
               </div>
             </section>
 
-            {/* Study details */}
+            {/* Current status - asked before anything that depends on it */}
             <section className="space-y-4">
-              <SectionLabel>Study details</SectionLabel>
-              <div className="grid gap-4 xl:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="bv-uni">University</Label>
-                  <select
-                    id="bv-uni"
-                    className={fieldClass}
-                    value={universityChoice}
-                    onChange={(e) => setUniversityChoice(e.target.value)}
-                    data-invalid={errors['university'] ? "true" : undefined}
-                  >
-                    <option value="" disabled>
-                      Select
+              <SectionLabel>Current status</SectionLabel>
+              <div className="space-y-1.5">
+                <Label htmlFor="bv-status">Are you studying or working?</Label>
+                <select
+                  id="bv-status"
+                  className={fieldClass}
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  data-invalid={errors["currentStatus"] ? "true" : undefined}
+                >
+                  <option value="" disabled>
+                    Select
+                  </option>
+                  {STATUS_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
                     </option>
-                    {UNIVERSITIES.map((u) => (
-                      <option key={u} value={u}>
-                        {u}
-                      </option>
-                    ))}
-                  </select>
-                  {universityChoice === "Other" && (
+                  ))}
+                </select>
+                <FieldError msg={errors["currentStatus"]} />
+              </div>
+            </section>
+
+            {/* Employment details - only once they have said they are working.
+                Asking a student for a job title is how a form gets abandoned. */}
+            {status === "employed" ? (
+              <section className="space-y-4">
+                <SectionLabel>Employment details</SectionLabel>
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="bv-company">Company / Organisation</Label>
                     <Input
-                      className="mt-2 h-11 rounded-xl"
-                      placeholder="Your university"
+                      id="bv-company"
+                      name="company"
+                      className="h-11 rounded-xl"
                       maxLength={120}
-                      value={universityOther}
-                      onChange={(e) => setUniversityOther(e.target.value)}
+                      value={employerName}
+                      disabled={selfEmployed}
+                      placeholder={selfEmployed ? "Not needed" : "Where you work"}
+                      onChange={(e) => setEmployerName(e.target.value)}
+                      data-invalid={errors["company"] ? "true" : undefined}
                     />
-                  )}
-                  <input type="hidden" name="university" value={universityValue} />
-                  <FieldError msg={errors['university']} />
+                    {/* somebody freelancing has no organisation to name, and
+                        inventing one is worse than saying so */}
+                    <label className="mt-1 flex cursor-pointer items-center gap-2">
+                      <input
+                        type="checkbox"
+                        className="size-4 shrink-0 accent-brand"
+                        checked={selfEmployed}
+                        onChange={(e) => {
+                          setSelfEmployed(e.target.checked);
+                          if (e.target.checked) setEmployerName("");
+                        }}
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        I&apos;m self-employed or freelance
+                      </span>
+                    </label>
+                    <FieldError msg={errors["company"]} />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="bv-occupation">Occupation / Job Title</Label>
+                    <Input
+                      id="bv-occupation"
+                      name="occupation"
+                      className="h-11 rounded-xl"
+                      maxLength={120}
+                      placeholder="e.g. Software engineer"
+                      data-invalid={errors["occupation"] ? "true" : undefined}
+                    />
+                    <FieldError msg={errors["occupation"]} />
+                  </div>
                 </div>
+              </section>
+            ) : null}
 
-                <SelectField
-                  id="bv-intake"
-                  name="intake"
-                  label="Intake"
-                  placeholder="Select month & year"
-                  options={intakes}
-                  error={errors['intake']}
-                />
+            {/* Study details - only for a student */}
+            {status === "student" ? (
+              <section className="space-y-4">
+                <SectionLabel>Study details</SectionLabel>
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="bv-uni">University</Label>
+                    <select
+                      id="bv-uni"
+                      className={fieldClass}
+                      value={universityChoice}
+                      onChange={(e) => setUniversityChoice(e.target.value)}
+                      data-invalid={errors['university'] ? "true" : undefined}
+                    >
+                      <option value="" disabled>
+                        Select
+                      </option>
+                      {UNIVERSITIES.map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
+                    </select>
+                    {universityChoice === "Other" && (
+                      <Input
+                        className="mt-2 h-11 rounded-xl"
+                        placeholder="Your university"
+                        maxLength={120}
+                        value={universityOther}
+                        onChange={(e) => setUniversityOther(e.target.value)}
+                      />
+                    )}
+                    <input type="hidden" name="university" value={universityValue} />
+                    <FieldError msg={errors['university']} />
+                  </div>
 
+                  <SelectField
+                    id="bv-intake"
+                    name="intake"
+                    label="Intake"
+                    placeholder="Select month & year"
+                    options={intakes}
+                    error={errors['intake']}
+                  />
+                </div>
+              </section>
+            ) : null}
+
+            {/* About you - asked of everybody, so it sits outside both of the
+                sections above rather than inside the studying one */}
+            <section className="space-y-4">
+              <SectionLabel>About you</SectionLabel>
+              <div className="grid gap-4 xl:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="bv-nat">Nationality</Label>
                   <CountryCombobox

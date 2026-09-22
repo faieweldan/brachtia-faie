@@ -26,8 +26,10 @@ const STATUS_LABELS: Record<string, string> = {
   vacant: "Vacant",
   held: "Reserved",
   booked: "Booked",
-  active: "Active",
-  notice: "Notice",
+  // the inventory statuses are Vacant, Reserved, Booked and Occupied - a bed
+  // still marked "notice" is occupied too
+  active: "Occupied",
+  notice: "Occupied",
 };
 
 export function StatusPill({
@@ -205,6 +207,35 @@ export function ReadOnlyField({ label, value }: { label: string; value?: string 
   );
 }
 
+/**
+ * A field's label, with the one marker this project uses for "still needed".
+ *
+ * A dot, never an asterisk - the student's application form has marked required
+ * fields this way since it was built, and the admin side was using both. Two
+ * marks for one meaning is how somebody ends up wondering what the difference is.
+ *
+ * It shows only while the box is empty and clears as the field is filled in, so
+ * what is left to do stays readable without reading every label.
+ */
+function FieldLabel({
+  label,
+  required = false,
+  filled,
+}: {
+  label: string;
+  required?: boolean;
+  filled: boolean;
+}) {
+  return (
+    <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      {label}
+      {required && !filled ? (
+        <span aria-hidden title="Still empty" className="size-1.5 rounded-full bg-brand" />
+      ) : null}
+    </Label>
+  );
+}
+
 export function Text({
   label,
   value,
@@ -213,6 +244,8 @@ export function Text({
   placeholder,
   readOnly = false,
   display,
+  autoFocus = false,
+  required = false,
 }: {
   label: string;
   value: string;
@@ -222,15 +255,20 @@ export function Text({
   readOnly?: boolean;
   /** what to show when read-only, if the raw value is not the friendly form */
   display?: string;
+  /** the cursor starts here - for the one field a form was opened to fill in */
+  autoFocus?: boolean;
+  /** marks it with the dot until it has something in it */
+  required?: boolean;
 }) {
   if (readOnly) return <ReadOnlyField label={label} value={display ?? value} />;
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <FieldLabel label={label} required={required} filled={!!value.trim()} />
       <Input
         type={type}
         value={value}
         placeholder={placeholder}
+        autoFocus={autoFocus}
         onChange={(e) => onChange(e.target.value)}
       />
     </div>
@@ -313,6 +351,7 @@ export function Select({
   options,
   placeholder = "Select",
   readOnly = false,
+  required = false,
 }: {
   label: string;
   value: string;
@@ -320,6 +359,8 @@ export function Select({
   options: (string | { value: string; label: string })[];
   placeholder?: string;
   readOnly?: boolean;
+  /** marks it with the dot until something is chosen */
+  required?: boolean;
 }) {
   if (readOnly) {
     const match = options.find((o) => (typeof o === "string" ? o : o.value) === value);
@@ -328,13 +369,21 @@ export function Select({
   }
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <FieldLabel label={label} required={required} filled={!!value} />
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-brand/30"
       >
         <option value="">{placeholder}</option>
+        {/*
+          What is already on record, when it is not one of the choices - an older
+          answer, or one typed before this became a list. Without it the box reads
+          as empty and the next save quietly replaces a real answer with nothing.
+        */}
+        {value && !options.some((o) => (typeof o === "string" ? o : o.value) === value) ? (
+          <option value={value}>{value}</option>
+        ) : null}
         {options.map((o) => {
           const v = typeof o === "string" ? o : o.value;
           const l = typeof o === "string" ? o : o.label;

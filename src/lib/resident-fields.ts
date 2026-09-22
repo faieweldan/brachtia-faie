@@ -2,10 +2,16 @@ import type { ProfileLinkFields } from "@/lib/profile-link.functions";
 import type { Resident } from "@/lib/ops-store";
 import {
   COUNTRY_OPTIONS,
+  EMPLOYMENT_TYPE_OPTIONS,
   GENDER_OPTIONS,
+  INDUSTRY_OPTIONS,
   LEVEL_OPTIONS,
   MARITAL_OPTIONS,
+  PAYOR_RELATIONSHIP_OPTIONS,
+  RACE_OPTIONS,
   RELATIONSHIP_OPTIONS,
+  RELIGION_OPTIONS,
+  STATUS_OPTIONS,
   UNIVERSITY_OPTIONS,
   YES_NO_OPTIONS,
   graduationYearOptions,
@@ -68,7 +74,7 @@ export const RESIDENT_SECTIONS: ResidentSection[] = [
       {
         key: "full_name",
         camel: "fullName",
-        label: "Full name (per passport / NRIC)",
+        label: "Full legal name",
         kind: "text",
       },
       { key: "email", camel: "email", label: "Email", kind: "email" },
@@ -91,11 +97,17 @@ export const RESIDENT_SECTIONS: ResidentSection[] = [
         kind: "choice",
         options: MARITAL_OPTIONS,
       },
-      { key: "race", camel: "race", label: "Race", kind: "text" },
-      { key: "religion", camel: "religion", label: "Religion", kind: "text" },
+      { key: "race", camel: "race", label: "Race", kind: "choice", options: RACE_OPTIONS },
+      {
+        key: "religion",
+        camel: "religion",
+        label: "Religion",
+        kind: "choice",
+        options: RELIGION_OPTIONS,
+      },
       { key: "address", camel: "address", label: "Address", kind: "text", wide: true },
-      { key: "postcode", camel: "postcode", label: "Postcode", kind: "text" },
-      { key: "state", camel: "state", label: "State", kind: "text" },
+      { key: "postcode", camel: "postcode", label: "Postal code", kind: "text" },
+      { key: "state", camel: "state", label: "State / Region / Province", kind: "text" },
       {
         key: "country",
         camel: "country",
@@ -107,18 +119,31 @@ export const RESIDENT_SECTIONS: ResidentSection[] = [
       {
         key: "medical_condition",
         camel: "medicalCondition",
-        label: "Medical condition / allergy",
+        label: "Do you have any medical conditions or allergies?",
         kind: "choice",
         options: YES_NO_OPTIONS,
       },
       {
         key: "medical_detail",
         camel: "medicalDetail",
-        label: "Medical details",
+        label: "Please specify medical condition details",
         kind: "long",
         wide: true,
         showIf: { key: "medical_condition", equals: "yes" },
         hint: "Conditions, allergies, medication…",
+      },
+    ],
+  },
+  {
+    key: "status",
+    title: "Current status",
+    fields: [
+      {
+        key: "current_status",
+        camel: "currentStatus",
+        label: "Are you studying or working?",
+        kind: "choice",
+        options: STATUS_OPTIONS,
       },
     ],
   },
@@ -129,10 +154,11 @@ export const RESIDENT_SECTIONS: ResidentSection[] = [
       {
         key: "university",
         camel: "university",
-        label: "University / college",
+        label: "Academic institution",
         kind: "choice",
         options: UNIVERSITY_OPTIONS.filter((o) => o.value !== "OTHER"),
         normalise: normUniversity,
+        showIf: { key: "current_status", equals: "student" },
       },
       {
         key: "level_of_study",
@@ -140,15 +166,79 @@ export const RESIDENT_SECTIONS: ResidentSection[] = [
         label: "Level of study",
         kind: "choice",
         options: LEVEL_OPTIONS,
+        showIf: { key: "current_status", equals: "student" },
       },
-      { key: "course", camel: "course", label: "Course / programme", kind: "text" },
-      { key: "student_id", camel: "studentId", label: "Student ID", kind: "text" },
+      {
+        key: "course",
+        camel: "course",
+        label: "Course / programme enrolled",
+        kind: "text",
+        showIf: { key: "current_status", equals: "student" },
+      },
+      {
+        key: "student_id",
+        camel: "studentId",
+        label: "Student ID",
+        kind: "text",
+        // a student who has not started yet has not been given one - they say so
+        // rather than leaving it blank, which reads as "not filled in"
+        hint: "N/A if not issued yet",
+        showIf: { key: "current_status", equals: "student" },
+      },
       {
         key: "graduation_year",
         camel: "graduationYear",
         label: "Expected graduation year",
         kind: "choice",
-        options: graduationYearOptions(),
+        showIf: { key: "current_status", equals: "student" },
+        // a getter, not a value: this list is built when the file loads, and a
+        // server left running over New Year would keep offering last year.
+        // Copying a field with {...field} would freeze it again - filter fields,
+        // never spread them
+        get options() {
+          return graduationYearOptions();
+        },
+      },
+    ],
+  },
+  {
+    /*
+     * Asked instead of Academic, never beside it. Brachtia is not only for
+     * students, and a working applicant has no university, no intake and no
+     * graduation year to give - the whole section above is put away for them.
+     */
+    key: "employment",
+    title: "Employment",
+    fields: [
+      {
+        key: "company",
+        camel: "company",
+        label: "Company / organisation",
+        kind: "text",
+        showIf: { key: "current_status", equals: "employed" },
+      },
+      {
+        key: "occupation",
+        camel: "occupation",
+        label: "Occupation / job title",
+        kind: "text",
+        showIf: { key: "current_status", equals: "employed" },
+      },
+      {
+        key: "industry",
+        camel: "industry",
+        label: "Industry",
+        kind: "choice",
+        options: INDUSTRY_OPTIONS,
+        showIf: { key: "current_status", equals: "employed" },
+      },
+      {
+        key: "employment_type",
+        camel: "employmentType",
+        label: "Employment type",
+        kind: "choice",
+        options: EMPLOYMENT_TYPE_OPTIONS,
+        showIf: { key: "current_status", equals: "employed" },
       },
     ],
   },
@@ -156,7 +246,7 @@ export const RESIDENT_SECTIONS: ResidentSection[] = [
     key: "emergency",
     title: "Emergency contact",
     fields: [
-      { key: "ec_name", camel: "ecName", label: "Full name", kind: "text" },
+      { key: "ec_name", camel: "ecName", label: "Full legal name", kind: "text" },
       {
         key: "ec_relationship",
         camel: "ecRelationship",
@@ -167,9 +257,15 @@ export const RESIDENT_SECTIONS: ResidentSection[] = [
       },
       { key: "ec_mobile", camel: "ecMobile", label: "Mobile number", kind: "phone" },
       { key: "ec_email", camel: "ecEmail", label: "Email", kind: "email" },
-      { key: "ec_address", camel: "ecAddress", label: "Address", kind: "text", wide: true },
-      { key: "ec_postcode", camel: "ecPostcode", label: "Postcode", kind: "text" },
-      { key: "ec_state", camel: "ecState", label: "State", kind: "text" },
+      {
+        key: "ec_address",
+        camel: "ecAddress",
+        label: "Residential address",
+        kind: "text",
+        wide: true,
+      },
+      { key: "ec_postcode", camel: "ecPostcode", label: "Postal code", kind: "text" },
+      { key: "ec_state", camel: "ecState", label: "State / Region / Province", kind: "text" },
       {
         key: "ec_country",
         camel: "ecCountry",
@@ -182,7 +278,7 @@ export const RESIDENT_SECTIONS: ResidentSection[] = [
   },
   {
     key: "payment",
-    title: "Payor details",
+    title: "Payment details",
     fields: [
       // the lists for these two live with the rest of the billing rules in
       // ops-store, which the student's page has no business loading
@@ -204,26 +300,27 @@ export const RESIDENT_SECTIONS: ResidentSection[] = [
       {
         key: "payer_relationship",
         camel: "payerRelationship",
-        label: "Relationship to resident",
+        label: "Relationship",
         kind: "choice",
-        options: RELATIONSHIP_OPTIONS,
+        // no "Self" here - "who is paying" is asked before this one
+        options: PAYOR_RELATIONSHIP_OPTIONS,
         normalise: normRelationship,
       },
-      { key: "payer_mobile", camel: "payerMobile", label: "Payor mobile", kind: "phone" },
-      { key: "payer_email", camel: "payerEmail", label: "Payor email", kind: "email" },
+      { key: "payer_mobile", camel: "payerMobile", label: "Mobile number", kind: "phone" },
+      { key: "payer_email", camel: "payerEmail", label: "Email", kind: "email" },
       {
         key: "payer_address",
         camel: "payerAddress",
-        label: "Payor address",
+        label: "Billing address",
         kind: "text",
         wide: true,
       },
-      { key: "payer_postcode", camel: "payerPostcode", label: "Payor postcode", kind: "text" },
-      { key: "payer_state", camel: "payerState", label: "Payor state", kind: "text" },
+      { key: "payer_postcode", camel: "payerPostcode", label: "Postal code", kind: "text" },
+      { key: "payer_state", camel: "payerState", label: "State / Region / Province", kind: "text" },
       {
         key: "payer_country",
         camel: "payerCountry",
-        label: "Payor country",
+        label: "Country",
         kind: "choice",
         options: COUNTRY_OPTIONS,
         normalise: normCountry,

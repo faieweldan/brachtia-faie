@@ -19,6 +19,12 @@ const enquirySchema = z.object({
   email: z.string().trim().email().max(255),
   phone: z.string().trim().min(5).max(30),
   nationality: z.string().trim().max(80).default(""),
+  // student or employed - a working applicant is never asked for a university
+  currentStatus: z.string().trim().max(40).default(""),
+  // where they work. Company is empty for somebody self-employed or freelancing,
+  // who has no organisation to name; the job title is asked of them either way
+  company: z.string().trim().max(120).default(""),
+  occupation: z.string().trim().max(120).default(""),
   university: z.string().trim().max(160).default(""),
   intake: z.string().trim().max(40).default(""),
   gender: z.string().trim().max(40).default(""),
@@ -26,7 +32,68 @@ const enquirySchema = z.object({
   heardAbout: z.string().trim().max(120).default(""),
   heardAboutOther: z.string().trim().max(200).default(""),
   quoteSnapshot: z.unknown().optional(),
+  /*
+   * One key per submission attempt, made by the browser. A double-click, a
+   * retried request or a refreshed tab sends the same key, and the unique index
+   * on it means the second insert cannot make a second row - the guard is in
+   * the database, not in a disabled button, because a button cannot stop a
+   * retry that never reached the browser.
+   */
+  idempotencyKey: z.string().trim().max(64).default(""),
+  /** they saw the warning and chose to send it anyway */
+  acceptedDuplicate: z.boolean().default(false),
 });
+
+/**
+ * The enquiries from the last day that share this email or phone.
+ *
+ * Asked of the database by the same rules the pure helpers use, then narrowed
+ * by them - so what the warning says and what gets recorded cannot drift.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function recentMatches(supabase: any, email: string, phone: string) {
+  const { normaliseEmail, normalisePhone, windowStart } = await import("@/lib/enquiry-duplicates");
+  const since = windowStart().toISOString();
+  const cleanEmail = normaliseEmail(email);
+  const cleanPhone = normalisePhone(phone);
+  if (!cleanEmail && !cleanPhone) return [];
+
+  const { data, error } = await supabase
+    .from("enquiries")
+    .select("id, reference, email, phone, created_at, full_name")
+    .gte("created_at", since)
+    .order("created_at", { ascending: true })
+    .limit(200);
+  if (error) {
+    // a lookup that fails must never cost the student their enquiry
+    console.warn("duplicate lookup failed", error.message);
+    return [];
+  }
+  return (data ?? []) as {
+    id: string;
+    reference: string;
+    email: string;
+    phone: string;
+    created_at: string;
+    full_name: string;
+  }[];
+}
+
+/**
+ * Has this person enquired in the last day? Asked before the form is sent, so
+ * the student can be told and decide - never to refuse the submission.
+ */
+export const checkEnquiryDuplicate = createServerFn({ method: "POST" })
+  .inputValidator((data: { email: string; phone: string }) => data)
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { findRepeatOf, DUPLICATE_NOTICE } = await import("@/lib/enquiry-duplicates");
+    const rows = await recentMatches(supabaseAdmin, data.email, data.phone);
+    const match = findRepeatOf({ email: data.email, phone: data.phone }, rows);
+    return match
+      ? { duplicate: true as const, notice: DUPLICATE_NOTICE, reference: match.reference ?? "" }
+      : { duplicate: false as const, notice: "", reference: "" };
+  });
 
 export type EnquiryInput = z.input<typeof enquirySchema>;
 
@@ -34,32 +101,72 @@ export const submitEnquiry = createServerFn({ method: "POST" })
   .inputValidator((data: EnquiryInput) => enquirySchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: row, error } = await supabaseAdmin.from("enquiries").insert({
-      residence_slug: data.residenceSlug,
-      residence_name: data.residenceName,
-      room_code: data.roomCode,
-      room_name: data.roomName,
-      unit_type: data.unitType,
-      occupancy: data.occupancy,
-      move_in: data.moveIn || null,
-      move_out: data.moveOut || null,
-      term: data.term,
-      payment_term: data.paymentTerm,
-      monthly_rent: data.monthlyRent,
-      first_payment: data.firstPayment,
-      addons: data.addons,
-      full_name: data.fullName,
-      email: data.email,
-      phone: data.phone,
-      nationality: data.nationality,
-      university: data.university,
-      intake: data.intake,
-      gender: data.gender,
-      message: data.message,
-      heard_about: data.heardAbout,
-      heard_about_other: data.heardAboutOther,
-      quote_snapshot: (data.quoteSnapshot ?? {}) as never,
-    }).select("reference").maybeSingle();
+    const { findRepeatOf } = await import("@/lib/enquiry-duplicates");
+
+    /*
+     * The generated Supabase types predate current_status, duplicate_of and
+     * idempotency_key. The table has all three - see the 2026-09-21 migrations -
+     * so the client is loosened here rather than the columns being left out.
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const enquiries = supabaseAdmin.from("enquiries") as any;
+
+    /*
+     * Already sent. The browser retried, or somebody pressed the button twice -
+     * either way this exact attempt is on record, so hand back the enquiry it
+     * made rather than making a second one.
+     */
+    if (data.idempotencyKey) {
+      const { data: already } = await enquiries
+        .select("reference")
+        .eq("idempotency_key", data.idempotencyKey)
+        .maybeSingle();
+      if (already) {
+        return { ok: true as const, reference: String(already.reference ?? "") };
+      }
+    }
+
+    // the one it repeats, if any. It is recorded, never enforced: the row is
+    // inserted whatever this finds
+    const repeat = findRepeatOf(
+      { email: data.email, phone: data.phone },
+      await recentMatches(supabaseAdmin, data.email, data.phone),
+    );
+
+    const { data: row, error } = await enquiries
+      .insert({
+        duplicate_of: repeat?.id ?? null,
+        idempotency_key: data.idempotencyKey || null,
+        residence_slug: data.residenceSlug,
+        residence_name: data.residenceName,
+        room_code: data.roomCode,
+        room_name: data.roomName,
+        unit_type: data.unitType,
+        occupancy: data.occupancy,
+        move_in: data.moveIn || null,
+        move_out: data.moveOut || null,
+        term: data.term,
+        payment_term: data.paymentTerm,
+        monthly_rent: data.monthlyRent,
+        first_payment: data.firstPayment,
+        addons: data.addons,
+        full_name: data.fullName,
+        email: data.email,
+        phone: data.phone,
+        nationality: data.nationality,
+        current_status: data.currentStatus,
+        company: data.company,
+        occupation: data.occupation,
+        university: data.university,
+        intake: data.intake,
+        gender: data.gender,
+        message: data.message,
+        heard_about: data.heardAbout,
+        heard_about_other: data.heardAboutOther,
+        quote_snapshot: (data.quoteSnapshot ?? {}) as never,
+      })
+      .select("reference")
+      .maybeSingle();
     if (error) {
       // the reason travels back to the browser: a failure the student cannot see
       // is a failure nobody fixes
@@ -145,6 +252,10 @@ const appointmentSchema = z.object({
   university: z.string().trim().max(160).default(""),
   nationality: z.string().trim().max(80).default(""),
   intake: z.string().trim().max(40).default(""),
+  // studying or working, and where - empty for whichever side was not asked
+  currentStatus: z.string().trim().max(40).default(""),
+  company: z.string().trim().max(120).default(""),
+  occupation: z.string().trim().max(120).default(""),
   gender: z.string().trim().max(40).default(""),
   heardAbout: z.string().trim().max(120).default(""),
   heardAboutOther: z.string().trim().max(200).default(""),
@@ -171,7 +282,14 @@ export const bookAppointment = createServerFn({ method: "POST" })
       .eq("slug", typeSlug)
       .maybeSingle();
 
-    const { error } = await supabaseAdmin.from("appointments").insert({
+    /*
+     * The generated types predate current_status, company and occupation - the
+     * columns are there, from the 2026-09-22 migration - so the insert is
+     * loosened rather than the three answers being dropped on the way in. The
+     * same way this file already reaches enquiries.
+     */
+    const appointments = supabaseAdmin.from("appointments") as any;
+    const { error } = await appointments.insert({
       type_slug: typeSlug,
       residence_id: (residence?.id as string | undefined) ?? null,
       residence_slug: data.residenceSlug,
@@ -191,6 +309,9 @@ export const bookAppointment = createServerFn({ method: "POST" })
       university: data.university,
       nationality: data.nationality,
       intake: data.intake,
+      current_status: data.currentStatus,
+      company: data.company,
+      occupation: data.occupation,
       gender: data.gender,
       heard_about: data.heardAbout,
       heard_about_other: data.heardAboutOther,
@@ -231,6 +352,70 @@ export const getViewingLink = createServerFn({ method: "GET" })
       .maybeSingle();
 
     return { ok: true as const, booking: row, viewing: appt ?? null };
+  });
+
+/**
+ * They would rather not view it - take them straight to the booking.
+ *
+ * A viewing is offered, never required, and a student who has already decided
+ * should not have to pick a slot they will not attend just to get past this
+ * page. The booking moves to awaiting the fee, which is where confirming a
+ * viewing would have left it anyway.
+ *
+ * Nothing is cancelled here: an appointment already booked is left alone, since
+ * skipping is a choice about the next step and not an instruction to undo the
+ * last one. Staff see the stage move in Recent Activity.
+ */
+export const skipViewingFromLink = createServerFn({ method: "POST" })
+  .inputValidator((data: { token: string }) =>
+    z.object({ token: z.string().min(8).max(64) }).parse(data),
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: enquiry } = await supabaseAdmin
+      .from("enquiries")
+      .select("id, status, assigned_staff")
+      .eq("viewing_token", data.token)
+      .maybeSingle();
+    if (!enquiry) return { ok: false as const };
+
+    const now = new Date().toISOString();
+    const { error } = await supabaseAdmin
+      .from("enquiries")
+      .update({
+        status: "awaiting_fee",
+        // what they said, kept: without it this student and one who never
+        // answered look identical on the booking page
+        viewing_skipped_at: now,
+        stage_changed_at: now,
+        updated_at: now,
+      } as never)
+      .eq("id", (enquiry as any).id);
+    if (error) {
+      console.error("skip viewing failed", error);
+      return { ok: false as const };
+    }
+
+    /*
+     * And in the trail, where staff look first.
+     *
+     * Only when the booking already has an owner: booking_events requires a
+     * staff name and a student has none, and inventing one would put a person's
+     * name against something they did not do. The summary says who really did
+     * it. A booking with nobody assigned still records the skip on the enquiry
+     * itself, which is what the Viewing card reads.
+     */
+    const staff = String((enquiry as any).assigned_staff ?? "").trim();
+    if (staff) {
+      const { logBookingEvent } = await import("@/lib/booking-events");
+      await logBookingEvent(supabaseAdmin, {
+        enquiryId: String((enquiry as any).id),
+        staff,
+        kind: "stage_changed",
+        summary: "Student chose to proceed without a viewing",
+      });
+    }
+    return { ok: true as const };
   });
 
 export const confirmViewingFromLink = createServerFn({ method: "POST" })

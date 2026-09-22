@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Building2, ChevronDown, Download, Plus, Trash2, Upload } from "lucide-react";
+import { Building2, ChevronDown, Download, Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
 import { listResidences } from "@/lib/admin.functions";
+import { GenderMark } from "@/components/admin/GenderMark";
 import { NO_ROOM_TYPES, typesOfUnitType, unitTypeNames } from "@/lib/room-types";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -14,7 +15,6 @@ import { EmptyState, Panel, Select, Text } from "@/components/admin/ops-ui";
 import {
   bedsFor,
   blankRoom,
-  deleteUnit,
   money,
   nextUnitCode,
   roomCountFor,
@@ -42,11 +42,19 @@ const TEMPLATE_HEADERS = [
   "room_type_code",
   "occupancy",
 ];
+/*
+ * One row per room, and a unit is its rows together - they are grouped by
+ * residence and unit_no. The residence has to be written the way Website names
+ * it, or the rows are skipped. The last unit here is let whole: room_letter
+ * "Unit" is how the master list records a unit taken by one party, and it needs
+ * no room rows of its own.
+ */
 const TEMPLATE_ROWS = [
-  ["The Arc Cyberjaya", "A-12-10", "4-bedroom", "A", "A", "twin"],
-  ["The Arc Cyberjaya", "A-12-10", "4-bedroom", "B", "B", "single"],
-  ["The Arc Cyberjaya", "A-12-10", "4-bedroom", "C", "C", "single"],
-  ["The Arc Cyberjaya", "A-12-10", "4-bedroom", "D", "D", "single"],
+  ["The Arc, Cyberjaya", "A-12-10", "4-bedroom", "A", "A", "twin"],
+  ["The Arc, Cyberjaya", "A-12-10", "4-bedroom", "B", "B", "single"],
+  ["The Arc, Cyberjaya", "A-12-10", "4-bedroom", "C", "C", "single"],
+  ["The Arc, Cyberjaya", "A-12-10", "4-bedroom", "D", "D", "single"],
+  ["The Arc, Cyberjaya", "A-15-09", "3-bedroom", "Unit", "", "unit"],
 ];
 
 function blankUnit(code: string): Unit {
@@ -106,17 +114,13 @@ function UnitSetupPage() {
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [units]);
 
-  const totals = useMemo(() => {
-    const rooms = units.flatMap((u) => u.rooms);
-    const lettable = rooms.filter((r) => r.letter.toLowerCase() !== "unit");
-    return {
-      units: units.length,
-      rooms: lettable.length,
-      beds: lettable.reduce((n, r) => n + r.beds.length, 0),
-      whole: units.filter((u) => u.wholeUnit).length,
+  const totals = useMemo(
+    () => ({
+      ...statsFor(units),
       residences: new Set(units.map((u) => u.residenceName).filter(Boolean)).size,
-    };
-  }, [units]);
+    }),
+    [units],
+  );
 
   const typesForResidence = useMemo(
     () => (draft ? roomTypes.filter((r) => r.residence_id === draft.residenceId) : []),
@@ -208,7 +212,40 @@ function UnitSetupPage() {
   }
 
   function applyType(unitType: string) {
-    setDraft((d) => (d ? { ...d, unitType, rooms: buildRooms(unitType, typesForResidence) } : d));
+    // a whole unit keeps its one Unit bed whatever the type says
+    setDraft((d) =>
+      d
+        ? { ...d, unitType, rooms: d.wholeUnit ? d.rooms : buildRooms(unitType, typesForResidence) }
+        : d,
+    );
+  }
+
+  /**
+   * A unit is let whole or by room, never both. Turning "Rent as whole unit" on
+   * replaces the rooms with one Unit bed; turning it off brings the rooms back
+   * from the unit type. Refused while someone is in a bed that would go.
+   */
+  function setWholeUnit(on: boolean) {
+    if (!draft) return;
+    const isSlot = (r: UnitRoom) => r.letter.toLowerCase() === "unit";
+    const leaving = draft.rooms.filter((r) => (on ? !isSlot(r) : isSlot(r)));
+    const taken = leaving.some((r) =>
+      r.beds.some((b) => b.residentId || b.enquiryId || b.status !== "vacant"),
+    );
+    if (taken) {
+      toast.error(
+        on
+          ? "Someone is in a room here - release them before letting the unit whole."
+          : "Someone holds the whole unit - release them before letting it by room.",
+      );
+      return;
+    }
+    patch({
+      wholeUnit: on,
+      rooms: on
+        ? [draft.rooms.find(isSlot) ?? blankRoom("Unit")]
+        : buildRooms(draft.unitType, typesForResidence),
+    });
   }
 
   function applyRoomType(roomId: string, code: string) {
@@ -233,8 +270,8 @@ function UnitSetupPage() {
     setDraft(null);
   }
 
-  function downloadTemplate() {
-    const sheet = XLSX.utils.aoa_to_sheet([TEMPLATE_HEADERS, ...TEMPLATE_ROWS]);
+  function writeUnitsFile(rows: string[][], fileName: string) {
+    const sheet = XLSX.utils.aoa_to_sheet([TEMPLATE_HEADERS, ...rows]);
     sheet["!cols"] = [{ wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 16 }, { wch: 12 }];
     for (let c = 0; c < TEMPLATE_HEADERS.length; c += 1) {
       const cell = sheet[XLSX.utils.encode_cell({ r: 0, c })];
@@ -250,9 +287,41 @@ function UnitSetupPage() {
     );
     const a = document.createElement("a");
     a.href = url;
-    a.download = "brachtia-units-template.xlsx";
+    a.download = fileName;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  /** The blank form: the shape of the file, with a few rows showing how it reads. */
+  function downloadTemplate() {
+    writeUnitsFile(TEMPLATE_ROWS, "brachtia-units-template.xlsx");
+  }
+
+  /**
+   * Every unit as it stands, in the same six columns.
+   *
+   * A unit is upserted on its residence and unit number, so this file can be
+   * edited and uploaded back to change units that already exist - which a blank
+   * template cannot do once there are 74 of them. A unit's rooms are rewritten
+   * from the file, so a room left out of it is removed from that unit.
+   */
+  function downloadUnits() {
+    const rows = units.flatMap((u) =>
+      (u.rooms.length ? u.rooms : [null]).map((room) => [
+        u.residenceName ?? "",
+        u.unitNo ?? "",
+        u.unitType ?? "",
+        room?.letter ?? "Unit",
+        room?.roomTypeCode ?? "",
+        room?.occupancy ?? "unit",
+      ]),
+    );
+    if (!rows.length) {
+      toast.error("No units to export yet");
+      return;
+    }
+    writeUnitsFile(rows, `brachtia-units-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    toast.success(`${units.length} unit${units.length === 1 ? "" : "s"} exported`);
   }
 
   async function importWorkbook(file: File) {
@@ -306,7 +375,19 @@ function UnitSetupPage() {
         continue;
       }
       const list = roomTypes.filter((r) => r.residence_id === res.id);
-      const unitType = first["unit_type"] ?? "";
+      // only this unit type's own room types. "4-bedroom" in the file and "4-Bedroom
+      // Apartment" in Website are the same unit, so they are matched by bedrooms -
+      // looking a letter up across the whole residence gave a 4-bedroom unit the
+      // 3-bedroom's Room A
+      const fileType = first["unit_type"] ?? "";
+      const ownTypes = list.filter(
+        (r) => roomCountFor(String(r.unit_type ?? "")) === roomCountFor(fileType),
+      );
+      const typesForUnit = ownTypes.length ? ownTypes : list;
+      // and the unit is saved under the name Website uses for it
+      const unitType = ownTypes.length
+        ? String(ownTypes[0]!.unit_type ?? "") || fileType
+        : fileType;
       const unit = blankUnit(`U${String(++index).padStart(3, "0")}`);
       unit.residenceId = res.id;
       unit.residenceName = res.name;
@@ -326,9 +407,9 @@ function UnitSetupPage() {
               ? "twin"
               : occRaw === "single"
                 ? "single"
-                : typeInfo(list, code).occ;
+                : typeInfo(typesForUnit, code).occ;
         // price for the way this room is actually let, not the type's default
-        const info = typeInfo(list, code, occ);
+        const info = typeInfo(typesForUnit, code, occ);
         return {
           ...blankRoom(letter),
           roomTypeCode: info.rt?.code ?? code,
@@ -337,10 +418,16 @@ function UnitSetupPage() {
           beds: bedsFor(occ),
         };
       });
-      if (!unit.rooms.length) unit.rooms = buildRooms(unitType, list);
-      // a "Unit" row in the file means this unit may also be let whole, so the
-      // toggle in the editor reflects what the spreadsheet says
-      unit.wholeUnit = unit.rooms.some((r) => r.letter.toLowerCase() === "unit");
+      if (!unit.rooms.length) unit.rooms = buildRooms(unitType, typesForUnit);
+      // a unit is let whole or by room, never both. A file that gives a unit
+      // only a "Unit" row makes it a whole unit. One that gives it rooms as well
+      // is carrying an old whole-unit letting from the master list's history
+      // (a unit files built from every row, Inactive ones included, did exactly
+      // that) - so the rooms win and the stray Unit row is dropped
+      const wholeRows = unit.rooms.filter((r) => r.letter.toLowerCase() === "unit");
+      const roomRows = unit.rooms.filter((r) => r.letter.toLowerCase() !== "unit");
+      unit.rooms = roomRows.length ? roomRows : wholeRows.slice(0, 1);
+      unit.wholeUnit = !roomRows.length && wholeRows.length > 0;
       try {
         await saveUnit(unit, batchId);
         created += 1;
@@ -403,11 +490,7 @@ function UnitSetupPage() {
         </p>
 
         <div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted p-3">
-          <Switch
-            checked={draft.wholeUnit}
-            onCheckedChange={(v) => patch({ wholeUnit: v })}
-            id="whole-unit"
-          />
+          <Switch checked={draft.wholeUnit} onCheckedChange={setWholeUnit} id="whole-unit" />
           <Label htmlFor="whole-unit" className="text-sm">
             Rent as whole unit
           </Label>
@@ -511,6 +594,9 @@ function UnitSetupPage() {
             <Button size="sm" variant="outline" onClick={downloadTemplate}>
               <Download className="mr-1 size-4" /> Template
             </Button>
+            <Button size="sm" variant="outline" onClick={downloadUnits}>
+              <Download className="mr-1 size-4" /> Export units
+            </Button>
             <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()}>
               <Upload className="mr-1 size-4" /> Bulk upload
             </Button>
@@ -532,20 +618,17 @@ function UnitSetupPage() {
         }
       >
         {units.length > 0 ? (
-          <div className="mb-4 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-5">
-            {[
+          // every residence together
+          <StatStrip
+            className="mb-4 sm:grid-cols-5"
+            items={[
               { label: "Units", value: totals.units },
               { label: "Rooms", value: totals.rooms },
               { label: "Beds", value: totals.beds },
               { label: "Whole unit", value: totals.whole },
               { label: "Residences", value: totals.residences },
-            ].map((s) => (
-              <div key={s.label} className="bg-card px-4 py-3">
-                <p className="text-lg font-semibold tabular-nums text-brand-deep">{s.value}</p>
-                <p className="text-xs text-muted-foreground">{s.label}</p>
-              </div>
-            ))}
-          </div>
+            ]}
+          />
         ) : null}
 
         {units.length === 0 ? (
@@ -577,16 +660,38 @@ function UnitSetupPage() {
                   </button>
                   {open ? (
                     <div className="divide-y divide-border px-4">
+                      {/* this residence on its own */}
+                      <div className="py-3">
+                        {(() => {
+                          const s = statsFor(list);
+                          return (
+                            <StatStrip
+                              className="sm:grid-cols-4"
+                              items={[
+                                { label: "Units", value: s.units },
+                                { label: "Rooms", value: s.rooms },
+                                { label: "Beds", value: s.beds },
+                                { label: "Whole unit", value: s.whole },
+                              ]}
+                            />
+                          );
+                        })()}
+                      </div>
                       {list.map((u) => (
                         <div key={u.id}>
                           <div className="flex flex-wrap items-center gap-3 py-3">
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-semibold text-brand-deep">
-                                {u.residenceName} · {u.unitNo}
+                              <p className="flex items-center gap-1.5 text-sm font-semibold text-brand-deep">
+                                {/* the residence is the dropdown it sits in */}
+                                <span className="truncate">{u.unitNo}</span>
+                                {/* who is in it, said the way every other page says it */}
+                                <GenderMark
+                                  gender={derivedGender(u)}
+                                  title={`${derivedGender(u)} unit`}
+                                />
                               </p>
                               <p className="truncate text-xs text-muted-foreground">
                                 {u.code} · {u.unitType || "No type"} ·{" "}
-                                {derivedGender(u) || "Gender not set"} ·{" "}
                                 {u.wholeUnit
                                   ? `Whole unit ${money(u.wholeUnitRent)}`
                                   : `${u.rooms.length} rooms / ${u.rooms.reduce((n, r) => n + r.beds.length, 0)} beds`}
@@ -598,23 +703,6 @@ function UnitSetupPage() {
                               onClick={() => setDraft(withConfiguredType(u))}
                             >
                               Edit
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={async () => {
-                                try {
-                                  await deleteUnit(u.id);
-                                } catch (err) {
-                                  toast.error(
-                                    err instanceof Error ? err.message : "Could not remove unit",
-                                  );
-                                  return;
-                                }
-                                toast.success("Unit removed");
-                              }}
-                            >
-                              <Trash2 className="size-4" />
                             </Button>
                           </div>
                           {draft?.id === u.id ? <div className="pb-4">{editor}</div> : null}
@@ -631,6 +719,39 @@ function UnitSetupPage() {
 
       {/* a brand new unit has no row to sit under, so it opens below the list */}
       {draft && !units.some((u) => u.id === draft.id) ? <div ref={draftRef}>{editor}</div> : null}
+    </div>
+  );
+}
+
+/** Units, rooms, beds and whole-unit lets in a set of units - all of them, or one residence. */
+function statsFor(list: Unit[]) {
+  const lettable = list.flatMap((u) => u.rooms).filter((r) => r.letter.toLowerCase() !== "unit");
+  return {
+    units: list.length,
+    rooms: lettable.length,
+    beds: lettable.reduce((n, r) => n + r.beds.length, 0),
+    whole: list.filter((u) => u.wholeUnit).length,
+  };
+}
+
+/** The row of counts shown above the units, and inside each residence. */
+function StatStrip({
+  items,
+  className = "",
+}: {
+  items: { label: string; value: number }[];
+  className?: string;
+}) {
+  return (
+    <div
+      className={`grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border ${className}`}
+    >
+      {items.map((s) => (
+        <div key={s.label} className="bg-card px-4 py-3">
+          <p className="text-lg font-semibold tabular-nums text-brand-deep">{s.value}</p>
+          <p className="text-xs text-muted-foreground">{s.label}</p>
+        </div>
+      ))}
     </div>
   );
 }
