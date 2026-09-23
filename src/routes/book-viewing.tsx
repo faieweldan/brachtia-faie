@@ -606,8 +606,8 @@ function BookViewingPage() {
                         Select
                       </option>
                       {UNIVERSITIES.map((u) => (
-                        <option key={u} value={u}>
-                          {u}
+                        <option key={u.value} value={u.value}>
+                          {u.label}
                         </option>
                       ))}
                     </select>

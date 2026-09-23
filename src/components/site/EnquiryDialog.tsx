@@ -741,8 +741,8 @@ export default function EnquiryDialog({
                             Select
                           </option>
                           {universities.map((u) => (
-                            <option key={u} value={u}>
-                              {u}
+                            <option key={u.value} value={u.value}>
+                              {u.label}
                             </option>
                           ))}
                         </select>

@@ -1,4 +1,26 @@
-export const UNIVERSITIES = ["MMU", "HWUM", "UoC", "LKW", "CU", "Other"];
+/**
+ * The universities the public forms offer, in the words a student would use.
+ *
+ * One list, shown by the enquiry dialog and the viewing form, and matching the
+ * application form's own list. It used to be six bare codes - "UoC", "CU" -
+ * which meant a student picked an abbreviation they may never have seen, and
+ * the enquiry form offered LKW while the application form did not.
+ *
+ * `value` is what gets stored, and it is deliberately the SAME string as
+ * before. Relabelling must not rewrite a single stored answer, and
+ * `universityAbbr` below still maps these values for the admin lists - the
+ * rule the level, race and payment schedule lists already follow.
+ */
+export const UNIVERSITIES: { value: string; label: string }[] = [
+  { value: "MMU", label: "MMU - Multimedia University" },
+  { value: "HWUM", label: "HWUM - Heriot-Watt University Malaysia" },
+  { value: "UoC", label: "UoC - University of Cyberjaya" },
+  { value: "CU", label: "CU - City University Malaysia" },
+  { value: "Other", label: "Other - I will type it" },
+];
+
+/** Just the stored values, for the places that only need to know the set. */
+export const UNIVERSITY_VALUES = UNIVERSITIES.map((u) => u.value);
 
 // Map any stored university value (abbreviation or full name) to its short form.
 const UNIVERSITY_ABBR: Record<string, string> = {
@@ -28,7 +50,7 @@ export function universityAbbr(value?: string | null): string {
   // parenthetical abbreviation when it is a known short form.
   const paren = v.match(/\(([A-Za-z]+)\)$/);
   const abbr = paren ? paren[1] : "";
-  if (abbr && UNIVERSITIES.includes(abbr)) return abbr;
+  if (abbr && UNIVERSITY_VALUES.includes(abbr)) return abbr;
   return v;
 }
 
