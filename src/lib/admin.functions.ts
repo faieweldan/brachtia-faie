@@ -1080,9 +1080,34 @@ async function paidOnInvoice(supabase: any, invoiceId: string) {
 }
 
 /**
- * Change an invoice nothing has been paid on: same number, new lines and
- * details. Refused once money is recorded - a receipt was issued against what it
- * said.
+ * How much has been paid on an invoice - the money, not the number of payments.
+ *
+ * RM250 today and RM250 on Friday is two rows and the whole fee; RM1 is one row
+ * and none of it. Counting rows cannot tell those apart, so anything that turns
+ * on how much is in asks this instead.
+ */
+async function paidTotalOnInvoice(supabase: any, invoiceId: string) {
+  const { data, error } = await supabase
+    .from("payments")
+    .select("amount")
+    .eq("invoice_id", invoiceId);
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as any[]).reduce((n, p) => n + Number(p.amount || 0), 0);
+}
+
+const asRM = (n: number) => `RM${n.toFixed(2)}`;
+
+/**
+ * Change an invoice: same number, new lines and details.
+ *
+ * Open to change while what is on it is the booking fee. The fee holds the room
+ * and the stay it prices is still being settled - dates move, a room changes -
+ * so the invoice has to be able to follow. Past the fee the student is paying
+ * for the stay itself, and the figures they paid against are the ones they
+ * agreed to, so it is closed.
+ *
+ * Never below what is already in: an invoice for less than has been paid puts
+ * the student in credit, and there is nothing here that holds credit.
  */
 export const updateInvoice = createServerFn({ method: "POST" })
   .inputValidator(
@@ -1102,8 +1127,21 @@ export const updateInvoice = createServerFn({ method: "POST" })
       .eq("id", data.invoiceId)
       .maybeSingle();
     if (!inv || (inv as any).status === "void") throw new Error("Invoice not found");
-    if (await paidOnInvoice(supabase, data.invoiceId)) {
-      throw new Error("Money has been paid on this invoice, so it can no longer be changed");
+    // the same tolerance the fee is tested with everywhere else, so one booking
+    // is never over the fee here and under it there
+    const paidSoFar = await paidTotalOnInvoice(supabase, data.invoiceId);
+    if (paidSoFar > BOOKING_FEE + 0.005) {
+      throw new Error(
+        `More than the ${asRM(BOOKING_FEE)} booking fee has been paid on this invoice, so it can no longer be changed`,
+      );
+    }
+    if (
+      paidSoFar > 0 &&
+      data.items.reduce((n, l) => n + Number(l.amount || 0), 0) + 0.005 < paidSoFar
+    ) {
+      throw new Error(
+        `${asRM(paidSoFar)} has been paid on this invoice, so it cannot be changed to less than that`,
+      );
     }
     // an invoice on a booking is changed by the booking's staff member
     const staff = (inv as any).enquiry_id ? await staffFor(supabase, (inv as any).enquiry_id) : "";
