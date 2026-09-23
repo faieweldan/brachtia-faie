@@ -15,10 +15,12 @@ import { EmptyState, Panel, Select, Text } from "@/components/admin/ops-ui";
 import {
   bedsFor,
   blankRoom,
+  fmtDate,
   money,
   nextUnitCode,
   roomCountFor,
   saveUnit,
+  setUnitDeactivated,
   uid,
   useOps,
   type Occupancy,
@@ -153,6 +155,44 @@ function UnitSetupPage() {
    * swaps the old spelling for the configured one the moment a unit is opened,
    * so the settings win and the legacy name is never offered again.
    */
+  /**
+   * Take a unit out of service, or put it back.
+   *
+   * The reason is asked for rather than assumed, because that sentence is the
+   * whole point: a unit that is simply gone explains nothing to whoever comes
+   * looking a year from now. Cancelling the prompt leaves the unit alone.
+   *
+   * The server refuses while anybody is still in the unit and says who. That
+   * comes back as a message, not an error, so it is shown - a button that
+   * quietly does nothing is worse than one that says why it will not.
+   */
+  async function toggleDeactivated(u: Unit) {
+    const turningOff = !u.deactivatedAt;
+    let reason = "";
+    if (turningOff) {
+      const typed = window.prompt(
+        `Why is ${u.unitNo} no longer let?\n\nThis is what somebody reads a year from now.`,
+        "",
+      );
+      if (typed === null) return;
+      reason = typed.trim();
+      if (!reason) {
+        toast.error("Give a reason - that is the point of keeping the unit");
+        return;
+      }
+    }
+    try {
+      const res = await setUnitDeactivated(u.id, turningOff, reason);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(turningOff ? `${u.unitNo} deactivated` : `${u.unitNo} is back in service`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not change the unit");
+    }
+  }
+
   function withConfiguredType(u: Unit): Unit {
     const names = unitTypeNames(roomTypes.filter((r) => r.residence_id === u.residenceId));
     if (!u.unitType || names.includes(u.unitType)) return u;
@@ -687,7 +727,13 @@ function UnitSetupPage() {
                       </div>
                       {list.map((u) => (
                         <div key={u.id}>
-                          <div className="flex flex-wrap items-center gap-3 py-3">
+                          {/* a unit out of service reads as one: dimmed, but
+                              still here, still legible, and still editable */}
+                          <div
+                            className={`flex flex-wrap items-center gap-3 py-3 ${
+                              u.deactivatedAt ? "opacity-55" : ""
+                            }`}
+                          >
                             <div className="min-w-0 flex-1">
                               <p className="flex items-center gap-1.5 text-sm font-semibold text-brand-deep">
                                 {/* the residence is the dropdown it sits in */}
@@ -704,14 +750,36 @@ function UnitSetupPage() {
                                   ? `Whole unit ${money(u.wholeUnitRent)}`
                                   : `${u.rooms.length} rooms / ${u.rooms.reduce((n, r) => n + r.beds.length, 0)} beds`}
                               </p>
+                              {/* why it is out of service, on the row itself -
+                                  a unit that is simply missing explains nothing
+                                  to whoever comes looking a year from now */}
+                              {u.deactivatedAt ? (
+                                <p className="truncate text-xs text-muted-foreground">
+                                  Deactivated {fmtDate(u.deactivatedAt)}
+                                  {u.deactivationReason ? ` · ${u.deactivationReason}` : ""}
+                                </p>
+                              ) : null}
                             </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setDraft(withConfiguredType(u))}
-                            >
-                              Edit
-                            </Button>
+                            <div className="flex shrink-0 items-center gap-2">
+                              {/* the reason is the point of the row, so it is
+                                  asked for rather than assumed. Cancelling the
+                                  prompt leaves the unit alone */}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-muted-foreground"
+                                onClick={() => void toggleDeactivated(u)}
+                              >
+                                {u.deactivatedAt ? "Reactivate" : "Deactivate"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setDraft(withConfiguredType(u))}
+                              >
+                                Edit
+                              </Button>
+                            </div>
                           </div>
                           {draft?.id === u.id ? <div className="pb-4">{editor}</div> : null}
                         </div>

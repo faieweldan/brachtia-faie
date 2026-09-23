@@ -386,6 +386,37 @@ export async function saveUnit(unit: Unit, importBatchId?: string) {
   }
 }
 
+/**
+ * Take a unit out of service, or put it back.
+ *
+ * The server refuses while anybody is still in it, and says who - that comes
+ * back as a message rather than a throw, so the page can show it. A button that
+ * quietly does nothing is worse than one that says why it will not.
+ */
+export async function setUnitDeactivated(id: string, deactivated: boolean, reason = "") {
+  const previous = state.units;
+  const at = deactivated ? new Date().toISOString() : "";
+  setState((s) => ({
+    ...s,
+    units: s.units.map((u) =>
+      u.id === id ? { ...u, deactivatedAt: at, deactivationReason: deactivated ? reason : "" } : u,
+    ),
+  }));
+  try {
+    const { setUnitDeactivated: call } = await import("@/lib/homes.functions");
+    const res = await call({ data: { id, deactivated, reason } });
+    if (!res.ok) {
+      setState((s) => ({ ...s, units: previous }));
+      return res;
+    }
+    void refreshUnits();
+    return res;
+  } catch (err) {
+    setState((s) => ({ ...s, units: previous }));
+    throw err;
+  }
+}
+
 export async function deleteUnit(id: string) {
   const previous = state.units;
   setState((s) => ({ ...s, units: s.units.filter((u) => u.id !== id) }));
