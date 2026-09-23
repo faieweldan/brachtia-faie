@@ -140,9 +140,60 @@ export const saveUnitRow = createServerFn({ method: "POST" })
       throw new Error(`${unit.unitNo}: a unit is let either whole or by room, not both`);
     }
 
+    /*
+     * The code this unit is known by - A-001, S-001.
+     *
+     * Worked out here rather than in the page, because only here is the
+     * residence certain: Add unit mints a draft before anybody has picked one,
+     * and the bulk upload has no say in it at all.
+     *
+     * A unit that already exists keeps the code it has. Codes are read by
+     * people and printed on lists, so one must never move under a unit that is
+     * merely being edited.
+     *
+     * A new one counts within its own residence, from the HIGHEST number
+     * already given rather than how many there are. The Arc skips A-028 for a
+     * deactivated unit, and counting would hand that number out a second time.
+     */
+    const found = isUuid(unit.id)
+      ? await supabase.from("units").select("code").eq("id", unit.id).maybeSingle()
+      : await supabase
+          .from("units")
+          .select("code")
+          .eq("residence_id", unit.residenceId)
+          .eq("unit_no", unit.unitNo)
+          .maybeSingle();
+
+    let code = String((found.data as any)?.code ?? "").trim();
+    if (!code) {
+      const { data: res } = await supabase
+        .from("residences")
+        .select("unit_prefix, name")
+        .eq("id", unit.residenceId)
+        .maybeSingle();
+      // blank means "use the first letter of the name", so a residence added
+      // before anyone set a prefix still gets a sensible code
+      const prefix =
+        String((res as any)?.unit_prefix ?? "").trim() ||
+        String((res as any)?.name ?? "")
+          .trim()
+          .charAt(0)
+          .toUpperCase() ||
+        "U";
+      const { data: mine } = await supabase
+        .from("units")
+        .select("code")
+        .eq("residence_id", unit.residenceId);
+      const highest = ((mine ?? []) as any[]).reduce((max, r) => {
+        const digits = /(\d+)\s*$/.exec(String(r.code ?? ""));
+        return digits ? Math.max(max, Number(digits[1])) : max;
+      }, 0);
+      code = `${prefix}-${String(highest + 1).padStart(3, "0")}`;
+    }
+
     const unitRow = {
       residence_id: unit.residenceId,
-      code: unit.code,
+      code,
       unit_no: unit.unitNo,
       block: unit.block ?? "",
       floor: unit.floor ?? "",

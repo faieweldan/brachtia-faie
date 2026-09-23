@@ -322,8 +322,15 @@ export function roomCountFor(unitType: string) {
   return 1;
 }
 
-export function nextUnitCode(units: Unit[]) {
-  return `U${String(units.length + 1).padStart(3, "0")}`;
+/**
+ * A placeholder for the Add unit form, nothing more.
+ *
+ * The real code is given by the server on save, once the residence is known -
+ * it counts within that residence and starts with its letter (A-001, S-001).
+ * This cannot do that: the form mints a draft before anybody has chosen one.
+ */
+export function nextUnitCode(_units: Unit[]) {
+  return "";
 }
 
 /** Put a unit into local state, replacing any row with the same id. */

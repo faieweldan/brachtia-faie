@@ -362,7 +362,6 @@ function UnitSetupPage() {
     let created = 0;
     let skipped = 0;
     let failed = 0;
-    let index = units.length;
 
     for (const group of groups.values()) {
       const first = group[0]!;
@@ -388,7 +387,8 @@ function UnitSetupPage() {
       const unitType = ownTypes.length
         ? String(ownTypes[0]!.unit_type ?? "") || fileType
         : fileType;
-      const unit = blankUnit(`U${String(++index).padStart(3, "0")}`);
+      // no code: the server gives it one for this residence - A-001, S-001
+      const unit = blankUnit("");
       unit.residenceId = res.id;
       unit.residenceName = res.name;
       unit.residenceSlug = res.slug ?? "";
@@ -445,7 +445,12 @@ function UnitSetupPage() {
 
   const editor = draft ? (
     <div ref={draftRef}>
-      <Panel title={`Unit ${draft.code}`} description="Unit details and bed configuration.">
+      {/* a unit being added has no code yet - the server gives it one, for its
+          own residence, on save */}
+      <Panel
+        title={draft.code ? `Unit ${draft.code}` : "New unit"}
+        description="Unit details and bed configuration."
+      >
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Select
             label="Residence"
