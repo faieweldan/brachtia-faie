@@ -119,21 +119,19 @@ export function RentalScheduleDialog({
   const [finalAmount, setFinalAmount] = useState(
     schedule?.finalAmount != null ? String(schedule.finalAmount) : "",
   );
-  const [opened, setOpened] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
 
-  // a value from the record stays as text until admin opens it
-  const open = (field: string) => setOpened((o) => ({ ...o, [field]: true }));
   /*
    * The rent terms are the record's, not this dialog's. Rent, cycle and the
    * tenancy dates are what every period below is built from, so typing over
    * one here rebuilt the whole schedule from a figure the tenancy never
-   * agreed to - and the pencil made that look like an ordinary edit. They are
-   * shown, and changed where they are kept. What is still BLANK stays typable,
-   * because a schedule cannot be built without all four - which is also why
-   * `missing` below reads these values rather than these locks.
+   * agreed to. They are shown, and changed where they are kept.
+   *
+   * What is still BLANK stays typable, because a schedule cannot be built
+   * without all four - which is also why `missing` below reads these values
+   * rather than these locks.
    */
-  const locked = (field: string, known: string) => Boolean(known);
+  const locked = (known: string) => Boolean(known);
   const hint = (known: string, value: string, source: string, blank: string) =>
     !known
       ? blank
@@ -231,54 +229,44 @@ export function RentalScheduleDialog({
             Rent terms
           </p>
           <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
-            <Sourced
-              hint={hint(knownRent, rent, "From the stay", "Not recorded")}
-              onEdit={locked("rent", knownRent) ? () => open("rent") : undefined}
-            >
+            <Sourced hint={hint(knownRent, rent, "From the stay", "Not recorded")}>
               <Text
                 label="Monthly rent (RM)"
                 type="number"
                 value={rent}
                 onChange={setRent}
-                readOnly={locked("rent", knownRent)}
+                readOnly={locked(knownRent)}
                 display={money(Number(rent) || 0)}
               />
             </Sourced>
             <Sourced
               hint={hint(knownSchedule, frequency, "From payor details", "Not set on the profile")}
-              onEdit={locked("frequency", knownSchedule) ? () => open("frequency") : undefined}
             >
               <Choice
                 label="Payment schedule"
                 value={frequency}
                 onChange={setFrequency}
                 options={SCHEDULES}
-                readOnly={locked("frequency", knownSchedule)}
+                readOnly={locked(knownSchedule)}
               />
             </Sourced>
-            <Sourced
-              hint={hint(knownStart, tenancyStart, "From the stay", "Not recorded")}
-              onEdit={locked("start", knownStart) ? () => open("start") : undefined}
-            >
+            <Sourced hint={hint(knownStart, tenancyStart, "From the stay", "Not recorded")}>
               <Text
                 label="Tenancy start"
                 type="date"
                 value={tenancyStart}
                 onChange={setTenancyStart}
-                readOnly={locked("start", knownStart)}
+                readOnly={locked(knownStart)}
                 display={tenancyStart ? fmtDate(tenancyStart) : ""}
               />
             </Sourced>
-            <Sourced
-              hint={hint(knownEnd, tenancyEnd, "From the stay", "Not recorded")}
-              onEdit={locked("end", knownEnd) ? () => open("end") : undefined}
-            >
+            <Sourced hint={hint(knownEnd, tenancyEnd, "From the stay", "Not recorded")}>
               <Text
                 label="Tenancy end"
                 type="date"
                 value={tenancyEnd}
                 onChange={setTenancyEnd}
-                readOnly={locked("end", knownEnd)}
+                readOnly={locked(knownEnd)}
                 display={tenancyEnd ? fmtDate(tenancyEnd) : ""}
               />
             </Sourced>
