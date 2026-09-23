@@ -326,7 +326,21 @@ export const setUnitDeactivated = createServerFn({ method: "POST" })
     if (!isUuid(data.id)) return { ok: true as const };
     const supabase = await admin();
 
-    if (data.deactivated) {
+    /*
+     * What it says now. A unit already out of service keeps the date it went
+     * out: editing the reason is a correction to the wording, and re-stamping
+     * it as today would destroy the one fact this row exists to hold.
+     */
+    const { data: current } = await supabase
+      .from("units")
+      .select("deactivated_at")
+      .eq("id", data.id)
+      .maybeSingle();
+    const alreadyOff = Boolean((current as any)?.deactivated_at);
+
+    // only when turning a LIVE unit off - a unit already off is hidden from
+    // placement, so nobody can have moved into it since
+    if (data.deactivated && !alreadyOff) {
       const { data: rooms } = await supabase.from("rooms").select("id").eq("unit_id", data.id);
       const roomIds = ((rooms ?? []) as any[]).map((r) => r.id);
       if (roomIds.length) {
@@ -350,7 +364,9 @@ export const setUnitDeactivated = createServerFn({ method: "POST" })
     const { error } = await supabase
       .from("units")
       .update({
-        deactivated_at: data.deactivated ? new Date().toISOString() : null,
+        deactivated_at: data.deactivated
+          ? ((current as any)?.deactivated_at ?? new Date().toISOString())
+          : null,
         // the reason goes with the deactivation and is cleared when it comes back
         deactivation_reason: data.deactivated ? (data.reason ?? "").trim() : "",
       } as any)

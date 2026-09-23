@@ -7,6 +7,7 @@ import * as XLSX from "xlsx";
 
 import { listResidences } from "@/lib/admin.functions";
 import { GenderMark } from "@/components/admin/GenderMark";
+import { DeactivateUnitDialog } from "@/components/admin/DeactivateUnitDialog";
 import { NO_ROOM_TYPES, typesOfUnitType, unitTypeNames } from "@/lib/room-types";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -94,6 +95,8 @@ function derivedGender(unit: Unit) {
 function UnitSetupPage() {
   const { units } = useOps();
   const [draft, setDraft] = useState<Unit | null>(null);
+  // the unit whose reason is being written or corrected
+  const [deactivating, setDeactivating] = useState<Unit | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const draftRef = useRef<HTMLDivElement>(null);
 
@@ -166,28 +169,21 @@ function UnitSetupPage() {
    * comes back as a message, not an error, so it is shown - a button that
    * quietly does nothing is worse than one that says why it will not.
    */
-  async function toggleDeactivated(u: Unit) {
-    const turningOff = !u.deactivatedAt;
-    let reason = "";
-    if (turningOff) {
-      const typed = window.prompt(
-        `Why is ${u.unitNo} no longer let?\n\nThis is what somebody reads a year from now.`,
-        "",
-      );
-      if (typed === null) return;
-      reason = typed.trim();
-      if (!reason) {
-        toast.error("Give a reason - that is the point of keeping the unit");
-        return;
-      }
-    }
+  /**
+   * Put a unit back in service.
+   *
+   * No reason is asked for: a unit coming back needs no explanation, and the
+   * old one is cleared with it. Taking one out is the decision that has to be
+   * written down, and that is the dialog's job.
+   */
+  async function reactivate(u: Unit) {
     try {
-      const res = await setUnitDeactivated(u.id, turningOff, reason);
+      const res = await setUnitDeactivated(u.id, false);
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
-      toast.success(turningOff ? `${u.unitNo} deactivated` : `${u.unitNo} is back in service`);
+      toast.success(`${u.unitNo} is back in service`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not change the unit");
     }
@@ -754,21 +750,32 @@ function UnitSetupPage() {
                                   a unit that is simply missing explains nothing
                                   to whoever comes looking a year from now */}
                               {u.deactivatedAt ? (
-                                <p className="truncate text-xs text-muted-foreground">
-                                  Deactivated {fmtDate(u.deactivatedAt)}
-                                  {u.deactivationReason ? ` · ${u.deactivationReason}` : ""}
+                                <p className="flex flex-wrap items-baseline gap-x-1.5 text-xs text-muted-foreground">
+                                  <span>
+                                    Deactivated {fmtDate(u.deactivatedAt)}
+                                    {u.deactivationReason ? ` · ${u.deactivationReason}` : ""}
+                                  </span>
+                                  {/* the wording is the useful part, so it can
+                                      be corrected without turning the unit back
+                                      on and off again */}
+                                  <button
+                                    type="button"
+                                    className="underline underline-offset-2 hover:text-foreground"
+                                    onClick={() => setDeactivating(u)}
+                                  >
+                                    Edit reason
+                                  </button>
                                 </p>
                               ) : null}
                             </div>
                             <div className="flex shrink-0 items-center gap-2">
-                              {/* the reason is the point of the row, so it is
-                                  asked for rather than assumed. Cancelling the
-                                  prompt leaves the unit alone */}
                               <Button
                                 size="sm"
                                 variant="ghost"
                                 className="text-muted-foreground"
-                                onClick={() => void toggleDeactivated(u)}
+                                onClick={() =>
+                                  u.deactivatedAt ? void reactivate(u) : setDeactivating(u)
+                                }
                               >
                                 {u.deactivatedAt ? "Reactivate" : "Deactivate"}
                               </Button>
@@ -795,6 +802,16 @@ function UnitSetupPage() {
 
       {/* a brand new unit has no row to sit under, so it opens below the list */}
       {draft && !units.some((u) => u.id === draft.id) ? <div ref={draftRef}>{editor}</div> : null}
+
+      {/* keyed on the unit, so opening a different one starts from its own
+          reason rather than the last one typed */}
+      <DeactivateUnitDialog
+        key={deactivating?.id ?? "none"}
+        unit={deactivating}
+        onOpenChange={(open) => {
+          if (!open) setDeactivating(null);
+        }}
+      />
     </div>
   );
 }

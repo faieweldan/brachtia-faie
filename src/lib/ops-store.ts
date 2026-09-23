@@ -395,7 +395,10 @@ export async function saveUnit(unit: Unit, importBatchId?: string) {
  */
 export async function setUnitDeactivated(id: string, deactivated: boolean, reason = "") {
   const previous = state.units;
-  const at = deactivated ? new Date().toISOString() : "";
+  // a unit already out of service keeps the date it went out - editing the
+  // reason must not re-stamp it as today
+  const held = state.units.find((u) => u.id === id)?.deactivatedAt ?? "";
+  const at = deactivated ? held || new Date().toISOString() : "";
   setState((s) => ({
     ...s,
     units: s.units.map((u) =>
