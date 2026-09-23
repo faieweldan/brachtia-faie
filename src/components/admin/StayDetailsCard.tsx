@@ -151,6 +151,16 @@ export function StayDetailsCard({
      * left the rent quietly at whatever was last saved. So it is looked for three
      * ways, and when it is still not found the card says so instead of pricing.
      */
+    /*
+     * A room reserved for this booking IS its room preference - a stay placed
+     * into a bed often names no room of its own. Pricing already knew that and
+     * took the rent from the bed, but the room TYPE was only ever looked for
+     * under the room preference. So such a stay priced fine and resolved no
+     * room type, and Update quote saved everything except the quote snapshot -
+     * then said the quote had been updated. The bed names its type, so it is
+     * asked when the room preference has nothing to say.
+     */
+    const bedFits = Boolean(assignedBed) && !roomFitChanged(row, s);
     const roomRow =
       (s.roomCode
         ? (roomRows.find((r) => String(r.code ?? "") === s.roomCode) ??
@@ -160,7 +170,13 @@ export function StayDetailsCard({
               String(r.name ?? "") === String(row.room_name ?? "") &&
               (!s.unitType || String(r.unit_type ?? "") === s.unitType),
           ))
-        : null) ?? null;
+        : null) ??
+      (bedFits && assignedBed
+        ? (roomRows.find(
+            (r) => String(r.code ?? "") === String(assignedBed.room.roomTypeCode ?? ""),
+          ) ?? null)
+        : null) ??
+      null;
     const roomType = roomRow && resRow ? rowToRoomType(roomRow, resRow.slug) : null;
     const term = s.moveIn && s.moveOut ? termForRange(s.moveIn, s.moveOut) : null;
     // a whole unit is let as one home, so no per-person room rate prices it
@@ -171,7 +187,7 @@ export function StayDetailsCard({
     let rentFrom = "";
     let blocked: PriceBlock = null;
     // a room that no longer fits the stay is released on save - it prices nothing
-    if (assignedBed && !roomFitChanged(row, s)) {
+    if (bedFits && assignedBed) {
       const soldWhole = assignedBed.room.beds.some(
         (b) => b.id !== assignedBed.bed.id && isSoldAsSingle(b),
       );
@@ -310,9 +326,22 @@ export function StayDetailsCard({
       toast.error("The quote needs a room rate, move in and move out");
       return;
     }
+    const patch = patchFor(s, w, withQuote);
+    /*
+     * The snapshot has conditions of its own, so a save could quietly leave it
+     * out and still report "Quote updated" - which is how a quote sat out of
+     * date through any number of presses, each one saying it had worked. If the
+     * quote is not in the patch, this did not update the quote, and says so.
+     */
+    if (withQuote && !("quoteSnapshot" in patch)) {
+      toast.error("The quote needs a room type Website prices", {
+        description: "Pick a room preference, then update the quote again.",
+      });
+      return;
+    }
     setBusy(true);
     try {
-      await onSave(patchFor(s, w, withQuote));
+      await onSave(patch);
       // the quote is rebuilt from the stay as it now stands, so "out of date"
       // is answered by this save - say so plainly rather than leaving the user
       // to notice the warning has gone
