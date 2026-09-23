@@ -112,8 +112,17 @@ function monthsBetween(start: string, end: string) {
   return parts.length ? parts.join(" ") : "0 days";
 }
 
-const PROFILE_SECTIONS = [
-  ...RESIDENT_SECTIONS.map((s) => ({ key: s.key, label: s.title })),
+/*
+ * The sections this resident is actually asked, by the same test the cards
+ * below are drawn by. Listed flat, the sidebar offered Employment to a student
+ * and Academic to somebody employed - every question inside was put away, so
+ * the link led to a heading that was not on the page.
+ */
+const profileSectionsFor = (r: Resident) => [
+  ...RESIDENT_SECTIONS.filter((s) => s.fields.some((f) => residentFieldShown(f, r))).map((s) => ({
+    key: s.key,
+    label: s.title,
+  })),
   { key: "documents", label: "Documents" },
   { key: "portal", label: "Portal access" },
 ];
@@ -597,7 +606,7 @@ function ResidentProfilePage() {
           <div className="flex gap-6">
             <nav className="sticky top-4 hidden w-48 shrink-0 self-start lg:block">
               <ul className="space-y-0.5">
-                {PROFILE_SECTIONS.map((s) => (
+                {(form ? profileSectionsFor(form) : []).map((s) => (
                   <li key={s.key}>
                     <button
                       type="button"

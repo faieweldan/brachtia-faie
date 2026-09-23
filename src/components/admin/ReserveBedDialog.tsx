@@ -106,15 +106,45 @@ export function ReserveBedDialog({
   function reserve(person: Resident, from?: string) {
     // a move: empty the bed they are leaving, so nobody is in two places
     const current = findBedForResident(units, person);
+    /*
+     * A move takes the booking with it. Emptying the old bed clears the booking
+     * it was held for, and the new bed was written as a fresh hold - so a paid
+     * student came out the other side attached to nothing: their stage fell
+     * back to Room reserved, and Release stopped recognising them as paid and
+     * swept the bed it had just refused to touch. What the old bed held is
+     * carried over, and the stage is worked out again from the booking.
+     */
+    const carried = current
+      ? {
+          enquiryId: current.bed.enquiryId,
+          // a booked or lived-in bed stays that; only a new placement is a hold
+          status: current.bed.status,
+          tenancyStart: current.bed.tenancyStart,
+          tenancyEnd: current.bed.tenancyEnd,
+        }
+      : null;
     if (current) vacateBed(current.bed.id);
     updateBed(bed.id, {
-      status: "held",
+      status: carried?.status ?? "held",
       residentId: person.id,
       residentName: person.fullName,
       university: person.university || undefined,
       nationality: person.nationality || undefined,
       gender: person.gender || undefined,
+      ...(carried?.enquiryId ? { enquiryId: carried.enquiryId } : {}),
+      ...(carried?.tenancyStart ? { tenancyStart: carried.tenancyStart } : {}),
+      ...(carried?.tenancyEnd ? { tenancyEnd: carried.tenancyEnd } : {}),
     });
+    if (carried?.enquiryId) {
+      const enquiryId = carried.enquiryId;
+      void (async () => {
+        const { syncStageForBooking } = await import("@/lib/homes.functions");
+        await syncStageForBooking({ data: { enquiryId } }).catch(() => {
+          // the stage is worked out again on the next thing that touches the
+          // booking - a move that succeeded must not read as one that failed
+        });
+      })();
+    }
 
     // let whole: the other bed stops being sellable, because it was sold too
     const whole = asSingle && mode === "single";

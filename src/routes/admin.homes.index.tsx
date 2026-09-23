@@ -95,7 +95,11 @@ function InventoryPage() {
    * keeps the bed until they are moved, and an unpaid booking loses its invoice
    * along with the room. A bed with no booking behind it is simply emptied.
    */
-  async function release(bed: { id: string; enquiryId?: string | undefined }) {
+  async function release(bed: {
+    id: string;
+    enquiryId?: string | undefined;
+    residentId?: string | undefined;
+  }) {
     if (bed.enquiryId) {
       const released = await releaseBookingFor(
         queryClient,
@@ -103,6 +107,17 @@ function InventoryPage() {
         "This student has paid, so the bed is kept. To move them, Reserve another bed and pick them there.",
       );
       if (!released) return;
+    } else if (bed.residentId) {
+      /*
+       * A resident with no booking behind the bed. The paid check above reads
+       * the booking, so a bed whose booking had been dropped - a move used to
+       * do exactly that - fell past it to vacateBed and the student lost their
+       * room. Somebody in a bed is moved, never swept.
+       */
+      toast.error(
+        "Somebody is in this bed. To move them, Reserve another bed and pick them there.",
+      );
+      return;
     }
     vacateBed(bed.id);
     toast.success("Bed released");

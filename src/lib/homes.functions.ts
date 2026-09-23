@@ -375,6 +375,27 @@ export const setUnitDeactivated = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+/**
+ * Work a booking's stage out again after its bed has moved.
+ *
+ * Placement writes beds directly - it is inventory, not the booking flow - so
+ * nothing here recomputed the stage, and a paid student moved to another bed
+ * kept whatever stage the move left behind. Reserving one read "Room reserved"
+ * on a booking whose fee was already in.
+ *
+ * The stage is worked out from what is true of the booking now, so this only
+ * has to be asked; it is never told what to say.
+ */
+export const syncStageForBooking = createServerFn({ method: "POST" })
+  .inputValidator((data: { enquiryId: string }) => data)
+  .handler(async ({ data }) => {
+    if (!isUuid(data.enquiryId)) return { ok: true as const };
+    const supabase = await admin();
+    const { syncBookingStage } = await import("@/lib/booking-lifecycle");
+    await syncBookingStage(supabase, data.enquiryId);
+    return { ok: true as const };
+  });
+
 export const deleteUnitRow = createServerFn({ method: "POST" })
   .inputValidator((data: { id: string }) => data)
   .handler(async ({ data }) => {
