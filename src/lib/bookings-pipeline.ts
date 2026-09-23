@@ -8,12 +8,15 @@
  *   New               the enquiry arrives
  *   Room reserved     a room is reserved for it
  *   Viewing           a viewing is booked - optional
- *   Awaiting payment  the invoice is issued; the booking fee is not in yet
- *   Booked            the booking fee is in and the room confirmed - the invoice
- *                     may still have a balance
+ *   Awaiting payment  the invoice is issued; none of the booking fee is in yet
+ *   Awaiting balance  part of the booking fee is in, but not all of it
+ *   Booked            the booking fee is in FULL and the room confirmed - the
+ *                     invoice may still have a rent balance on it
  *   Closed            admin closes it
  *
- * "Awaiting balance" is kept for bookings from before the fee made them Booked.
+ * The fee decides the last three, and only paying it in full confirms a room.
+ * Any payment at all used to mean Booked, so a student who paid half the fee
+ * held a confirmed room for money that had not arrived.
  */
 
 export type StageKey =
@@ -172,12 +175,18 @@ export function nextActionFor(
         window: 14 * DAY,
       };
     }
-    case "awaiting_payment":
-      // a booking fee paid before residents were created automatically
-      if (!row.resident_id) return { action: "create_resident", label: "Create resident" };
-      // the fee is in and they are a resident: the balance is money on their
-      // Payments tab, not on the booking, so the step is to go there
-      return { action: "view_resident", label: "View resident" };
+    case "awaiting_payment": {
+      // part of the fee is in and the rest is not. The room is not confirmed
+      // until it is, so the step is the remainder - not the resident, who is
+      // not made until the fee is complete
+      const from = ts(row.invoice_issued_at) ?? stageAt;
+      return {
+        action: "record_payment",
+        label: "Record the rest of the booking fee",
+        due: from ? from + 14 * DAY : undefined,
+        window: 14 * DAY,
+      };
+    }
     case "booked":
       if (!row.resident_id) return { action: "create_resident", label: "Create resident" };
       return { action: "view_resident", label: "View resident" };

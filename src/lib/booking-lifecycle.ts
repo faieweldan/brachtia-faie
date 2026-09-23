@@ -1,6 +1,6 @@
 import { logBookingEvent } from "@/lib/booking-events";
 import { STAGE_ORDER, stageLabel } from "@/lib/bookings-pipeline";
-import { liveInvoices } from "@/lib/invoices";
+import { BOOKING_FEE, liveInvoices } from "@/lib/invoices";
 import { SCHEDULES, normCountry, normGender, normUniversity } from "@/lib/reference-data";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -258,8 +258,9 @@ export async function releaseBooking(supabase: any, enquiryId: string) {
  * and only some could move it back: a released room left a booking at Viewing
  * with no room, and a cancelled viewing never moved it at all.
  *
- *   money recorded on a live invoice   Booked
- *   a live invoice                     Awaiting payment
+ *   the booking fee paid in full       Booked
+ *   part of the booking fee paid       Awaiting balance
+ *   a live invoice, nothing paid yet   Awaiting payment
  *   a viewing booked, or one completed Viewing
  *   a bed held for it                  Room reserved
  *   none of these                      New
@@ -286,18 +287,26 @@ export async function syncBookingStage(supabase: any, enquiryId: string) {
     supabase.from("beds").select("id").eq("enquiry_id", enquiryId),
   ]);
   const invoiceIds = ((invoiceRes.data ?? []) as any[]).map((i) => i.id);
-  const paid = invoiceIds.length
-    ? ((
-        await supabase
-          .from("payments")
-          .select("id", { count: "exact", head: true })
-          .in("invoice_id", invoiceIds)
-      ).count ?? 0)
+  /*
+   * How much is in, not how many payments there are. A student who pays RM250
+   * of the RM500 today and the rest on Friday has made one payment and still
+   * owes half the fee - counting rows called that Booked on the first one, and
+   * the room was confirmed for money that had not arrived.
+   */
+  const paidTotal = invoiceIds.length
+    ? (
+        ((await supabase.from("payments").select("amount").in("invoice_id", invoiceIds)).data ??
+          []) as any[]
+      ).reduce((sum, p) => sum + Number(p.amount ?? 0), 0)
     : 0;
+  // the same test admin.functions makes before it creates the resident,
+  // tolerance and all, so the stage and the resident cannot disagree
+  const feeIn = paidTotal + 0.005 >= BOOKING_FEE;
 
-  const next =
-    paid > 0
-      ? "booked"
+  const next = feeIn
+    ? "booked"
+    : paidTotal > 0
+      ? "awaiting_payment"
       : invoiceIds.length
         ? "awaiting_fee"
         : (viewingRes.data ?? []).length || enquiry.viewing_completed_at
