@@ -334,6 +334,18 @@ export function StayDetailsCard({
     (r) => !draft.unitType || r.unit_type === draft.unitType,
   );
   /*
+   * Changing the unit type used to clear the room preference every time. A stay
+   * saved that way has no room, so it cannot be priced and its quote can never
+   * be brought up to date again - the card sat on "Pick a room preference" with
+   * Update quote greyed out for good. The room is only dropped when it really
+   * is not a room of the newly picked unit type.
+   */
+  const roomSurvives = (unitType: string) =>
+    Boolean(draft.roomCode) &&
+    live.roomRows.some(
+      (r) => String(r.code ?? "") === draft.roomCode && String(r.unit_type ?? "") === unitType,
+    );
+  /*
    * What this stay can be let as. Single and twin come from the room type; a
    * whole unit is not a room, so it is offered when the unit type has a
    * whole-unit rate in Website - whichever room preference is picked, since the
@@ -462,10 +474,15 @@ export function StayDetailsCard({
         </div>
       </div>
 
-      {/* what Website cannot price, in a line each - the card says the rest with a dash */}
+      {/*
+        What Website cannot price, in a line each - the card says the rest with
+        a dash. Closed up top when not editing: the header already carries the
+        price problem there, and printing it twice left two amber lines on one
+        card saying the same thing.
+      */}
       {[
         unitTypeClosed ? `${unitTypeWanted} has no ${termName} rates in Website.` : "",
-        priceProblem,
+        editing ? priceProblem : "",
       ]
         .filter(Boolean)
         .map((note) => (
@@ -504,7 +521,12 @@ export function StayDetailsCard({
             <label className="text-xs text-muted-foreground">Unit type</label>
             <select
               value={draft.unitType}
-              onChange={(e) => set({ unitType: e.target.value, roomCode: "" })}
+              onChange={(e) =>
+                set({
+                  unitType: e.target.value,
+                  ...(roomSurvives(e.target.value) ? {} : { roomCode: "" }),
+                })
+              }
               className={selectClass}
             >
               <option value="">—</option>
