@@ -194,8 +194,16 @@ function BookingsTable() {
       ).length,
     },
     {
-      label: "Awaiting payment",
-      value: decorated.filter((d) => d.row.status === "awaiting_payment").length,
+      /*
+       * Named by the one list the stage dropdown reads, and counting the stage
+       * that name belongs to. Written out by hand the two came apart: the box
+       * said "Awaiting payment" while counting awaiting_payment - the stage
+       * that list calls Awaiting balance - so it totted up part-paid bookings
+       * under the name of unpaid ones, and the bookings with nothing in at all
+       * were counted nowhere on the page.
+       */
+      label: stageLabel("awaiting_fee"),
+      value: decorated.filter((d) => d.row.status === "awaiting_fee").length,
     },
   ];
 
