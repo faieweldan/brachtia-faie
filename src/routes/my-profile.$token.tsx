@@ -630,9 +630,19 @@ function MyProfilePage() {
                   }`}
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-foreground">
+                    <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
                       {/* follows the nationality picked above, like the ID number does */}
                       {studentDocLabel(d.key, values["nationality"] ?? "")}
+                      {/* every one of these is needed before the application can
+                          be processed, so the dot says so on the row itself
+                          rather than in a sentence nobody reads twice */}
+                      {d.required ? (
+                        <span
+                          className="size-1.5 shrink-0 rounded-full bg-emerald-600"
+                          title="Required"
+                          aria-label="Required"
+                        />
+                      ) : null}
                     </p>
                     <p
                       className={`truncate text-xs ${have ? "text-brand-deep" : "text-muted-foreground"}`}

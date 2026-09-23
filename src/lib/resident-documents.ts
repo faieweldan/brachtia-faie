@@ -34,10 +34,10 @@ export function safeExt(name: string, type: string) {
  * when there is a document to sign and a balance to pay.
  */
 export const STUDENT_DOCS = [
-  { key: "photo", label: "Passport size photo" },
-  { key: "offer", label: "University offer / admission letter" },
-  { key: "id", label: "Passport / NRIC copy" },
-  { key: "booking_proof", label: "Booking fee payment proof" },
+  { key: "photo", label: "Passport size photo", required: true },
+  { key: "offer", label: "University offer / admission letter", required: true },
+  { key: "id", label: "Passport / NRIC copy", required: true },
+  { key: "booking_proof", label: "Booking fee payment proof", required: true },
 ] as const;
 
 /**
