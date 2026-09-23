@@ -47,7 +47,19 @@ export const pick = (row: ImportRow, ...keys: readonly string[]) => {
  * genuinely carries brackets keeps them.
  */
 export const withoutHint = (v: string) => {
-  const cleaned = v.replace(/\s*\([^)]*dropdown[^)]*\)\s*$/i, "").trim();
+  let cleaned = v.replace(/\s*\([^)]*dropdown[^)]*\)\s*$/i, "").trim();
+  /*
+   * The same hint with its closing bracket lost - "040225-14-1207 (Only if
+   * Malaysian show" - left behind when a column is narrowed or a cell is
+   * trimmed by hand. The answer is still in front of it, so the truncated
+   * instruction comes off and the number is kept. An opening bracket with no
+   * closing one anywhere after it is never part of a real answer, which is why
+   * this does not have to mention a dropdown to be sure of itself.
+   */
+  const openAt = cleaned.lastIndexOf("(");
+  if (openAt !== -1 && !cleaned.slice(openAt).includes(")")) {
+    cleaned = cleaned.slice(0, openAt).trim();
+  }
   /*
    * Sometimes the cell is the instruction and nothing else - "Dropdown (MMU,
    * HWUM, CityU, UoC, Others)" in a University column, where the brackets hold
