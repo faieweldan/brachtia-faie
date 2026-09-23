@@ -204,7 +204,9 @@ function AppointmentsPage() {
   const [staffFilter, setStaffFilter] = useState("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "datetime", dir: 1 });
+  // newest first: the appointment just made, or the one that has only just
+  // happened, is the one being looked for - oldest first buried it
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "datetime", dir: -1 });
   const [month, setMonth] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -328,7 +330,14 @@ function AppointmentsPage() {
   }, [filtered, sort]);
 
   function toggleSort(key: SortKey) {
-    setSort((s) => (s.key === key ? { key, dir: s.dir === 1 ? -1 : 1 } : { key, dir: 1 }));
+    // a column picked afresh starts the way that column reads best: dates newest
+    // first, names A-Z. Starting every column at 1 flipped Date & time back to
+    // oldest first the moment you clicked away and came back
+    setSort((s) =>
+      s.key === key
+        ? { key, dir: s.dir === 1 ? -1 : 1 }
+        : { key, dir: key === "datetime" ? -1 : 1 },
+    );
   }
 
   /* ---- slot loading for reschedule / new ---- */
@@ -1210,8 +1219,8 @@ function AppointmentsPage() {
                               >
                                 <option value="">—</option>
                                 {UNIVERSITIES.map((u) => (
-                                  <option key={u} value={u}>
-                                    {u}
+                                  <option key={u.value} value={u.value}>
+                                    {u.label}
                                   </option>
                                 ))}
                               </select>
