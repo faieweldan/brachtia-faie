@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { refreshMoney } from "@/lib/billing-client";
 import type { InvoiceDoc } from "@/lib/invoice-pdf";
-import { money } from "@/lib/ops-store";
+import { fmtDate, money } from "@/lib/ops-store";
 import { SCHEDULES } from "@/lib/reference-data";
 import {
   createResidentInvoice,
@@ -343,13 +343,29 @@ export function ResidentInvoiceDialog({
               )}
             </>
           )}
+          {/*
+            A scheduled invoice's dates belong to the schedule, not to this
+            form: they are worked out from the tenancy and the payment cycle,
+            and typing over one here would put a single invoice out of step with
+            every other period. They are shown, not edited - the schedule is
+            where they change. A one-off charge still sets its own.
+          */}
           <Text
             label={editing?.scheduled ? "Billing date" : "Issue date"}
             type="date"
             value={invoiceDate}
             onChange={setInvoiceDate}
+            readOnly={Boolean(editing?.scheduled)}
+            display={invoiceDate ? fmtDate(invoiceDate) : "—"}
           />
-          <Text label="Due date" type="date" value={dueDate} onChange={setDueDate} />
+          <Text
+            label="Due date"
+            type="date"
+            value={dueDate}
+            onChange={setDueDate}
+            readOnly={Boolean(editing?.scheduled)}
+            display={dueDate ? fmtDate(dueDate) : "—"}
+          />
           {isRental ? (
             <>
               <Text
@@ -357,8 +373,17 @@ export function ResidentInvoiceDialog({
                 type="date"
                 value={periodStart}
                 onChange={setPeriodStart}
+                readOnly={Boolean(editing?.scheduled)}
+                display={periodStart ? fmtDate(periodStart) : "—"}
               />
-              <Text label="Period end" type="date" value={periodEnd} onChange={setPeriodEnd} />
+              <Text
+                label="Period end"
+                type="date"
+                value={periodEnd}
+                onChange={setPeriodEnd}
+                readOnly={Boolean(editing?.scheduled)}
+                display={periodEnd ? fmtDate(periodEnd) : "—"}
+              />
             </>
           ) : null}
         </div>
@@ -433,15 +458,25 @@ export function ResidentInvoiceDialog({
           </div>
         </div>
 
-        <div className="space-y-1.5">
-          <p className="text-xs text-muted-foreground">Description on invoice</p>
-          <Textarea
-            rows={2}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Optional"
-          />
-        </div>
+        {/* the description belongs to the schedule too, for the same reason */}
+        {editing?.scheduled ? (
+          notes.trim() ? (
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Description on invoice</p>
+              <p className="text-sm text-foreground">{notes}</p>
+            </div>
+          ) : null
+        ) : (
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">Description on invoice</p>
+            <Textarea
+              rows={2}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Optional"
+            />
+          </div>
+        )}
 
         <div className="flex flex-wrap justify-end gap-2">
           <PdfPreviewButton

@@ -237,7 +237,17 @@ async function buildInvoice(inv: InvoiceDoc) {
               : []),
             ["Payment frequency", FREQ_LABEL[inv.payment_frequency] ?? inv.payment_frequency],
           ]),
-      ["Payment terms", terms],
+      /*
+       * The date the money is due, not the jargon for it. "NET105" is a term of
+       * trade nobody outside accounts reads as a date, and the due date was
+       * already printed in the band above - so this row said the same thing
+       * twice, in its least readable form. Same formatting as the band, so one
+       * invoice never prints one date two ways.
+       */
+      [
+        "Invoice due date",
+        due.toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" }),
+      ],
       ...(inv.period ? [["Period", inv.period]] : []),
       ...(inv.university ? [["University", inv.university]] : []),
     ],
