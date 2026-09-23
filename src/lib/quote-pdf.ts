@@ -8,6 +8,7 @@ import {
   type RoomType,
   type StayQuote,
 } from "@/data/properties";
+import { stayLength } from "@/lib/stay-length";
 
 const GREEN: [number, number, number] = [26, 71, 52];
 const PEACH: [number, number, number] = [250, 240, 231];
@@ -202,8 +203,13 @@ function build(
       ],
       ["Move in", formatDate(moveIn)],
       ["Move out", formatDate(moveOut)],
-      ["Contract term", term === "long" ? "12-month stay" : "Short-term stay"],
-      ["Monthly rate", `${formatRM(quote.monthlyAfter)} / month  (${quote.days} days total)`],
+      // the term is what it is called everywhere else - Stay details, the
+      // rate tables - so the quote says the same words back to the student
+      ["Contract term", term === "long" ? "Long term" : "Short term"],
+      // "393 days total" is a number nobody can picture. The same length in
+      // months and days is the way Stay details already says it, so the quote
+      // and the admin page read alike
+      ["Monthly rate", `${formatRM(quote.monthlyAfter)} / month  (${stayLength(moveIn, moveOut)})`],
     ],
   });
 
