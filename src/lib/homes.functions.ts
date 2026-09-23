@@ -81,6 +81,8 @@ function toUnit(row: any, rooms: any[], beds: any[]): Unit {
     wholeUnit: !!row.whole_unit,
     wholeUnitRent: Number(row.whole_unit_rent ?? 0),
     notes: row.notes ?? "",
+    deactivatedAt: row.deactivated_at ?? "",
+    deactivationReason: row.deactivation_reason ?? "",
     rooms: rooms
       .filter((r) => r.unit_id === row.id)
       .sort(
@@ -141,7 +143,14 @@ export const saveUnitRow = createServerFn({ method: "POST" })
     }
 
     /*
-     * The code this unit is known by - A-001, S-001.
+     * The code this unit is known by - U001, U002, and no dash, the way the
+     * master list writes it.
+     *
+     * ONE sequence across every residence, not one per residence. The Arc ends
+     * at U075 and Solstice carries straight on at U076, so the next new unit of
+     * either is U087. Per-residence letters were tidier to read, but these
+     * codes are already printed on invoices that have gone out, and an invoice
+     * quoting U063 has to lead back to a unit called U063.
      *
      * Worked out here rather than in the page, because only here is the
      * residence certain: Add unit mints a draft before anybody has picked one,
@@ -151,9 +160,9 @@ export const saveUnitRow = createServerFn({ method: "POST" })
      * people and printed on lists, so one must never move under a unit that is
      * merely being edited.
      *
-     * A new one counts within its own residence, from the HIGHEST number
-     * already given rather than how many there are. The Arc skips A-028 for a
-     * deactivated unit, and counting would hand that number out a second time.
+     * A new one takes the HIGHEST number already given rather than how many
+     * units there are. U028 is a deliberate gap - B-13A-01 is deactivated - and
+     * counting would hand that number out a second time.
      */
     const found = isUuid(unit.id)
       ? await supabase.from("units").select("code").eq("id", unit.id).maybeSingle()
@@ -168,27 +177,23 @@ export const saveUnitRow = createServerFn({ method: "POST" })
     if (!code) {
       const { data: res } = await supabase
         .from("residences")
-        .select("unit_prefix, name")
+        .select("unit_prefix")
         .eq("id", unit.residenceId)
         .maybeSingle();
-      // blank means "use the first letter of the name", so a residence added
-      // before anyone set a prefix still gets a sensible code
-      const prefix =
-        String((res as any)?.unit_prefix ?? "").trim() ||
-        String((res as any)?.name ?? "")
-          .trim()
-          .charAt(0)
-          .toUpperCase() ||
-        "U";
-      const { data: mine } = await supabase
-        .from("units")
-        .select("code")
-        .eq("residence_id", unit.residenceId);
-      const highest = ((mine ?? []) as any[]).reduce((max, r) => {
+      /*
+       * Blank means U. It used to fall back to the first letter of the
+       * residence's name, which made sense while each had its own letter and
+       * is simply wrong now - it would mint T001 for The Arc.
+       */
+      const prefix = String((res as any)?.unit_prefix ?? "").trim() || "U";
+      // every unit, not this residence's: the sequence is shared, and counting
+      // within one residence would hand Solstice a number The Arc already has
+      const { data: all } = await supabase.from("units").select("code");
+      const highest = ((all ?? []) as any[]).reduce((max, r) => {
         const digits = /(\d+)\s*$/.exec(String(r.code ?? ""));
         return digits ? Math.max(max, Number(digits[1])) : max;
       }, 0);
-      code = `${prefix}-${String(highest + 1).padStart(3, "0")}`;
+      code = `${prefix}${String(highest + 1).padStart(3, "0")}`;
     }
 
     const unitRow = {
@@ -303,6 +308,56 @@ async function readUnit(supabase: any, unitId: string): Promise<Unit> {
     : [];
   return toUnit(row, rooms ?? [], beds);
 }
+
+/**
+ * Take a unit out of service, or put it back.
+ *
+ * Deliberately NOT part of saveUnitRow: that rewrites the unit's rooms and beds
+ * to match what it was handed, which is exactly how the bulk upload detaches
+ * residents. Turning a unit off must touch one row and nothing else.
+ *
+ * A unit with somebody in it is refused. Deactivating hides its beds from
+ * placement, so a resident inside one would quietly vanish from Homes - the
+ * same rule Release follows: somebody living there is moved, not swept aside.
+ */
+export const setUnitDeactivated = createServerFn({ method: "POST" })
+  .inputValidator((data: { id: string; deactivated: boolean; reason?: string }) => data)
+  .handler(async ({ data }) => {
+    if (!isUuid(data.id)) return { ok: true as const };
+    const supabase = await admin();
+
+    if (data.deactivated) {
+      const { data: rooms } = await supabase.from("rooms").select("id").eq("unit_id", data.id);
+      const roomIds = ((rooms ?? []) as any[]).map((r) => r.id);
+      if (roomIds.length) {
+        const { data: taken } = await supabase
+          .from("beds")
+          .select("label, resident_name")
+          .in("room_id", roomIds)
+          .or("resident_id.not.is.null,enquiry_id.not.is.null");
+        const who = ((taken ?? []) as any[])
+          .map((b) => String(b.resident_name ?? "").trim() || String(b.label ?? ""))
+          .filter(Boolean);
+        if (who.length) {
+          return {
+            ok: false as const,
+            error: `${who.join(", ")} ${who.length === 1 ? "is" : "are"} still in this unit. Move them out before deactivating it.`,
+          };
+        }
+      }
+    }
+
+    const { error } = await supabase
+      .from("units")
+      .update({
+        deactivated_at: data.deactivated ? new Date().toISOString() : null,
+        // the reason goes with the deactivation and is cleared when it comes back
+        deactivation_reason: data.deactivated ? (data.reason ?? "").trim() : "",
+      } as any)
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });
 
 export const deleteUnitRow = createServerFn({ method: "POST" })
   .inputValidator((data: { id: string }) => data)

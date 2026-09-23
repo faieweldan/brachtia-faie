@@ -61,6 +61,10 @@ export type Unit = {
   wholeUnit: boolean;
   wholeUnitRent: number;
   notes: string;
+  /** when it stopped being let - empty means it is live */
+  deactivatedAt: string;
+  /** why, in plain words: the thing somebody needs a year from now */
+  deactivationReason: string;
   rooms: UnitRoom[];
 };
 
@@ -567,10 +571,22 @@ export type BedRow = {
   bed: Bed;
 };
 
+/**
+ * Every bed there is to place somebody in.
+ *
+ * A deactivated unit is not let any more, so its beds are not beds anybody can
+ * be put in. Filtered HERE rather than in listUnits on purpose: everything that
+ * offers a room - the booking room picker, findBed, the Homes inventory - comes
+ * through this one function, so one filter covers them all and none can be
+ * forgotten. Unit setup reads the units directly and still sees every one of
+ * them, which is the whole point: the unit stays visible, with its reason.
+ */
 export function allBeds(units: Unit[]): BedRow[] {
   const out: BedRow[] = [];
-  for (const unit of units)
+  for (const unit of units) {
+    if (unit.deactivatedAt) continue;
     for (const room of unit.rooms) for (const bed of room.beds) out.push({ unit, room, bed });
+  }
   return out;
 }
 

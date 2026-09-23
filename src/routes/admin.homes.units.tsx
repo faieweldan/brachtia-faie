@@ -72,6 +72,9 @@ function blankUnit(code: string): Unit {
     wholeUnit: false,
     wholeUnitRent: 0,
     notes: "",
+    // a unit is born in service; deactivating is a decision somebody makes later
+    deactivatedAt: "",
+    deactivationReason: "",
     rooms: [],
   };
 }
