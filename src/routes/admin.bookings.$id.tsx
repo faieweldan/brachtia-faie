@@ -1831,9 +1831,18 @@ function BookingDetail() {
                       {paidTotal > 0 ? ` still to pay · ${money(paidTotal)} in` : ""} ·{" "}
                       {invoice.number}
                     </span>
-                    <Button size="sm" onClick={recordBookingFee}>
-                      Record booking fee
-                    </Button>
+                    {/* it refused silently without a staff member: the button
+                        looked live, the toast was easy to miss. Now it says so */}
+                    <span className="flex items-center gap-2">
+                      {r.assigned_staff ? null : (
+                        <span className="text-xs text-muted-foreground">
+                          Assign a staff member first
+                        </span>
+                      )}
+                      <Button size="sm" onClick={recordBookingFee} disabled={!r.assigned_staff}>
+                        Record booking fee
+                      </Button>
+                    </span>
                   </div>
                 ) : invoice && balanceDue > 0 ? (
                   <p className="mt-1 text-xs text-muted-foreground">
