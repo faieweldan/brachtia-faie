@@ -391,15 +391,25 @@ export function ResidentInvoiceDialog({
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">Items</p>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() =>
-                setLines((rows) => [...rows, { label: "", kind: "charge", amount: 0, quantity: 1 }])
-              }
-            >
-              <Plus className="size-4" /> Add line
-            </Button>
+            {/*
+              What a scheduled invoice charges is the period's rent, worked out
+              from the schedule - so there is nothing to add to it or take off
+              it here. A one-off charge is built line by line and keeps both.
+            */}
+            {editing?.scheduled ? null : (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  setLines((rows) => [
+                    ...rows,
+                    { label: "", kind: "charge", amount: 0, quantity: 1 },
+                  ])
+                }
+              >
+                <Plus className="size-4" /> Add line
+              </Button>
+            )}
           </div>
           <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
             {/* the boxes below are unlabelled on their own - this names them, so
@@ -413,44 +423,63 @@ export function ResidentInvoiceDialog({
               <span className="w-28 text-right">Amount (RM)</span>
               <span className="size-8 shrink-0" aria-hidden />
             </div>
-            {lines.map((l, i) => (
-              <div key={i} className="flex items-center gap-2 px-3 py-2">
-                <Input
-                  value={l.label}
-                  placeholder="Description"
-                  className="h-8 flex-1"
-                  onChange={(e) => edit(i, { label: e.target.value })}
-                />
-                {/* how many, then the price of one - the line is worth the two
-                    multiplied, which is what the total below adds up */}
-                <Input
-                  type="number"
-                  min={1}
-                  step={1}
-                  value={l.quantity}
-                  aria-label="Quantity"
-                  className="h-8 w-16 text-right tabular-nums"
-                  onChange={(e) => edit(i, { quantity: Number(e.target.value) })}
-                />
-                <span className="text-xs text-muted-foreground">×</span>
-                <Input
-                  type="number"
-                  value={l.amount}
-                  aria-label="Price each"
-                  className="h-8 w-28 text-right tabular-nums"
-                  onChange={(e) => edit(i, { amount: Number(e.target.value) })}
-                />
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="size-8 shrink-0 text-muted-foreground"
-                  aria-label="Remove line"
-                  onClick={() => setLines((rows) => rows.filter((_, j) => j !== i))}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-            ))}
+            {lines.map((l, i) =>
+              /*
+               * Read as a line of the invoice rather than a row of boxes: a
+               * scheduled period's rent is the schedule's, and editing it here
+               * put one invoice out of step with every other period. Laid out
+               * on the same columns as the header above, so the figures still
+               * line up under Qty and Amount.
+               */
+              editing?.scheduled ? (
+                <div key={i} className="flex items-center gap-2 px-3 py-2 text-sm">
+                  <span className="flex-1">{l.label || "—"}</span>
+                  <span className="w-16 text-right tabular-nums">{qty(l.quantity)}</span>
+                  <span className="text-xs text-muted-foreground">×</span>
+                  <span className="w-28 text-right tabular-nums">
+                    {money(Number(l.amount) || 0)}
+                  </span>
+                  <span className="size-8 shrink-0" aria-hidden />
+                </div>
+              ) : (
+                <div key={i} className="flex items-center gap-2 px-3 py-2">
+                  <Input
+                    value={l.label}
+                    placeholder="Description"
+                    className="h-8 flex-1"
+                    onChange={(e) => edit(i, { label: e.target.value })}
+                  />
+                  {/* how many, then the price of one - the line is worth the two
+                      multiplied, which is what the total below adds up */}
+                  <Input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={l.quantity}
+                    aria-label="Quantity"
+                    className="h-8 w-16 text-right tabular-nums"
+                    onChange={(e) => edit(i, { quantity: Number(e.target.value) })}
+                  />
+                  <span className="text-xs text-muted-foreground">×</span>
+                  <Input
+                    type="number"
+                    value={l.amount}
+                    aria-label="Price each"
+                    className="h-8 w-28 text-right tabular-nums"
+                    onChange={(e) => edit(i, { amount: Number(e.target.value) })}
+                  />
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="size-8 shrink-0 text-muted-foreground"
+                    aria-label="Remove line"
+                    onClick={() => setLines((rows) => rows.filter((_, j) => j !== i))}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              ),
+            )}
             <div className="flex items-center justify-between bg-muted px-3 py-2 text-sm font-medium">
               <span>Total</span>
               <span className="tabular-nums">{money(total)}</span>

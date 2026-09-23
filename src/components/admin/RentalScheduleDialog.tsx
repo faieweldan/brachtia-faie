@@ -124,7 +124,16 @@ export function RentalScheduleDialog({
 
   // a value from the record stays as text until admin opens it
   const open = (field: string) => setOpened((o) => ({ ...o, [field]: true }));
-  const locked = (field: string, known: string) => Boolean(known) && !opened[field];
+  /*
+   * The rent terms are the record's, not this dialog's. Rent, cycle and the
+   * tenancy dates are what every period below is built from, so typing over
+   * one here rebuilt the whole schedule from a figure the tenancy never
+   * agreed to - and the pencil made that look like an ordinary edit. They are
+   * shown, and changed where they are kept. What is still BLANK stays typable,
+   * because a schedule cannot be built without all four - which is also why
+   * `missing` below reads these values rather than these locks.
+   */
+  const locked = (field: string, known: string) => Boolean(known);
   const hint = (known: string, value: string, source: string, blank: string) =>
     !known
       ? blank
