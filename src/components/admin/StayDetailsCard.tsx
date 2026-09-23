@@ -246,7 +246,15 @@ export function StayDetailsCard({
     (snap.moveIn !== row.move_in ||
       snap.moveOut !== row.move_out ||
       snap.occupancy !== row.occupancy ||
-      snap.room?.id !== row.room_code ||
+      /*
+       * The snapshot stores the room TYPE, whose id is the site row's `code`.
+       * A stay finds its room by `code` OR by `room_code` - two different
+       * columns - so comparing the snapshot against `room_code` said "out of
+       * date" forever whenever the match came from the other one, and Update
+       * quote could never clear it. Compared with the type resolved the same
+       * way, the two agree when nothing has changed.
+       */
+      snap.room?.id !== (saved.roomType?.id ?? row.room_code) ||
       (saved.quote !== null &&
         Math.round(Number(snap.quote?.totalUpfront ?? 0)) !==
           Math.round(saved.quote.totalUpfront)));
