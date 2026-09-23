@@ -313,7 +313,12 @@ export function StayDetailsCard({
     setBusy(true);
     try {
       await onSave(patchFor(s, w, withQuote));
-      toast.success(withQuote ? "Stay and quote updated" : "Stay details saved");
+      // the quote is rebuilt from the stay as it now stands, so "out of date"
+      // is answered by this save - say so plainly rather than leaving the user
+      // to notice the warning has gone
+      toast.success(withQuote ? "Quote updated" : "Stay details saved", {
+        ...(withQuote ? { description: "It now matches the stay details." } : {}),
+      });
       setEditing(false);
     } catch {
       // the page already says what went wrong
@@ -399,7 +404,16 @@ export function StayDetailsCard({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-sm font-semibold text-brand-deep">Stay details</p>
-          {!editing && quoteStale ? (
+          {/*
+            A stay that cannot be priced has no out-of-date quote - it has no
+            quote at all, and saying both left two messages arguing on one card
+            while the real problem (no room preference) read as the smaller one.
+            The reason it cannot be priced wins, because that is the thing to
+            act on.
+          */}
+          {!editing && priceProblem ? (
+            <p className="text-[11px] font-medium text-amber-700">{priceProblem}</p>
+          ) : !editing && quoteStale ? (
             <p className="text-[11px] font-medium text-amber-700">Quote is out of date</p>
           ) : !editing && !hasQuote ? (
             <p className="text-[11px] text-muted-foreground">No quote yet</p>
@@ -411,6 +425,14 @@ export function StayDetailsCard({
               size="sm"
               variant="outline"
               disabled={busy || !(editing ? live.quote : saved.quote)}
+              /* a greyed button with no reason on it is the commonest failure
+                 there is: the explanation sat in a line above and read as a
+                 separate remark rather than as why this cannot be pressed */
+              title={
+                (editing ? live.quote : saved.quote)
+                  ? undefined
+                  : priceProblem || "The quote needs a room rate, move in and move out"
+              }
               onClick={() =>
                 canEdit ? void persist(editing ? draft : fromRow(row), true) : onBlocked()
               }
