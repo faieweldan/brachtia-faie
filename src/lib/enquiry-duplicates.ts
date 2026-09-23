@@ -11,8 +11,17 @@
  * read - and tested - without standing a Supabase up.
  */
 
-/** How far back a repeat still counts as the same enquiry. */
-export const DUPLICATE_WINDOW_HOURS = 24;
+/**
+ * How far back a repeat still counts as the same enquiry.
+ *
+ * Two weeks. A day was too short to be the rule it looked like: somebody who
+ * sends the same enquiry again on Wednesday because nobody answered on Monday
+ * is plainly repeating themselves, and was being read as a new student. A
+ * fortnight covers the way students actually chase, and still closes before
+ * the next intake - so enquiring again next term is a new enquiry, not a
+ * repeat of an old one.
+ */
+export const DUPLICATE_WINDOW_HOURS = 24 * 14;
 
 /** What the student is told. Their words, not ours: they may well be right. */
 export const DUPLICATE_NOTICE =

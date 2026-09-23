@@ -55,8 +55,22 @@ const now = new Date("2026-09-21T12:00:00Z");
 const hoursAgo = (n: number) => new Date(now.getTime() - n * 3600_000).toISOString();
 
 check("an hour ago is inside the window", isWithinWindow(hoursAgo(1), now), true);
-check(`${DUPLICATE_WINDOW_HOURS - 1}h ago is inside`, isWithinWindow(hoursAgo(23), now), true);
-check(`${DUPLICATE_WINDOW_HOURS + 1}h ago is outside`, isWithinWindow(hoursAgo(25), now), false);
+/*
+ * Either side of the edge, counted from the window itself. Written as 23 and
+ * 25 these read as the window while it was a day, and quietly stopped testing
+ * the edge the moment it became a fortnight - both hours sat well inside it,
+ * and the labels went on naming a boundary neither one was near.
+ */
+check(
+  `${DUPLICATE_WINDOW_HOURS - 1}h ago is inside`,
+  isWithinWindow(hoursAgo(DUPLICATE_WINDOW_HOURS - 1), now),
+  true,
+);
+check(
+  `${DUPLICATE_WINDOW_HOURS + 1}h ago is outside`,
+  isWithinWindow(hoursAgo(DUPLICATE_WINDOW_HOURS + 1), now),
+  false,
+);
 // a clock skewed forward must not make every new row a repeat of a future one
 check("a row stamped in the future is not a repeat", isWithinWindow(hoursAgo(-2), now), false);
 check("an unreadable date is not a repeat", isWithinWindow("not a date", now), false);
@@ -99,7 +113,19 @@ check(
 const recent = [
   { id: "second", email: "aisha@example.com", phone: "", created_at: hoursAgo(3) },
   { id: "first", email: "aisha@example.com", phone: "", created_at: hoursAgo(5) },
-  { id: "stale", email: "aisha@example.com", phone: "", created_at: hoursAgo(30) },
+  /*
+   * Older than the window, counted from the window itself. At a flat 30 hours
+   * this was only stale while the window was a day: widened to a fortnight it
+   * fell inside, became the oldest match, and won the "points at the first"
+   * check below - the test reporting a real change in what a repeat links to,
+   * not a fault.
+   */
+  {
+    id: "stale",
+    email: "aisha@example.com",
+    phone: "",
+    created_at: hoursAgo(DUPLICATE_WINDOW_HOURS + 6),
+  },
   { id: "someone-else", email: "other@example.com", phone: "0129990000", created_at: hoursAgo(1) },
 ];
 

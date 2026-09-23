@@ -45,7 +45,7 @@ const enquirySchema = z.object({
 });
 
 /**
- * The enquiries from the last day that share this email or phone.
+ * The enquiries from the last fortnight that share this email or phone.
  *
  * Asked of the database by the same rules the pure helpers use, then narrowed
  * by them - so what the warning says and what gets recorded cannot drift.
@@ -62,7 +62,14 @@ async function recentMatches(supabase: any, email: string, phone: string) {
     .from("enquiries")
     .select("id, reference, email, phone, created_at, full_name")
     .gte("created_at", since)
-    .order("created_at", { ascending: true })
+    /*
+     * Newest first, because the limit decides what is looked at. Taken oldest
+     * first, a busy fortnight would fill the 200 with the start of the window
+     * and never reach the enquiry sent an hour ago - the repeat most worth
+     * catching. Which one a repeat points AT is decided afterwards, by
+     * findRepeatOf, which sorts the matches it keeps.
+     */
+    .order("created_at", { ascending: false })
     .limit(200);
   if (error) {
     // a lookup that fails must never cost the student their enquiry
@@ -80,8 +87,8 @@ async function recentMatches(supabase: any, email: string, phone: string) {
 }
 
 /**
- * Has this person enquired in the last day? Asked before the form is sent, so
- * the student can be told and decide - never to refuse the submission.
+ * Has this person enquired in the last fortnight? Asked before the form is
+ * sent, so the student can be told and decide - never to refuse the submission.
  */
 export const checkEnquiryDuplicate = createServerFn({ method: "POST" })
   .inputValidator((data: { email: string; phone: string }) => data)
