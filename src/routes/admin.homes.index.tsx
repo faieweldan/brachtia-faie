@@ -524,7 +524,26 @@ function InventoryPage() {
                                 Reserve
                               </Button>
                             ) : (
-                              <Button size="sm" variant="ghost" onClick={() => void release(bed)}>
+                              /*
+                               * An occupied bed holds a resident, and release()
+                               * only guards a booking hold - an occupied bed with
+                               * no enquiry went straight to vacateBed and the
+                               * person lost their room. Moving somebody out is a
+                               * checkout, not a release, so the button is shown
+                               * and refused rather than hidden: hiding it looks
+                               * like a bug to whoever went looking for it.
+                               */
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={inventoryStatus(bed.status) === "active"}
+                                title={
+                                  inventoryStatus(bed.status) === "active"
+                                    ? "Someone lives here - end their tenancy to free the bed"
+                                    : undefined
+                                }
+                                onClick={() => void release(bed)}
+                              >
                                 Release
                               </Button>
                             )}
