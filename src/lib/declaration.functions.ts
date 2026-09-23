@@ -5,6 +5,7 @@ import {
   DECLARATION_TERMS,
   DECLARATION_VERSION,
   declarationBody,
+  idMatches,
   nameMatches,
 } from "@/lib/declaration";
 
@@ -120,7 +121,12 @@ export const getDeclarationByToken = createServerFn({ method: "GET" })
 
 export const signDeclarationByToken = createServerFn({ method: "POST" })
   .inputValidator(
-    (data: { token: string; signedName: string; agreedTerms: Record<string, boolean> }) => data,
+    (data: {
+      token: string;
+      signedName: string;
+      signedIdNumber: string;
+      agreedTerms: Record<string, boolean>;
+    }) => data,
   )
   .handler(async ({ data }) => {
     const supabase = await admin();
@@ -154,6 +160,26 @@ export const signDeclarationByToken = createServerFn({ method: "POST" })
       };
     }
 
+    /*
+     * The ID number is typed too, and checked the same way. It used to be
+     * filled in from the record and copied onto the signature untouched - so
+     * the student attested to a number they never entered, which is not much
+     * of an attestation. Where we hold no number yet, what they type is taken
+     * and kept, because there is nothing to check it against.
+     */
+    const typedId = data.signedIdNumber.trim();
+    const idOnFile = String(resident.id_number ?? "").trim();
+    if (!typedId) {
+      return { ok: false as const, error: "Type your NRIC or passport number to sign." };
+    }
+    if (idOnFile && !idMatches(typedId, idOnFile)) {
+      return {
+        ok: false as const,
+        error:
+          "This does not match the NRIC or passport number we hold. Correct it above if the number is wrong.",
+      };
+    }
+
     const version = await currentVersion(supabase);
     if ("error" in version) return { ok: false as const, error: version.error };
 
@@ -166,7 +192,7 @@ export const signDeclarationByToken = createServerFn({ method: "POST" })
       resident_id: resident.id,
       version_id: version.id,
       signed_name: data.signedName.trim(),
-      signed_id_number: String(resident.id_number ?? ""),
+      signed_id_number: typedId,
       agreed_terms: data.agreedTerms ?? {},
       // the terms are no longer in a box to scroll: every one of them was ticked
       // on the page itself, which the check above has just proved

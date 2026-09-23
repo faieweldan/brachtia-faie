@@ -162,3 +162,17 @@ export function nameMatches(typed: string, onFile: string): boolean {
   if (!norm(typed) || !norm(onFile)) return false;
   return norm(typed) === norm(onFile);
 }
+
+/**
+ * ID numbers compared ignoring how they were punctuated - 040225-14-1207 and
+ * 040225141207 are one number typed two ways, and a passport can carry spaces.
+ *
+ * The number is typed rather than filled in for the student, because a field
+ * they never touched is not something they attested to. Typing it is part of
+ * the signature; checking it against the record is what makes it worth having.
+ */
+export function idMatches(typed: string, onFile: string): boolean {
+  const norm = (v: string) => v.replace(/[\s-]/g, "").toLowerCase();
+  if (!norm(typed) || !norm(onFile)) return false;
+  return norm(typed) === norm(onFile);
+}

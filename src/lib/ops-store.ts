@@ -288,6 +288,25 @@ export const fmtDate = (d?: string) =>
     ? new Date(d).toLocaleDateString("en-MY", { day: "2-digit", month: "short", year: "numeric" })
     : "—";
 
+/**
+ * The same date with the time on it, for the moments where the hour is the
+ * point rather than the day.
+ *
+ * A signature, most of all. "Signed on 23 Sep 2026" and "signed at 14:47 on 23
+ * Sep 2026" answer different questions, and only the second settles whether it
+ * happened before or after the room changed, or before or after they paid.
+ */
+export const fmtDateTime = (d?: string) =>
+  d
+    ? new Date(d).toLocaleString("en-MY", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "—";
+
 /* ---------------- Unit helpers ---------------- */
 
 /**

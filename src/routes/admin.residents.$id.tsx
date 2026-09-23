@@ -46,6 +46,7 @@ import {
   allBeds,
   blankResident,
   fmtDate,
+  fmtDateTime,
   money,
   createTenancy,
   deleteResident,
@@ -167,7 +168,8 @@ function DeclarationStatus({ residentId }: { residentId: string }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <ReadOnlyField label="Signed by" value={state.signedName} />
-      <ReadOnlyField label="Signed on" value={fmtDate(state.signedAt)} />
+      {/* the time is the evidence, not the day - see fmtDateTime */}
+      <ReadOnlyField label="Signed on" value={fmtDateTime(state.signedAt)} />
       <ReadOnlyField
         label="Version"
         value={`${state.version}${state.readToEnd ? " · read to the end" : ""}`}

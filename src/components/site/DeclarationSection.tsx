@@ -10,6 +10,7 @@ import {
   DECLARATION_INTRO,
   DECLARATION_TERMS,
   LANDLORD_ENTITY,
+  idMatches,
   nameMatches,
 } from "@/lib/declaration";
 import {
@@ -42,6 +43,7 @@ export function DeclarationSection({
 }) {
   const [ticked, setTicked] = useState<boolean[]>(() => DECLARATION_TERMS.map(() => false));
   const [typedName, setTypedName] = useState("");
+  const [typedId, setTypedId] = useState("");
   const [busy, setBusy] = useState(false);
 
   // once signed the section stops being a form and becomes a receipt - a
@@ -55,10 +57,14 @@ export function DeclarationSection({
             <h2 className="text-sm font-semibold text-brand-deep">Declaration signed</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
               Signed by {signed.signedName} on{" "}
-              {new Date(signed.signedAt).toLocaleDateString("en-GB", {
+              {/* the time is part of the record: it is what settles the order of
+                  events months later, when the day on its own does not */}
+              {new Date(signed.signedAt).toLocaleString("en-GB", {
                 day: "numeric",
                 month: "long",
                 year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
               })}{" "}
               · version {signed.version}
             </p>
@@ -73,6 +79,8 @@ export function DeclarationSection({
 
   const left = ticked.filter((t) => !t).length;
   const nameOk = nameMatches(typedName, fullName);
+  // nothing on file to check against: what they type is what we keep
+  const idOk = !idNumber.trim() || idMatches(typedId, idNumber);
 
   // a disabled button with no reason is the commonest failure in the world -
   // it always says what is still missing
@@ -83,14 +91,18 @@ export function DeclarationSection({
         ? "Type your full name to sign."
         : !nameOk
           ? `This does not match the name we hold (${fullName || "—"}).`
-          : "";
+          : !typedId.trim()
+            ? "Type your NRIC or passport number to sign."
+            : !idOk
+              ? `This does not match the number we hold (${idNumber || "—"}).`
+              : "";
 
   async function sign() {
     setBusy(true);
     try {
       const agreedTerms = Object.fromEntries(ticked.map((t, i) => [`term_${i + 1}`, t]));
       const res = await signDeclarationByToken({
-        data: { token, signedName: typedName, agreedTerms },
+        data: { token, signedName: typedName, signedIdNumber: typedId, agreedTerms },
       });
       if (!res.ok) {
         toast.error(res.error);
@@ -171,15 +183,24 @@ export function DeclarationSection({
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">NRIC / Passport number</Label>
-          <Input value={idNumber} readOnly className="bg-muted/50" />
+          {/* typed, not filled in: a number they never entered is not something
+              they attested to. It is checked against the record on the server */}
+          <Input
+            value={typedId}
+            placeholder="As written on your ID"
+            onChange={(e) => setTypedId(e.target.value)}
+          />
           <p className="text-[11px] text-muted-foreground">
-            Taken from your details above. Not right? Correct it there first.
+            Type it yourself - this is part of your signature.
           </p>
         </div>
       </div>
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
-        <Button disabled={left > 0 || !nameOk || busy} onClick={() => void sign()}>
+        <Button
+          disabled={left > 0 || !nameOk || !typedId.trim() || !idOk || busy}
+          onClick={() => void sign()}
+        >
           {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
           Sign declaration
         </Button>
