@@ -172,9 +172,27 @@ export function StayDetailsCard({
           ))
         : null) ??
       (bedFits && assignedBed
-        ? (roomRows.find(
-            (r) => String(r.code ?? "") === String(assignedBed.room.roomTypeCode ?? ""),
-          ) ?? null)
+        ? (() => {
+            /*
+             * The bed names its type by code, but older beds carry the room's
+             * own code or only its letter - the same three-way spread the room
+             * preference above allows for. A type found under none of them
+             * leaves the stay priced from the bed and still unable to quote.
+             */
+            const wanted = String(assignedBed.room.roomTypeCode ?? "");
+            const letter = String(assignedBed.room.letter ?? "");
+            const ofUnitType = (r: any) => !s.unitType || String(r.unit_type ?? "") === s.unitType;
+            return (
+              (wanted
+                ? (roomRows.find((r) => String(r.code ?? "") === wanted) ??
+                  roomRows.find((r) => String(r.room_code ?? "") === wanted))
+                : null) ??
+              (letter
+                ? roomRows.find((r) => String(r.room_code ?? "") === letter && ofUnitType(r))
+                : null) ??
+              null
+            );
+          })()
         : null) ??
       null;
     const roomType = roomRow && resRow ? rowToRoomType(roomRow, resRow.slug) : null;
