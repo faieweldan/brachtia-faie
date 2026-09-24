@@ -1888,7 +1888,11 @@ function BookingDetail() {
                           title={`Receipt ${rc.number}`}
                           fileName={`Brachtia-${rc.number}.pdf`}
                           build={async () =>
-                            (await import("@/lib/invoice-pdf")).receiptPdfUrl(receiptDocFor(rc))
+                            (await import("@/lib/invoice-pdf")).receiptPdfUrl(
+                              receiptDocFor(rc),
+                              // the slip it was paid with, on the pages after it
+                              await loadProof(rc),
+                            )
                           }
                         >
                           <Eye className="size-4" />
@@ -1918,24 +1922,34 @@ function BookingDetail() {
               onSent={() => void queryClient.invalidateQueries({ queryKey: ["admin"] })}
               residentId={row.resident_id}
               phone={row.phone ?? ""}
-              hasProof={hasProofFor(receipts[receipts.length - 1])}
-              // one file, scrolled through: the updated invoice, the receipt for
-              // the booking fee, and the slip it was paid with
+              hasProof={receipts.some(hasProofFor)}
+              /*
+               * One file, scrolled through: the updated invoice, then every
+               * receipt with the slip it was paid with.
+               *
+               * A booking fee is often paid in parts - RM400 today, RM100 on
+               * Friday - and only the last receipt was attached, so a student
+               * who had paid RM500 was sent a receipt for RM100 and went
+               * looking for the rest.
+               */
               attachments={
                 invoice && receipts.length
                   ? [
                       {
-                        label: hasProofFor(receipts[receipts.length - 1])
-                          ? "Invoice, receipt & proof"
-                          : "Invoice & receipt",
+                        label: receipts.some(hasProofFor)
+                          ? `Invoice, ${receipts.length === 1 ? "receipt" : "all receipts"} & proof`
+                          : `Invoice & ${receipts.length === 1 ? "receipt" : "all receipts"}`,
                         fileName: `Brachtia-${invoice.number}-welcome.pdf`,
                         build: async () => {
-                          const rc = receipts[receipts.length - 1];
                           const { welcomePackPdfUrl } = await import("@/lib/invoice-pdf");
                           return welcomePackPdfUrl({
                             invoice: invoiceDoc(),
-                            receipt: receiptDocFor(rc),
-                            proof: await loadProof(rc),
+                            receipts: await Promise.all(
+                              receipts.map(async (rc) => ({
+                                receipt: receiptDocFor(rc),
+                                proof: await loadProof(rc),
+                              })),
+                            ),
                           });
                         },
                       },

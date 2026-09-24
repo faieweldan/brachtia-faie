@@ -643,10 +643,46 @@ async function buildReceipt(rec: ReceiptDoc) {
   return doc;
 }
 
-/** The receipt as a PDF link, the same way as invoicePdfUrl. */
-export async function receiptPdfUrl(rec: ReceiptDoc) {
+/**
+ * Several PDFs as one, in the order given.
+ *
+ * A part that cannot be read is left out rather than losing the rest with it -
+ * a receipt whose slip is missing must still open, because a document that
+ * refuses to open at all is worse than one without its slip.
+ */
+async function stitch(parts: Array<() => Promise<ArrayBuffer>>) {
+  const { PDFDocument } = await import("pdf-lib");
+  const out = await PDFDocument.create();
+  for (const part of parts) {
+    try {
+      const src = await PDFDocument.load(await part());
+      const pages = await out.copyPages(src, src.getPageIndices());
+      for (const page of pages) out.addPage(page);
+    } catch {
+      /* one unreadable part must not cost the others */
+    }
+  }
+  const bytes = await out.save();
+  return URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" }));
+}
+
+/** A slip as pages: a PDF goes in whole, a photo gets a page made for it. */
+const proofPart = (proof: ProofFile, rec: ReceiptDoc) => async () =>
+  /pdf/i.test(proof.type) || /\.pdf$/i.test(proof.name)
+    ? await proof.blob.arrayBuffer()
+    : ((await buildProofPage(proof, rec)).output("arraybuffer") as ArrayBuffer);
+
+/**
+ * The receipt as a PDF link, the same way as invoicePdfUrl - with the slip it
+ * was paid with on the pages after it.
+ *
+ * A receipt and its proof were two files to open and two things to send. They
+ * are one document: the money received, then the evidence of it.
+ */
+export async function receiptPdfUrl(rec: ReceiptDoc, proof?: ProofFile | null) {
   const doc = await buildReceipt(rec);
-  return URL.createObjectURL(doc.output("blob"));
+  if (!proof) return URL.createObjectURL(doc.output("blob"));
+  return stitch([async () => doc.output("arraybuffer") as ArrayBuffer, proofPart(proof, rec)]);
 }
 
 /** A payment proof as it was uploaded - a photo of the bank slip, or a PDF. */
@@ -684,46 +720,25 @@ async function buildProofPage(proof: ProofFile, rec: ReceiptDoc) {
 }
 
 /**
- * One document for the welcome message: the updated invoice, then the receipt,
- * then the proof of payment - so the student opens a single file and scrolls
- * through all three instead of juggling attachments.
+ * One document for the welcome message: the updated invoice, then EVERY receipt
+ * with the slip it was paid with after it - so the student opens a single file
+ * and scrolls through the lot instead of juggling attachments.
  *
- * Each part is built as its own PDF the way it always was, and the pages are
- * stitched together at the end; a proof that is already a PDF is merged whole,
- * a photo gets a page of its own. A proof that cannot be read is left out
- * rather than losing the invoice and receipt with it.
+ * Every receipt, because a booking fee is often paid in parts: RM400 today and
+ * RM100 on Friday is two receipts and two slips, and sending only the last of
+ * them showed RM100 against a fee of RM500 and left the student looking for the
+ * rest. Each receipt is followed by its own proof, so the pairs stay together
+ * however many there are.
  */
 export async function welcomePackPdfUrl(pack: {
   invoice: InvoiceDoc;
-  receipt: ReceiptDoc;
-  proof?: ProofFile | null;
+  receipts: { receipt: ReceiptDoc; proof?: ProofFile | null }[];
 }) {
-  const { PDFDocument } = await import("pdf-lib");
-  const out = await PDFDocument.create();
-
-  async function append(bytes: ArrayBuffer) {
-    const src = await PDFDocument.load(bytes);
-    const pages = await out.copyPages(src, src.getPageIndices());
-    for (const page of pages) out.addPage(page);
-  }
-
-  await append((await buildInvoice(pack.invoice)).output("arraybuffer"));
-  await append((await buildReceipt(pack.receipt)).output("arraybuffer"));
-
-  const proof = pack.proof;
-  if (proof) {
-    const isPdf = /pdf/i.test(proof.type) || /\.pdf$/i.test(proof.name);
-    try {
-      await append(
-        isPdf
-          ? await proof.blob.arrayBuffer()
-          : (await buildProofPage(proof, pack.receipt)).output("arraybuffer"),
-      );
-    } catch {
-      /* an unreadable proof must not cost the student their invoice */
-    }
-  }
-
-  const bytes = await out.save();
-  return URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" }));
+  return stitch([
+    async () => (await buildInvoice(pack.invoice)).output("arraybuffer") as ArrayBuffer,
+    ...pack.receipts.flatMap(({ receipt, proof }) => [
+      async () => (await buildReceipt(receipt)).output("arraybuffer") as ArrayBuffer,
+      ...(proof ? [proofPart(proof, receipt)] : []),
+    ]),
+  ]);
 }
