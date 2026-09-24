@@ -214,7 +214,11 @@ export const fetchDaySlots = createServerFn({ method: "GET" })
     const weekday = new Date(`${data.date}T00:00:00`).getDay();
 
     const [{ data: rules }, { data: blocked }] = await Promise.all([
-      supabaseAdmin.from("availability_rules").select("*").eq("weekday", weekday).eq("active", true),
+      supabaseAdmin
+        .from("availability_rules")
+        .select("*")
+        .eq("weekday", weekday)
+        .eq("active", true),
       supabaseAdmin.from("blocked_dates").select("*").eq("blocked_on", data.date),
     ]);
 
@@ -251,9 +255,7 @@ export const fetchDaySlots = createServerFn({ method: "GET" })
         blockedWindows,
       ),
     };
-
   });
-
 
 const appointmentSchema = z.object({
   mode: z.enum(["in_person", "virtual"]),
@@ -338,7 +340,6 @@ export const bookAppointment = createServerFn({ method: "POST" })
       notes: data.notes,
     });
 
-
     if (error) {
       console.error("appointment insert failed", error);
       return { ok: false as const };
@@ -349,13 +350,15 @@ export const bookAppointment = createServerFn({ method: "POST" })
 /* ---------------- Student self-service viewing link ---------------- */
 
 export const getViewingLink = createServerFn({ method: "GET" })
-  .inputValidator((data: { token: string }) => z.object({ token: z.string().min(8).max(64) }).parse(data))
+  .inputValidator((data: { token: string }) =>
+    z.object({ token: z.string().min(8).max(64) }).parse(data),
+  )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row } = await supabaseAdmin
       .from("enquiries")
       .select(
-        "id,reference,full_name,email,phone,university,nationality,gender,intake,residence_slug,residence_name,room_name,occupancy,move_in,move_out",
+        "id,reference,full_name,email,phone,university,nationality,gender,intake,residence_slug,residence_name,room_name,unit_type,occupancy,move_in,move_out,monthly_rent,term",
       )
       .eq("viewing_token", data.token)
       .maybeSingle();

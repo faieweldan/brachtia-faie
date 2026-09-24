@@ -5,6 +5,8 @@ import {
   ArrowLeft,
   ArrowRight,
   CalendarCheck,
+  ChevronDown,
+  ChevronUp,
   CheckCircle2,
   Loader2,
   MapPin,
@@ -15,7 +17,8 @@ import { toast } from "sonner";
 
 import { getViewingLink, confirmViewingFromLink } from "@/lib/public.functions";
 import { formatSlot } from "@/lib/slots";
-import { company } from "@/data/properties";
+import { company, formatRate } from "@/data/properties";
+import { stayLength } from "@/lib/stay-length";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
@@ -74,14 +77,20 @@ function ViewingLinkPage() {
   const [view, setView] = useState<"choose" | "viewing" | "booking">("choose");
   // the booking is requested by ticking, not by arriving at the right button
   const [confirmed, setConfirmed] = useState(false);
+  // the full particulars, put away until asked for - the card says the room,
+  // and a student who wants the rest can have it without it being in the way
+  const [showDetails, setShowDetails] = useState(false);
 
   const linkQuery = useQuery({
     queryKey: ["viewing-link", token],
     queryFn: () => getViewingLink({ data: { token } }),
   });
 
-  const booking = linkQuery.data?.ok ? (linkQuery.data.booking as Record<string, string>) : null;
-  const slug = booking?.["residence_slug"] ?? "";
+  // the row as it comes back: rent is a number, everything else text
+  const booking = linkQuery.data?.ok
+    ? (linkQuery.data.booking as Record<string, string | number | null>)
+    : null;
+  const slug = String(booking?.["residence_slug"] ?? "");
   const isoDate = date ? toISODate(date) : "";
 
   useEffect(() => setSlot(null), [isoDate, mode]);
@@ -216,12 +225,59 @@ function ViewingLinkPage() {
       <p className="text-sm font-semibold text-foreground">{booking["room_name"]}</p>
       <p className="mt-1 text-sm text-muted-foreground">
         {booking["occupancy"] === "twin" ? "Twin sharing" : "Single occupancy"}
-        {booking["move_in"] ? ` · ${prettyDay(booking["move_in"])}` : ""}
-        {booking["move_out"] ? ` \u2013 ${prettyDay(booking["move_out"])}` : ""}
+        {booking["move_in"] ? ` · ${prettyDay(String(booking["move_in"]))}` : ""}
+        {booking["move_out"] ? ` \u2013 ${prettyDay(String(booking["move_out"]))}` : ""}
       </p>
       <p className="mt-3 text-xs text-muted-foreground">
         Booking ID <span className="font-semibold text-foreground">{booking["reference"]}</span>
       </p>
+
+      <button
+        type="button"
+        onClick={() => setShowDetails((was) => !was)}
+        aria-expanded={showDetails}
+        className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-brand underline-offset-2 hover:underline"
+      >
+        {showDetails ? "Hide booking details" : "View booking details"}
+        {showDetails ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+      </button>
+
+      {showDetails ? (
+        <dl className="mt-4 grid gap-x-4 gap-y-2 border-t border-border pt-4 text-sm sm:grid-cols-[auto_1fr]">
+          {(
+            [
+              ["Booking ID", booking["reference"]],
+              ["Name", booking["full_name"]],
+              ["Residence", booking["residence_name"]],
+              ["Unit type", booking["unit_type"]],
+              ["Room", booking["room_name"]],
+              ["Occupancy", booking["occupancy"] === "twin" ? "Twin sharing" : "Single"],
+              ["Move-in date", prettyDay(String(booking["move_in"] ?? ""))],
+              ["Move-out date", prettyDay(String(booking["move_out"] ?? ""))],
+              [
+                "Stay duration",
+                booking["move_in"] && booking["move_out"]
+                  ? stayLength(String(booking["move_in"]), String(booking["move_out"]))
+                  : "",
+              ],
+              [
+                "Monthly rental",
+                Number(booking["monthly_rent"]) > 0
+                  ? formatRate(Number(booking["monthly_rent"]))
+                  : "",
+              ],
+            ] as const
+          )
+            // a blank line says nothing and reads as something missing
+            .filter(([, value]) => Boolean(value))
+            .map(([label, value]) => (
+              <div key={label} className="contents">
+                <dt className="text-muted-foreground sm:whitespace-nowrap">{label}</dt>
+                <dd className="font-semibold text-foreground sm:text-right">{value}</dd>
+              </div>
+            ))}
+        </dl>
+      ) : null}
     </div>
   );
 
@@ -237,8 +293,8 @@ function ViewingLinkPage() {
             Good news \u2014 we have a room for you! \ud83c\udf89
           </h1>
           <p className="mt-3 text-muted-foreground">
-            Hi {booking["full_name"]?.split(" ")[0]}, your preferred room is available. What would
-            you like to do next?
+            Hi {String(booking["full_name"] ?? "").split(" ")[0]}, your preferred room is available.
+            What would you like to do next?
           </p>
 
           <div className="mt-6">{roomCard}</div>
