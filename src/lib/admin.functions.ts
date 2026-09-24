@@ -1116,6 +1116,12 @@ export const createInvoice = createServerFn({ method: "POST" })
       }`,
     });
 
+    // the invoice as raised - the original every later edit is a revision of
+    {
+      const { recordInvoiceVersion } = await import("@/lib/document-versions.functions");
+      await recordInvoiceVersion(supabase, invoiceId);
+    }
+
     return { id: invoiceId, number: (inv as any).number as string };
   });
 
@@ -1242,6 +1248,11 @@ export const updateInvoice = createServerFn({ method: "POST" })
         ref: String((inv as any).number ?? ""),
         summary: `Invoice ${(inv as any).number} edited · ${rm(lines.reduce((n, l) => n + Number(l.amount || 0), 0))}`,
       });
+    }
+    // the edited invoice becomes the next revision of the one raised before it
+    {
+      const { recordInvoiceVersion } = await import("@/lib/document-versions.functions");
+      await recordInvoiceVersion(supabase, data.invoiceId);
     }
     return { id: data.invoiceId, number: String((inv as any).number ?? "") };
   });

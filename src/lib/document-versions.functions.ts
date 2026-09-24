@@ -76,6 +76,67 @@ export async function recordQuoteVersion(
   }
 }
 
+/**
+ * The first invoice in this one's lineage.
+ *
+ * Cancelling an invoice and raising it again makes a new row pointed at the one
+ * it replaces. Versions are counted against the root of that chain, so an
+ * invoice reissued twice still reads as one document with a history rather than
+ * three documents each calling itself the original.
+ */
+async function rootInvoiceId(supabase: any, invoiceId: string): Promise<string> {
+  let id = invoiceId;
+  // a cycle would hang the request; a lineage is never this long
+  for (let hop = 0; hop < 20; hop++) {
+    const { data } = await supabase
+      .from("invoices")
+      .select("replaces_invoice_id")
+      .eq("id", id)
+      .maybeSingle();
+    const parent = (data as any)?.replaces_invoice_id;
+    if (!parent || parent === id) return id;
+    id = String(parent);
+  }
+  return id;
+}
+
+/**
+ * Keep this invoice as a version, if it differs from the one before it.
+ *
+ * Called wherever an invoice is written - raised, edited, or reissued after a
+ * cancellation - so the record follows the money rather than whoever remembered
+ * to open a preview. Booking invoices, rental invoices and charges all come
+ * through here, so none of them can behave differently from the others.
+ *
+ * Never throws: failing to keep the history is not a reason to refuse the
+ * invoice that produced it.
+ */
+export async function recordInvoiceVersion(supabase: any, invoiceId: string): Promise<void> {
+  try {
+    const [{ data: row }, { data: items }] = await Promise.all([
+      supabase.from("invoices").select("*").eq("id", invoiceId).maybeSingle(),
+      supabase.from("invoice_items").select("*").eq("invoice_id", invoiceId).order("id"),
+    ]);
+    if (!row) return;
+    const { invoiceDocFromRow } = await import("@/lib/invoice-doc");
+    const root = await rootInvoiceId(supabase, invoiceId);
+    await freeze(
+      "invoice_versions",
+      "root_invoice_id",
+      root,
+      "number",
+      "document",
+      String((row as any).number ?? ""),
+      invoiceDocFromRow(row, (items ?? []) as any[]),
+      { total: Number((row as any).total ?? 0), invoice_id: invoiceId },
+      "saved",
+      supabase,
+    );
+  } catch {
+    /* the invoice matters more than the record of it */
+  }
+}
+
 /** Every quote this booking has given out, oldest first. */
 export const listQuoteVersions = createServerFn({ method: "GET" })
   .inputValidator((data: { enquiryId: string }) => data)
@@ -95,10 +156,12 @@ export const listInvoiceVersions = createServerFn({ method: "GET" })
   .inputValidator((data: { invoiceId: string }) => data)
   .handler(async ({ data }): Promise<DocumentVersion[]> => {
     const supabase = await admin();
+    // by lineage, so an invoice cancelled and raised again keeps one history
+    const root = await rootInvoiceId(supabase, data.invoiceId);
     const { data: rows, error } = await supabase
       .from("invoice_versions")
       .select("*")
-      .eq("invoice_id", data.invoiceId)
+      .eq("root_invoice_id", root)
       .order("version", { ascending: true });
     if (error) throw new Error(error.message);
     return ((rows ?? []) as any[]).map((r) => rowToVersion(r, "number", "document"));

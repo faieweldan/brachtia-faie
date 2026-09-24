@@ -445,6 +445,12 @@ export const createResidentInvoice = createServerFn({ method: "POST" })
       })),
     );
     if (itemErr) throw new Error(itemErr.message);
+    // the same record a booking's invoice keeps, so Collections and the
+    // resident's Payments tab do not behave differently from the booking
+    {
+      const { recordInvoiceVersion } = await import("@/lib/document-versions.functions");
+      await recordInvoiceVersion(supabase, String(inv.id));
+    }
     return { id: String(inv.id), number: String(inv.number ?? "") };
   });
 
@@ -529,6 +535,10 @@ export const updateResidentInvoice = createServerFn({ method: "POST" })
     );
     if (itemErr) throw new Error(itemErr.message);
 
+    {
+      const { recordInvoiceVersion } = await import("@/lib/document-versions.functions");
+      await recordInvoiceVersion(supabase, data.invoiceId);
+    }
     // moved to a day already past: billed now
     await billDueInvoices(supabase);
     return { ok: true };

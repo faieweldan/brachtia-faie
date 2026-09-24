@@ -20,13 +20,9 @@ import { toast } from "sonner";
 
 import { StageStepper } from "@/components/admin/ops-ui";
 import { PdfPreviewButton, type VersionNav } from "@/components/admin/PdfPreview";
-import {
-  freezeInvoiceVersion,
-  listInvoiceVersions,
-  listQuoteVersions,
-} from "@/lib/document-versions.functions";
+import { listInvoiceVersions, listQuoteVersions } from "@/lib/document-versions.functions";
 import { referenceFor } from "@/lib/document-versions";
-import { discountLabel } from "@/lib/invoices";
+import { invoiceDocFromRow } from "@/lib/invoice-doc";
 import { company } from "@/data/properties";
 import { WelcomeMessageCard } from "@/components/admin/WelcomeMessageCard";
 import { StayDetailsCard } from "@/components/admin/StayDetailsCard";
@@ -623,22 +619,15 @@ function BookingDetail() {
       invoice?.id ? listInvoiceVersions({ data: { invoiceId: String(invoice.id) } }) : [],
     buildVersion: async (v) => {
       const { invoicePdfUrl } = await import("@/lib/invoice-pdf");
+      // the document as it was stored, under the reference that version read
       return invoicePdfUrl({
         ...(v.body as any),
-        number: referenceFor(String(invoice?.number ?? v.reference), v.version),
+        reference: r.reference ?? null,
+        number: referenceFor(String(v.reference || invoice?.number || ""), v.version),
       });
     },
-    freeze: async () => {
-      const doc = invoiceDoc();
-      return freezeInvoiceVersion({
-        data: {
-          invoiceId: String(invoice?.id ?? ""),
-          number: String(invoice?.number ?? ""),
-          document: doc,
-          total: Number((doc as any).total ?? 0),
-        },
-      });
-    },
+    // no freeze: an invoice records itself when it is raised and again when it
+    // is edited, so its newest version is already the one on screen
   };
 
   /** The quotes this booking has given out, for the arrows in the preview. */
@@ -656,68 +645,28 @@ function BookingDetail() {
     // version is already the one on screen
   };
 
+  /**
+   * The invoice as its PDF is printed.
+   *
+   * The fields come from one shared reader, because building them by hand here
+   * is how the terms flag and then the discount each went missing from the
+   * issued invoice while the generator's own preview showed them. What is
+   * added here is only what the booking page knows and the invoice row does
+   * not: who the student is at Brachtia, and what has been paid.
+   */
   function invoiceDoc() {
     return {
-      number: invoice.number,
-      issued_at: invoice.issued_at,
+      ...invoiceDocFromRow(invoice, invoiceItems),
       reference: r.reference ?? null,
       // the ID the student goes by, once the booking has made them a resident
       ...((billing as any)?.residentCode
         ? { resident_code: String((billing as any).residentCode) }
         : {}),
-      full_name: invoice.full_name,
-      email: invoice.email,
-      phone: invoice.phone,
-      university: invoice.university,
-      nationality: invoice.nationality,
-      residence_name: invoice.residence_name,
-      room_name: invoice.room_name,
-      occupancy: invoice.occupancy,
-      tenancy_start: invoice.tenancy_start,
-      tenancy_end: invoice.tenancy_end,
-      monthly_rent: Number(invoice.monthly_rent),
-      /*
-       * The discount, read back off the stored invoice the same way the terms
-       * below are. The generator's preview showed "RM100 off RM500" and the
-       * issued invoice showed no discount line at all, because the three
-       * fields that print it never travelled this far - the label is not a
-       * column, it is worked out from the type and the value.
-       */
-      ...(Number(invoice.list_rent) > 0 && Number(invoice.discount_value) > 0
-        ? {
-            list_rent: Number(invoice.list_rent),
-            discount_label: discountLabel(invoice.discount_type, Number(invoice.discount_value)),
-            ...(invoice.discount_note ? { discount_note: String(invoice.discount_note) } : {}),
-          }
-        : {}),
-      payment_frequency: invoice.payment_frequency,
-      total: Number(invoice.total),
-      deposits_total: Number(invoice.deposits_total),
-      notes: invoice.notes ?? "",
-      items: invoiceItems.map((i) => ({
-        label: i.label,
-        kind: i.kind,
-        amount: Number(i.amount),
-      })),
       // the same invoice, updated: paid so far and the balance left
       paid: paidTotal,
       // a booking's invoice is the initial payment: each line is one thing at
       // one price, so it carries no Qty or Unit price columns
       kind: "initial" as const,
-      /*
-       * The terms admin asked for when it was generated, read back off the
-       * stored invoice rather than assumed. Without these three the downloaded
-       * PDF printed no terms at all while the generator's own preview showed
-       * them - the flag simply never travelled this far.
-       */
-      ...(invoice.show_terms
-        ? {
-            show_terms: true,
-            next_payment_date: invoice.next_payment_date ?? null,
-            next_payment_amount:
-              invoice.next_payment_amount == null ? null : Number(invoice.next_payment_amount),
-          }
-        : {}),
     };
   }
 
