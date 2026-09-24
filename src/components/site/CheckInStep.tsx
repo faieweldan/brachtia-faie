@@ -1,6 +1,13 @@
-import { CalendarDays, Clock } from "lucide-react";
+import { useMemo } from "react";
 
-import { Input } from "@/components/ui/input";
+import {
+  addDays,
+  CHECKIN_NOTICE_DAYS,
+  CHECKIN_SLOTS,
+  CHECKIN_WINDOW_DAYS,
+  todayISO,
+  type CheckInChoice,
+} from "@/lib/checkin";
 
 /**
  * When the student says they will arrive.
@@ -10,46 +17,17 @@ import { Input } from "@/components/ui/input";
  * before it, because there is no room yet, and nothing long after, because a
  * key left uncollected is a room nobody can let and nobody has moved into.
  *
+ * Eight days is a small enough choice to show. A date field would hide them
+ * behind a calendar the student has to open, guess at, and be refused by - so
+ * the days themselves are on the page, and the ones too soon to staff are
+ * visibly closed rather than silently rejected.
+ *
  * Not knowing yet is a real answer. A student whose flight is not booked says
  * so and submits; what would be lost is the rest of the form, and Brachtia
  * would rather have that and chase the date.
  */
 
-export const CHECKIN_WINDOW_DAYS = 7;
-
-/** Times a key can be handed over: office hours, on the hour and the half. */
-export const CHECKIN_SLOTS = [
-  "10:00",
-  "10:30",
-  "11:00",
-  "11:30",
-  "12:00",
-  "14:00",
-  "14:30",
-  "15:00",
-  "15:30",
-  "16:00",
-  "16:30",
-  "17:00",
-];
-
-const addDays = (iso: string, days: number) => {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-};
-
-const pretty = (iso: string) =>
-  iso
-    ? new Date(`${iso}T00:00:00`).toLocaleDateString("en-MY", {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      })
-    : "";
-
-export type CheckInChoice = { on: string; slot: string; remind: boolean };
+type Day = { iso: string; weekday: string; day: string; month: string; tooSoon: boolean };
 
 export function CheckInStep({
   moveIn,
@@ -61,92 +39,189 @@ export function CheckInStep({
   value: CheckInChoice;
   onChange: (next: CheckInChoice) => void;
 }) {
-  const last = moveIn ? addDays(moveIn, CHECKIN_WINDOW_DAYS) : "";
+  const days = useMemo<Day[]>(() => {
+    if (!moveIn) return [];
+    const earliest = addDays(todayISO(), CHECKIN_NOTICE_DAYS);
+    return Array.from({ length: CHECKIN_WINDOW_DAYS + 1 }, (_, i) => {
+      const iso = addDays(moveIn, i);
+      const d = new Date(`${iso}T00:00:00`);
+      return {
+        iso,
+        weekday: d.toLocaleDateString("en-MY", { weekday: "short" }),
+        day: d.toLocaleDateString("en-MY", { day: "numeric" }),
+        month: d.toLocaleDateString("en-MY", { month: "short" }),
+        tooSoon: iso < earliest,
+      };
+    });
+  }, [moveIn]);
+
+  const open = days.filter((d) => !d.tooSoon);
+  const off = value.remind;
 
   return (
-    <section className="rounded-2xl bg-card p-5 shadow-sm sm:p-6">
-      <h2 className="text-base font-semibold text-brand-deep">Schedule check-in</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Tell us when you plan to arrive. Our team will meet you, show you around, and hand over your
-        keys and access card.
-      </p>
-
-      {moveIn ? (
-        <p className="mt-3 rounded-lg bg-brand-tint px-3 py-2 text-xs text-foreground">
-          Your tenancy starts <strong>{pretty(moveIn)}</strong>. Pick any day from then up to{" "}
-          <strong>{pretty(last)}</strong>. Arriving later than that needs our approval first.
+    <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-16px_rgba(16,24,40,0.18)]">
+      {/* the welcome, on the brand rather than in grey body text - this is the
+          one moment in the form that is good news rather than a question */}
+      <div className="bg-brand-deep px-5 py-6 text-primary-foreground sm:px-6">
+        <h2 className="text-xl font-bold tracking-tight sm:text-2xl">Schedule Your Arrival</h2>
+        <p className="mt-2 max-w-prose text-sm leading-relaxed text-primary-foreground/90">
+          You&rsquo;re almost home! On your arrival day, our team will give you a tour, answer any
+          questions, and hand over your keys and access card.
         </p>
-      ) : (
-        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          We do not have your move-in date yet, so we cannot offer days to choose from. Pick the
-          reminder below and we will sort this out with you.
+        <p className="mt-2 max-w-prose text-sm italic leading-relaxed text-primary-foreground/75">
+          In the meantime, we will send a copy of your tenancy agreement for your review.
         </p>
-      )}
-
-      <div className={`mt-4 grid gap-4 sm:grid-cols-2 ${value.remind ? "opacity-50" : ""}`}>
-        <div>
-          <label
-            htmlFor="checkin-date"
-            className="flex items-center gap-1.5 text-xs font-medium text-foreground/70"
-          >
-            <CalendarDays className="size-3.5" /> Arrival date
-          </label>
-          <Input
-            id="checkin-date"
-            type="date"
-            className="mt-1.5"
-            disabled={value.remind || !moveIn}
-            value={value.on}
-            min={moveIn}
-            max={last}
-            onChange={(e) => onChange({ ...value, on: e.target.value })}
-          />
-        </div>
-        <div>
-          <span className="flex items-center gap-1.5 text-xs font-medium text-foreground/70">
-            <Clock className="size-3.5" /> Arrival time
-          </span>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {CHECKIN_SLOTS.map((t) => {
-              const on = value.slot === t;
-              return (
-                <button
-                  key={t}
-                  type="button"
-                  aria-pressed={on}
-                  disabled={value.remind || !moveIn}
-                  onClick={() => onChange({ ...value, slot: on ? "" : t })}
-                  className={`rounded-full border px-2.5 py-1 text-xs transition-colors disabled:cursor-not-allowed ${
-                    on
-                      ? "border-brand-deep bg-brand-deep text-primary-foreground"
-                      : "border-border bg-background text-foreground hover:bg-muted"
-                  }`}
-                >
-                  {t}
-                </button>
-              );
-            })}
-          </div>
-        </div>
       </div>
 
-      {/* said as a choice, not as a way out: a student who does not know yet
-          should not feel they are failing the form by saying so */}
-      <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-border p-3 text-sm">
-        <input
-          type="checkbox"
-          className="mt-0.5 size-4 accent-[var(--brand-deep,#1a4734)]"
-          checked={value.remind}
-          onChange={(e) => onChange({ on: "", slot: "", remind: e.target.checked })}
-        />
-        <span>
-          <span className="font-medium text-foreground">I&rsquo;ll pick a time later</span>
-          <span className="mt-0.5 block text-xs text-muted-foreground">
-            Remind me about a week before I move in. You can come back to this link any time to
-            choose.
+      <div className="p-5 sm:p-6">
+        <div className="rounded-xl bg-brand-tint/60 p-4">
+          <p className="text-sm font-semibold text-brand-deep">Important Details:</p>
+          <ul className="mt-3 space-y-3">
+            {[
+              {
+                icon: "🔑",
+                label: "Key Collection:",
+                rest: (
+                  <>
+                    Full initial payment must be cleared on or before arrival to receive your keys.
+                  </>
+                ),
+              },
+              {
+                icon: "📅",
+                label: "Book Early:",
+                rest: (
+                  <>
+                    Reserve your slot at least <strong>5 days in advance</strong>. Spaces fill up
+                    quickly during peak periods, so early booking is recommended.
+                  </>
+                ),
+              },
+              {
+                icon: "⏳",
+                label: "Arrival Window:",
+                rest: (
+                  <>
+                    You can choose any date from your tenancy start day up to{" "}
+                    <strong>7 days after</strong>. Any later arrival requires prior approval.
+                  </>
+                ),
+              },
+            ].map((d) => (
+              <li key={d.label} className="flex gap-3 text-sm leading-relaxed text-foreground">
+                <span aria-hidden className="shrink-0 text-base leading-6">
+                  {d.icon}
+                </span>
+                <span>
+                  <strong className="font-semibold">{d.label}</strong> {d.rest}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <p className="mt-4 text-sm italic leading-relaxed text-muted-foreground">
+          Not ready to schedule yet? Select <strong>&ldquo;Remind me 1 week before&rdquo;</strong>{" "}
+          below to pick a slot later.
+        </p>
+
+        {!moveIn ? (
+          <p className="mt-5 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            We do not have your move-in date yet, so we cannot offer days to choose from. Pick the
+            reminder below and we will sort this out with you.
+          </p>
+        ) : !open.length ? (
+          <p className="mt-5 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Every day in your arrival window is less than {CHECKIN_NOTICE_DAYS} days away. Pick the
+            reminder below and message us — we will arrange your arrival with you directly.
+          </p>
+        ) : null}
+
+        {moveIn && open.length ? (
+          <div className={`mt-6 transition-opacity ${off ? "pointer-events-none opacity-40" : ""}`}>
+            <p className="text-sm font-semibold italic text-foreground">Date:</p>
+            {/* the eight days, as themselves. A student picking a day should be
+                able to see which day of the week it falls on without counting */}
+            <div className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-8">
+              {days.map((d) => {
+                const on = value.on === d.iso;
+                return (
+                  <button
+                    key={d.iso}
+                    type="button"
+                    disabled={d.tooSoon || off}
+                    aria-pressed={on}
+                    title={d.tooSoon ? `Less than ${CHECKIN_NOTICE_DAYS} days away` : undefined}
+                    onClick={() => onChange({ ...value, on: on ? "" : d.iso })}
+                    className={`flex flex-col items-center rounded-xl border py-2 transition-colors ${
+                      on
+                        ? "border-brand-deep bg-brand-deep text-primary-foreground"
+                        : d.tooSoon
+                          ? "cursor-not-allowed border-dashed border-border bg-muted/40 text-muted-foreground/60"
+                          : "border-border bg-background text-foreground hover:border-brand/50 hover:bg-brand-tint/40"
+                    }`}
+                  >
+                    <span className="text-[10px] uppercase tracking-wide opacity-75">
+                      {d.weekday}
+                    </span>
+                    <span className="text-base font-bold leading-tight">{d.day}</span>
+                    <span className="text-[10px] uppercase tracking-wide opacity-75">
+                      {d.month}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <p className="mt-5 text-sm font-semibold italic text-foreground">Time:</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {CHECKIN_SLOTS.map((t) => {
+                const on = value.slot === t;
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    aria-pressed={on}
+                    disabled={off}
+                    onClick={() => onChange({ ...value, slot: on ? "" : t })}
+                    className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+                      on
+                        ? "border-brand-deep bg-brand-deep text-primary-foreground"
+                        : "border-border bg-background text-foreground hover:border-brand/50 hover:bg-brand-tint/40"
+                    }`}
+                  >
+                    {t}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {/* offered as a choice, not as a way out: a student who does not know
+            yet should not feel they are failing the form by saying so */}
+        <label
+          className={`mt-6 flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${
+            off ? "border-brand-deep bg-brand-tint/70" : "border-border hover:bg-muted/40"
+          }`}
+        >
+          <input
+            type="checkbox"
+            className="mt-0.5 size-4 shrink-0 accent-brand"
+            checked={off}
+            onChange={(e) => onChange({ on: "", slot: "", remind: e.target.checked })}
+          />
+          <span>
+            <span className="block text-sm font-semibold text-foreground">
+              Remind me 1 week before
+            </span>
+            <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+              We will get in touch about a week before you move in. You can come back to this link
+              any time to pick a slot yourself.
+            </span>
           </span>
-        </span>
-      </label>
+        </label>
+      </div>
     </section>
   );
 }

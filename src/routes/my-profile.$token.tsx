@@ -17,7 +17,8 @@ import {
 import { compressImage, readableSize } from "@/lib/compress";
 import { DeclarationSection } from "@/components/site/DeclarationSection";
 import { FormSteps } from "@/components/site/FormSteps";
-import { CheckInStep, type CheckInChoice } from "@/components/site/CheckInStep";
+import { CheckInStep } from "@/components/site/CheckInStep";
+import type { CheckInChoice } from "@/lib/checkin";
 import { RESIDENT_DOCUMENTS } from "@/lib/resident-reading";
 import { ChoicePicker, DialPicker } from "@/components/site/ChoicePicker";
 import { getDeclarationByToken, type SignedDeclaration } from "@/lib/declaration.functions";
