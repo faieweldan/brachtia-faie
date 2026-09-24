@@ -23,6 +23,7 @@ import { PdfPreviewButton, type VersionNav } from "@/components/admin/PdfPreview
 import { listInvoiceVersions, listQuoteVersions } from "@/lib/document-versions.functions";
 import { referenceFor } from "@/lib/document-versions";
 import { invoiceDocFromRow } from "@/lib/invoice-doc";
+import { BOOKING_FEE as FEE_AMOUNT } from "@/lib/invoices";
 import { company } from "@/data/properties";
 import { WelcomeMessageCard } from "@/components/admin/WelcomeMessageCard";
 import { StayDetailsCard } from "@/components/admin/StayDetailsCard";
@@ -400,8 +401,15 @@ function BookingDetail() {
   const receipts = ((billing as any)?.receipts ?? []) as any[];
   const paidTotal = Number((billing as any)?.paid ?? 0);
   const balanceDue = Number((billing as any)?.balance ?? 0);
-  // one invoice: the booking fee the website quotes is the first payment on it
-  const BOOKING_FEE = Number(company.bookingFee.replace(/[^0-9.]/g, "")) || 0;
+  /*
+   * One invoice: the booking fee the website quotes is the first payment on it.
+   *
+   * Read from the same constant the server refuses an edit against, not parsed
+   * back out of the words shown to students. Those two agreeing is what makes
+   * the Edit button and the rule behind it say the same thing, and reworded
+   * copy is no reason for them to stop agreeing.
+   */
+  const BOOKING_FEE = FEE_AMOUNT;
 
   /**
    * Their money is in, so this booking is a real person with a real payment
@@ -1773,8 +1781,19 @@ function BookingDetail() {
                       Paid: {money(paidTotal)} · Balance: {money(balanceDue)}
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {paidTotal === 0 ? (
-                        // an invoice is a record once money is paid on it - until then it can change
+                      {/*
+                          Edit survives the booking fee. An invoice is a record
+                          once money is paid on it, but the fee lands before the
+                          details are settled, and hiding Edit the moment it
+                          arrived left the allowance the server grants with no
+                          button to reach it. It still refuses to write the
+                          invoice down below what has been paid.
+
+                          Cancel does not survive it: a replacement invoice does
+                          not inherit payments, so cancelling a paid one strands
+                          the money.
+                      */}
+                      {paidTotal <= BOOKING_FEE ? (
                         <>
                           <Button
                             size="sm"
@@ -1789,7 +1808,7 @@ function BookingDetail() {
                           >
                             Edit
                           </Button>
-                          {confirmCancel ? (
+                          {paidTotal > 0 ? null : confirmCancel ? (
                             <>
                               <Button
                                 size="sm"
