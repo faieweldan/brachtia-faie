@@ -263,6 +263,9 @@ export default function EnquiryDialog({
           name: lead.name,
           university: lead.university ?? "",
           intake: lead.intake ?? "",
+          // somebody working has an employer where a student has a university
+          company: lead.company ?? "",
+          occupation: lead.occupation ?? "",
           nationality: lead.nationality,
           gender: lead.gender,
           email: lead.email,

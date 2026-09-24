@@ -79,6 +79,10 @@ export const updateEnquiry = createServerFn({ method: "POST" })
       university?: string;
       gender?: string;
       intake?: string;
+      /** where they work - asked of somebody employed, where a student is asked
+       *  for a university. Editable for the same reason the rest is. */
+      company?: string;
+      occupation?: string;
       // editable stay details
       residenceSlug?: string;
       residenceName?: string;
@@ -129,6 +133,8 @@ export const updateEnquiry = createServerFn({ method: "POST" })
     if (data.phone !== undefined) patch["phone"] = data.phone;
     if (data.nationality !== undefined) patch["nationality"] = data.nationality;
     if (data.university !== undefined) patch["university"] = data.university;
+    if (data.company !== undefined) patch["company"] = data.company;
+    if (data.occupation !== undefined) patch["occupation"] = data.occupation;
     if (data.gender !== undefined) patch["gender"] = data.gender;
     if (data.intake !== undefined) patch["intake"] = data.intake;
     if (data.residenceSlug !== undefined) patch["residence_slug"] = data.residenceSlug;

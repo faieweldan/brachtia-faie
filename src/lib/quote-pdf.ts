@@ -69,6 +69,9 @@ export type QuoteInput = {
     name: string;
     university: string;
     intake: string;
+    /** where they work, when they are working rather than studying */
+    company?: string;
+    occupation?: string;
     nationality: string;
     gender: string;
     email: string;
@@ -198,7 +201,29 @@ function build(
       columnStyles: infoCols,
       body: [
         ["Prepared for", lead.name],
-        ["University", `${lead.university}  ·  Intake ${lead.intake}`],
+        /*
+         * Somebody working has no university or intake, and the row printed
+         * " · Intake" over two blanks - a quote that looked like it had lost
+         * their details rather than one that never asked for them. Their
+         * employer takes that place, and a row with nothing to say is dropped.
+         */
+        ...(lead.company || lead.occupation
+          ? [
+              ["Employment", [lead.occupation, lead.company].filter(Boolean).join("  ·  ")] as [
+                string,
+                string,
+              ],
+            ]
+          : lead.university || lead.intake
+            ? [
+                [
+                  "University",
+                  [lead.university, lead.intake ? `Intake ${lead.intake}` : ""]
+                    .filter(Boolean)
+                    .join("  ·  "),
+                ] as [string, string],
+              ]
+            : []),
         ["Nationality", `${lead.nationality}  ·  ${lead.gender}`],
         ["Contact", `${lead.email}  ·  ${lead.mobile}`],
       ],

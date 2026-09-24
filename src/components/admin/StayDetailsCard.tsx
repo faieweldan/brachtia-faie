@@ -324,6 +324,10 @@ export function StayDetailsCard({
                 name: row.full_name ?? "",
                 university: row.university ?? "",
                 intake: row.intake ?? "",
+                // somebody working has an employer where a student has a
+                // university; the quote prints whichever they gave
+                company: row.company ?? "",
+                occupation: row.occupation ?? "",
                 nationality: row.nationality ?? "",
                 gender: row.gender ?? "",
                 email: row.email ?? "",

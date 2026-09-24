@@ -1037,14 +1037,30 @@ function BookingDetail() {
     unit: "Whole unit",
   };
 
+  /*
+   * What is shown follows the answer to "studying or working?", the same way
+   * the enquiry form and the resident profile already do.
+   *
+   * The list was fixed at University and Intake, so somebody employed had their
+   * company and job title asked for on the form, saved to the booking, and then
+   * shown nowhere - two permanent dashes where their actual details were.
+   */
+  const employed = String(row?.current_status ?? "") === "employed";
   const studentFields = [
     ["full_name", "Name", "text"],
     ["gender", "Gender", "gender"],
     ["phone", "Phone", "text"],
     ["email", "Email", "text"],
     ["nationality", "Nationality", "text"],
-    ["university", "University", "text"],
-    ["intake", "Intake", "text"],
+    ...(employed
+      ? ([
+          ["company", "Company", "text"],
+          ["occupation", "Job title", "text"],
+        ] as const)
+      : ([
+          ["university", "University", "text"],
+          ["intake", "Intake", "text"],
+        ] as const)),
     ["heard_about", "Referral Source", "heard"],
   ] as const;
 
