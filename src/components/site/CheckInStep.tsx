@@ -1,4 +1,7 @@
 import { useMemo } from "react";
+import { MessageCircle } from "lucide-react";
+
+import { whatsappUrl } from "@/data/properties";
 
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -29,17 +32,29 @@ import {
  * would rather have that and chase the date.
  */
 
+const prettyDay = (iso: string) =>
+  new Date(`${iso}T00:00:00`).toLocaleDateString("en-MY", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
 type Day = { iso: string; weekday: string; day: string; month: string; tooSoon: boolean };
 
 export function CheckInStep({
   moveIn,
   value,
   onChange,
+  name = "",
+  residentCode = "",
 }: {
   /** the day their tenancy starts - the first day a key exists for them */
   moveIn: string;
   value: CheckInChoice;
   onChange: (next: CheckInChoice) => void;
+  /** who is asking, so a message about arriving late names them */
+  name?: string;
+  residentCode?: string;
 }) {
   const days = useMemo<Day[]>(() => {
     if (!moveIn) return [];
@@ -61,6 +76,21 @@ export function CheckInStep({
   const off = value.remind;
   // the last day that needs no approval - past it the calendar marks, not blocks
   const lastInWindow = moveIn ? addDays(moveIn, CHECKIN_WINDOW_DAYS) : "";
+  /*
+   * For the student none of these days suit. Arriving outside the window needs
+   * a person either way, so rather than leaving them to work out that the form
+   * cannot help, it hands them the conversation with their own details already
+   * in it - nobody should have to introduce themselves twice.
+   */
+  const lateArrivalMessage = [
+    "Hi Brachtia Homes, I cannot arrive within the 7 days after my tenancy starts.",
+    name ? `Name: ${name}` : "",
+    residentCode ? `Resident ID: ${residentCode}` : "",
+    moveIn ? `Tenancy starts: ${prettyDay(moveIn)}` : "",
+    "Could we arrange another arrival date?",
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   return (
     <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-16px_rgba(16,24,40,0.18)]">
@@ -220,6 +250,23 @@ export function CheckInStep({
             </span>
           </span>
         </label>
+
+        {/* the way out of the window itself. Not the same question as the
+            reminder above: that one is "not yet", this one is "not then" */}
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-border px-4 py-3">
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Cannot arrive within those 7 days? Any later arrival needs our approval first \u2014
+            message us and we will sort it out with you.
+          </p>
+          <a
+            href={whatsappUrl(lateArrivalMessage)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#25D366] px-3.5 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            <MessageCircle className="size-3.5" /> WhatsApp us
+          </a>
+        </div>
       </div>
     </section>
   );

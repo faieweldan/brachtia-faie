@@ -813,7 +813,13 @@ function MyProfilePage() {
       </div>
 
       <div className={step === 3 ? "space-y-4" : "hidden"}>
-        <CheckInStep moveIn={moveIn} value={checkIn} onChange={setCheckIn} />
+        <CheckInStep
+          moveIn={moveIn}
+          value={checkIn}
+          onChange={setCheckIn}
+          name={values["full_name"] ?? ""}
+          residentCode={residentCode}
+        />
 
         {/* agreeing to a document nobody put in front of them is not agreement */}
         <section className="rounded-2xl bg-card p-5 shadow-sm sm:p-6">
