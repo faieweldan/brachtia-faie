@@ -995,7 +995,7 @@ function BookingDetail() {
     ["nationality", "Nationality", "text"],
     ["university", "University", "text"],
     ["intake", "Intake", "text"],
-    ["heard_about", "Heard about us", "heard"],
+    ["heard_about", "Referral Source", "heard"],
   ] as const;
 
   return (
