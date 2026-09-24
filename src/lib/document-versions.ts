@@ -21,13 +21,19 @@ export type DocumentVersion = {
 };
 
 /**
- * The reference as it should read for a version: the first one plain, later
- * ones with the version after a slash.
+ * The reference as it should read for a version.
  *
- * Version 1 is left alone on purpose. A student holding "BH-240926-QT0035"
- * should not have to work out whether it is the same document as
- * "BH-240926-QT0035/1".
+ * Version 1 is the original - the quote the student asked for on the website -
+ * and carries the plain reference, because that is the paper they already
+ * hold. The slash counts what Brachtia changed afterwards, so the first
+ * revision is /1 rather than /2: "/1" reads as the first change, which is what
+ * it is.
  */
 export function referenceFor(reference: string, version: number): string {
-  return version > 1 ? `${reference}/${version}` : reference;
+  return version > 1 ? `${reference}/${version - 1}` : reference;
+}
+
+/** What to call a version in a list: the original says so in words. */
+export function versionLabel(reference: string, version: number): string {
+  return version > 1 ? referenceFor(reference, version) : `${reference} · original`;
 }

@@ -255,6 +255,23 @@ export const updateEnquiry = createServerFn({ method: "POST" })
     }
     const { error } = await supabase.from("enquiries").update(patch as any).eq("id", data.id);
     if (error) throw new Error(error.message);
+    // a changed quote becomes the next revision of the one the student asked
+    // for - recorded here, where both the card's own quote and the one worked
+    // out above have landed, so neither can go unrecorded
+    if (patch["quote_snapshot"]) {
+      const { data: saved } = await supabase
+        .from("enquiries")
+        .select("reference")
+        .eq("id", data.id)
+        .maybeSingle();
+      const { recordQuoteVersion } = await import("@/lib/document-versions.functions");
+      await recordQuoteVersion(
+        supabase,
+        data.id,
+        String((saved as any)?.reference ?? ""),
+        patch["quote_snapshot"],
+      );
+    }
     if (staffBefore !== null && data.assignedStaff && staffBefore !== data.assignedStaff) {
       await logBookingEvent(supabase, {
         enquiryId: data.id,

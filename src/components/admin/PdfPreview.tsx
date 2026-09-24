@@ -10,7 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { referenceFor, type DocumentVersion } from "@/lib/document-versions";
+import { referenceFor, versionLabel, type DocumentVersion } from "@/lib/document-versions";
 
 /**
  * A PDF - an invoice, a receipt - shown inside the system, in a window over the
@@ -23,23 +23,36 @@ import { referenceFor, type DocumentVersion } from "@/lib/document-versions";
 /**
  * The versions of one document, and how to build each of them.
  *
- * Given to a preview that has a history worth stepping through. The working
- * copy is always the last stop and is not a version yet - downloading it is
- * what makes it one, because that is the moment it can reach the student.
+ * Version 1 is the original the student asked for; later ones are what
+ * Brachtia changed. A document that records a version every time it is saved
+ * gives no `freeze` - its newest version IS the current one, so there is no
+ * unsaved copy to offer. One that does not record itself gives `freeze`, and
+ * downloading is what turns the working copy into a version.
  */
 export type VersionNav = {
-  /** the reference without the /2, e.g. "BH-240926-QT0035" */
+  /** the reference without the /1, e.g. "BH-240926-QT0035" */
   reference: string;
-  /** every version already given out, oldest first */
+  /** every version, oldest first */
   load: () => Promise<DocumentVersion[]>;
-  /** rebuild the PDF of a version as it was given out */
+  /** rebuild the PDF of a version as it was */
   buildVersion: (v: DocumentVersion) => Promise<string>;
-  /** record the working copy as the next version; returns which one it became */
-  freeze: () => Promise<{ version: number }>;
+  /** only when the document does not record its own versions as it is saved */
+  freeze?: () => Promise<{ version: number }>;
 };
 
 /** One stop in the preview: a version already given out, or the working copy. */
 type Stop = { version: DocumentVersion | null };
+
+/**
+ * The stops to offer: every version, and a working copy only when there is one
+ * that has not been recorded yet. A quote records itself on every save, so its
+ * newest version is already the current one and a "working copy" row would be
+ * the same document listed twice.
+ */
+const listFor = (found: DocumentVersion[], canFreeze: boolean): Stop[] =>
+  canFreeze || !found.length
+    ? [...found.map((v) => ({ version: v })), { version: null }]
+    : found.map((v) => ({ version: v }));
 
 /** The day a version went out, short enough to sit at the end of a menu row. */
 const sentOn = (iso: string) => {
@@ -119,10 +132,9 @@ export function PdfPreviewButton({
 
   const stop = stops[at];
   const onWorkingCopy = Boolean(stop) && stop!.version === null;
-  // the working copy is always the last stop, and is not one of them
-  const sent = Math.max(0, stops.length - 1);
+  const kept = stops.filter((s) => s.version).length;
   const shown = stop?.version;
-  // the working copy has no number of its own until it is downloaded
+  // a working copy has no number of its own until it is recorded
   const label = shown
     ? referenceFor(versions?.reference ?? shown.reference, shown.version)
     : (versions?.reference ?? "");
@@ -167,7 +179,7 @@ export function PdfPreviewButton({
     try {
       // a history that cannot be read is not a reason to refuse the preview
       const found = await versions.load();
-      list = [...found.map((v) => ({ version: v })), { version: null }];
+      list = listFor(found, Boolean(versions.freeze));
     } catch {
       /* the working copy on its own */
     } finally {
@@ -182,12 +194,12 @@ export function PdfPreviewButton({
    * re-read afterwards and the window lands on the version it just became.
    */
   async function afterDownload() {
-    if (!versions || !onWorkingCopy || freezing) return;
+    if (!versions?.freeze || !onWorkingCopy || freezing) return;
     setFreezing(true);
     try {
-      await versions.freeze();
+      await versions.freeze!();
       const found = await versions.load();
-      setStops([...found.map((v) => ({ version: v })), { version: null }]);
+      setStops(listFor(found, true));
       setAt(Math.max(0, found.length - 1));
     } catch {
       toast.error("Downloaded, but could not record which version it was");
@@ -232,11 +244,11 @@ export function PdfPreviewButton({
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button size="sm" variant="outline" className="h-7 shrink-0" disabled={loading}>
-                    {/* what you are looking at, then how many have gone out -
+                    {/* what you are looking at, then how deep the history is -
                         never both saying the same thing */}
-                    {onWorkingCopy ? (sent ? "Working copy" : "Not sent yet") : label}
-                    {sent ? (
-                      <span className="ml-1 text-muted-foreground">· {sent} sent</span>
+                    {onWorkingCopy ? (kept ? "Working copy" : "Not saved yet") : label}
+                    {kept > 1 ? (
+                      <span className="ml-1 text-muted-foreground">· {kept - 1} revised</span>
                     ) : null}
                     <ChevronDown className="ml-0.5 size-3.5" />
                   </Button>
@@ -251,14 +263,14 @@ export function PdfPreviewButton({
                       <Check className={`size-3.5 ${i === at ? "" : "invisible"}`} />
                       <span className="flex-1">
                         {s.version
-                          ? referenceFor(
+                          ? versionLabel(
                               versions.reference || s.version.reference,
                               s.version.version,
                             )
                           : "Working copy"}
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        {s.version ? sentOn(s.version.createdAt) : "not sent yet"}
+                        {s.version ? sentOn(s.version.createdAt) : "not saved yet"}
                       </span>
                     </DropdownMenuItem>
                   ))}

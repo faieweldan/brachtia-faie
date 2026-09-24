@@ -33,6 +33,49 @@ const rowToVersion = (row: any, refKey: string, bodyKey: string): DocumentVersio
   createdAt: String(row.created_at ?? ""),
 });
 
+/**
+ * Keep this quote as a version, if it differs from the one before it.
+ *
+ * Called wherever quote_snapshot is written - the website submission, which
+ * becomes the original, and every admin change after it. Writing it at the
+ * source rather than at the download means no path can quietly skip it, and a
+ * quote that was changed and never sent is still on the record.
+ *
+ * An unchanged snapshot records nothing, so pressing Update quote without
+ * having changed anything does not invent a revision.
+ *
+ * Never throws: failing to keep the history is not a reason to refuse the
+ * booking change that produced it.
+ */
+export async function recordQuoteVersion(
+  supabase: any,
+  enquiryId: string,
+  reference: string,
+  snapshot: any,
+): Promise<void> {
+  try {
+    const quote = snapshot?.quote;
+    if (!snapshot?.property || !quote) return;
+    await freeze(
+      "quote_versions",
+      "enquiry_id",
+      enquiryId,
+      "reference",
+      "snapshot",
+      reference,
+      snapshot,
+      {
+        total_upfront: Number(quote.totalUpfront ?? 0),
+        monthly_rent: Number(quote.monthlyAfter ?? 0),
+      },
+      "saved",
+      supabase,
+    );
+  } catch {
+    /* the booking change matters more than the record of it */
+  }
+}
+
 /** Every quote this booking has given out, oldest first. */
 export const listQuoteVersions = createServerFn({ method: "GET" })
   .inputValidator((data: { enquiryId: string }) => data)
@@ -78,8 +121,9 @@ async function freeze(
   body: unknown,
   extra: Record<string, unknown>,
   issuedAs: string,
+  client?: any,
 ): Promise<number> {
-  const supabase = await admin();
+  const supabase = client ?? (await admin());
   const { data: rows, error } = await supabase
     .from(table)
     .select(`version, ${bodyColumn}`)

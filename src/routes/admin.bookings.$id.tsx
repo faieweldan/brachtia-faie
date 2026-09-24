@@ -22,7 +22,6 @@ import { StageStepper } from "@/components/admin/ops-ui";
 import { PdfPreviewButton, type VersionNav } from "@/components/admin/PdfPreview";
 import {
   freezeInvoiceVersion,
-  freezeQuoteVersion,
   listInvoiceVersions,
   listQuoteVersions,
 } from "@/lib/document-versions.functions";
@@ -594,19 +593,13 @@ function BookingDetail() {
       const { downloadStayQuote } = await import("@/lib/quote-pdf");
       const body = await quoteBodyFor(r);
       if (!body) return;
-      // the version this download is, so the reference on the paper matches
-      const frozen = await freezeQuoteVersion({
-        data: {
-          enquiryId: id,
-          reference: String(r.reference ?? ""),
-          snapshot: body,
-          totalUpfront: Number(body.quote?.totalUpfront ?? 0),
-          monthlyRent: Number(body.quote?.monthlyAfter ?? 0),
-        },
-      }).catch(() => null);
+      // the version already on record for this quote, so the paper carries the
+      // same reference the history shows
+      const versions = await listQuoteVersions({ data: { enquiryId: id } }).catch(() => []);
+      const current = versions[versions.length - 1];
       await downloadStayQuote({
         ...body,
-        reference: frozen?.reference ?? r.reference,
+        reference: current ? referenceFor(String(r.reference ?? ""), current.version) : r.reference,
       });
     } catch (err) {
       console.error(err);
@@ -658,18 +651,8 @@ function BookingDetail() {
         reference: referenceFor(String(row?.reference ?? v.reference), v.version),
       });
     },
-    freeze: async () => {
-      const body = await quoteBodyFor(row);
-      return freezeQuoteVersion({
-        data: {
-          enquiryId: id,
-          reference: String(row?.reference ?? ""),
-          snapshot: body ?? {},
-          totalUpfront: Number(body?.quote?.totalUpfront ?? 0),
-          monthlyRent: Number(body?.quote?.monthlyAfter ?? 0),
-        },
-      });
-    },
+    // no freeze: a quote records itself every time it is saved, so its newest
+    // version is already the one on screen
   };
 
   function invoiceDoc() {

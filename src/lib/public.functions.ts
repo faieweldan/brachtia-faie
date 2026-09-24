@@ -172,13 +172,25 @@ export const submitEnquiry = createServerFn({ method: "POST" })
         heard_about_other: data.heardAboutOther,
         quote_snapshot: (data.quoteSnapshot ?? {}) as never,
       })
-      .select("reference")
+      .select("id, reference")
       .maybeSingle();
     if (error) {
       // the reason travels back to the browser: a failure the student cannot see
       // is a failure nobody fixes
       console.error("enquiry insert failed", error);
       return { ok: false as const, reference: "", error: error.message };
+    }
+    // the quote they asked for, kept as the original every later one is a
+    // revision of - without it, the first admin change would look like the
+    // first quote that ever existed
+    if (row?.id) {
+      const { recordQuoteVersion } = await import("@/lib/document-versions.functions");
+      await recordQuoteVersion(
+        supabaseAdmin,
+        String(row.id),
+        String(row.reference ?? ""),
+        data.quoteSnapshot ?? {},
+      );
     }
     return { ok: true as const, reference: (row?.reference ?? "") as string };
   });
