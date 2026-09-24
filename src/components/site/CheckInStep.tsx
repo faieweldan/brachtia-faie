@@ -255,8 +255,8 @@ export function CheckInStep({
             reminder above: that one is "not yet", this one is "not then" */}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-border px-4 py-3">
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Cannot arrive within those 7 days? Any later arrival needs our approval first \u2014
-            message us and we will sort it out with you.
+            Cannot arrive within those 7 days? Any later arrival needs our approval first — message
+            us and we will sort it out with you.
           </p>
           <a
             href={whatsappUrl(lateArrivalMessage)}

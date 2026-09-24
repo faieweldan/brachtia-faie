@@ -5,6 +5,8 @@ import {
   ArrowLeft,
   ArrowRight,
   CalendarCheck,
+  Eye,
+  KeyRound,
   ChevronDown,
   ChevronUp,
   CheckCircle2,
@@ -217,67 +219,80 @@ function ViewingLinkPage() {
 
   /** The room itself, shown the same way wherever it appears. */
   const roomCard = (
-    <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-        Your room
-      </p>
-      <p className="mt-2 text-base font-bold text-brand-deep">{booking["residence_name"]}</p>
-      <p className="text-sm font-semibold text-foreground">{booking["room_name"]}</p>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {booking["occupancy"] === "twin" ? "Twin sharing" : "Single occupancy"}
-        {booking["move_in"] ? ` · ${prettyDay(String(booking["move_in"]))}` : ""}
-        {booking["move_out"] ? ` \u2013 ${prettyDay(String(booking["move_out"]))}` : ""}
-      </p>
-      <p className="mt-3 text-xs text-muted-foreground">
-        Booking ID <span className="font-semibold text-foreground">{booking["reference"]}</span>
-      </p>
+    <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-16px_rgba(16,24,40,0.18)]">
+      {/* the room on the brand, the way the arrival step carries its welcome -
+          this is the thing the page is about, not a field beside the others */}
+      <div className="bg-brand-deep px-5 py-4 text-primary-foreground sm:px-6">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary-foreground/70">
+          Your room
+        </p>
+        <p className="mt-1.5 text-lg font-bold leading-tight">{booking["residence_name"]}</p>
+        <p className="text-sm font-medium text-primary-foreground/90">{booking["room_name"]}</p>
+      </div>
 
-      <button
-        type="button"
-        onClick={() => setShowDetails((was) => !was)}
-        aria-expanded={showDetails}
-        className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-brand underline-offset-2 hover:underline"
-      >
-        {showDetails ? "Hide booking details" : "View booking details"}
-        {showDetails ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-      </button>
+      <div className="px-5 py-4 sm:px-6">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-foreground">
+          <span className="rounded-full bg-brand-tint px-2.5 py-0.5 text-xs font-semibold text-brand-deep">
+            {booking["occupancy"] === "twin" ? "Twin sharing" : "Single occupancy"}
+          </span>
+          {booking["move_in"] ? (
+            <span className="text-muted-foreground">
+              {prettyDay(String(booking["move_in"]))}
+              {booking["move_out"] ? ` – ${prettyDay(String(booking["move_out"]))}` : ""}
+            </span>
+          ) : null}
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Booking ID <span className="font-semibold text-foreground">{booking["reference"]}</span>
+        </p>
 
-      {showDetails ? (
-        <dl className="mt-4 grid gap-x-4 gap-y-2 border-t border-border pt-4 text-sm sm:grid-cols-[auto_1fr]">
-          {(
-            [
-              ["Booking ID", booking["reference"]],
-              ["Name", booking["full_name"]],
-              ["Residence", booking["residence_name"]],
-              ["Unit type", booking["unit_type"]],
-              ["Room", booking["room_name"]],
-              ["Occupancy", booking["occupancy"] === "twin" ? "Twin sharing" : "Single"],
-              ["Move-in date", prettyDay(String(booking["move_in"] ?? ""))],
-              ["Move-out date", prettyDay(String(booking["move_out"] ?? ""))],
+        <button
+          type="button"
+          onClick={() => setShowDetails((was) => !was)}
+          aria-expanded={showDetails}
+          className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-brand underline-offset-2 hover:underline"
+        >
+          {showDetails ? "Hide booking details" : "View booking details"}
+          {showDetails ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+        </button>
+
+        {showDetails ? (
+          <dl className="mt-4 grid gap-x-4 gap-y-2 border-t border-border pt-4 text-sm sm:grid-cols-[auto_1fr]">
+            {(
               [
-                "Stay duration",
-                booking["move_in"] && booking["move_out"]
-                  ? stayLength(String(booking["move_in"]), String(booking["move_out"]))
-                  : "",
-              ],
-              [
-                "Monthly rental",
-                Number(booking["monthly_rent"]) > 0
-                  ? formatRate(Number(booking["monthly_rent"]))
-                  : "",
-              ],
-            ] as const
-          )
-            // a blank line says nothing and reads as something missing
-            .filter(([, value]) => Boolean(value))
-            .map(([label, value]) => (
-              <div key={label} className="contents">
-                <dt className="text-muted-foreground sm:whitespace-nowrap">{label}</dt>
-                <dd className="font-semibold text-foreground sm:text-right">{value}</dd>
-              </div>
-            ))}
-        </dl>
-      ) : null}
+                ["Booking ID", booking["reference"]],
+                ["Name", booking["full_name"]],
+                ["Residence", booking["residence_name"]],
+                ["Unit type", booking["unit_type"]],
+                ["Room", booking["room_name"]],
+                ["Occupancy", booking["occupancy"] === "twin" ? "Twin sharing" : "Single"],
+                ["Move-in date", prettyDay(String(booking["move_in"] ?? ""))],
+                ["Move-out date", prettyDay(String(booking["move_out"] ?? ""))],
+                [
+                  "Stay duration",
+                  booking["move_in"] && booking["move_out"]
+                    ? stayLength(String(booking["move_in"]), String(booking["move_out"]))
+                    : "",
+                ],
+                [
+                  "Monthly rental",
+                  Number(booking["monthly_rent"]) > 0
+                    ? formatRate(Number(booking["monthly_rent"]))
+                    : "",
+                ],
+              ] as const
+            )
+              // a blank line says nothing and reads as something missing
+              .filter(([, value]) => Boolean(value))
+              .map(([label, value]) => (
+                <div key={label} className="contents">
+                  <dt className="text-muted-foreground sm:whitespace-nowrap">{label}</dt>
+                  <dd className="font-semibold text-foreground sm:text-right">{value}</dd>
+                </div>
+              ))}
+          </dl>
+        ) : null}
+      </div>
     </div>
   );
 
@@ -290,7 +305,7 @@ function ViewingLinkPage() {
       {view === "choose" ? (
         <>
           <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-brand-deep sm:text-4xl">
-            Good news \u2014 we have a room for you! \ud83c\udf89
+            Good news — we have a room for you! 🎉
           </h1>
           <p className="mt-3 text-muted-foreground">
             Hi {String(booking["full_name"] ?? "").split(" ")[0]}, your preferred room is available.
@@ -307,39 +322,51 @@ function ViewingLinkPage() {
             read past a calendar to find that out.
           */}
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {/*
+              Two ways on, side by side and equally weighted. A viewing is
+              offered, not required - and a student who has seen enough should
+              not have to read past a calendar to find that out.
+
+              Each carries its own mark rather than a shared grey rule, so the
+              choice reads as two things rather than one list.
+            */}
             <button
               type="button"
               onClick={() => setView("viewing")}
-              className="rounded-2xl border border-border bg-card p-5 text-left transition-colors hover:border-brand/50 hover:bg-brand-tint/30"
+              className="group relative overflow-hidden rounded-2xl border border-border bg-card p-5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-all hover:-translate-y-0.5 hover:border-brand/50 hover:shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_28px_-14px_rgba(16,24,40,0.3)]"
             >
-              <span className="text-2xl" aria-hidden>
-                \ud83d\udc40
+              <span className="absolute inset-x-0 top-0 h-1 bg-brand/40" aria-hidden />
+              <span className="flex size-11 items-center justify-center rounded-xl bg-brand-tint text-xl">
+                <Eye className="size-5 text-brand-deep" />
               </span>
-              <span className="mt-2 block text-base font-bold text-brand-deep">
+              <span className="mt-3 block text-base font-bold text-brand-deep">
                 View the room first
               </span>
-              <span className="mt-1 block text-sm text-muted-foreground">
+              <span className="mt-1 block text-sm leading-relaxed text-muted-foreground">
                 Visit the residence in person or take a virtual tour before deciding.
               </span>
-              <span className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">
-                Schedule a viewing <ArrowRight className="size-4" />
+              <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">
+                Schedule a viewing
+                <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
               </span>
             </button>
 
             <button
               type="button"
               onClick={() => setView("booking")}
-              className="rounded-2xl border border-border bg-card p-5 text-left transition-colors hover:border-brand/50 hover:bg-brand-tint/30"
+              className="group relative overflow-hidden rounded-2xl border border-brand/40 bg-brand-tint/40 p-5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-all hover:-translate-y-0.5 hover:border-brand hover:shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_28px_-14px_rgba(16,24,40,0.3)]"
             >
-              <span className="text-2xl" aria-hidden>
-                \ud83d\udd11
+              <span className="absolute inset-x-0 top-0 h-1 bg-brand-deep" aria-hidden />
+              <span className="flex size-11 items-center justify-center rounded-xl bg-brand-deep text-primary-foreground">
+                <KeyRound className="size-5" />
               </span>
-              <span className="mt-2 block text-base font-bold text-brand-deep">Ready to book?</span>
-              <span className="mt-1 block text-sm text-muted-foreground">
+              <span className="mt-3 block text-base font-bold text-brand-deep">Ready to book?</span>
+              <span className="mt-1 block text-sm leading-relaxed text-muted-foreground">
                 Proceed with the room above and request your booking invoice.
               </span>
-              <span className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">
-                Proceed to booking <ArrowRight className="size-4" />
+              <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-deep">
+                Proceed to booking
+                <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
               </span>
             </button>
           </div>
@@ -424,7 +451,7 @@ function ViewingLinkPage() {
                 </p>
               ) : slotsQuery.isLoading ? (
                 <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="size-4 animate-spin" /> Loading times\u2026
+                  <Loader2 className="size-4 animate-spin" /> Loading times…
                 </p>
               ) : slots.length === 0 ? (
                 <p className="mt-2 text-sm text-muted-foreground">
