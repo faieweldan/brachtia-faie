@@ -216,7 +216,7 @@ export default function StayCalculator({
                         Monthly rental
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {term === "long" ? "12-month rate" : "Short-term rate"} · {quote.days} days
+                        {term === "long" ? "Standard rate" : "Short-term rate"} · {quote.days} days
                         {quote.monthlyAfter > quote.rent && (
                           <> · incl. {formatRM(quote.monthlyAfter - quote.rent)} add-ons</>
                         )}

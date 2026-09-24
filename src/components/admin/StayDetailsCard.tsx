@@ -412,9 +412,9 @@ export function StayDetailsCard({
   const offeredFor = (roomRow: any, occupancy?: string) =>
     !draftTerm || offersTerm(roomRow as SiteRoomType, draftTerm, occupancy);
   const draftRoomRow = live.roomRows.find((r) => r.code === draft.roomCode) ?? null;
-  const notOffered = `no ${draftTerm === "short" ? "short-term" : "12-month"} rate`;
+  const notOffered = `no ${draftTerm === "short" ? "short-term" : "Standard"} rate`;
   const releasesRoom = editing && Boolean(assignedBed) && roomFitChanged(row, draft);
-  const termName = shown.term === "short" ? "short-term" : "12-month";
+  const termName = shown.term === "short" ? "short-term" : "Standard";
 
   /** Why there is no rent - short, because it sits inside the card. */
   const priceProblem = (() => {

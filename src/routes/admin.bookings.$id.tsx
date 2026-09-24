@@ -949,7 +949,7 @@ function BookingDetail() {
   if (stayTerm) {
     for (const c of candidates) {
       if (c.blocked) continue;
-      const termName = stayTerm === "short" ? "short-term" : "12-month";
+      const termName = stayTerm === "short" ? "short-term" : "Standard";
       // a whole unit is one let of the apartment, priced by unit type
       if (wantedOcc === "unit" || isUnitSlot(c.row.room)) {
         const residenceRow = ((site as any)?.residences ?? []).find(
