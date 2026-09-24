@@ -26,6 +26,7 @@ import {
   listQuoteVersions,
 } from "@/lib/document-versions.functions";
 import { referenceFor } from "@/lib/document-versions";
+import { discountLabel } from "@/lib/invoices";
 import { company } from "@/data/properties";
 import { WelcomeMessageCard } from "@/components/admin/WelcomeMessageCard";
 import { StayDetailsCard } from "@/components/admin/StayDetailsCard";
@@ -675,6 +676,20 @@ function BookingDetail() {
       tenancy_start: invoice.tenancy_start,
       tenancy_end: invoice.tenancy_end,
       monthly_rent: Number(invoice.monthly_rent),
+      /*
+       * The discount, read back off the stored invoice the same way the terms
+       * below are. The generator's preview showed "RM100 off RM500" and the
+       * issued invoice showed no discount line at all, because the three
+       * fields that print it never travelled this far - the label is not a
+       * column, it is worked out from the type and the value.
+       */
+      ...(Number(invoice.list_rent) > 0 && Number(invoice.discount_value) > 0
+        ? {
+            list_rent: Number(invoice.list_rent),
+            discount_label: discountLabel(invoice.discount_type, Number(invoice.discount_value)),
+            ...(invoice.discount_note ? { discount_note: String(invoice.discount_note) } : {}),
+          }
+        : {}),
       payment_frequency: invoice.payment_frequency,
       total: Number(invoice.total),
       deposits_total: Number(invoice.deposits_total),

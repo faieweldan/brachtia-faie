@@ -440,7 +440,9 @@ function InvoiceGenerator() {
 
   function draft(): InvoiceDoc {
     return {
-      number: "INV-Draft",
+      // an invoice being edited previews under its own number; only one that
+      // does not exist yet has none to show
+      number: String(editing?.invoice?.number ?? "") || "INV-Draft",
       issued_at: new Date().toISOString(),
       // blank until the booking has made them a resident - a booking invoiced
       // before that has no resident ID to state yet
@@ -939,6 +941,11 @@ function InvoiceGenerator() {
           title="Invoice preview"
           fileName="Brachtia-invoice-preview.pdf"
           build={() => invoicePdfUrl(draft())}
+          /* A draft prints "INV-Draft" and carries no number. Downloadable, it
+             could be sent to a student and would match no invoice Brachtia
+             raised, with no number for them to quote when they pay. */
+          downloadable={Boolean(editing)}
+          downloadHint={editing ? undefined : "Generate the invoice to download it"}
         >
           Preview invoice
         </PdfPreviewButton>
