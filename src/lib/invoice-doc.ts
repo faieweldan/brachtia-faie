@@ -24,7 +24,9 @@ export function invoiceDocFromRow(row: any, items: any[]): InvoiceDoc {
     issued_at: row?.issued_at ?? null,
     invoice_date: row?.invoice_date ?? null,
     payment_terms: row?.payment_terms ?? "",
-    due_date: row?.due_date ?? null,
+    // no due_date: it is not stored. The PDF works it out from the invoice
+    // date and the terms, so an invoice cannot end up with a due date that
+    // disagrees with the "NET15" printed beside it
     full_name: row?.full_name ?? "",
     email: row?.email ?? "",
     phone: row?.phone ?? "",

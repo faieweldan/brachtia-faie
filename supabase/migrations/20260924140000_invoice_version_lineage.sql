@@ -52,7 +52,6 @@ select
     'issued_at', i.issued_at,
     'invoice_date', i.invoice_date,
     'payment_terms', i.payment_terms,
-    'due_date', i.due_date,
     'full_name', i.full_name,
     'email', i.email,
     'phone', i.phone,
@@ -78,7 +77,7 @@ select
     'items', coalesce((
       select jsonb_agg(jsonb_build_object(
         'label', it.label, 'kind', it.kind, 'amount', it.amount, 'quantity', it.quantity
-      ) order by it.id)
+      ) order by it.sort_order, it.created_at)
       from public.invoice_items it where it.invoice_id = i.id
     ), '[]'::jsonb)
   ),
