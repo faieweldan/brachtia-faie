@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { company, formatDate, formatRM } from "@/data/properties";
-import qrAsset from "@/assets/duitnow-qr.jpg.asset.json";
 
 const GREEN: [number, number, number] = [26, 71, 52];
 const PEACH: [number, number, number] = [250, 240, 231];
@@ -15,6 +14,9 @@ export const BANK = {
   accountName: "BRACHTIA MAJU RESOURCES PLT",
   accountNo: "2126-0200-0280-57",
   swift: "RHBBMYKL",
+  // stated rather than left off: an overseas payer looking for it and finding
+  // nothing assumes the invoice is incomplete and writes to ask
+  iban: "Not applicable for Malaysian bank accounts",
 };
 
 /** amount is the price of one; the line is worth quantity x amount. */
@@ -91,22 +93,6 @@ function drawLogo(doc: any, x: number, y: number, size: number) {
     [34, 42],
   ] as [number, number][]) {
     doc.rect(px(rx), py(ry), 5 * s, 5 * s);
-  }
-}
-
-async function loadQr(): Promise<string | null> {
-  try {
-    const res = await fetch(qrAsset.url);
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => resolve(null as any);
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return null;
   }
 }
 
@@ -351,48 +337,19 @@ async function buildInvoice(inv: InvoiceDoc) {
     y += 4;
   }
 
-  // Payment details + QR
-  y += 20;
-  doc.setTextColor(...GREEN);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10.5);
-  doc.text("Payment details", M, y);
-
-  const qr = await loadQr();
-  const qrSize = 108;
-  autoTable(doc, {
-    startY: y + 6,
-    margin: { left: M, right: M + (qr ? qrSize + 16 : 0), bottom: FOOT },
-    theme: "plain",
-    styles: infoStyles,
-    columnStyles: infoCols,
-    body: [
-      ["Bank name", BANK.name],
-      ["Bank address", BANK.address],
-      ["Account name", BANK.accountName],
-      ["Account no.", BANK.accountNo],
-      ["Swift code", BANK.swift],
-    ],
-  });
-  if (qr) {
-    try {
-      doc.addImage(qr, "JPEG", W - M - qrSize, y + 6, qrSize, qrSize * 1.55, undefined, "FAST");
-    } catch {
-      /* QR is optional */
-    }
-  }
-
   /*
-   * The terms, when admin asked for them. Last on the page on purpose: the
-   * money and how to pay it are what the invoice is for, and six clauses above
-   * them would push the account number off the first page.
+   * The terms, then how to pay. The terms set out what the money buys and what
+   * happens if the stay ends early, so they are read before the account number
+   * rather than after it - they run onto a second page now, and the bank
+   * details go with them, which is the order asked for.
    *
-   * autoTable rather than hand-drawn text, so a clause that runs long wraps and
-   * carries onto a second page instead of printing over the footer.
+   * autoTable rather than hand-drawn text throughout, so a clause that runs
+   * long wraps and carries onto the next page instead of printing over the
+   * footer.
    */
   if (inv.show_terms) {
     const { INVOICE_TERMS, INVOICE_TERMS_HEADING } = await import("@/lib/invoice-terms");
-    y = doc.lastAutoTable.finalY + 22;
+    y += 20;
 
     autoTable(doc, {
       startY: y,
@@ -413,24 +370,87 @@ async function buildInvoice(inv: InvoiceDoc) {
       },
       body: INVOICE_TERMS.map((clause, i) => [`${i + 1}.`, clause]),
     });
+    y = doc.lastAutoTable.finalY;
+  }
 
-    // what falls due next - the line that saves the follow-up call
-    const nextDate = inv.next_payment_date ? formatDate(inv.next_payment_date) : "";
-    const nextAmount =
-      inv.next_payment_amount != null && inv.next_payment_amount > 0
-        ? formatRM(inv.next_payment_amount)
-        : "";
-    if (nextDate || nextAmount) {
-      y = doc.lastAutoTable.finalY + 12;
-      doc.setTextColor(...GREEN);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8.5);
-      if (nextDate) {
-        doc.text(`Next Payment Due: ${nextDate}`, M, y);
-        y += 12;
-      }
-      if (nextAmount) doc.text(`Next Payment Amount: ${nextAmount}`, M, y);
+  // Payment details
+  y += 22;
+  doc.setTextColor(...GREEN);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10.5);
+  doc.text("Payment Details", M, y);
+
+  autoTable(doc, {
+    startY: y + 6,
+    margin: { left: M, right: M, bottom: FOOT },
+    theme: "plain",
+    styles: infoStyles,
+    columnStyles: infoCols,
+    body: [
+      ["Bank", BANK.name],
+      ["Account Name", BANK.accountName],
+      ["Account No.", BANK.accountNo],
+      ["SWIFT Code", BANK.swift],
+      ["IBAN", BANK.iban],
+      ["Payment Reference", "Invoice Number or Resident ID"],
+      ["Proof of Payment", `Submit via WhatsApp to ${PDF_PHONE}`],
+    ],
+  });
+
+  /*
+   * What the payer carries, and what they get back. Paragraphs rather than
+   * label/value pairs, in a table of one column so a long one paginates like
+   * everything else on the page.
+   */
+  y = doc.lastAutoTable.finalY + 18;
+  doc.setTextColor(...GREEN);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10.5);
+  doc.text("Currency & Payment Note", M, y);
+
+  autoTable(doc, {
+    startY: y + 6,
+    margin: { left: M, right: M, bottom: FOOT },
+    theme: "plain",
+    styles: {
+      fontSize: 7.5,
+      cellPadding: { top: 2, bottom: 4, left: 0, right: 0 },
+      textColor: [60, 60, 58],
+    },
+    body: [
+      [
+        "All fees are payable in Ringgit Malaysia (RM). Any foreign currency amount or exchange rate shown is for reference only and is subject to exchange-rate fluctuations and applicable bank or transfer charges. The payer is responsible for any difference required to ensure the full invoiced amount in RM is received.",
+      ],
+      [
+        "Any applicable stamp duty is charged in accordance with the prevailing Malaysian stamp duty requirements.",
+      ],
+      ["An official receipt will be issued upon confirmation of payment."],
+    ],
+  });
+
+  /*
+   * What falls due next - the line that saves the follow-up call. Only the date
+   * and the amount: the period it covers is not recorded against an invoice, so
+   * a line for it would print its label and nothing after it.
+   */
+  const nextDate = inv.next_payment_date ? formatDate(inv.next_payment_date) : "";
+  const nextAmount =
+    inv.next_payment_amount != null && inv.next_payment_amount > 0
+      ? formatRM(inv.next_payment_amount)
+      : "";
+  if (nextDate || nextAmount) {
+    y = doc.lastAutoTable.finalY + 20;
+    doc.setTextColor(...GREEN);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.text("After Full Initial Payment & Tenancy Agreement Signing", M, y);
+    y += 13;
+    doc.setFontSize(8.5);
+    if (nextDate) {
+      doc.text(`Next Payment Due: ${nextDate}`, M, y);
+      y += 12;
     }
+    if (nextAmount) doc.text(`Next Payment Amount: ${nextAmount}`, M, y);
   }
 
   footer(doc, "Payment confirms your booking. Deposits are refundable per the tenancy agreement.");
