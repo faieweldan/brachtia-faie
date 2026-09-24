@@ -19,7 +19,14 @@ import {
 import { toast } from "sonner";
 
 import { StageStepper } from "@/components/admin/ops-ui";
-import { PdfPreviewButton } from "@/components/admin/PdfPreview";
+import { PdfPreviewButton, type VersionNav } from "@/components/admin/PdfPreview";
+import {
+  freezeInvoiceVersion,
+  freezeQuoteVersion,
+  listInvoiceVersions,
+  listQuoteVersions,
+} from "@/lib/document-versions.functions";
+import { referenceFor } from "@/lib/document-versions";
 import { company } from "@/data/properties";
 import { WelcomeMessageCard } from "@/components/admin/WelcomeMessageCard";
 import { StayDetailsCard } from "@/components/admin/StayDetailsCard";
@@ -538,6 +545,45 @@ function BookingDetail() {
    */
   const isClosed = row.status === "closed";
 
+  /**
+   * The quote as the PDF is built from it.
+   *
+   * Pulled out so downloading it and recording which version it was work from
+   * one body - a version that did not match the PDF it was frozen beside would
+   * be worse than keeping no version at all.
+   */
+  async function quoteBodyFor(r: any) {
+    const snap = r.quote_snapshot as any;
+    let quote = snap.quote;
+    if (!quote) {
+      // Older enquiries were saved without a computed quote — rebuild it.
+      const { stayQuote, termForRange } = await import("@/data/properties");
+      const moveIn = snap.moveIn || r.move_in;
+      const moveOut = snap.moveOut || r.move_out;
+      const occupancy = snap.occupancy || r.occupancy || "single";
+      const term = snap.term || (moveIn && moveOut ? termForRange(moveIn, moveOut) : "long");
+      const rent = Number(r.monthly_rent) || snap.room?.rent?.[term]?.[occupancy];
+      if (!moveIn || !moveOut || !rent) {
+        toast.error("This enquiry is missing dates or a rate — add them in Stay Details first");
+        return null;
+      }
+      quote = stayQuote(
+        snap.property,
+        rent,
+        term,
+        moveIn,
+        moveOut,
+        (r.payment_term as any) || "full",
+        [],
+      );
+      snap.term = term;
+      snap.occupancy = occupancy;
+      snap.moveIn = moveIn;
+      snap.moveOut = moveOut;
+    }
+    return { ...snap, quote };
+  }
+
   async function downloadQuote(r: any) {
     if (!hasSnapshot(r)) {
       toast.error("No quote snapshot on this enquiry");
@@ -546,35 +592,22 @@ function BookingDetail() {
     setDownloading(true);
     try {
       const { downloadStayQuote } = await import("@/lib/quote-pdf");
-      const snap = r.quote_snapshot as any;
-      let quote = snap.quote;
-      if (!quote) {
-        // Older enquiries were saved without a computed quote — rebuild it.
-        const { stayQuote, termForRange } = await import("@/data/properties");
-        const moveIn = snap.moveIn || r.move_in;
-        const moveOut = snap.moveOut || r.move_out;
-        const occupancy = snap.occupancy || r.occupancy || "single";
-        const term = snap.term || (moveIn && moveOut ? termForRange(moveIn, moveOut) : "long");
-        const rent = Number(r.monthly_rent) || snap.room?.rent?.[term]?.[occupancy];
-        if (!moveIn || !moveOut || !rent) {
-          toast.error("This enquiry is missing dates or a rate — add them in Stay Details first");
-          return;
-        }
-        quote = stayQuote(
-          snap.property,
-          rent,
-          term,
-          moveIn,
-          moveOut,
-          (r.payment_term as any) || "full",
-          [],
-        );
-        snap.term = term;
-        snap.occupancy = occupancy;
-        snap.moveIn = moveIn;
-        snap.moveOut = moveOut;
-      }
-      await downloadStayQuote({ ...snap, quote, reference: r.reference });
+      const body = await quoteBodyFor(r);
+      if (!body) return;
+      // the version this download is, so the reference on the paper matches
+      const frozen = await freezeQuoteVersion({
+        data: {
+          enquiryId: id,
+          reference: String(r.reference ?? ""),
+          snapshot: body,
+          totalUpfront: Number(body.quote?.totalUpfront ?? 0),
+          monthlyRent: Number(body.quote?.monthlyAfter ?? 0),
+        },
+      }).catch(() => null);
+      await downloadStayQuote({
+        ...body,
+        reference: frozen?.reference ?? r.reference,
+      });
     } catch (err) {
       console.error(err);
       toast.error("Could not build the quotation");
@@ -582,6 +615,62 @@ function BookingDetail() {
       setDownloading(false);
     }
   }
+
+  /**
+   * The invoices given out, for the arrows in the preview.
+   *
+   * The live invoice row is never copied - payments point at it, so a version
+   * that was a row of its own would leave the money behind on the old one.
+   * What is frozen here is the document, for the record.
+   */
+  const invoiceVersions: VersionNav = {
+    reference: String(invoice?.number ?? ""),
+    load: async () =>
+      invoice?.id ? listInvoiceVersions({ data: { invoiceId: String(invoice.id) } }) : [],
+    buildVersion: async (v) => {
+      const { invoicePdfUrl } = await import("@/lib/invoice-pdf");
+      return invoicePdfUrl({
+        ...(v.body as any),
+        number: referenceFor(String(invoice?.number ?? v.reference), v.version),
+      });
+    },
+    freeze: async () => {
+      const doc = invoiceDoc();
+      return freezeInvoiceVersion({
+        data: {
+          invoiceId: String(invoice?.id ?? ""),
+          number: String(invoice?.number ?? ""),
+          document: doc,
+          total: Number((doc as any).total ?? 0),
+        },
+      });
+    },
+  };
+
+  /** The quotes this booking has given out, for the arrows in the preview. */
+  const quoteVersions: VersionNav = {
+    reference: String(row?.reference ?? ""),
+    load: () => listQuoteVersions({ data: { enquiryId: id } }),
+    buildVersion: async (v) => {
+      const { quotePdfUrl } = await import("@/lib/quote-pdf");
+      return quotePdfUrl({
+        ...(v.body as any),
+        reference: referenceFor(String(row?.reference ?? v.reference), v.version),
+      });
+    },
+    freeze: async () => {
+      const body = await quoteBodyFor(row);
+      return freezeQuoteVersion({
+        data: {
+          enquiryId: id,
+          reference: String(row?.reference ?? ""),
+          snapshot: body ?? {},
+          totalUpfront: Number(body?.quote?.totalUpfront ?? 0),
+          monthlyRent: Number(body?.quote?.monthlyAfter ?? 0),
+        },
+      });
+    },
+  };
 
   function invoiceDoc() {
     return {
@@ -1107,6 +1196,7 @@ function BookingDetail() {
                   reference: row.reference,
                 })
               }
+              versions={quoteVersions}
             >
               <Eye className="size-4" />
             </PdfPreviewButton>
@@ -1690,6 +1780,7 @@ function BookingDetail() {
                         reference: row.reference,
                       })
                     }
+                    versions={quoteVersions}
                   >
                     <Eye className="size-4" />
                   </PdfPreviewButton>
@@ -1712,6 +1803,7 @@ function BookingDetail() {
                         build={async () =>
                           (await import("@/lib/invoice-pdf")).invoicePdfUrl(invoiceDoc())
                         }
+                        versions={invoiceVersions}
                       >
                         <Eye className="size-4" />
                       </PdfPreviewButton>
