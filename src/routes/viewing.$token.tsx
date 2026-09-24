@@ -66,13 +66,14 @@ function toISODate(d: Date) {
  * The canvas this page stands on.
  *
  * White cards on a white page have nothing to lift off, which read as flat
- * beside the resident form - and it is the same student, an hour apart. The
- * tint is the one that form already uses, so the two feel like one place
- * rather than two products.
+ * beside the resident form - and it is the same student, an hour apart. It is
+ * the same ground that form stands on, by name rather than by coincidence:
+ * --brand-tint is redefined inside .admin-ui, which only one of the two pages
+ * wears, so matching on that one would have drifted again.
  */
 function Canvas({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-brand-tint">
+    <div className="min-h-screen bg-brand-canvas">
       <div className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6 sm:py-16">{children}</div>
     </div>
   );
@@ -207,7 +208,7 @@ function ViewingLinkPage() {
     return (
       <Canvas>
         <div className="py-8 text-center">
-          <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-brand-soft">
+          <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-brand-canvas">
             <CheckCircle2 className="size-7 text-brand" />
           </div>
           <h1 className="mt-5 text-3xl font-extrabold text-brand-deep">
@@ -254,7 +255,7 @@ function ViewingLinkPage() {
 
       <div className="px-5 py-4 sm:px-6">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-foreground">
-          <span className="rounded-full bg-brand-tint px-2.5 py-0.5 text-xs font-semibold text-brand-deep">
+          <span className="rounded-full bg-brand-canvas px-2.5 py-0.5 text-xs font-semibold text-brand-deep">
             {booking["occupancy"] === "twin" ? "Twin sharing" : "Single occupancy"}
           </span>
           {booking["move_in"] ? (
@@ -320,7 +321,7 @@ function ViewingLinkPage() {
 
   return (
     <Canvas>
-      <span className="inline-flex items-center gap-2 rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-brand-deep">
+      <span className="inline-flex items-center gap-2 rounded-full bg-brand-canvas px-3 py-1 text-xs font-medium text-brand-deep">
         <CalendarCheck className="size-3.5" /> Booking ID {booking["reference"]}
       </span>
 
@@ -358,7 +359,7 @@ function ViewingLinkPage() {
               className="group relative overflow-hidden rounded-2xl border border-border bg-card p-5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-all hover:-translate-y-0.5 hover:border-brand/50 hover:shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_28px_-14px_rgba(16,24,40,0.3)]"
             >
               <span className="absolute inset-x-0 top-0 h-1 bg-brand/40" aria-hidden />
-              <span className="flex size-11 items-center justify-center rounded-xl bg-brand-tint text-xl">
+              <span className="flex size-11 items-center justify-center rounded-xl bg-brand-canvas text-xl">
                 <Eye className="size-5 text-brand-deep" />
               </span>
               <span className="mt-3 block text-base font-bold text-brand-deep">
@@ -376,7 +377,7 @@ function ViewingLinkPage() {
             <button
               type="button"
               onClick={() => setView("booking")}
-              className="group relative overflow-hidden rounded-2xl border border-brand/40 bg-brand-tint/40 p-5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-all hover:-translate-y-0.5 hover:border-brand hover:shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_28px_-14px_rgba(16,24,40,0.3)]"
+              className="group relative overflow-hidden rounded-2xl border-2 border-brand-deep/70 bg-card p-5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-all hover:-translate-y-0.5 hover:border-brand-deep hover:shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_28px_-14px_rgba(16,24,40,0.3)]"
             >
               <span className="absolute inset-x-0 top-0 h-1 bg-brand-deep" aria-hidden />
               <span className="flex size-11 items-center justify-center rounded-xl bg-brand-deep text-primary-foreground">
@@ -436,7 +437,7 @@ function ViewingLinkPage() {
                     onClick={() => setMode(o.value)}
                     className={`flex items-start gap-2.5 rounded-2xl border p-3 text-left transition-colors sm:gap-3 sm:p-4 ${
                       mode === o.value
-                        ? "border-brand bg-brand-tint/60"
+                        ? "border-brand bg-brand-canvas"
                         : "border-border hover:border-brand/40"
                     }`}
                   >
@@ -559,7 +560,7 @@ function ViewingLinkPage() {
             <ArrowRight className="size-4" />
           </Button>
 
-          <div className="mt-5 rounded-2xl bg-brand-tint/60 p-4 text-sm text-foreground">
+          <div className="mt-5 rounded-2xl bg-brand-canvas p-4 text-sm text-foreground">
             <p>
               Once submitted, our team will send you the booking invoice and payment instructions.
             </p>

@@ -64,6 +64,7 @@
   --color-brand-deep: var(--brand-deep);
   --color-gold: var(--gold);
   --color-brand-tint: var(--brand-tint);
+  --color-brand-canvas: var(--brand-canvas);
   --color-accent-warm: var(--accent-warm);
   --color-accent-warm-foreground: var(--accent-warm-foreground);
   --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
@@ -98,6 +99,14 @@
   --brand: oklch(0.44 0.086 163);
   --brand-soft: oklch(0.938 0.031 62);
   --brand-tint: oklch(0.972 0.014 62);
+  /*
+   * The warm ground a student's own pages stand on - the resident form and the
+   * viewing link both, so the two look like one place rather than two products.
+   * Named once here because they were the same colour by coincidence and then
+   * stopped being: .admin-ui redefines --brand-tint, and only one of the two
+   * pages wears that class.
+   */
+  --brand-canvas: oklch(0.945 0.014 82);
   --brand-deep: oklch(0.26 0.045 164);
   --gold: oklch(0.78 0.13 66);
   --accent-warm: oklch(0.76 0.1 58);
@@ -290,10 +299,10 @@
   --ring: oklch(0.62 0.11 165);
 
   --brand: oklch(0.5 0.1 165);
-  --brand-soft: oklch(0.945 0.014 82);
-  --brand-tint: oklch(0.945 0.014 82);
+  --brand-soft: var(--brand-canvas);
+  --brand-tint: var(--brand-canvas);
   --brand-deep: oklch(0.3 0.06 165);
-  --accent-warm: oklch(0.945 0.014 82);
+  --accent-warm: var(--brand-canvas);
   --accent-warm-foreground: oklch(0.32 0.03 82);
 
   /* admin-only extras */
