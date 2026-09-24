@@ -1025,15 +1025,6 @@ function BookingDetail() {
             {row.reference}
           </p>
           <p className="text-xs text-muted-foreground">Submitted {fullDateTime(row.created_at)}</p>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            <span>{universityAbbr(row.university) || "—"}</span>
-            <span>·</span>
-            <span>Move in {fullDate(row.move_in)}</span>
-            <span>·</span>
-            <span>{SHARING_SHORT[row.occupancy] ?? row.occupancy}</span>
-            <span>·</span>
-            <span className="truncate">{row.room_name || "—"}</span>
-          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* a booking is never left without someone on it: staff is changed, not removed */}
