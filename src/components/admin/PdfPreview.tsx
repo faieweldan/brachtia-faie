@@ -67,11 +67,17 @@ export function PdfPreviewDialog({
   fileName,
   url,
   onClose,
+  downloadable = true,
+  downloadHint,
 }: {
   title: string;
   fileName: string;
   url: string | null;
   onClose: () => void;
+  /** false while the document is a draft with no number to stand behind it */
+  downloadable?: boolean;
+  /** what has to happen first, said where the button would have been */
+  downloadHint?: string | undefined;
 }) {
   // the link holds the whole PDF in memory: let it go when the window closes
   useEffect(() => {
@@ -87,12 +93,14 @@ export function PdfPreviewDialog({
       >
         <div className="flex items-center justify-between gap-3 border-b border-border py-3 pl-5 pr-14">
           <DialogTitle className="truncate text-base">{title}</DialogTitle>
-          {url ? (
+          {url && downloadable ? (
             <Button asChild size="sm" variant="outline">
               <a href={url} download={fileName}>
                 <Download className="size-4" /> Download
               </a>
             </Button>
+          ) : downloadHint ? (
+            <p className="shrink-0 text-xs text-muted-foreground">{downloadHint}</p>
           ) : null}
         </div>
         {url ? (
@@ -113,6 +121,8 @@ export function PdfPreviewButton({
   fileName,
   build,
   versions,
+  downloadable = true,
+  downloadHint,
   children,
   ...button
 }: {
@@ -122,6 +132,10 @@ export function PdfPreviewButton({
   build: () => Promise<string>;
   /** given when the document keeps a history worth stepping through */
   versions?: VersionNav;
+  /** false while the document is a draft with no number to stand behind it */
+  downloadable?: boolean;
+  /** what has to happen first, said where the button would have been */
+  downloadHint?: string | undefined;
   children: ReactNode;
 } & Omit<ComponentProps<typeof Button>, "onClick" | "children">) {
   const [url, setUrl] = useState<string | null>(null);
@@ -219,7 +233,14 @@ export function PdfPreviewButton({
         <Button {...button} disabled={button.disabled || loading} onClick={() => void open()}>
           {children}
         </Button>
-        <PdfPreviewDialog title={title} fileName={fileName} url={url} onClose={close} />
+        <PdfPreviewDialog
+          title={title}
+          fileName={fileName}
+          url={url}
+          onClose={close}
+          downloadable={downloadable}
+          downloadHint={downloadHint}
+        />
       </>
     );
   }
@@ -277,12 +298,14 @@ export function PdfPreviewButton({
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            {url ? (
+            {url && downloadable ? (
               <Button asChild size="sm" variant="outline" disabled={freezing}>
                 <a href={url} download={downloadName} onClick={() => void afterDownload()}>
                   <Download className="size-4" /> Download
                 </a>
               </Button>
+            ) : downloadHint ? (
+              <p className="shrink-0 text-xs text-muted-foreground">{downloadHint}</p>
             ) : null}
           </div>
           {url ? (

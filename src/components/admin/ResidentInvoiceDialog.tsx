@@ -514,6 +514,11 @@ export function ResidentInvoiceDialog({
             title="Invoice preview"
             fileName="Brachtia-invoice-preview.pdf"
             build={async () => (await import("@/lib/invoice-pdf")).invoicePdfUrl(preview())}
+            /* A draft has no number - it prints "INV-Draft". Downloadable, it
+               could be sent to a student and would match no invoice Brachtia
+               ever raised, so it is looked at here and generated first. */
+            downloadable={Boolean(editing?.number)}
+            downloadHint={editing?.number ? undefined : "Generate the invoice to download it"}
           >
             Preview
           </PdfPreviewButton>
