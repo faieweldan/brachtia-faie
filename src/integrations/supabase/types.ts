@@ -54,7 +54,9 @@ export type Database = {
         Row: {
           admin_notes: string
           assigned_staff: string
+          company: string
           created_at: string
+          current_status: string
           duration_minutes: number
           email: string
           enquiry_id: string | null
@@ -71,6 +73,7 @@ export type Database = {
           move_out: string | null
           nationality: string
           notes: string
+          occupation: string
           phone: string
           residence_id: string | null
           residence_name: string
@@ -89,7 +92,9 @@ export type Database = {
         Insert: {
           admin_notes?: string
           assigned_staff?: string
+          company?: string
           created_at?: string
+          current_status?: string
           duration_minutes?: number
           email?: string
           enquiry_id?: string | null
@@ -106,6 +111,7 @@ export type Database = {
           move_out?: string | null
           nationality?: string
           notes?: string
+          occupation?: string
           phone?: string
           residence_id?: string | null
           residence_name?: string
@@ -124,7 +130,9 @@ export type Database = {
         Update: {
           admin_notes?: string
           assigned_staff?: string
+          company?: string
           created_at?: string
+          current_status?: string
           duration_minutes?: number
           email?: string
           enquiry_id?: string | null
@@ -141,6 +149,7 @@ export type Database = {
           move_out?: string | null
           nationality?: string
           notes?: string
+          occupation?: string
           phone?: string
           residence_id?: string | null
           residence_name?: string
@@ -364,12 +373,81 @@ export type Database = {
           },
         ]
       }
+      booking_events: {
+        Row: {
+          created_at: string
+          enquiry_id: string
+          id: string
+          kind: string
+          ref: string
+          staff: string
+          summary: string
+        }
+        Insert: {
+          created_at?: string
+          enquiry_id: string
+          id?: string
+          kind: string
+          ref?: string
+          staff: string
+          summary?: string
+        }
+        Update: {
+          created_at?: string
+          enquiry_id?: string
+          id?: string
+          kind?: string
+          ref?: string
+          staff?: string
+          summary?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_events_enquiry_id_fkey"
+            columns: ["enquiry_id"]
+            isOneToOne: false
+            referencedRelation: "enquiries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      declaration_versions: {
+        Row: {
+          body: string
+          body_sha256: string
+          created_at: string
+          effective_from: string
+          id: string
+          version: string
+        }
+        Insert: {
+          body: string
+          body_sha256: string
+          created_at?: string
+          effective_from?: string
+          id?: string
+          version: string
+        }
+        Update: {
+          body?: string
+          body_sha256?: string
+          created_at?: string
+          effective_from?: string
+          id?: string
+          version?: string
+        }
+        Relationships: []
+      }
       enquiries: {
         Row: {
           addons: Json
           admin_notes: string
           assigned_staff: string
+          close_reason: string
+          company: string
           created_at: string
+          current_status: string
+          duplicate_of: string | null
           email: string
           fee_received_at: string | null
           first_payment: number
@@ -378,6 +456,7 @@ export type Database = {
           heard_about: string
           heard_about_other: string
           id: string
+          idempotency_key: string | null
           intake: string
           invoice_issued_at: string | null
           message: string
@@ -386,6 +465,7 @@ export type Database = {
           move_out: string | null
           nationality: string
           occupancy: string
+          occupation: string
           payment_term: string
           phone: string
           quote_snapshot: Json
@@ -402,13 +482,19 @@ export type Database = {
           university: string
           updated_at: string
           viewing_completed_at: string | null
+          viewing_skipped_at: string | null
           viewing_token: string | null
+          welcome_sent_at: string | null
         }
         Insert: {
           addons?: Json
           admin_notes?: string
           assigned_staff?: string
+          close_reason?: string
+          company?: string
           created_at?: string
+          current_status?: string
+          duplicate_of?: string | null
           email?: string
           fee_received_at?: string | null
           first_payment?: number
@@ -417,6 +503,7 @@ export type Database = {
           heard_about?: string
           heard_about_other?: string
           id?: string
+          idempotency_key?: string | null
           intake?: string
           invoice_issued_at?: string | null
           message?: string
@@ -425,6 +512,7 @@ export type Database = {
           move_out?: string | null
           nationality?: string
           occupancy?: string
+          occupation?: string
           payment_term?: string
           phone?: string
           quote_snapshot?: Json
@@ -441,13 +529,19 @@ export type Database = {
           university?: string
           updated_at?: string
           viewing_completed_at?: string | null
+          viewing_skipped_at?: string | null
           viewing_token?: string | null
+          welcome_sent_at?: string | null
         }
         Update: {
           addons?: Json
           admin_notes?: string
           assigned_staff?: string
+          close_reason?: string
+          company?: string
           created_at?: string
+          current_status?: string
+          duplicate_of?: string | null
           email?: string
           fee_received_at?: string | null
           first_payment?: number
@@ -456,6 +550,7 @@ export type Database = {
           heard_about?: string
           heard_about_other?: string
           id?: string
+          idempotency_key?: string | null
           intake?: string
           invoice_issued_at?: string | null
           message?: string
@@ -464,6 +559,7 @@ export type Database = {
           move_out?: string | null
           nationality?: string
           occupancy?: string
+          occupation?: string
           payment_term?: string
           phone?: string
           quote_snapshot?: Json
@@ -480,9 +576,55 @@ export type Database = {
           university?: string
           updated_at?: string
           viewing_completed_at?: string | null
+          viewing_skipped_at?: string | null
           viewing_token?: string | null
+          welcome_sent_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "enquiries_duplicate_of_fkey"
+            columns: ["duplicate_of"]
+            isOneToOne: false
+            referencedRelation: "enquiries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      enquiry_not_duplicates: {
+        Row: {
+          a_id: string
+          b_id: string
+          created_at: string
+          staff: string
+        }
+        Insert: {
+          a_id: string
+          b_id: string
+          created_at?: string
+          staff?: string
+        }
+        Update: {
+          a_id?: string
+          b_id?: string
+          created_at?: string
+          staff?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enquiry_not_duplicates_a_id_fkey"
+            columns: ["a_id"]
+            isOneToOne: false
+            referencedRelation: "enquiries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enquiry_not_duplicates_b_id_fkey"
+            columns: ["b_id"]
+            isOneToOne: false
+            referencedRelation: "enquiries"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       import_batches: {
         Row: {
@@ -522,6 +664,7 @@ export type Database = {
           invoice_id: string
           kind: string
           label: string
+          quantity: number
           sort_order: number
         }
         Insert: {
@@ -531,6 +674,7 @@ export type Database = {
           invoice_id: string
           kind?: string
           label?: string
+          quantity?: number
           sort_order?: number
         }
         Update: {
@@ -540,6 +684,7 @@ export type Database = {
           invoice_id?: string
           kind?: string
           label?: string
+          quantity?: number
           sort_order?: number
         }
         Relationships: [
@@ -554,8 +699,13 @@ export type Database = {
       }
       invoices: {
         Row: {
+          auto_scheduled: boolean
+          bill_on: string | null
           created_at: string
           deposits_total: number
+          discount_note: string
+          discount_type: string | null
+          discount_value: number
           email: string
           enquiry_id: string | null
           full_name: string
@@ -563,8 +713,11 @@ export type Database = {
           invoice_date: string | null
           invoice_type: string
           issued_at: string
+          list_rent: number | null
           monthly_rent: number
           nationality: string
+          next_payment_amount: number | null
+          next_payment_date: string | null
           notes: string
           number: string
           occupancy: string
@@ -573,19 +726,27 @@ export type Database = {
           period_end: string | null
           period_start: string | null
           phone: string
+          replaces_invoice_id: string | null
           residence_name: string
           resident_id: string
           room_name: string
+          show_terms: boolean
           status: string
           tenancy_end: string | null
+          tenancy_id: string | null
           tenancy_start: string | null
           total: number
           university: string
           updated_at: string
         }
         Insert: {
+          auto_scheduled?: boolean
+          bill_on?: string | null
           created_at?: string
           deposits_total?: number
+          discount_note?: string
+          discount_type?: string | null
+          discount_value?: number
           email?: string
           enquiry_id?: string | null
           full_name?: string
@@ -593,8 +754,11 @@ export type Database = {
           invoice_date?: string | null
           invoice_type?: string
           issued_at?: string
+          list_rent?: number | null
           monthly_rent?: number
           nationality?: string
+          next_payment_amount?: number | null
+          next_payment_date?: string | null
           notes?: string
           number?: string
           occupancy?: string
@@ -603,19 +767,27 @@ export type Database = {
           period_end?: string | null
           period_start?: string | null
           phone?: string
+          replaces_invoice_id?: string | null
           residence_name?: string
           resident_id?: string
           room_name?: string
+          show_terms?: boolean
           status?: string
           tenancy_end?: string | null
+          tenancy_id?: string | null
           tenancy_start?: string | null
           total?: number
           university?: string
           updated_at?: string
         }
         Update: {
+          auto_scheduled?: boolean
+          bill_on?: string | null
           created_at?: string
           deposits_total?: number
+          discount_note?: string
+          discount_type?: string | null
+          discount_value?: number
           email?: string
           enquiry_id?: string | null
           full_name?: string
@@ -623,8 +795,11 @@ export type Database = {
           invoice_date?: string | null
           invoice_type?: string
           issued_at?: string
+          list_rent?: number | null
           monthly_rent?: number
           nationality?: string
+          next_payment_amount?: number | null
+          next_payment_date?: string | null
           notes?: string
           number?: string
           occupancy?: string
@@ -633,11 +808,14 @@ export type Database = {
           period_end?: string | null
           period_start?: string | null
           phone?: string
+          replaces_invoice_id?: string | null
           residence_name?: string
           resident_id?: string
           room_name?: string
+          show_terms?: boolean
           status?: string
           tenancy_end?: string | null
+          tenancy_id?: string | null
           tenancy_start?: string | null
           total?: number
           university?: string
@@ -651,12 +829,27 @@ export type Database = {
             referencedRelation: "enquiries"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "invoices_replaces_invoice_id_fkey"
+            columns: ["replaces_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_tenancy_id_fkey"
+            columns: ["tenancy_id"]
+            isOneToOne: false
+            referencedRelation: "tenancies"
+            referencedColumns: ["id"]
+          },
         ]
       }
       payments: {
         Row: {
           amount: number
           created_at: string
+          description: string
           enquiry_id: string | null
           id: string
           invoice_id: string
@@ -669,6 +862,7 @@ export type Database = {
         Insert: {
           amount?: number
           created_at?: string
+          description?: string
           enquiry_id?: string | null
           id?: string
           invoice_id: string
@@ -681,6 +875,7 @@ export type Database = {
         Update: {
           amount?: number
           created_at?: string
+          description?: string
           enquiry_id?: string | null
           id?: string
           invoice_id?: string
@@ -758,6 +953,7 @@ export type Database = {
           invoice_id: string
           issued_at: string
           number: string
+          paid_to_date: number | null
           payment_id: string
           resident_id: string
         }
@@ -770,6 +966,7 @@ export type Database = {
           invoice_id: string
           issued_at?: string
           number?: string
+          paid_to_date?: number | null
           payment_id: string
           resident_id?: string
         }
@@ -782,6 +979,7 @@ export type Database = {
           invoice_id?: string
           issued_at?: string
           number?: string
+          paid_to_date?: number | null
           payment_id?: string
           resident_id?: string
         }
@@ -805,6 +1003,56 @@ export type Database = {
             columns: ["payment_id"]
             isOneToOne: false
             referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rental_schedules: {
+        Row: {
+          confirmed_at: string
+          final_amount: number | null
+          first_due_date: string
+          first_period_end: string
+          first_period_start: string
+          frequency: string
+          id: string
+          monthly_rent: number
+          tenancy_end: string
+          tenancy_id: string
+          updated_at: string
+        }
+        Insert: {
+          confirmed_at?: string
+          final_amount?: number | null
+          first_due_date: string
+          first_period_end: string
+          first_period_start: string
+          frequency: string
+          id?: string
+          monthly_rent: number
+          tenancy_end: string
+          tenancy_id: string
+          updated_at?: string
+        }
+        Update: {
+          confirmed_at?: string
+          final_amount?: number | null
+          first_due_date?: string
+          first_period_end?: string
+          first_period_start?: string
+          frequency?: string
+          id?: string
+          monthly_rent?: number
+          tenancy_end?: string
+          tenancy_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rental_schedules_tenancy_id_fkey"
+            columns: ["tenancy_id"]
+            isOneToOne: true
+            referencedRelation: "tenancies"
             referencedColumns: ["id"]
           },
         ]
@@ -839,6 +1087,8 @@ export type Database = {
           summary: string
           tagline: string
           terms: Json
+          unit_prefix: string
+          unit_rates: Json
           updated_at: string
           utilities_note: string
           waze_url: string
@@ -872,6 +1122,8 @@ export type Database = {
           summary?: string
           tagline?: string
           terms?: Json
+          unit_prefix?: string
+          unit_rates?: Json
           updated_at?: string
           utilities_note?: string
           waze_url?: string
@@ -905,18 +1157,89 @@ export type Database = {
           summary?: string
           tagline?: string
           terms?: Json
+          unit_prefix?: string
+          unit_rates?: Json
           updated_at?: string
           utilities_note?: string
           waze_url?: string
         }
         Relationships: []
       }
+      resident_declarations: {
+        Row: {
+          agreed_terms: Json
+          created_at: string
+          id: string
+          profile_link_id: string | null
+          resident_id: string
+          scrolled_to_end: boolean
+          signed_at: string
+          signed_id_number: string
+          signed_ip: string
+          signed_name: string
+          signed_user_agent: string
+          version_id: string
+        }
+        Insert: {
+          agreed_terms?: Json
+          created_at?: string
+          id?: string
+          profile_link_id?: string | null
+          resident_id: string
+          scrolled_to_end?: boolean
+          signed_at?: string
+          signed_id_number?: string
+          signed_ip?: string
+          signed_name: string
+          signed_user_agent?: string
+          version_id: string
+        }
+        Update: {
+          agreed_terms?: Json
+          created_at?: string
+          id?: string
+          profile_link_id?: string | null
+          resident_id?: string
+          scrolled_to_end?: boolean
+          signed_at?: string
+          signed_id_number?: string
+          signed_ip?: string
+          signed_name?: string
+          signed_user_agent?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resident_declarations_profile_link_id_fkey"
+            columns: ["profile_link_id"]
+            isOneToOne: false
+            referencedRelation: "profile_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resident_declarations_resident_id_fkey"
+            columns: ["resident_id"]
+            isOneToOne: false
+            referencedRelation: "residents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resident_declarations_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "declaration_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       residents: {
         Row: {
           address: string
+          company: string
           country: string
           course: string
           created_at: string
+          current_status: string
           dob: string
           docs: Json
           ec_address: string
@@ -928,6 +1251,7 @@ export type Database = {
           ec_relationship: string
           ec_state: string
           email: string
+          employment_type: string
           enquiry_id: string | null
           full_name: string
           gender: string
@@ -935,8 +1259,8 @@ export type Database = {
           id: string
           id_number: string
           import_batch_id: string | null
+          industry: string
           lease_months: string
-          legacy_id: string | null
           level_of_study: string
           marital_status: string
           medical_condition: string
@@ -945,6 +1269,7 @@ export type Database = {
           move_in: string
           nationality: string
           occupancy: string
+          occupation: string
           pay_method: string
           pay_schedule: string
           payer_address: string
@@ -957,8 +1282,10 @@ export type Database = {
           payer_state: string
           portal_invited: boolean
           postcode: string
+          quickbooks_id: string | null
           race: string
           religion: string
+          resident_code: string | null
           sponsor: string
           state: string
           status: string
@@ -968,9 +1295,11 @@ export type Database = {
         }
         Insert: {
           address?: string
+          company?: string
           country?: string
           course?: string
           created_at?: string
+          current_status?: string
           dob?: string
           docs?: Json
           ec_address?: string
@@ -982,6 +1311,7 @@ export type Database = {
           ec_relationship?: string
           ec_state?: string
           email?: string
+          employment_type?: string
           enquiry_id?: string | null
           full_name?: string
           gender?: string
@@ -989,8 +1319,8 @@ export type Database = {
           id?: string
           id_number?: string
           import_batch_id?: string | null
+          industry?: string
           lease_months?: string
-          legacy_id?: string | null
           level_of_study?: string
           marital_status?: string
           medical_condition?: string
@@ -999,6 +1329,7 @@ export type Database = {
           move_in?: string
           nationality?: string
           occupancy?: string
+          occupation?: string
           pay_method?: string
           pay_schedule?: string
           payer_address?: string
@@ -1011,8 +1342,10 @@ export type Database = {
           payer_state?: string
           portal_invited?: boolean
           postcode?: string
+          quickbooks_id?: string | null
           race?: string
           religion?: string
+          resident_code?: string | null
           sponsor?: string
           state?: string
           status?: string
@@ -1022,9 +1355,11 @@ export type Database = {
         }
         Update: {
           address?: string
+          company?: string
           country?: string
           course?: string
           created_at?: string
+          current_status?: string
           dob?: string
           docs?: Json
           ec_address?: string
@@ -1036,6 +1371,7 @@ export type Database = {
           ec_relationship?: string
           ec_state?: string
           email?: string
+          employment_type?: string
           enquiry_id?: string | null
           full_name?: string
           gender?: string
@@ -1043,8 +1379,8 @@ export type Database = {
           id?: string
           id_number?: string
           import_batch_id?: string | null
+          industry?: string
           lease_months?: string
-          legacy_id?: string | null
           level_of_study?: string
           marital_status?: string
           medical_condition?: string
@@ -1053,6 +1389,7 @@ export type Database = {
           move_in?: string
           nationality?: string
           occupancy?: string
+          occupation?: string
           pay_method?: string
           pay_schedule?: string
           payer_address?: string
@@ -1065,8 +1402,10 @@ export type Database = {
           payer_state?: string
           portal_invited?: boolean
           postcode?: string
+          quickbooks_id?: string | null
           race?: string
           religion?: string
+          resident_code?: string | null
           sponsor?: string
           state?: string
           status?: string
@@ -1229,11 +1568,61 @@ export type Database = {
           },
         ]
       }
+      tenancies: {
+        Row: {
+          bed_id: string | null
+          created_at: string
+          end_date: string | null
+          enquiry_id: string | null
+          id: string
+          resident_id: string
+          start_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          bed_id?: string | null
+          created_at?: string
+          end_date?: string | null
+          enquiry_id?: string | null
+          id?: string
+          resident_id: string
+          start_date?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bed_id?: string | null
+          created_at?: string
+          end_date?: string | null
+          enquiry_id?: string | null
+          id?: string
+          resident_id?: string
+          start_date?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenancies_enquiry_id_fkey"
+            columns: ["enquiry_id"]
+            isOneToOne: false
+            referencedRelation: "enquiries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenancies_resident_id_fkey"
+            columns: ["resident_id"]
+            isOneToOne: false
+            referencedRelation: "residents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       units: {
         Row: {
           block: string
           code: string
           created_at: string
+          deactivated_at: string | null
+          deactivation_reason: string
           floor: string
           gender: string
           id: string
@@ -1250,6 +1639,8 @@ export type Database = {
           block?: string
           code: string
           created_at?: string
+          deactivated_at?: string | null
+          deactivation_reason?: string
           floor?: string
           gender?: string
           id?: string
@@ -1266,6 +1657,8 @@ export type Database = {
           block?: string
           code?: string
           created_at?: string
+          deactivated_at?: string | null
+          deactivation_reason?: string
           floor?: string
           gender?: string
           id?: string
@@ -1314,6 +1707,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      bill_due_invoices: { Args: never; Returns: number }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1321,7 +1715,9 @@ export type Database = {
         }
         Returns: boolean
       }
+      invoice_category_code: { Args: { invoice_type: string }; Returns: string }
       next_enquiry_reference: { Args: never; Returns: string }
+      next_invoice_number: { Args: { invoice_type: string }; Returns: string }
       next_invoice_reference: { Args: never; Returns: string }
       next_receipt_reference: { Args: never; Returns: string }
     }
