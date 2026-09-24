@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
+  ArrowLeft,
   ArrowRight,
   CalendarCheck,
   CheckCircle2,
@@ -14,12 +15,14 @@ import { toast } from "sonner";
 
 import { getViewingLink, confirmViewingFromLink } from "@/lib/public.functions";
 import { formatSlot } from "@/lib/slots";
+import { company } from "@/data/properties";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 
-const title = "Pick your viewing time | Brachtia Homes";
-const description = "Choose a date and time for your Brachtia Homes viewing.";
+// the page opens on a choice, not on a calendar - it is not a booking form
+const title = "Your room is available | Brachtia Homes";
+const description = "View your Brachtia Homes room first, or go straight to your booking.";
 
 export const Route = createFileRoute("/viewing/$token")({
   head: () => ({
@@ -38,21 +41,20 @@ export const Route = createFileRoute("/viewing/$token")({
 
 type Mode = "in_person" | "virtual";
 
+/** A stored date as a person reads it. */
+function prettyDay(iso: string) {
+  if (!iso) return "";
+  return new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-MY", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 function toISODate(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
     d.getDate(),
   ).padStart(2, "0")}`;
-}
-
-function Row({ label, value }: { label: string; value: string | null | undefined }) {
-  return (
-    <div>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-0.5 text-sm font-medium text-foreground">{value || "—"}</p>
-    </div>
-  );
 }
 
 function ViewingLinkPage() {
@@ -64,6 +66,14 @@ function ViewingLinkPage() {
   // either a time they picked, or their decision not to view it at all
   const [done, setDone] = useState<{ slot: string } | { skipped: true } | null>(null);
   const [skipping, setSkipping] = useState(false);
+  /*
+   * Which of the three the student is looking at: the choice, the viewing, or
+   * the booking. One page holding all of it asked them to read past a calendar
+   * to find out they never had to book a viewing at all.
+   */
+  const [view, setView] = useState<"choose" | "viewing" | "booking">("choose");
+  // the booking is requested by ticking, not by arriving at the right button
+  const [confirmed, setConfirmed] = useState(false);
 
   const linkQuery = useQuery({
     queryKey: ["viewing-link", token],
@@ -116,6 +126,7 @@ function ViewingLinkPage() {
    * will not attend just to move on is how a booking stalls here for a week.
    */
   async function skip() {
+    if (!confirmed) return;
     setSkipping(true);
     try {
       const { skipViewingFromLink } = await import("@/lib/public.functions");
@@ -195,173 +206,278 @@ function ViewingLinkPage() {
     );
   }
 
+  /** The room itself, shown the same way wherever it appears. */
+  const roomCard = (
+    <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        Your room
+      </p>
+      <p className="mt-2 text-base font-bold text-brand-deep">{booking["residence_name"]}</p>
+      <p className="text-sm font-semibold text-foreground">{booking["room_name"]}</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {booking["occupancy"] === "twin" ? "Twin sharing" : "Single occupancy"}
+        {booking["move_in"] ? ` · ${prettyDay(booking["move_in"])}` : ""}
+        {booking["move_out"] ? ` \u2013 ${prettyDay(booking["move_out"])}` : ""}
+      </p>
+      <p className="mt-3 text-xs text-muted-foreground">
+        Booking ID <span className="font-semibold text-foreground">{booking["reference"]}</span>
+      </p>
+    </div>
+  );
+
   return (
-    <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
+    <section className="mx-auto max-w-3xl px-4 py-12 sm:px-6 sm:py-16">
       <span className="inline-flex items-center gap-2 rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-brand-deep">
         <CalendarCheck className="size-3.5" /> Booking ID {booking["reference"]}
       </span>
-      {/* The good news first, then the choice. "Pick your viewing time" assumed
-          they had already decided to view it, which is the thing this page is
-          actually asking them. */}
-      <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-brand-deep sm:text-4xl">
-        Good news — your room is available! 🎉
-      </h1>
-      <p className="mt-3 max-w-2xl text-muted-foreground">
-        Hi {booking["full_name"]?.split(" ")[0]}, your details are already with us — nothing to fill
-        in again.
-      </p>
 
-      {/*
-        The choice, put where Book a viewing puts its own: at the top, as one
-        box, with the recommended path as the button and the way past it as a
-        quiet link beside it.
-        It sat at the foot of the right-hand column before, under an OR rule -
-        which made a student read the whole page to find out they did not have
-        to book anything at all.
-      */}
-      <div className="mt-6 grid gap-3 rounded-2xl border border-brand/30 bg-brand-tint/50 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-4 sm:p-5">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-brand-deep">Want to see it first?</p>
-          <p className="mt-1 hidden text-sm text-muted-foreground sm:block">
-            Most residents schedule a quick viewing before making their reservation — but you can go
-            straight to your booking if you have seen enough.
+      {view === "choose" ? (
+        <>
+          <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-brand-deep sm:text-4xl">
+            Good news \u2014 we have a room for you! \ud83c\udf89
+          </h1>
+          <p className="mt-3 text-muted-foreground">
+            Hi {booking["full_name"]?.split(" ")[0]}, your preferred room is available. What would
+            you like to do next?
           </p>
-          <p className="mt-1 text-xs text-muted-foreground sm:hidden">
-            Most residents view first — or go straight to your booking.
+
+          <div className="mt-6">{roomCard}</div>
+
+          <h2 className="mt-10 text-xl font-bold text-brand-deep">What would you like to do?</h2>
+
+          {/*
+            Two ways on, side by side and equally weighted. A viewing is offered,
+            not required - and a student who has seen enough should not have to
+            read past a calendar to find that out.
+          */}
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setView("viewing")}
+              className="rounded-2xl border border-border bg-card p-5 text-left transition-colors hover:border-brand/50 hover:bg-brand-tint/30"
+            >
+              <span className="text-2xl" aria-hidden>
+                \ud83d\udc40
+              </span>
+              <span className="mt-2 block text-base font-bold text-brand-deep">
+                View the room first
+              </span>
+              <span className="mt-1 block text-sm text-muted-foreground">
+                Visit the residence in person or take a virtual tour before deciding.
+              </span>
+              <span className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">
+                Schedule a viewing <ArrowRight className="size-4" />
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setView("booking")}
+              className="rounded-2xl border border-border bg-card p-5 text-left transition-colors hover:border-brand/50 hover:bg-brand-tint/30"
+            >
+              <span className="text-2xl" aria-hidden>
+                \ud83d\udd11
+              </span>
+              <span className="mt-2 block text-base font-bold text-brand-deep">Ready to book?</span>
+              <span className="mt-1 block text-sm text-muted-foreground">
+                Proceed with the room above and request your booking invoice.
+              </span>
+              <span className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">
+                Proceed to booking <ArrowRight className="size-4" />
+              </span>
+            </button>
+          </div>
+
+          <p className="mt-8 text-xs text-muted-foreground">
+            Need help? WhatsApp us on +6012-330 6815.
           </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            className="rounded-full"
-            onClick={() =>
-              document
-                .getElementById("pick-a-date")
-                ?.scrollIntoView({ behavior: "smooth", block: "center" })
-            }
+        </>
+      ) : view === "viewing" ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setView("choose")}
+            className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
           >
-            Schedule a viewing <ArrowRight className="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            className="rounded-full text-muted-foreground"
-            disabled={saving || skipping}
-            onClick={() => void skip()}
-          >
-            {skipping ? <Loader2 className="size-4 animate-spin" /> : null} Reserve without viewing
-          </Button>
-        </div>
-      </div>
+            <ArrowLeft className="size-4" /> Back
+          </button>
+          <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-brand-deep sm:text-3xl">
+            Schedule your viewing
+          </h1>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[1.15fr_1fr]">
-        {/* Left: static details + date */}
-        <div className="space-y-6 rounded-3xl border border-border/70 bg-card p-4 shadow-card sm:p-6">
-          <div className="grid grid-cols-2 gap-2">
-            {(
-              [
-                { value: "in_person", label: "In person", icon: MapPin, hint: "At the residence" },
-                { value: "virtual", label: "Virtual tour", icon: Video, hint: "Live video call" },
-              ] as const
-            ).map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                onClick={() => setMode(o.value)}
-                className={`flex items-start gap-2.5 rounded-2xl border p-3 text-left transition-colors sm:gap-3 sm:p-4 ${
-                  mode === o.value
-                    ? "border-brand bg-brand-tint/60"
-                    : "border-border hover:border-brand/40"
-                }`}
-              >
-                <o.icon className="mt-0.5 size-5 shrink-0 text-brand" />
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-brand-deep">{o.label}</span>
-                  <span className="block text-xs leading-snug text-muted-foreground">{o.hint}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <div className="space-y-3 rounded-2xl border border-border bg-muted/30 p-4">
-            <p className="text-sm font-semibold text-brand-deep">Your details</p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Row label="Booking ID" value={booking["reference"]} />
-              <Row label="Name" value={booking["full_name"]} />
-              <Row label="Email" value={booking["email"]} />
-              <Row label="Phone" value={booking["phone"]} />
-              <Row label="University" value={booking["university"]} />
-              <Row label="Residence" value={booking["residence_name"]} />
-              <Row label="Room preference" value={booking["room_name"]} />
-              <Row label="Move in" value={booking["move_in"]} />
-            </div>
-          </div>
-
-          {/* what the box at the top sends them to */}
-          <div id="pick-a-date" className="scroll-mt-24 space-y-2">
-            <Label>Pick a date</Label>
-            <div className="rounded-2xl border border-border p-2">
-              <Calendar
-                mode="single"
-                selected={date}
-                onSelect={setDate}
-                disabled={{ before: today }}
-                className="mx-auto pointer-events-auto"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Right: slots */}
-        <div className="space-y-6 rounded-3xl border border-border/70 bg-card p-4 shadow-card sm:p-6">
-          <div>
-            <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-muted-foreground">
-              Available times
-            </h2>
-            {!isoDate ? (
-              <p className="mt-3 text-sm text-muted-foreground">
-                Select a date to see available times.
-              </p>
-            ) : slotsQuery.isLoading ? (
-              <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" /> Loading times…
-              </p>
-            ) : slots.length === 0 ? (
-              <p className="mt-3 text-sm text-muted-foreground">
-                No times available on this date. Try another day or message us on WhatsApp.
-              </p>
-            ) : (
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                {slots.map((s) => (
+          <div className="mt-6 space-y-6 rounded-3xl border border-border/70 bg-card p-4 shadow-card sm:p-6">
+            <div>
+              <Label>How would you like to view?</Label>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {(
+                  [
+                    {
+                      value: "in_person",
+                      label: "In person",
+                      icon: MapPin,
+                      hint: "At the residence",
+                    },
+                    {
+                      value: "virtual",
+                      label: "Virtual tour",
+                      icon: Video,
+                      hint: "Live video call",
+                    },
+                  ] as const
+                ).map((o) => (
                   <button
-                    key={s}
+                    key={o.value}
                     type="button"
-                    onClick={() => setSlot(s)}
-                    className={`rounded-xl border px-2 py-2 text-sm font-medium transition-colors ${
-                      slot === s
-                        ? "border-brand bg-brand text-white"
-                        : "border-border hover:border-brand/50"
+                    onClick={() => setMode(o.value)}
+                    className={`flex items-start gap-2.5 rounded-2xl border p-3 text-left transition-colors sm:gap-3 sm:p-4 ${
+                      mode === o.value
+                        ? "border-brand bg-brand-tint/60"
+                        : "border-border hover:border-brand/40"
                     }`}
                   >
-                    {formatSlot(s)}
+                    <o.icon className="mt-0.5 size-5 shrink-0 text-brand" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-brand-deep">{o.label}</span>
+                      <span className="block text-xs leading-snug text-muted-foreground">
+                        {o.hint}
+                      </span>
+                    </span>
                   </button>
                 ))}
               </div>
-            )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Choose a date</Label>
+              <div className="rounded-2xl border border-border p-2">
+                <Calendar
+                  mode="single"
+                  selected={date}
+                  onSelect={setDate}
+                  disabled={{ before: today }}
+                  className="mx-auto pointer-events-auto"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label>Available times</Label>
+              {!isoDate ? (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Select a date to see available times.
+                </p>
+              ) : slotsQuery.isLoading ? (
+                <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" /> Loading times\u2026
+                </p>
+              ) : slots.length === 0 ? (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  No times available on this date. Try another day or message us on WhatsApp.
+                </p>
+              ) : (
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {slots.map((sl) => (
+                    <button
+                      key={sl}
+                      type="button"
+                      onClick={() => setSlot(sl)}
+                      className={`rounded-xl border px-2 py-2 text-sm font-medium transition-colors ${
+                        slot === sl
+                          ? "border-brand bg-brand text-white"
+                          : "border-border hover:border-brand/50"
+                      }`}
+                    >
+                      {formatSlot(sl)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <Button
+              size="lg"
+              className="w-full rounded-full"
+              disabled={!slot || saving}
+              onClick={() => void confirm()}
+            >
+              {saving ? <Loader2 className="size-4 animate-spin" /> : null} Confirm viewing
+            </Button>
           </div>
+
+          <p className="mt-6 text-xs text-muted-foreground">
+            Need help? WhatsApp us on +6012-330 6815.
+          </p>
+        </>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={() => setView("choose")}
+            className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="size-4" /> Back
+          </button>
+          <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-brand-deep sm:text-3xl">
+            Confirm your booking
+          </h1>
+          <p className="mt-2 text-muted-foreground">
+            Please check that the details below are correct.
+          </p>
+
+          <div className="mt-6">{roomCard}</div>
+
+          {/*
+            Ticked, not assumed. Reserving used to happen on the click of a
+            quiet link beside a button, which is no way to agree to anything -
+            and this is the point a room stops being available to anybody else.
+          */}
+          <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-2xl border border-border bg-card p-4">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 accent-[var(--brand-deep,#1a4734)]"
+              checked={confirmed}
+              onChange={(e) => setConfirmed(e.target.checked)}
+            />
+            <span className="text-sm text-foreground">
+              I confirm that the room and booking details above are correct and I would like to
+              proceed with the booking.
+            </span>
+          </label>
 
           <Button
             size="lg"
-            className="w-full rounded-full"
-            disabled={!slot || saving}
-            onClick={() => void confirm()}
+            className="mt-5 w-full rounded-full"
+            disabled={!confirmed || skipping}
+            onClick={() => void skip()}
           >
-            {saving ? <Loader2 className="size-4 animate-spin" /> : null} Confirm viewing
+            {skipping ? <Loader2 className="size-4 animate-spin" /> : null} Request booking invoice{" "}
+            <ArrowRight className="size-4" />
           </Button>
 
-          {/* the way past a viewing is offered once, in the box at the top -
-              asking the same question twice on one screen reads as two questions */}
-          <p className="text-xs text-muted-foreground">Need help? WhatsApp us on +6012-330 6815.</p>
-        </div>
-      </div>
+          <div className="mt-5 rounded-2xl bg-brand-tint/60 p-4 text-sm text-foreground">
+            <p>
+              Once submitted, our team will send you the booking invoice and payment instructions.
+            </p>
+            <p className="mt-2">
+              To reserve your room, please make the{" "}
+              <strong>{company.bookingFee} booking fee</strong> payment and send your payment proof
+              to our team.
+            </p>
+          </div>
+
+          <p className="mt-6 text-xs text-muted-foreground">
+            Changed your mind? You can still{" "}
+            <button
+              type="button"
+              className="font-medium text-brand underline underline-offset-2"
+              onClick={() => setView("viewing")}
+            >
+              schedule a viewing
+            </button>{" "}
+            instead.
+          </p>
+        </>
+      )}
     </section>
   );
 }
