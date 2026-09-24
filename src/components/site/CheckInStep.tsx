@@ -1,10 +1,12 @@
 import { useMemo } from "react";
 
+import { Calendar } from "@/components/ui/calendar";
 import {
   addDays,
   CHECKIN_NOTICE_DAYS,
   CHECKIN_SLOTS,
   CHECKIN_WINDOW_DAYS,
+  toISO,
   todayISO,
   type CheckInChoice,
 } from "@/lib/checkin";
@@ -57,6 +59,8 @@ export function CheckInStep({
 
   const open = days.filter((d) => !d.tooSoon);
   const off = value.remind;
+  // the last day that needs no approval - past it the calendar marks, not blocks
+  const lastInWindow = moveIn ? addDays(moveIn, CHECKIN_WINDOW_DAYS) : "";
 
   return (
     <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-16px_rgba(16,24,40,0.18)]">
@@ -140,37 +144,32 @@ export function CheckInStep({
         {moveIn && open.length ? (
           <div className={`mt-6 transition-opacity ${off ? "pointer-events-none opacity-40" : ""}`}>
             <p className="text-sm font-semibold italic text-foreground">Date:</p>
-            {/* the eight days, as themselves. A student picking a day should be
-                able to see which day of the week it falls on without counting */}
-            <div className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-8">
-              {days.map((d) => {
-                const on = value.on === d.iso;
-                return (
-                  <button
-                    key={d.iso}
-                    type="button"
-                    disabled={d.tooSoon || off}
-                    aria-pressed={on}
-                    title={d.tooSoon ? `Less than ${CHECKIN_NOTICE_DAYS} days away` : undefined}
-                    onClick={() => onChange({ ...value, on: on ? "" : d.iso })}
-                    className={`flex flex-col items-center rounded-xl border py-2 transition-colors ${
-                      on
-                        ? "border-brand-deep bg-brand-deep text-primary-foreground"
-                        : d.tooSoon
-                          ? "cursor-not-allowed border-dashed border-border bg-muted/40 text-muted-foreground/60"
-                          : "border-border bg-background text-foreground hover:border-brand/50 hover:bg-brand-tint/40"
-                    }`}
-                  >
-                    <span className="text-[10px] uppercase tracking-wide opacity-75">
-                      {d.weekday}
-                    </span>
-                    <span className="text-base font-bold leading-tight">{d.day}</span>
-                    <span className="text-[10px] uppercase tracking-wide opacity-75">
-                      {d.month}
-                    </span>
-                  </button>
-                );
-              })}
+            {/*
+              A real calendar, because a student is choosing around a flight and
+              needs to see the month they are choosing in - and the window can
+              straddle two of them. What the window means is drawn onto it
+              rather than enforced after the fact: before the tenancy starts
+              there is no room, after the seventh day it is not offered here at
+              all, and days too soon for anybody to be there to meet are closed.
+            */}
+            <div className="mt-2 rounded-xl border border-border p-2">
+              <Calendar
+                mode="single"
+                selected={value.on ? new Date(`${value.on}T00:00:00`) : undefined}
+                onSelect={(d) => onChange({ ...value, on: d ? toISO(d) : "" })}
+                defaultMonth={new Date(`${(open[0] ?? days[0])!.iso}T00:00:00`)}
+                startMonth={new Date(`${moveIn}T00:00:00`)}
+                endMonth={new Date(`${lastInWindow}T00:00:00`)}
+                disabled={(d) => {
+                  const iso = toISO(d);
+                  return (
+                    iso < moveIn ||
+                    iso > lastInWindow ||
+                    iso < addDays(todayISO(), CHECKIN_NOTICE_DAYS)
+                  );
+                }}
+                className="mx-auto pointer-events-auto"
+              />
             </div>
 
             <p className="mt-5 text-sm font-semibold italic text-foreground">Time:</p>

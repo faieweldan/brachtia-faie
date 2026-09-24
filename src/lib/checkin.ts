@@ -35,4 +35,13 @@ export const addDays = (iso: string, days: number) => {
   return d.toISOString().slice(0, 10);
 };
 
-export const todayISO = () => new Date().toISOString().slice(0, 10);
+/**
+ * A Date as the day it is where the student is, not where the server is.
+ *
+ * toISOString would shift a Malaysian evening back into the previous day, so a
+ * calendar click on the 15th would be recorded as the 14th.
+ */
+export const toISO = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+export const todayISO = () => toISO(new Date());
