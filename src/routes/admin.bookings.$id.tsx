@@ -1117,9 +1117,9 @@ function BookingDetail() {
       <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
         {/* Main column */}
         <div className="space-y-5">
-          {/* Student details */}
+          {/* Personal details */}
           <EditableCard
-            title="Student details"
+            title="Personal details"
             editing={editingStudent}
             onEdit={() => setEditingStudent(true)}
             onCancel={() => setEditingStudent(false)}
