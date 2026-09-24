@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { company, formatDate, formatRM } from "@/data/properties";
+import { stayLength } from "@/lib/stay-length";
 
 const GREEN: [number, number, number] = [26, 71, 52];
 const PEACH: [number, number, number] = [250, 240, 231];
@@ -191,8 +192,89 @@ async function buildInvoice(inv: InvoiceDoc) {
   const autoTable = (await import("jspdf-autotable")).default;
   const doc: any = new jsPDF({ unit: "pt", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
   const M = 44;
   const FOOT = 54;
+
+  /*
+   * Numbered paragraphs with some words set in bold.
+   *
+   * autoTable draws a cell in one font, so the sums and the deadlines could not
+   * be picked out inside a sentence - which is the whole reason a resident
+   * comes back to this page. Drawn by hand instead: every word is measured,
+   * the line wraps at the margin, the font changes where the emphasis does,
+   * and a line that would cross the footer starts a new page. Wrapped lines sit
+   * under the text rather than under the number, so the block reads as a list.
+   *
+   * Returns where it finished, so what follows can be placed after it.
+   */
+  const drawSpans = (
+    paras: { text: string; bold?: boolean }[][],
+    opts: { y: number; size: number; numbered?: boolean; gap: number },
+  ) => {
+    const indent = opts.numbered ? 16 : 0;
+    const left = M + indent;
+    const right = W - M;
+    const lineH = opts.size * 1.35;
+    let y = opts.y;
+
+    doc.setFontSize(opts.size);
+    doc.setTextColor(60, 60, 58);
+
+    paras.forEach((spans, i) => {
+      // every word with the font it is set in, whitespace kept so it can break
+      const words: { text: string; bold: boolean }[] = [];
+      for (const span of spans) {
+        for (const piece of span.text.split(/(\s+)/)) {
+          if (piece) words.push({ text: piece, bold: Boolean(span.bold) });
+        }
+      }
+
+      let line: { text: string; bold: boolean }[] = [];
+      let lineW = 0;
+      let first = true;
+
+      const flush = () => {
+        if (!line.length) return;
+        if (y + lineH > H - FOOT) {
+          doc.addPage();
+          y = M + 20;
+        }
+        let x = left;
+        if (first && opts.numbered) {
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(...MUTED);
+          doc.text(`${i + 1}.`, M, y);
+          doc.setTextColor(60, 60, 58);
+        }
+        for (const w of line) {
+          doc.setFont("helvetica", w.bold ? "bold" : "normal");
+          doc.text(w.text, x, y);
+          x += doc.getTextWidth(w.text);
+        }
+        y += lineH;
+        line = [];
+        lineW = 0;
+        first = false;
+      };
+
+      for (const w of words) {
+        doc.setFont("helvetica", w.bold ? "bold" : "normal");
+        const width = doc.getTextWidth(w.text);
+        // a space that falls at the end of a line is dropped, not carried down
+        if (lineW + width > right - left && line.length) {
+          flush();
+          if (!w.text.trim()) continue;
+        }
+        line.push({ text: w.text, bold: w.bold });
+        lineW += width;
+      }
+      flush();
+      y += opts.gap;
+    });
+
+    return y - opts.gap;
+  };
 
   const issued = inv.issued_at ? new Date(inv.issued_at) : new Date();
   const invDate = inv.invoice_date ? new Date(inv.invoice_date) : issued;
@@ -243,7 +325,14 @@ async function buildInvoice(inv: InvoiceDoc) {
       ["Residence", inv.residence_name || "—"],
       ["Room", inv.room_name || "—"],
       ["Occupancy", inv.occupancy === "twin" ? "Twin sharing (per pax)" : "Single"],
-      ["Tenancy", `${formatDate(inv.tenancy_start ?? "")} — ${formatDate(inv.tenancy_end ?? "")}`],
+      [
+        "Tenancy",
+        // how long the stay runs, the way Stay details and the quote say it
+        `${formatDate(inv.tenancy_start ?? "")} — ${formatDate(inv.tenancy_end ?? "")}  (${stayLength(
+          inv.tenancy_start,
+          inv.tenancy_end,
+        )})`,
+      ],
       // the rental terms - what the rent is, and how often it is paid. A charge
       // for a broken air conditioner is not rent and is not on a cycle, so they
       // are left off it entirely rather than printed as blanks - Lav, 21 Sept 2026
@@ -388,29 +477,15 @@ async function buildInvoice(inv: InvoiceDoc) {
    * footer.
    */
   if (inv.show_terms) {
-    const { INVOICE_TERMS, INVOICE_TERMS_HEADING } = await import("@/lib/invoice-terms");
+    const { INVOICE_TERM_SPANS, INVOICE_TERMS_HEADING } = await import("@/lib/invoice-terms");
     y += 20;
 
-    autoTable(doc, {
-      startY: y,
-      margin: { left: M, right: M, bottom: FOOT },
-      theme: "plain",
-      styles: { fontSize: 7.5, cellPadding: { top: 2, bottom: 2, left: 0, right: 0 } },
-      columnStyles: {
-        0: { cellWidth: 16, textColor: MUTED },
-        1: { textColor: [60, 60, 58] as [number, number, number] },
-      },
-      head: [[{ content: INVOICE_TERMS_HEADING, colSpan: 2 }]],
-      headStyles: {
-        fillColor: false as never,
-        textColor: GREEN,
-        fontStyle: "bold",
-        fontSize: 9.5,
-        cellPadding: { top: 0, bottom: 5, left: 0, right: 0 },
-      },
-      body: INVOICE_TERMS.map((clause, i) => [`${i + 1}.`, clause]),
-    });
-    y = doc.lastAutoTable.finalY;
+    doc.setTextColor(...GREEN);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.text(INVOICE_TERMS_HEADING, M, y);
+
+    y = drawSpans(INVOICE_TERM_SPANS, { y: y + 14, size: 7.5, numbered: true, gap: 6 });
   }
 
   /*
@@ -450,30 +525,14 @@ async function buildInvoice(inv: InvoiceDoc) {
     ],
   });
 
-  // what the payer carries, and what they get back - paragraphs rather than
-  // label/value pairs, so one column
-  autoTable(doc, {
-    startY: doc.lastAutoTable.finalY + 18,
-    margin: { left: M, right: M, bottom: FOOT },
-    theme: "plain",
-    styles: {
-      fontSize: 7.5,
-      cellPadding: { top: 2, bottom: 4, left: 0, right: 0 },
-      textColor: [60, 60, 58],
-    },
-    pageBreak: "avoid",
-    head: [["Currency & Payment Note"]],
-    headStyles: heading(10.5),
-    body: [
-      [
-        "All fees are payable in Ringgit Malaysia (RM). Any foreign currency amount or exchange rate shown is for reference only and is subject to exchange-rate fluctuations and applicable bank or transfer charges. The payer is responsible for any difference required to ensure the full invoiced amount in RM is received.",
-      ],
-      [
-        "Any applicable stamp duty is charged in accordance with the prevailing Malaysian stamp duty requirements.",
-      ],
-      ["An official receipt will be issued upon confirmation of payment."],
-    ],
-  });
+  // what the payer carries, and what they get back
+  const { CURRENCY_NOTE_SPANS, CURRENCY_NOTE_HEADING } = await import("@/lib/invoice-terms");
+  y = doc.lastAutoTable.finalY + 18;
+  doc.setTextColor(...GREEN);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10.5);
+  doc.text(CURRENCY_NOTE_HEADING, M, y);
+  y = drawSpans(CURRENCY_NOTE_SPANS, { y: y + 14, size: 7.5, gap: 8 });
 
   // what falls due next - the lines that save the follow-up call
   const nextRows = [
@@ -488,7 +547,10 @@ async function buildInvoice(inv: InvoiceDoc) {
   ].filter(([, value]) => value);
   if (nextRows.length) {
     autoTable(doc, {
-      startY: doc.lastAutoTable.finalY + 20,
+      // where the currency note finished - it is drawn by hand, so the last
+      // TABLE to finish is the payment details above it, and reading that would
+      // start this one back up the page on top of the note
+      startY: y + 20,
       margin: { left: M, right: M, bottom: FOOT },
       theme: "plain",
       styles: infoStyles,
