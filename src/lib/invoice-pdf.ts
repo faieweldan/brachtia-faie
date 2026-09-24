@@ -74,6 +74,46 @@ const FREQ_LABEL: Record<string, string> = {
   full: "Full term",
 };
 
+/** How many months one payment covers. "full" is the whole stay, so it has none. */
+const CYCLE_MONTHS: Record<string, number> = {
+  monthly: 1,
+  bimonthly: 2,
+  quarterly: 3,
+  semiannual: 6,
+  annual: 12,
+};
+
+/**
+ * The period the next payment covers, worked out backwards from when it falls
+ * due.
+ *
+ * Rent is due on the 5th of the month AFTER a period ends, so a payment due in
+ * January covers a period ending 31 December, and a quarterly one began on
+ * 1 October. The invoice carries its own period as words rather than dates, so
+ * it cannot be counted forward from - the due date is the one date here that
+ * can.
+ *
+ * Only what is certain is printed. The end follows from the due date and
+ * nothing else. The start assumes a whole cycle, which a shortened final period
+ * is not - so a start that falls before the tenancy began is the sign the
+ * assumption is wrong, and only the end is given. "Full term" is paid once and
+ * has no next period at all.
+ */
+function nextBillingPeriod(inv: InvoiceDoc): string {
+  const [y, m] = String(inv.next_payment_date ?? "")
+    .slice(0, 10)
+    .split("-")
+    .map(Number);
+  const cycle = CYCLE_MONTHS[inv.payment_frequency];
+  if (!y || !m || !cycle) return "";
+  // day 0 of the due month is the last day of the month before it
+  const end = new Date(Date.UTC(y, m - 1, 0)).toISOString().slice(0, 10);
+  const start = new Date(Date.UTC(y, m - 1 - cycle, 1)).toISOString().slice(0, 10);
+  const tenancyStart = String(inv.tenancy_start ?? "").slice(0, 10);
+  if (tenancyStart && start < tenancyStart) return formatDate(end);
+  return `${formatDate(start)} — ${formatDate(end)}`;
+}
+
 /** Brachtia mark, same geometry as the quote PDF. */
 function drawLogo(doc: any, x: number, y: number, size: number) {
   const s = size / 64;
@@ -373,19 +413,32 @@ async function buildInvoice(inv: InvoiceDoc) {
     y = doc.lastAutoTable.finalY;
   }
 
-  // Payment details
-  y += 22;
-  doc.setTextColor(...GREEN);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10.5);
-  doc.text("Payment Details", M, y);
+  /*
+   * Each block below carries its heading inside its own table and is told not
+   * to break across pages.
+   *
+   * Drawn as loose text with a table after it, a heading printed at the foot of
+   * one page and its rows on the next: "Payment Details" on one page and the
+   * account number on another, which is the one thing here nobody should have
+   * to hunt for. A block that will not fit now moves whole to the next page.
+   */
+  const heading = (size: number) => ({
+    fillColor: false as never,
+    textColor: GREEN,
+    fontStyle: "bold" as const,
+    fontSize: size,
+    cellPadding: { top: 0, bottom: 6, left: 0, right: 0 },
+  });
 
   autoTable(doc, {
-    startY: y + 6,
+    startY: y + 22,
     margin: { left: M, right: M, bottom: FOOT },
     theme: "plain",
     styles: infoStyles,
     columnStyles: infoCols,
+    pageBreak: "avoid",
+    head: [[{ content: "Payment Details", colSpan: 2 }]],
+    headStyles: heading(10.5),
     body: [
       ["Bank", BANK.name],
       ["Account Name", BANK.accountName],
@@ -397,19 +450,10 @@ async function buildInvoice(inv: InvoiceDoc) {
     ],
   });
 
-  /*
-   * What the payer carries, and what they get back. Paragraphs rather than
-   * label/value pairs, in a table of one column so a long one paginates like
-   * everything else on the page.
-   */
-  y = doc.lastAutoTable.finalY + 18;
-  doc.setTextColor(...GREEN);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10.5);
-  doc.text("Currency & Payment Note", M, y);
-
+  // what the payer carries, and what they get back - paragraphs rather than
+  // label/value pairs, so one column
   autoTable(doc, {
-    startY: y + 6,
+    startY: doc.lastAutoTable.finalY + 18,
     margin: { left: M, right: M, bottom: FOOT },
     theme: "plain",
     styles: {
@@ -417,6 +461,9 @@ async function buildInvoice(inv: InvoiceDoc) {
       cellPadding: { top: 2, bottom: 4, left: 0, right: 0 },
       textColor: [60, 60, 58],
     },
+    pageBreak: "avoid",
+    head: [["Currency & Payment Note"]],
+    headStyles: heading(10.5),
     body: [
       [
         "All fees are payable in Ringgit Malaysia (RM). Any foreign currency amount or exchange rate shown is for reference only and is subject to exchange-rate fluctuations and applicable bank or transfer charges. The payer is responsible for any difference required to ensure the full invoiced amount in RM is received.",
@@ -428,29 +475,29 @@ async function buildInvoice(inv: InvoiceDoc) {
     ],
   });
 
-  /*
-   * What falls due next - the line that saves the follow-up call. Only the date
-   * and the amount: the period it covers is not recorded against an invoice, so
-   * a line for it would print its label and nothing after it.
-   */
-  const nextDate = inv.next_payment_date ? formatDate(inv.next_payment_date) : "";
-  const nextAmount =
-    inv.next_payment_amount != null && inv.next_payment_amount > 0
-      ? formatRM(inv.next_payment_amount)
-      : "";
-  if (nextDate || nextAmount) {
-    y = doc.lastAutoTable.finalY + 20;
-    doc.setTextColor(...GREEN);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9.5);
-    doc.text("After Full Initial Payment & Tenancy Agreement Signing", M, y);
-    y += 13;
-    doc.setFontSize(8.5);
-    if (nextDate) {
-      doc.text(`Next Payment Due: ${nextDate}`, M, y);
-      y += 12;
-    }
-    if (nextAmount) doc.text(`Next Payment Amount: ${nextAmount}`, M, y);
+  // what falls due next - the lines that save the follow-up call
+  const nextRows = [
+    ["Next Billing Period", nextBillingPeriod(inv)],
+    ["Next Payment Due", inv.next_payment_date ? formatDate(inv.next_payment_date) : ""],
+    [
+      "Next Payment Amount",
+      inv.next_payment_amount != null && inv.next_payment_amount > 0
+        ? formatRM(inv.next_payment_amount)
+        : "",
+    ],
+  ].filter(([, value]) => value);
+  if (nextRows.length) {
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 20,
+      margin: { left: M, right: M, bottom: FOOT },
+      theme: "plain",
+      styles: infoStyles,
+      columnStyles: infoCols,
+      pageBreak: "avoid",
+      head: [[{ content: "After Full Initial Payment & Tenancy Agreement Signing", colSpan: 2 }]],
+      headStyles: heading(9.5),
+      body: nextRows,
+    });
   }
 
   footer(doc, "Payment confirms your booking. Deposits are refundable per the tenancy agreement.");
