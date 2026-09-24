@@ -3,13 +3,11 @@ import { MessageCircle } from "lucide-react";
 
 import { whatsappUrl } from "@/data/properties";
 
-import { Calendar } from "@/components/ui/calendar";
 import {
   addDays,
   CHECKIN_NOTICE_DAYS,
   CHECKIN_SLOTS,
   CHECKIN_WINDOW_DAYS,
-  toISO,
   todayISO,
   type CheckInChoice,
 } from "@/lib/checkin";
@@ -39,7 +37,7 @@ const prettyDay = (iso: string) =>
     year: "numeric",
   });
 
-type Day = { iso: string; weekday: string; day: string; month: string; tooSoon: boolean };
+type Day = { iso: string; label: string; tooSoon: boolean };
 
 export function CheckInStep({
   moveIn,
@@ -61,12 +59,16 @@ export function CheckInStep({
     const earliest = addDays(todayISO(), CHECKIN_NOTICE_DAYS);
     return Array.from({ length: CHECKIN_WINDOW_DAYS + 1 }, (_, i) => {
       const iso = addDays(moveIn, i);
-      const d = new Date(`${iso}T00:00:00`);
       return {
         iso,
-        weekday: d.toLocaleDateString("en-MY", { weekday: "short" }),
-        day: d.toLocaleDateString("en-MY", { day: "numeric" }),
-        month: d.toLocaleDateString("en-MY", { month: "short" }),
+        // the weekday is named, because somebody arriving is choosing around a
+        // flight and a bare date makes them count
+        label: new Date(`${iso}T00:00:00`).toLocaleDateString("en-MY", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        }),
         tooSoon: iso < earliest,
       };
     });
@@ -96,19 +98,23 @@ export function CheckInStep({
     <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-16px_rgba(16,24,40,0.18)]">
       {/* the welcome, on the brand rather than in grey body text - this is the
           one moment in the form that is good news rather than a question */}
-      <div className="bg-brand-deep px-5 py-6 text-primary-foreground sm:px-6">
+      {/* the title carries the brand; the reading under it does not. A block of
+          green behind body text made the part you read once the heaviest thing
+          on the step */}
+      <div className="bg-brand-deep px-5 py-4 text-primary-foreground sm:px-6">
         <h2 className="text-xl font-bold tracking-tight sm:text-2xl">Schedule Your Arrival</h2>
-        <p className="mt-2 max-w-prose text-sm leading-relaxed text-primary-foreground/90">
-          You&rsquo;re almost home! On your arrival day, our team will give you a tour, answer any
-          questions, and hand over your keys and access card.
-        </p>
-        <p className="mt-2 max-w-prose text-sm italic leading-relaxed text-primary-foreground/75">
-          In the meantime, we will send a copy of your tenancy agreement for your review.
-        </p>
       </div>
 
       <div className="p-5 sm:p-6">
-        <div className="rounded-xl bg-brand-tint/60 p-4">
+        <p className="max-w-prose text-sm leading-relaxed text-foreground">
+          You&rsquo;re almost home! On your arrival day, our team will give you a tour, answer any
+          questions, and hand over your keys and access card.
+        </p>
+        <p className="mt-2 max-w-prose text-sm italic leading-relaxed text-muted-foreground">
+          In the meantime, we will send a copy of your tenancy agreement for your review.
+        </p>
+
+        <div className="mt-4 rounded-xl border border-border p-4">
           <p className="text-sm font-semibold text-brand-deep">Important Details:</p>
           <ul className="mt-3 space-y-3">
             {[
@@ -154,11 +160,6 @@ export function CheckInStep({
           </ul>
         </div>
 
-        <p className="mt-4 text-sm italic leading-relaxed text-muted-foreground">
-          Not ready to schedule yet? Select <strong>&ldquo;Remind me 1 week before&rdquo;</strong>{" "}
-          below to pick a slot later.
-        </p>
-
         {!moveIn ? (
           <p className="mt-5 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
             We do not have your move-in date yet, so we cannot offer days to choose from. Pick the
@@ -175,55 +176,40 @@ export function CheckInStep({
           <div className={`mt-6 transition-opacity ${off ? "pointer-events-none opacity-40" : ""}`}>
             <p className="text-sm font-semibold italic text-foreground">Date:</p>
             {/*
-              A real calendar, because a student is choosing around a flight and
-              needs to see the month they are choosing in - and the window can
-              straddle two of them. What the window means is drawn onto it
-              rather than enforced after the fact: before the tenancy starts
-              there is no room, after the seventh day it is not offered here at
-              all, and days too soon for anybody to be there to meet are closed.
+              A list, not a calendar. Eight days is the whole choice, and a
+              month grid drawn around them was twenty-three greyed squares and
+              a pair of arrows that led nowhere - work to do before the one
+              decision could be made.
             */}
-            <div className="mt-2 rounded-xl border border-border p-2">
-              <Calendar
-                mode="single"
-                selected={value.on ? new Date(`${value.on}T00:00:00`) : undefined}
-                onSelect={(d) => onChange({ ...value, on: d ? toISO(d) : "" })}
-                defaultMonth={new Date(`${(open[0] ?? days[0])!.iso}T00:00:00`)}
-                startMonth={new Date(`${moveIn}T00:00:00`)}
-                endMonth={new Date(`${lastInWindow}T00:00:00`)}
-                disabled={(d) => {
-                  const iso = toISO(d);
-                  return (
-                    iso < moveIn ||
-                    iso > lastInWindow ||
-                    iso < addDays(todayISO(), CHECKIN_NOTICE_DAYS)
-                  );
-                }}
-                className="mx-auto pointer-events-auto"
-              />
-            </div>
+            <select
+              value={value.on}
+              disabled={off}
+              onChange={(e) => onChange({ ...value, on: e.target.value })}
+              className="mt-2 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm disabled:cursor-not-allowed sm:max-w-sm"
+            >
+              <option value="">Choose your arrival date</option>
+              {days.map((d) => (
+                <option key={d.iso} value={d.iso} disabled={d.tooSoon}>
+                  {d.label}
+                  {d.tooSoon ? `  (less than ${CHECKIN_NOTICE_DAYS} days away)` : ""}
+                </option>
+              ))}
+            </select>
 
             <p className="mt-5 text-sm font-semibold italic text-foreground">Time:</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {CHECKIN_SLOTS.map((t) => {
-                const on = value.slot === t;
-                return (
-                  <button
-                    key={t}
-                    type="button"
-                    aria-pressed={on}
-                    disabled={off}
-                    onClick={() => onChange({ ...value, slot: on ? "" : t })}
-                    className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
-                      on
-                        ? "border-brand-deep bg-brand-deep text-primary-foreground"
-                        : "border-border bg-background text-foreground hover:border-brand/50 hover:bg-brand-tint/40"
-                    }`}
-                  >
-                    {t}
-                  </button>
-                );
-              })}
-            </div>
+            <select
+              value={value.slot}
+              disabled={off}
+              onChange={(e) => onChange({ ...value, slot: e.target.value })}
+              className="mt-2 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm disabled:cursor-not-allowed sm:max-w-sm"
+            >
+              <option value="">Choose your arrival time</option>
+              {CHECKIN_SLOTS.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
           </div>
         ) : null}
 

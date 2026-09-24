@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  ArrowLeft,
   ArrowRight,
   CalendarCheck,
   Eye,
@@ -325,27 +324,25 @@ function ViewingLinkPage() {
         <CalendarCheck className="size-3.5" /> Booking ID {booking["reference"]}
       </span>
 
-      {view === "choose" ? (
-        <>
-          <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-brand-deep sm:text-4xl">
-            Good news — we have a room for you! 🎉
-          </h1>
-          <p className="mt-3 text-muted-foreground">
-            Hi {String(booking["full_name"] ?? "").split(" ")[0]}, your preferred room is available.
-            What would you like to do next?
-          </p>
+      <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-brand-deep sm:text-4xl">
+        Good news — we have a room for you! 🎉
+      </h1>
+      <p className="mt-3 text-muted-foreground">
+        Hi {String(booking["full_name"] ?? "").split(" ")[0]}, your preferred room is available.
+        What would you like to do next?
+      </p>
 
-          <div className="mt-6">{roomCard}</div>
+      <div className="mt-6">{roomCard}</div>
 
-          <h2 className="mt-10 text-xl font-bold text-brand-deep">What would you like to do?</h2>
+      <h2 className="mt-10 text-xl font-bold text-brand-deep">What would you like to do?</h2>
 
-          {/*
+      {/*
             Two ways on, side by side and equally weighted. A viewing is offered,
             not required - and a student who has seen enough should not have to
             read past a calendar to find that out.
           */}
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {/*
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {/*
               Two ways on, side by side and equally weighted. A viewing is
               offered, not required - and a student who has seen enough should
               not have to read past a calendar to find that out.
@@ -353,60 +350,69 @@ function ViewingLinkPage() {
               Each carries its own mark rather than a shared grey rule, so the
               choice reads as two things rather than one list.
             */}
-            <button
-              type="button"
-              onClick={() => setView("viewing")}
-              className="group relative overflow-hidden rounded-2xl border border-border bg-card p-5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-all hover:-translate-y-0.5 hover:border-brand/50 hover:shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_28px_-14px_rgba(16,24,40,0.3)]"
-            >
-              <span className="absolute inset-x-0 top-0 h-1 bg-brand/40" aria-hidden />
-              <span className="flex size-11 items-center justify-center rounded-xl bg-brand-canvas text-xl">
-                <Eye className="size-5 text-brand-deep" />
-              </span>
-              <span className="mt-3 block text-base font-bold text-brand-deep">
-                View the room first
-              </span>
-              <span className="mt-1 block text-sm leading-relaxed text-muted-foreground">
-                Visit the residence in person or take a virtual tour before deciding.
-              </span>
-              <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">
-                Schedule a viewing
-                <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-              </span>
-            </button>
+        <button
+          type="button"
+          onClick={() => {
+            setView(view === "viewing" ? "choose" : "viewing");
+            requestAnimationFrame(() =>
+              document
+                .getElementById("viewing-panel")
+                ?.scrollIntoView({ behavior: "smooth", block: "nearest" }),
+            );
+          }}
+          className="group relative overflow-hidden rounded-2xl border border-border bg-card p-5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-all hover:-translate-y-0.5 hover:border-brand/50 hover:shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_28px_-14px_rgba(16,24,40,0.3)]"
+        >
+          <span className="absolute inset-x-0 top-0 h-1 bg-brand/40" aria-hidden />
+          <span className="flex size-11 items-center justify-center rounded-xl bg-brand-canvas text-xl">
+            <Eye className="size-5 text-brand-deep" />
+          </span>
+          <span className="mt-3 block text-base font-bold text-brand-deep">
+            View the room first
+          </span>
+          <span className="mt-1 block text-sm leading-relaxed text-muted-foreground">
+            Visit the residence in person or take a virtual tour before deciding.
+          </span>
+          <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand">
+            {view === "viewing" ? "Hide the times" : "Schedule a viewing"}
+            <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+          </span>
+        </button>
 
-            <button
-              type="button"
-              onClick={() => setView("booking")}
-              className="group relative overflow-hidden rounded-2xl border-2 border-brand-deep/70 bg-card p-5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-all hover:-translate-y-0.5 hover:border-brand-deep hover:shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_28px_-14px_rgba(16,24,40,0.3)]"
-            >
-              <span className="absolute inset-x-0 top-0 h-1 bg-brand-deep" aria-hidden />
-              <span className="flex size-11 items-center justify-center rounded-xl bg-brand-deep text-primary-foreground">
-                <KeyRound className="size-5" />
-              </span>
-              <span className="mt-3 block text-base font-bold text-brand-deep">Ready to book?</span>
-              <span className="mt-1 block text-sm leading-relaxed text-muted-foreground">
-                Proceed with the room above and request your booking invoice.
-              </span>
-              <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-deep">
-                Proceed to booking
-                <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-              </span>
-            </button>
-          </div>
+        <button
+          type="button"
+          onClick={() => {
+            setView(view === "booking" ? "choose" : "booking");
+            requestAnimationFrame(() =>
+              document
+                .getElementById("booking-panel")
+                ?.scrollIntoView({ behavior: "smooth", block: "nearest" }),
+            );
+          }}
+          className="group relative overflow-hidden rounded-2xl border-2 border-brand-deep/70 bg-card p-5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-all hover:-translate-y-0.5 hover:border-brand-deep hover:shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_28px_-14px_rgba(16,24,40,0.3)]"
+        >
+          <span className="absolute inset-x-0 top-0 h-1 bg-brand-deep" aria-hidden />
+          <span className="flex size-11 items-center justify-center rounded-xl bg-brand-deep text-primary-foreground">
+            <KeyRound className="size-5" />
+          </span>
+          <span className="mt-3 block text-base font-bold text-brand-deep">Ready to book?</span>
+          <span className="mt-1 block text-sm leading-relaxed text-muted-foreground">
+            Proceed with the room above and request your booking invoice.
+          </span>
+          <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-deep">
+            {view === "booking" ? "Hide the details" : "Proceed to booking"}
+            <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+          </span>
+        </button>
+      </div>
 
-          <p className="mt-8 text-xs text-muted-foreground">
-            Need help? WhatsApp us on +6012-330 6815.
-          </p>
-        </>
-      ) : view === "viewing" ? (
-        <>
-          <button
-            type="button"
-            onClick={() => setView("choose")}
-            className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="size-4" /> Back
-          </button>
+      {/*
+        The chosen panel opens under the choice rather than replacing it.
+        Swapping the whole screen for a calendar made looking feel like a
+        decision already taken, and left a student who only wanted to see
+        the times pressing Back to get their room details back.
+      */}
+      {view === "viewing" ? (
+        <div id="viewing-panel" className="mt-8 scroll-mt-6">
           <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-brand-deep sm:text-3xl">
             Schedule your viewing
           </h1>
@@ -509,20 +515,9 @@ function ViewingLinkPage() {
               {saving ? <Loader2 className="size-4 animate-spin" /> : null} Confirm viewing
             </Button>
           </div>
-
-          <p className="mt-6 text-xs text-muted-foreground">
-            Need help? WhatsApp us on +6012-330 6815.
-          </p>
-        </>
-      ) : (
-        <>
-          <button
-            type="button"
-            onClick={() => setView("choose")}
-            className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="size-4" /> Back
-          </button>
+        </div>
+      ) : view === "booking" ? (
+        <div id="booking-panel" className="mt-8 scroll-mt-6">
           <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-brand-deep sm:text-3xl">
             Confirm your booking
           </h1>
@@ -576,14 +571,25 @@ function ViewingLinkPage() {
             <button
               type="button"
               className="font-medium text-brand underline underline-offset-2"
-              onClick={() => setView("viewing")}
+              onClick={() => {
+                setView("viewing");
+                requestAnimationFrame(() =>
+                  document
+                    .getElementById("viewing-panel")
+                    ?.scrollIntoView({ behavior: "smooth", block: "nearest" }),
+                );
+              }}
             >
               schedule a viewing
             </button>{" "}
             instead.
           </p>
-        </>
-      )}
+        </div>
+      ) : null}
+
+      <p className="mt-8 text-xs text-muted-foreground">
+        Need help? WhatsApp us on +6012-330 6815.
+      </p>
     </Canvas>
   );
 }

@@ -364,16 +364,36 @@ export const getViewingLink = createServerFn({ method: "GET" })
       .maybeSingle();
     if (!row) return { ok: false as const };
 
+    /*
+     * The unit their bed sits in, once one is held for them. Named rather than
+     * implied: "Unit A-07-03 · Room C" is a place, where "Room C" on its own is
+     * a description. Empty until a bed is reserved, because inventing one would
+     * be worse than saying nothing.
+     */
+    type HeldBed = { rooms?: { letter?: string; units?: { unit_no?: string } | null } | null };
+    const { data: bed } = await supabaseAdmin
+      .from("beds")
+      .select("label, rooms(letter, name, units(unit_no))")
+      .eq("enquiry_id", row.id)
+      .limit(1);
+    const held = ((bed ?? []) as HeldBed[])[0] ?? null;
+    const unitNo = String(held?.rooms?.units?.unit_no ?? "");
+    const roomLetter = String(held?.rooms?.letter ?? "");
+
     const { data: appt } = await supabaseAdmin
       .from("appointments")
       .select("id,starts_at,duration_minutes,mode,status,residence_name")
-      .eq("enquiry_id", (row as any).id)
+      .eq("enquiry_id", row.id)
       .neq("status", "cancelled")
       .order("starts_at", { ascending: true })
       .limit(1)
       .maybeSingle();
 
-    return { ok: true as const, booking: row, viewing: appt ?? null };
+    return {
+      ok: true as const,
+      booking: { ...row, unit_no: unitNo, unit_room: roomLetter },
+      viewing: appt ?? null,
+    };
   });
 
 /**

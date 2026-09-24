@@ -371,6 +371,10 @@ function MyProfilePage() {
         toast.error("Please sign the declaration to continue");
         return;
       }
+      if (step === 2 && unread.length) {
+        toast.error("Please open the Tenancy Agreement and House Rules first");
+        return;
+      }
     }
     const to = Math.min(step + 1, 3);
     setStep(to);
@@ -802,7 +806,7 @@ function MyProfilePage() {
           can agree to terms about their own tenancy before saying who they are,
           and on one long page they could scroll straight past and do exactly
           that */}
-      <div className={step === 2 ? "" : "hidden"}>
+      <div className={step === 2 ? "space-y-4" : "hidden"}>
         <DeclarationSection
           token={token}
           fullName={values["full_name"] ?? ""}
@@ -810,23 +814,13 @@ function MyProfilePage() {
           signed={signed}
           onSigned={setSigned}
         />
-      </div>
-
-      <div className={step === 3 ? "space-y-4" : "hidden"}>
-        <CheckInStep
-          moveIn={moveIn}
-          value={checkIn}
-          onChange={setCheckIn}
-          name={values["full_name"] ?? ""}
-          residentCode={residentCode}
-        />
 
         {/* agreeing to a document nobody put in front of them is not agreement */}
         <section className="rounded-2xl bg-card p-5 shadow-sm sm:p-6">
-          <h2 className="text-base font-semibold text-brand-deep">Before you submit</h2>
+          <h2 className="text-base font-semibold text-brand-deep">What you are agreeing to</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Please open both documents. Your declaration refers to them, so we ask that you have
-            seen them.
+            Please open this before continuing. Your declaration above refers to it, so we ask that
+            you have seen it.
           </p>
           <ul className="mt-3 space-y-2">
             {RESIDENT_DOCUMENTS.map((d) => {
@@ -869,6 +863,16 @@ function MyProfilePage() {
         </section>
       </div>
 
+      <div className={step === 3 ? "space-y-4" : "hidden"}>
+        <CheckInStep
+          moveIn={moveIn}
+          value={checkIn}
+          onChange={setCheckIn}
+          name={values["full_name"] ?? ""}
+          residentCode={residentCode}
+        />
+      </div>
+
       {/* The save button follows you down the page without walling off the
           field behind it. A slab with an edge reads as a thing sitting on top;
           a fade into the page colour lets the form run underneath and keeps
@@ -889,12 +893,12 @@ function MyProfilePage() {
                 ? `${problems.length} field${problems.length === 1 ? "" : "s"} need${problems.length === 1 ? "s" : ""} filling in`
                 : "Everything is filled in."
               : step === 2
-                ? signed
-                  ? "Signed. One step to go."
-                  : "Sign the declaration to continue."
-                : unread.length
-                  ? `Please open the ${unread.map((d) => d.label).join(" and the ")}.`
-                  : "Submitting confirms these details are correct."}
+                ? !signed
+                  ? "Sign the declaration to continue."
+                  : unread.length
+                    ? "Open the document above to continue."
+                    : "Signed. One step to go."
+                : "Submitting confirms these details are correct."}
           </p>
           {step > 1 ? (
             <Button variant="outline" onClick={() => goToStep(step - 1)} disabled={saving}>
@@ -911,7 +915,7 @@ function MyProfilePage() {
           ) : (
             <Button
               onClick={submit}
-              disabled={saving || unread.length > 0}
+              disabled={saving}
               className="min-w-36 shadow-[0_2px_8px_rgba(16,24,40,0.12),0_12px_28px_-12px_rgba(16,24,40,0.35)]"
             >
               {saving ? "Submitting…" : "Submit my details"}
