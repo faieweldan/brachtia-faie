@@ -629,7 +629,7 @@ function WholeUnitRates({
                 </p>
               </div>
               <div className="text-right text-xs text-muted-foreground">
-                <p>12-mo: {rateOf(unitType, "long") ?? "—"}</p>
+                <p>Standard: {rateOf(unitType, "long") ?? "—"}</p>
                 <p>Short: {rateOf(unitType, "short") ?? "—"}</p>
               </div>
               <Button
@@ -798,7 +798,7 @@ function RoomsSection({ residenceId, rooms }: { residenceId: string; rooms: any[
               </div>
               <div className="text-right text-xs text-muted-foreground">
                 <p>
-                  12-mo: {rate(r, "long", "single") ?? "—"} / {rate(r, "long", "twin") ?? "—"}
+                  Standard: {rate(r, "long", "single") ?? "—"} / {rate(r, "long", "twin") ?? "—"}
                 </p>
                 <p>
                   Short: {rate(r, "short", "single") ?? "—"} / {rate(r, "short", "twin") ?? "—"}
