@@ -647,13 +647,6 @@ function InvoiceGenerator() {
               and the stay disagreeing about what the student signed up to. */}
           <Field label="Payment frequency">
             <Choice value={frequency} readOnly options={SCHEDULES} className="h-8 max-w-56" />
-            <p className="mt-1 text-xs text-muted-foreground">
-              Changed in Stay details on the{" "}
-              <Link to="/admin/bookings/$id" params={{ id }} className="font-medium underline">
-                booking
-              </Link>
-              .
-            </p>
           </Field>
         </div>
         {offeredAddons.length ? (
