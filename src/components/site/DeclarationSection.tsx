@@ -7,8 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   termRuns,
+  DECLARATION_CLOSING,
   DECLARATION_INTRO,
   DECLARATION_TERMS,
+  DECLARATION_TITLE,
   LANDLORD_ENTITY,
   idMatches,
   nameMatches,
@@ -123,7 +125,7 @@ export function DeclarationSection({
   return (
     <section className="rounded-2xl border border-border bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-16px_rgba(16,24,40,0.18)] sm:p-6">
       <h2 className="border-b border-border pb-3 text-base font-semibold tracking-tight text-brand-deep">
-        Declaration
+        {DECLARATION_TITLE}
       </h2>
       <p className="mt-3 text-sm text-muted-foreground">
         Please read each term and tick it. This is the agreement between you and {LANDLORD_ENTITY}.
@@ -170,6 +172,12 @@ export function DeclarationSection({
           </li>
         ))}
       </ul>
+
+      {/* the sentence the signature is given against, so what is being agreed
+          to sits next to the box where it is agreed rather than above a list */}
+      <p className="mt-5 text-sm font-medium leading-relaxed text-foreground">
+        {DECLARATION_CLOSING}
+      </p>
 
       {/* the signature. the evidence is the record, not the look of it */}
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
