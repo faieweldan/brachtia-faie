@@ -62,6 +62,22 @@ function toISODate(d: Date) {
   ).padStart(2, "0")}`;
 }
 
+/**
+ * The canvas this page stands on.
+ *
+ * White cards on a white page have nothing to lift off, which read as flat
+ * beside the resident form - and it is the same student, an hour apart. The
+ * tint is the one that form already uses, so the two feel like one place
+ * rather than two products.
+ */
+function Canvas({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-brand-tint">
+      <div className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6 sm:py-16">{children}</div>
+    </div>
+  );
+}
+
 function ViewingLinkPage() {
   const { token } = Route.useParams();
   const [mode, setMode] = useState<Mode>("in_person");
@@ -156,64 +172,70 @@ function ViewingLinkPage() {
 
   if (linkQuery.isLoading) {
     return (
-      <section className="mx-auto max-w-2xl px-4 py-20 text-center text-muted-foreground">
-        <Loader2 className="mx-auto size-5 animate-spin" />
-      </section>
+      <Canvas>
+        <p className="py-16 text-center text-muted-foreground">
+          <Loader2 className="mx-auto size-5 animate-spin" />
+        </p>
+      </Canvas>
     );
   }
 
   if (!booking) {
     return (
-      <section className="mx-auto max-w-2xl px-4 py-20 text-center sm:px-6">
-        <h1 className="text-3xl font-extrabold text-brand-deep">Link not available</h1>
-        <p className="mt-3 text-muted-foreground">
-          This viewing link has expired or is no longer valid. Message us and we'll sort out a time
-          with you.
-        </p>
-        <Button asChild size="lg" className="mt-8 rounded-full">
-          <a
-            href="https://wa.me/60123306815?text=Hi+my+viewing+link+is+not+working"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <MessageCircle className="size-4" /> WhatsApp us
-          </a>
-        </Button>
-      </section>
+      <Canvas>
+        <div className="py-8 text-center">
+          <h1 className="text-3xl font-extrabold text-brand-deep">Link not available</h1>
+          <p className="mt-3 text-muted-foreground">
+            This viewing link has expired or is no longer valid. Message us and we'll sort out a
+            time with you.
+          </p>
+          <Button asChild size="lg" className="mt-8 rounded-full">
+            <a
+              href="https://wa.me/60123306815?text=Hi+my+viewing+link+is+not+working"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <MessageCircle className="size-4" /> WhatsApp us
+            </a>
+          </Button>
+        </div>
+      </Canvas>
     );
   }
 
   if (done) {
     return (
-      <section className="mx-auto max-w-2xl px-4 py-20 text-center sm:px-6">
-        <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-brand-soft">
-          <CheckCircle2 className="size-7 text-brand" />
+      <Canvas>
+        <div className="py-8 text-center">
+          <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-brand-soft">
+            <CheckCircle2 className="size-7 text-brand" />
+          </div>
+          <h1 className="mt-5 text-3xl font-extrabold text-brand-deep">
+            {"slot" in done ? "Viewing confirmed" : "We'll send your invoice"}
+          </h1>
+          {"slot" in done ? (
+            <p className="mt-3 text-muted-foreground">
+              {mode === "virtual" ? "Video tour" : "Viewing"} on{" "}
+              <strong className="text-foreground">
+                {new Date(done.slot).toLocaleDateString("en-MY", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                })}
+              </strong>{" "}
+              at <strong className="text-foreground">{formatSlot(done.slot)}</strong>.
+            </p>
+          ) : (
+            <p className="mt-3 text-muted-foreground">
+              No viewing needed — we&apos;ll send your booking invoice shortly. You can still ask
+              for a viewing at any time.
+            </p>
+          )}
+          <p className="mt-2 text-sm text-muted-foreground">
+            Booking ID {booking["reference"]} · {booking["residence_name"]}
+          </p>
         </div>
-        <h1 className="mt-5 text-3xl font-extrabold text-brand-deep">
-          {"slot" in done ? "Viewing confirmed" : "We'll send your invoice"}
-        </h1>
-        {"slot" in done ? (
-          <p className="mt-3 text-muted-foreground">
-            {mode === "virtual" ? "Video tour" : "Viewing"} on{" "}
-            <strong className="text-foreground">
-              {new Date(done.slot).toLocaleDateString("en-MY", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-              })}
-            </strong>{" "}
-            at <strong className="text-foreground">{formatSlot(done.slot)}</strong>.
-          </p>
-        ) : (
-          <p className="mt-3 text-muted-foreground">
-            No viewing needed — we&apos;ll send your booking invoice shortly. You can still ask for
-            a viewing at any time.
-          </p>
-        )}
-        <p className="mt-2 text-sm text-muted-foreground">
-          Booking ID {booking["reference"]} · {booking["residence_name"]}
-        </p>
-      </section>
+      </Canvas>
     );
   }
 
@@ -297,7 +319,7 @@ function ViewingLinkPage() {
   );
 
   return (
-    <section className="mx-auto max-w-3xl px-4 py-12 sm:px-6 sm:py-16">
+    <Canvas>
       <span className="inline-flex items-center gap-2 rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-brand-deep">
         <CalendarCheck className="size-3.5" /> Booking ID {booking["reference"]}
       </span>
@@ -561,6 +583,6 @@ function ViewingLinkPage() {
           </p>
         </>
       )}
-    </section>
+    </Canvas>
   );
 }
