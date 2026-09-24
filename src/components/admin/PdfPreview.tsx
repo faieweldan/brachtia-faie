@@ -1,9 +1,15 @@
 import { useEffect, useState, type ComponentProps, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { Check, ChevronDown, Download } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { referenceFor, type DocumentVersion } from "@/lib/document-versions";
 
 /**
@@ -34,6 +40,14 @@ export type VersionNav = {
 
 /** One stop in the preview: a version already given out, or the working copy. */
 type Stop = { version: DocumentVersion | null };
+
+/** The day a version went out, short enough to sit at the end of a menu row. */
+const sentOn = (iso: string) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? ""
+    : d.toLocaleDateString("en-MY", { day: "numeric", month: "short" });
+};
 
 export function PdfPreviewDialog({
   title,
@@ -211,33 +225,41 @@ export function PdfPreviewButton({
           <div className="flex items-center justify-between gap-3 border-b border-border py-3 pl-5 pr-14">
             <div className="flex min-w-0 items-center gap-3">
               <DialogTitle className="truncate text-base">{title}</DialogTitle>
-              {stops.length > 1 ? (
-                <div className="flex shrink-0 items-center gap-1">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="size-7"
-                    aria-label="Previous version"
-                    disabled={at === 0 || loading}
-                    onClick={() => void show(at - 1, stops)}
-                  >
-                    <ChevronLeft className="size-4" />
-                  </Button>
-                  <span className="min-w-28 text-center text-xs font-medium text-muted-foreground">
+              {/* the whole history in one menu: how many there are is the
+                  first thing asked, and arrows alone never answer it */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline" className="h-7 shrink-0" disabled={loading}>
                     {onWorkingCopy ? "Not sent yet" : label}
-                  </span>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="size-7"
-                    aria-label="Next version"
-                    disabled={at >= stops.length - 1 || loading}
-                    onClick={() => void show(at + 1, stops)}
-                  >
-                    <ChevronRight className="size-4" />
+                    <span className="ml-1 text-muted-foreground">
+                      {stops.length > 1 ? `· ${stops.length - 1} sent` : "· none sent"}
+                    </span>
+                    <ChevronDown className="ml-0.5 size-3.5" />
                   </Button>
-                </div>
-              ) : null}
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="min-w-56">
+                  {stops.map((s, i) => (
+                    <DropdownMenuItem
+                      key={s.version?.id ?? "working"}
+                      onSelect={() => void show(i, stops)}
+                      className="gap-2"
+                    >
+                      <Check className={`size-3.5 ${i === at ? "" : "invisible"}`} />
+                      <span className="flex-1">
+                        {s.version
+                          ? referenceFor(
+                              versions.reference || s.version.reference,
+                              s.version.version,
+                            )
+                          : "Working copy"}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {s.version ? sentOn(s.version.createdAt) : "not sent yet"}
+                      </span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             {url ? (
               <Button asChild size="sm" variant="outline" disabled={freezing}>
