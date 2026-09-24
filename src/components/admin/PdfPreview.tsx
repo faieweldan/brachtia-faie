@@ -119,6 +119,8 @@ export function PdfPreviewButton({
 
   const stop = stops[at];
   const onWorkingCopy = Boolean(stop) && stop!.version === null;
+  // the working copy is always the last stop, and is not one of them
+  const sent = Math.max(0, stops.length - 1);
   const shown = stop?.version;
   // the working copy has no number of its own until it is downloaded
   const label = shown
@@ -230,10 +232,12 @@ export function PdfPreviewButton({
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button size="sm" variant="outline" className="h-7 shrink-0" disabled={loading}>
-                    {onWorkingCopy ? "Not sent yet" : label}
-                    <span className="ml-1 text-muted-foreground">
-                      {stops.length > 1 ? `· ${stops.length - 1} sent` : "· none sent"}
-                    </span>
+                    {/* what you are looking at, then how many have gone out -
+                        never both saying the same thing */}
+                    {onWorkingCopy ? (sent ? "Working copy" : "Not sent yet") : label}
+                    {sent ? (
+                      <span className="ml-1 text-muted-foreground">· {sent} sent</span>
+                    ) : null}
                     <ChevronDown className="ml-0.5 size-3.5" />
                   </Button>
                 </DropdownMenuTrigger>
