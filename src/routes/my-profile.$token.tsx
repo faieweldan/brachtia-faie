@@ -101,18 +101,25 @@ function tidyPhone(raw: string, fallbackDial: string): string {
   return joinPhone(dial, phoneDigits(digits));
 }
 
-/** What is wrong with one field, or "" if nothing is. */
+/**
+ * What is wrong with one field, or "" if nothing is.
+ *
+ * Every field the student is shown is one Brachtia needs, so a blank one is a
+ * problem like any other. Only the shape of an answer used to be checked, which
+ * let an empty form be submitted whole and left staff chasing the gaps by hand.
+ */
 function problemFor(f: ResidentField, values: ProfileLinkFields): string {
   const value = values[f.key] ?? "";
+  // "yes" to a medical condition means nothing without saying which
+  if (f.key === "medical_detail" && !value.trim())
+    return "Please tell us what the condition or allergy is.";
+  if (!value.trim()) return `${f.label} is needed.`;
   if (f.kind === "email") return emailProblem(value);
   if (f.kind === "phone") {
     const { dial, rest } = splitPhone(value);
     return phoneProblem(rest, dial);
   }
   if (f.kind === "id" && values["nationality"] === "MYS") return nricProblem(value);
-  // "yes" to a medical condition means nothing without saying which
-  if (f.key === "medical_detail" && values["medical_condition"] === "yes" && !value.trim())
-    return "Please tell us what the condition or allergy is.";
   return "";
 }
 
@@ -121,6 +128,12 @@ function problemFor(f: ResidentField, values: ProfileLinkFields): string {
  *
  * The rest only takes digits, and a leading 0 is refused as it is typed: the
  * code box already says +60, and 0 is not part of an international number.
+ *
+ * The code picked is remembered here rather than read back out of the stored
+ * value. A number with no digits yet is stored as nothing at all - so a code
+ * picked first had nowhere to live and the picker sprang back to the country's
+ * own code, which read as a dropdown that would not open. Most students pick
+ * the code before typing, so it has to hold on its own.
  */
 function PhoneField({
   value,
@@ -136,10 +149,17 @@ function PhoneField({
   onBlur: () => void;
 }) {
   const parts = splitPhone(value);
-  const dial = parts.dial || fallbackDial || "+60";
+  const [picked, setPicked] = useState("");
+  const dial = parts.dial || picked || fallbackDial || "+60";
   return (
     <div className="flex gap-2">
-      <DialPicker value={dial} onChange={(d) => onChange(joinPhone(d, parts.rest))} />
+      <DialPicker
+        value={dial}
+        onChange={(d) => {
+          setPicked(d);
+          onChange(joinPhone(d, parts.rest));
+        }}
+      />
       <Input
         inputMode="numeric"
         placeholder="123456789"
@@ -290,9 +310,17 @@ function MyProfilePage() {
   async function submit() {
     if (!values) return;
     if (problems.length) {
-      // show every problem at once, and take them to the first
+      // show every problem at once, and take them to the first - scrolled to,
+      // then focused, so the cursor is already where the answer goes
       setTouched(new Set(problems.map((p) => p.f.key)));
-      document.getElementById(`f-${problems[0]!.f.key}`)?.scrollIntoView({ block: "center" });
+      const first = document.getElementById(`f-${problems[0]!.f.key}`);
+      first?.scrollIntoView({ block: "center", behavior: "smooth" });
+      first?.querySelector<HTMLElement>("input, select, textarea, button")?.focus({
+        preventScroll: true,
+      });
+      toast.error(
+        `${problems.length} field${problems.length === 1 ? "" : "s"} still ${problems.length === 1 ? "needs" : "need"} an answer`,
+      );
       return;
     }
     setSaving(true);
@@ -697,13 +725,20 @@ function MyProfilePage() {
               {problems.length} field{problems.length === 1 ? "" : "s"} need
               {problems.length === 1 ? "s" : ""} fixing
             </p>
-          ) : null}
+          ) : (
+            /* said where the decision is made, not buried in a tickbox nobody
+               reads - this is the last thing between them and Brachtia having
+               it on record */
+            <p className="mr-auto text-xs text-muted-foreground">
+              Submitting confirms these details are correct.
+            </p>
+          )}
           <Button
             onClick={submit}
             disabled={saving}
             className="min-w-36 shadow-[0_2px_8px_rgba(16,24,40,0.12),0_12px_28px_-12px_rgba(16,24,40,0.35)]"
           >
-            {saving ? "Saving…" : "Save my details"}
+            {saving ? "Submitting…" : "Submit my details"}
           </Button>
         </div>
       </div>
