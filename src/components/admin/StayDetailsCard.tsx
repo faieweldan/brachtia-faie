@@ -290,8 +290,11 @@ export function StayDetailsCard({
        */
       snap.room?.id !== (saved.roomType?.id ?? row.room_code) ||
       (saved.quote !== null &&
-        Math.round(Number(snap.quote?.totalUpfront ?? 0)) !==
-          Math.round(saved.quote.totalUpfront)));
+        // to the sen, not the ringgit: rounded to whole ringgit, a quote that
+        // had moved by less than RM1 read as unchanged, so the card offered
+        // nothing while the invoice would have charged the new figure
+        Math.round(Number(snap.quote?.totalUpfront ?? 0) * 100) !==
+          Math.round(saved.quote.totalUpfront * 100)));
 
   function patchFor(s: Stay, w: ReturnType<typeof work>, withQuote: boolean) {
     const roomName = w.roomRows.find((r) => r.code === s.roomCode)?.name;

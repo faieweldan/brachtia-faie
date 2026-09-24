@@ -201,8 +201,23 @@ export const updateEnquiry = createServerFn({ method: "POST" })
             ? termForRange(moveIn, moveOut)
             : String(patch["term"] ?? current.term ?? "long");
           const rent = Number(roomType.rent[term as "long" | "short"]?.[occupancy as "single" | "twin"] ?? 0);
-          const selectedAddonIds = Array.isArray(current.addons) ? current.addons : [];
-          const selectedAddons = (property.addons ?? []).filter((addon) => selectedAddonIds.includes(addon.id));
+          /*
+           * A booking names its add-ons. Everything that writes them - the
+           * enquiry form, the cost calculator, Stay details - stores the label
+           * a student saw, and this matched them against the id, so nothing
+           * ever matched: the quote was rebuilt here WITHOUT the add-ons the
+           * booking had, overwrote the one the card had just saved with them
+           * in, and left "Quote is out of date" standing after every press of
+           * Update quote.
+           *
+           * Both are accepted. The id is what should be stored, and matching it
+           * first means a booking already saved that way keeps working when the
+           * label is later reworded.
+           */
+          const chosen = Array.isArray(current.addons) ? current.addons.map(String) : [];
+          const selectedAddons = (property.addons ?? []).filter(
+            (addon) => chosen.includes(addon.id) || chosen.includes(addon.label),
+          );
           const quote = moveIn && moveOut && rent
             ? stayQuote(
                 property,
