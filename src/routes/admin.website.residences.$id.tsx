@@ -397,7 +397,7 @@ function ResidenceEditor() {
                               )
                             }
                           />
-                          {t === "long" ? "12-month" : "Short-term"}
+                          {t === "long" ? "Standard" : "Short-term"}
                         </label>
                       );
                     })}
@@ -446,7 +446,7 @@ function ResidenceEditor() {
               <div className="overflow-hidden rounded-md border border-border">
                 <div className="grid grid-cols-[1.6fr_1fr_1fr] items-center gap-2 border-b border-border bg-muted px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                   <span>Fee</span>
-                  <span>12-month</span>
+                  <span>Standard</span>
                   <span>Short-term</span>
                 </div>
                 {FEE_FIELDS.map((f) => (
@@ -712,7 +712,7 @@ function WholeUnitRateDialog({
           )}
           <div className="grid gap-4 sm:grid-cols-2">
             <TextField
-              label="12-month (RM)"
+              label="Standard (RM)"
               type="number"
               value={longRent}
               onChange={setLongRent}
@@ -922,7 +922,7 @@ function RoomsSection({ residenceId, rooms }: { residenceId: string; rooms: any[
                     (["single", "twin"] as const).map((occ) => (
                       <TextField
                         key={`${term}-${occ}`}
-                        label={`${term === "long" ? "12-month" : "Short"} · ${occ === "single" ? "Single" : "Twin"}`}
+                        label={`${term === "long" ? "Standard" : "Short"} · ${occ === "single" ? "Single" : "Twin"}`}
                         type="number"
                         value={editing.rent?.[term]?.[occ] ?? ""}
                         onChange={(v) => setRent(term, occ, v)}

@@ -484,7 +484,7 @@ export default function EnquiryDialog({
                     {quote && (
                       <div className="flex flex-wrap items-baseline justify-between gap-2 rounded-xl bg-card px-3.5 py-2.5">
                         <span className="text-xs text-muted-foreground">
-                          {stay.term === "short" ? "Short-term rate" : "12-month rate"} ·{" "}
+                          {stay.term === "short" ? "Short-term rate" : "Standard rate"} ·{" "}
                           {formatRM(quote.monthlyAfter)}/month
                         </span>
                         <span className="text-sm font-extrabold tabular-nums text-brand-deep">

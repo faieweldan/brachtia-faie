@@ -150,7 +150,7 @@ export default function RoomDetailDialog({
                   <tr>
                     <th className="px-4 py-2 font-semibold">Occupancy</th>
                     <th className="px-4 py-2 font-semibold">Beds</th>
-                    <th className="px-4 py-2 font-semibold">12-month</th>
+                    <th className="px-4 py-2 font-semibold">Standard</th>
                     <th className="px-4 py-2 font-semibold">Short-term</th>
                   </tr>
                 </thead>
