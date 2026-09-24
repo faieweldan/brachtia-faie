@@ -151,7 +151,7 @@ export function RentalScheduleDialog({
           advance.amount,
           advance.rent || Number(rent) || 0,
         )
-      : { start: "", end: "" };
+      : { start: "", end: "", credit: 0 };
   const terms: ScheduleTerms = {
     monthlyRent: Number(rent) || 0,
     frequency,
@@ -159,7 +159,8 @@ export function RentalScheduleDialog({
     firstPeriodEnd: first.end,
     // the same day the engine works out, so the saved figure cannot disagree
     // with the dates listed beside it
-    firstDueDate: dueFor(first.end),
+    firstDueDate: dueFor(first.start),
+    firstPeriodCredit: first.credit,
     tenancyEnd,
     finalAmount: null,
   };

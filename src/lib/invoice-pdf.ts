@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { company, formatDate, formatRM } from "@/data/properties";
+import { nextRentalPayment, cycleEnd } from "@/lib/rental-schedule";
 import { stayLength } from "@/lib/stay-length";
 
 const GREEN: [number, number, number] = [26, 71, 52];
@@ -75,44 +76,25 @@ const FREQ_LABEL: Record<string, string> = {
   full: "Full term",
 };
 
-/** How many months one payment covers. "full" is the whole stay, so it has none. */
-const CYCLE_MONTHS: Record<string, number> = {
-  monthly: 1,
-  bimonthly: 2,
-  quarterly: 3,
-  semiannual: 6,
-  annual: 12,
-};
-
-/**
- * The period the next payment covers, worked out backwards from when it falls
- * due.
- *
- * Rent is due on the 5th of the month AFTER a period ends, so a payment due in
- * January covers a period ending 31 December, and a quarterly one began on
- * 1 October. The invoice carries its own period as words rather than dates, so
- * it cannot be counted forward from - the due date is the one date here that
- * can.
- *
- * Only what is certain is printed. The end follows from the due date and
- * nothing else. The start assumes a whole cycle, which a shortened final period
- * is not - so a start that falls before the tenancy began is the sign the
- * assumption is wrong, and only the end is given. "Full term" is paid once and
- * has no next period at all.
- */
-function nextBillingPeriod(inv: InvoiceDoc): string {
-  const [y, m] = String(inv.next_payment_date ?? "")
-    .slice(0, 10)
-    .split("-")
-    .map(Number);
-  const cycle = CYCLE_MONTHS[inv.payment_frequency];
-  if (!y || !m || !cycle) return "";
-  // day 0 of the due month is the last day of the month before it
-  const end = new Date(Date.UTC(y, m - 1, 0)).toISOString().slice(0, 10);
-  const start = new Date(Date.UTC(y, m - 1 - cycle, 1)).toISOString().slice(0, 10);
-  const tenancyStart = String(inv.tenancy_start ?? "").slice(0, 10);
-  if (tenancyStart && start < tenancyStart) return formatDate(end);
-  return `${formatDate(start)} — ${formatDate(end)}`;
+/** Initial invoices use the advance-rent ledger, never a period guessed backwards. */
+export function invoiceNextPayment(inv: InvoiceDoc) {
+  if (!inv.kind || inv.kind === "initial") {
+    return nextRentalPayment({
+      tenancyStart: inv.tenancy_start ?? "",
+      tenancyEnd: inv.tenancy_end ?? "",
+      frequency: inv.payment_frequency,
+      monthlyRent: inv.monthly_rent,
+      items: inv.items,
+    });
+  }
+  if (!inv.next_payment_date || !inv.next_payment_amount) return null;
+  const start = `${inv.next_payment_date.slice(0, 8)}01`;
+  return {
+    start,
+    end: cycleEnd(start, inv.payment_frequency, inv.tenancy_end ?? ""),
+    due: inv.next_payment_date,
+    amount: inv.next_payment_amount,
+  };
 }
 
 /** Brachtia mark, same geometry as the quote PDF. */
@@ -124,8 +106,22 @@ function drawLogo(doc: any, x: number, y: number, size: number) {
   doc.setLineWidth(size * 0.05);
   doc.setLineCap("round");
   doc.setLineJoin("round");
-  doc.lines([[22 * s, -26 * s], [8 * s, 9 * s]], px(4), py(40));
-  doc.lines([[-22 * s, -26 * s], [-12 * s, 14 * s]], px(60), py(40));
+  doc.lines(
+    [
+      [22 * s, -26 * s],
+      [8 * s, 9 * s],
+    ],
+    px(4),
+    py(40),
+  );
+  doc.lines(
+    [
+      [-22 * s, -26 * s],
+      [-12 * s, 14 * s],
+    ],
+    px(60),
+    py(40),
+  );
   doc.setLineWidth(size * 0.032);
   for (const [rx, ry] of [
     [26, 34],
@@ -283,12 +279,16 @@ async function buildInvoice(inv: InvoiceDoc) {
   const due = inv.due_date
     ? new Date(inv.due_date)
     : new Date(invDate.getTime() + termDays * 86400000);
-  const band = header(doc, "Invoice", [
-    inv.number,
-    `Invoice date: ${invDate.toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" })}`,
-    `Due date: ${due.toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" })} (${terms})`,
-    inv.reference ? `Booking ${inv.reference}` : "",
-  ].filter(Boolean) as string[]);
+  const band = header(
+    doc,
+    "Invoice",
+    [
+      inv.number,
+      `Invoice date: ${invDate.toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" })}`,
+      `Due date: ${due.toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" })} (${terms})`,
+      inv.reference ? `Booking ${inv.reference}` : "",
+    ].filter(Boolean) as string[],
+  );
 
   let y = band + 30;
   doc.setTextColor(...GREEN);
@@ -535,16 +535,14 @@ async function buildInvoice(inv: InvoiceDoc) {
   y = drawSpans(CURRENCY_NOTE_SPANS, { y: y + 14, size: 7.5, gap: 8 });
 
   // what falls due next - the lines that save the follow-up call
-  const nextRows = [
-    ["Next Billing Period", nextBillingPeriod(inv)],
-    ["Next Payment Due", inv.next_payment_date ? formatDate(inv.next_payment_date) : ""],
-    [
-      "Next Payment Amount",
-      inv.next_payment_amount != null && inv.next_payment_amount > 0
-        ? formatRM(inv.next_payment_amount)
-        : "",
-    ],
-  ].filter(([, value]) => value);
+  const next = invoiceNextPayment(inv);
+  const nextRows = next
+    ? [
+        ["Next Billing Period", `${formatDate(next.start)} — ${formatDate(next.end)}`],
+        ["Next Payment Due", formatDate(next.due)],
+        ["Next Payment Amount", formatRM(next.amount)],
+      ]
+    : [];
   if (nextRows.length) {
     autoTable(doc, {
       // where the currency note finished - it is drawn by hand, so the last

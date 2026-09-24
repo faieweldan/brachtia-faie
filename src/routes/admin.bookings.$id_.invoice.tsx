@@ -2,7 +2,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -20,13 +20,18 @@ import { NO_ROOM_TYPES, bedRent, type SiteRoomType } from "@/lib/room-types";
 import { invoicePdfUrl, type InvoiceDoc } from "@/lib/invoice-pdf";
 import { SCHEDULES } from "@/lib/reference-data";
 import { INVOICE_TERMS } from "@/lib/invoice-terms";
-import { buildPeriods, dueFor, firstRentPeriod } from "@/lib/rental-schedule";
+import { nextRentalPayment } from "@/lib/rental-schedule";
+import { bookingAddonNames, selectedBookingAddons } from "@/lib/booking-quote";
 import { Choice } from "@/components/admin/Choice";
 import { discountLabel, discountPerMonth, type DiscountType } from "@/lib/invoices";
 import { PdfPreviewButton } from "@/components/admin/PdfPreview";
 import {
+  addonsFor,
   stayQuote,
+  formatDate,
+  type Addon,
   type ContractTerm,
+  type Occupancy,
   type PaymentTerm,
   type Property,
 } from "@/data/properties";
@@ -107,8 +112,6 @@ function InvoiceGenerator() {
    * nothing to switch on, so only these two figures are held here, and both are
    * filled in from the rent before anyone touches them.
    */
-  const [nextPaymentDate, setNextPaymentDate] = useState("");
-  const [nextPaymentAmount, setNextPaymentAmount] = useState("");
   const [invoiceDate, setInvoiceDate] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("NET15");
   const [ready, setReady] = useState(false);
@@ -138,8 +141,6 @@ function InvoiceGenerator() {
     );
     setManual(true);
     setNotes(String(inv.notes ?? ""));
-    setNextPaymentDate(String(inv.next_payment_date ?? ""));
-    setNextPaymentAmount(inv.next_payment_amount == null ? "" : String(inv.next_payment_amount));
     if (inv.invoice_date) setInvoiceDate(String(inv.invoice_date));
     if (inv.payment_terms) setPaymentTerms(String(inv.payment_terms));
     // the rent before its discount, then the discount
@@ -197,7 +198,7 @@ function InvoiceGenerator() {
       )
     : 0;
   const bookingRent = Number(r?.monthly_rent || snapshot?.quote?.monthlyAfter || 0);
-  const autoRent = roomRent || bookingRent;
+  const autoRent = bookingRent || roomRent;
   // an invoice being edited keeps the rent it was raised at; a new one takes the
   // rent agreed on the booking
   const listRent = issuedRent ?? autoRent;
@@ -211,6 +212,36 @@ function InvoiceGenerator() {
 
   const property = snapshot?.property as Property | undefined;
 
+  /*
+   * Add-ons the student picked, unless admin changes them while raising this
+   * invoice - a student who decides on a bedding set after enquiring, or drops
+   * one, would otherwise leave admin no way to charge for it.
+   *
+   * The choice lives on the invoice, not the booking: raising an invoice is not
+   * the moment to rewrite the stay the student was quoted.
+   */
+  const [addonOverride, setAddonOverride] = useState<string[] | null>(null);
+  const addonNames = addonOverride ?? bookingAddonNames(r ?? {});
+  const offeredAddons = useMemo(
+    () => (property ? addonsFor(property, (r?.occupancy ?? "single") as Occupancy) : []),
+    [property, r?.occupancy],
+  );
+  const selectedAddons = useMemo(
+    () => (property ? selectedBookingAddons(property, addonNames) : []),
+    // addonNames is a fresh array each render; its contents are what matter
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [property, addonNames.join(" ")],
+  );
+  const toggleAddon = (a: Addon) => {
+    const on = addonNames.includes(a.id) || addonNames.includes(a.label);
+    setAddonOverride(
+      on ? addonNames.filter((x) => x !== a.id && x !== a.label) : [...addonNames, a.id],
+    );
+  };
+  const monthlyExtras = selectedAddons
+    .filter((a) => a.chargeType === "monthly")
+    .reduce((sum, a) => sum + a.price, 0);
+
   /* Everything on the invoice is derived from monthly rent + payment frequency. */
   const calculated = useMemo<Line[] | null>(() => {
     if (!property || !rent || !r?.move_in || !r?.move_out) return null;
@@ -219,14 +250,17 @@ function InvoiceGenerator() {
     // one and have its advance line filtered back out afterwards
     const cycle = frequency as PaymentTerm;
     // the lowered rent prices the whole invoice: advance rent and the deposits with it
-    const q = stayQuote(property, rent, term, r.move_in, r.move_out, cycle);
+    // Booking rent already includes recurring extras. Add them only once;
+    // keep their names/prices when rebuilding one-time charges as well.
+    const baseRent = Math.max(0, rent - monthlyExtras);
+    const q = stayQuote(property, baseRent, term, r.move_in, r.move_out, cycle, selectedAddons);
     if (!q) return null;
     return q.firstPayment.map((l) => ({
       label: l.label,
       kind: String(l.kind),
       amount: Number(l.amount || 0),
     }));
-  }, [property, rent, frequency, r?.move_in, r?.move_out, r?.term]);
+  }, [property, rent, monthlyExtras, selectedAddons, frequency, r?.move_in, r?.move_out, r?.term]);
 
   const snapshotLines = useMemo<Line[]>(
     () =>
@@ -295,36 +329,19 @@ function InvoiceGenerator() {
    * Nothing for a full-term stay: that invoice pays the whole tenancy, so there
    * is no next payment to state.
    */
-  const nextPayment = useMemo(() => {
-    const advance = lines
-      .filter((l) => l.kind === "advance")
-      .reduce((n, l) => n + Number(l.amount || 0), 0);
-    const moveIn = String(r?.move_in ?? "");
-    const moveOut = String(r?.move_out ?? "");
-    const first = firstRentPeriod(moveIn, moveOut, frequency, advance, rent);
-    if (!first.start || !first.end) return null;
-    const [period] = buildPeriods({
-      monthlyRent: rent,
-      frequency,
-      firstPeriodStart: first.start,
-      firstPeriodEnd: first.end,
-      firstDueDate: dueFor(first.end),
-      tenancyEnd: moveOut,
-      finalAmount: null,
-    });
-    return period ? { due: period.due, amount: period.amount } : null;
-  }, [lines, rent, frequency, r?.move_in, r?.move_out]);
-
-  /*
-   * Filled in when the terms are asked for, and only into a box nobody has
-   * typed in - so a figure admin set for a one-off case is never overwritten by
-   * the calculation behind it.
-   */
-  useEffect(() => {
-    if (!nextPayment) return;
-    setNextPaymentDate((v) => v || nextPayment.due);
-    setNextPaymentAmount((v) => v || String(nextPayment.amount));
-  }, [nextPayment]);
+  const nextPayment = useMemo(
+    () =>
+      nextRentalPayment({
+        tenancyStart: String(r?.move_in ?? ""),
+        tenancyEnd: String(r?.move_out ?? ""),
+        frequency,
+        monthlyRent: rent,
+        items: lines,
+      }),
+    [lines, rent, frequency, r?.move_in, r?.move_out],
+  );
+  const nextPaymentDate = nextPayment?.due ?? "";
+  const nextPaymentAmount = nextPayment?.amount ?? 0;
 
   const roomAssigned = Boolean(assignedBed);
 
@@ -639,6 +656,41 @@ function InvoiceGenerator() {
             </p>
           </Field>
         </div>
+        {offeredAddons.length ? (
+          <div className="mt-4 border-t border-border pt-4">
+            <p className="text-xs text-muted-foreground">Add-ons</p>
+            <div className="mt-1.5 flex flex-wrap gap-2">
+              {offeredAddons.map((a) => {
+                const on = addonNames.includes(a.id) || addonNames.includes(a.label);
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => toggleAddon(a)}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors ${
+                      on
+                        ? "border-brand-deep bg-brand-deep text-primary-foreground"
+                        : "border-border bg-background text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {on ? <Check className="size-3" /> : null}
+                    {a.label}
+                    <span className={on ? "text-primary-foreground/80" : "text-muted-foreground"}>
+                      {money(a.price)}
+                      {a.chargeType === "monthly" ? "/mo" : ""}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {addonOverride
+                ? "Changed for this invoice only — the booking keeps what the student picked."
+                : "Picked by the student on the booking. Tick or untick to charge differently here."}
+            </p>
+          </div>
+        ) : null}
         {!roomAssigned || missingDetails.length ? (
           <div className="mt-3 space-y-1 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
             {missingDetails.length ? (
@@ -840,13 +892,19 @@ function InvoiceGenerator() {
             </div>
 
             <div className="grid gap-3 border-t border-border pt-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <Field label="Next billing period">
+                  <p className="text-sm font-medium">
+                    {nextPayment
+                      ? `${formatDate(nextPayment.start)} — ${formatDate(nextPayment.end)}`
+                      : "—"}
+                  </p>
+                </Field>
+              </div>
               <Field label="Next payment due">
-                <Input
-                  type="date"
-                  value={nextPaymentDate}
-                  onChange={(e) => setNextPaymentDate(e.target.value)}
-                  className="h-9"
-                />
+                <p className="flex h-9 items-center text-sm font-medium">
+                  {nextPaymentDate ? formatDate(nextPaymentDate) : "—"}
+                </p>
               </Field>
               {/* stated, not typed: it is the rent and the frequency above
                   worked out, and a figure edited here would promise the student
@@ -858,8 +916,8 @@ function InvoiceGenerator() {
               </Field>
               <p className="text-xs text-muted-foreground sm:col-span-2">
                 {nextPayment
-                  ? "Taken from the rent and payment frequency above — change either if this one differs."
-                  : "A full-term stay is paid in one go, so there is no next payment to state."}
+                  ? "Calculated from advance rent, the discounted monthly rent and payment frequency above."
+                  : "No further rental payment is scheduled for these stay details."}
               </p>
             </div>
           </div>

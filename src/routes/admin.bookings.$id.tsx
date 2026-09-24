@@ -274,7 +274,7 @@ function BookingDetail() {
   const mutate = useMutation({
     mutationFn: (input: Record<string, unknown>) =>
       updateEnquiry({ data: { id, ...input } as any }),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["admin"] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin"] }),
     onError: (err) => toast.error(err instanceof Error ? err.message : "Could not save changes"),
   });
 

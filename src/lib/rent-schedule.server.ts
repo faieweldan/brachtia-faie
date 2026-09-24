@@ -61,11 +61,11 @@ export async function initialInvoiceFor(supabase: any, tenancy: Tenancy) {
   if (!invoice) return null;
   const { data: items } = await supabase
     .from("invoice_items")
-    .select("kind, amount")
+    .select("kind, amount, quantity")
     .eq("invoice_id", invoice.id);
   const advance = ((items ?? []) as any[])
     .filter((i) => i.kind === "advance")
-    .reduce((n, i) => n + Number(i.amount || 0), 0);
+    .reduce((n, i) => n + Number(i.amount || 0) * Number(i.quantity ?? 1), 0);
   return { invoice, advance, rent: Number(invoice.monthly_rent || 0) };
 }
 
@@ -119,8 +119,8 @@ export async function ensureRentSchedule(supabase: any, tenancyId: string) {
     frequency,
     first_period_start: first.start,
     first_period_end: first.end,
-    // rent is due the 5th of the month after its period ends
-    first_due_date: dueFor(first.end),
+    // New bookings are due on the 5th of the first uncovered month.
+    first_due_date: dueFor(first.start),
     tenancy_end: end,
     final_amount: null,
   });
@@ -171,7 +171,16 @@ export async function syncScheduledRent(supabase: any, tenancyId: string) {
     if (dropErr) throw new Error(dropErr.message);
   }
 
+  const initial = await initialInvoiceFor(supabase, tenancy);
+  const coverage = firstRentPeriod(
+    day(tenancy.start_date),
+    day(s.tenancy_end),
+    String(s.frequency),
+    initial?.advance ?? 0,
+    Number(s.monthly_rent),
+  );
   const terms: ScheduleTerms = {
+    firstPeriodCredit: coverage.start === day(s.first_period_start) ? coverage.credit : 0,
     monthlyRent: Number(s.monthly_rent),
     frequency: String(s.frequency),
     firstPeriodStart: day(s.first_period_start),
@@ -191,14 +200,11 @@ export async function syncScheduledRent(supabase: any, tenancyId: string) {
   if (!periods.length) return;
 
   // who and where, as the initial invoice and the resident's record have them
-  const [initial, { data: resident }] = await Promise.all([
-    initialInvoiceFor(supabase, tenancy),
-    supabase
-      .from("residents")
-      .select("full_name, email, mobile, university, nationality")
-      .eq("id", tenancy.resident_id)
-      .maybeSingle(),
-  ]);
+  const { data: resident } = await supabase
+    .from("residents")
+    .select("full_name, email, mobile, university, nationality")
+    .eq("id", tenancy.resident_id)
+    .maybeSingle();
   const inv = (initial?.invoice ?? {}) as any;
   const person = (resident ?? {}) as any;
   // the discount carries on while the rent is the one the initial invoice gave it

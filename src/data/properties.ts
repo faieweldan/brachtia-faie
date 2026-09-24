@@ -888,6 +888,8 @@ export function staySchedule(fromISO: string, toISOStr: string, rent: number): S
 }
 
 export type StayQuote = {
+  selectedAddons?: Addon[];
+  paymentTerm?: PaymentTerm;
   term: ContractTerm;
   rent: number;
   days: number;
@@ -1023,6 +1025,8 @@ export function stayQuote(
   const totalStay = round2(schedule.reduce((s, seg) => s + seg.amount, 0));
 
   return {
+    selectedAddons,
+    paymentTerm,
     term,
     rent,
     days,
@@ -1037,7 +1041,7 @@ export function stayQuote(
 
 export function formatRM(amount: number) {
 
-  return `RM ${amount.toLocaleString("en-MY", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  return `RM ${amount.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function formatDate(iso: string) {

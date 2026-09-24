@@ -4,10 +4,12 @@ import {
   formatRM,
   type ContractTerm,
   type Occupancy,
+  type PaymentTerm,
   type Property,
   type RoomType,
   type StayQuote,
 } from "@/data/properties";
+import { nextRentalPayment } from "@/lib/rental-schedule";
 import { stayLength } from "@/lib/stay-length";
 
 const GREEN: [number, number, number] = [26, 71, 52];
@@ -25,8 +27,22 @@ function drawLogo(doc: any, x: number, y: number, size: number) {
   doc.setLineWidth(size * 0.05);
   doc.setLineCap("round");
   doc.setLineJoin("round");
-  doc.lines([[22 * s, -26 * s], [8 * s, 9 * s]], px(4), py(40));
-  doc.lines([[-22 * s, -26 * s], [-12 * s, 14 * s]], px(60), py(40));
+  doc.lines(
+    [
+      [22 * s, -26 * s],
+      [8 * s, 9 * s],
+    ],
+    px(4),
+    py(40),
+  );
+  doc.lines(
+    [
+      [-22 * s, -26 * s],
+      [-12 * s, 14 * s],
+    ],
+    px(60),
+    py(40),
+  );
   doc.setLineWidth(size * 0.032);
   const squares: [number, number][] = [
     [26, 34],
@@ -47,6 +63,7 @@ export type QuoteInput = {
   moveIn: string;
   moveOut: string;
   quote: StayQuote;
+  paymentTerm?: PaymentTerm;
   reference?: string;
   lead?: {
     name: string;
@@ -92,7 +109,18 @@ export async function quotePdfUrl(input: QuoteInput) {
 function build(
   jsPDF: any,
   autoTable: any,
-  { property, room, occupancy, term, moveIn, moveOut, quote, lead, reference }: QuoteInput,
+  {
+    property,
+    room,
+    occupancy,
+    term,
+    moveIn,
+    moveOut,
+    quote,
+    lead,
+    reference,
+    paymentTerm,
+  }: QuoteInput,
   k: number,
 ) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
@@ -196,7 +224,9 @@ function build(
         [
           room.sizeLabel,
           room.bathroom === "ensuite" ? "Private ensuite" : "Shared bathroom",
-          room.hasView ? `With view${room.viewType ? ` (${room.viewType})` : ""}` : "Internal facing",
+          room.hasView
+            ? `With view${room.viewType ? ` (${room.viewType})` : ""}`
+            : "Internal facing",
         ]
           .filter(Boolean)
           .join(" · "),
@@ -262,6 +292,32 @@ function build(
     M,
     y,
   );
+
+  const frequency = quote.paymentTerm ?? paymentTerm;
+  const next = frequency
+    ? nextRentalPayment({
+        tenancyStart: moveIn,
+        tenancyEnd: moveOut,
+        frequency,
+        monthlyRent: quote.monthlyAfter,
+        items: quote.firstPayment,
+      })
+    : null;
+  if (next) {
+    autoTable(doc, {
+      startY: y + g(10),
+      margin: { left: M, right: M, bottom: FOOT },
+      theme: "plain",
+      styles: infoStyles,
+      columnStyles: infoCols,
+      body: [
+        ["Next billing period", `${formatDate(next.start)} — ${formatDate(next.end)}`],
+        ["Next payment due", formatDate(next.due)],
+        ["Next payment amount", formatRM(next.amount)],
+      ],
+    });
+    y = doc.lastAutoTable.finalY;
+  }
 
   // Terms & conditions
   if (property.terms.length > 0) {

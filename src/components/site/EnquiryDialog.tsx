@@ -402,6 +402,8 @@ export default function EnquiryDialog({
                   message: leadData.message ?? "",
                   idempotencyKey: submissionKey.current,
                   quoteSnapshot: {
+                    addons: stay.addons ?? [],
+                    paymentTerm: stay.paymentTerm ?? "bimonthly",
                     property,
                     room,
                     occupancy: occupancy ?? raw["occupancy"] ?? "single",

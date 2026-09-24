@@ -6,14 +6,16 @@ import { SCHEDULES } from "@/lib/reference-data";
  *
  * Nothing here is guessed: without the rent, payment schedule and tenancy dates
  * there is no schedule. Each period becomes a scheduled invoice, billed
- * BILL_LEAD_DAYS before it starts and due on the 5th of the month after it ends
- * - the student has the period itself to pay for it. When a schedule is edited,
+ * BILL_LEAD_DAYS before its due date. New bookings are due on the 5th
+ * of the first uncovered month. Previously confirmed schedules keep their dates. When a schedule is edited,
  * rent already billed stays as it was and the schedule picks up the day after it.
  */
 
 /** The terms admin confirms. */
 export type ScheduleTerms = {
   monthlyRent: number;
+  /** Advance money remaining in the first uncovered calendar month. */
+  firstPeriodCredit?: number;
   frequency: string;
   firstPeriodStart: string;
   firstPeriodEnd: string;
@@ -48,18 +50,11 @@ export const RENT_DUE_DAY = 5;
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
-/**
- * When a period's rent must be paid: the 5th of the month after it ends.
- *
- * Brachtia's declaration says rent is paid by the 5th, so a period running to
- * 31 December is due on 5 January - the student has the period, and the first
- * few days of the next one, to pay for it.
- */
-export function dueFor(end: string) {
-  const [y, m] = end.slice(0, 10).split("-").map(Number);
-  if (!y || !m) return end;
-  // month index m is already the month after, since the index is zero-based
-  return iso(new Date(Date.UTC(y, m, RENT_DUE_DAY)));
+/** The 5th of the first month covered by a payment. */
+export function dueFor(start: string) {
+  const [y, m] = start.slice(0, 10).split("-").map(Number);
+  if (!y || !m) return start;
+  return iso(new Date(Date.UTC(y, m - 1, RENT_DUE_DAY)));
 }
 
 export function shiftDate(
@@ -116,14 +111,19 @@ export function buildPeriods(terms: ScheduleTerms, resumeAfter = ""): RentalPeri
     const full = cycle ? end >= shiftDate(start, { months: cycle, days: -1 }) : false;
     const final = end >= tenancyEnd;
     const prorated = full ? null : prorate(start, end, rent);
-    const amount =
+    const beforeCredit =
       prorated === null
         ? rent * (cycle ?? 1)
         : final && terms.finalAmount !== null
           ? terms.finalAmount
           : prorated;
-    // due the 5th of the month after it ends, however long it runs
-    periods.push({ start, end, due: dueFor(end), amount, prorated, final });
+    const credit = start === firstPeriodStart ? (terms.firstPeriodCredit ?? 0) : 0;
+    const amount = Math.max(0, Math.round((beforeCredit - credit) * 100) / 100);
+    // Preserve previously confirmed schedules that were explicitly due after
+    // their period. New booking terms always use the start-month due date.
+    const legacyDue = firstDueDate > terms.firstPeriodEnd;
+    const due = legacyDue ? dueFor(shiftDate(end, { days: 1 })) : dueFor(start);
+    periods.push({ start, end, due, amount, prorated, final });
     if (!cycle || final) break;
     start = shiftDate(end, { days: 1 });
     end = shiftDate(start, { months: cycle, days: -1 });
@@ -134,42 +134,32 @@ export function buildPeriods(terms: ScheduleTerms, resumeAfter = ""): RentalPeri
 /** The day a period's invoice is billed. */
 export const billOnFor = (due: string) => shiftDate(due, { days: -BILL_LEAD_DAYS });
 
-/**
- * The day rent invoices start: the day after what the advance rent on the
- * initial invoice paid for.
- *
- * Advance rent pays the start of the stay, in the order the invoice priced it -
- * the move-in month's pro-rated days first, then whole calendar months. So the
- * amount is walked through the same months: RM225 + RM450 at RM450 a month from
- * 16 Sept pays 16-30 Sept and October, and rent starts 1 Nov. Money that pays
- * only part of a month moves the start by that many days of it.
- */
+/** Walk advance money through calendar months without turning cents into rounded days. */
+function advanceCoverage(tenancyStart: string, tenancyEnd: string, advance: number, rent: number) {
+  const from = tenancyStart.slice(0, 10);
+  const to = tenancyEnd.slice(0, 10);
+  if (!from || !to || !(rent > 0) || to < from) return { start: "", credit: 0 };
+  let left = Math.max(0, Math.round(advance * 100));
+  let cursor = from;
+  for (const month of staySchedule(from, to, rent)) {
+    const cost = Math.round(month.amount * 100);
+    if (left < cost) return { start: cursor, credit: left / 100 };
+    left -= cost;
+    cursor = shiftDate(`${cursor.slice(0, 8)}01`, { months: 1 });
+  }
+  return { start: "", credit: 0 };
+}
+
 export function rentStartAfterAdvance(
   tenancyStart: string,
   tenancyEnd: string,
   advance: number,
   rent: number,
 ) {
-  const from = tenancyStart.slice(0, 10);
-  if (!from || !(advance > 0) || !(rent > 0)) return from;
-  const to = tenancyEnd.slice(0, 10) || shiftDate(from, { months: 60 });
-  let left = advance;
-  let cursor = from;
-  for (const month of staySchedule(from, to, rent)) {
-    if (left + 0.005 < month.amount) {
-      return shiftDate(cursor, { days: Math.round(left / (rent / month.daysInMonth)) });
-    }
-    left -= month.amount;
-    cursor = shiftDate(`${cursor.slice(0, 8)}01`, { months: 1 });
-  }
-  return cursor;
+  return advanceCoverage(tenancyStart, tenancyEnd, advance, rent).start;
 }
 
-/**
- * The first rent period: from the day advance rent runs out, one cycle long.
- * Empty when advance rent pays the whole tenancy, or for the full term, which the
- * initial invoice pays whole.
- */
+/** First unpaid calendar cycle, with any partial advance preserved as money. */
 export function firstRentPeriod(
   tenancyStart: string,
   tenancyEnd: string,
@@ -177,10 +167,38 @@ export function firstRentPeriod(
   advance: number,
   rent: number,
 ) {
+  const none = { start: "", end: "", credit: 0 };
   const to = tenancyEnd.slice(0, 10);
-  const none = { start: "", end: "" };
-  if (!tenancyStart || !to || !CYCLE[frequency]) return none;
-  const start = rentStartAfterAdvance(tenancyStart, to, advance, rent);
+  if (!CYCLE[frequency]) return none;
+  const { start, credit } = advanceCoverage(tenancyStart, to, advance, rent);
   if (!start || start > to) return none;
-  return { start, end: cycleEnd(start, frequency, to) };
+  // A partial first month still belongs to that calendar billing cycle.
+  const end = cycleEnd(`${start.slice(0, 8)}01`, frequency, to);
+  return { start, end, credit };
+}
+
+/** Shared by the invoice editor, its PDF and the saved next-payment values. */
+export function nextRentalPayment(input: {
+  tenancyStart: string;
+  tenancyEnd: string;
+  frequency: string;
+  monthlyRent: number;
+  items: { kind: string; amount: number; quantity?: number }[];
+}) {
+  const advance = input.items
+    .filter((line) => line.kind === "advance")
+    .reduce((sum, line) => sum + Number(line.amount || 0) * Number(line.quantity ?? 1), 0);
+  const first = firstRentPeriod(
+    input.tenancyStart,
+    input.tenancyEnd,
+    input.frequency,
+    advance,
+    input.monthlyRent,
+  );
+  if (!first.start) return null;
+  const amount = Math.max(
+    0,
+    Math.round((prorate(first.start, first.end, input.monthlyRent) - first.credit) * 100) / 100,
+  );
+  return { start: first.start, end: first.end, due: dueFor(first.start), amount };
 }

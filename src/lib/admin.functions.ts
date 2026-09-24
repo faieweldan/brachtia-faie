@@ -1,3 +1,4 @@
+import { nextRentalPayment } from "@/lib/rental-schedule";
 import { createServerFn } from "@tanstack/react-start";
 import { NEED_STAFF, logBookingEvent, rm, staffFor, when, words } from "@/lib/booking-events";
 
@@ -158,9 +159,12 @@ export const updateEnquiry = createServerFn({ method: "POST" })
       data.moveIn,
       data.moveOut,
       data.paymentTerm,
+      data.addons,
     ].some((value) => value !== undefined);
 
-    if (stayChanged) {
+    // The card already priced the assigned room and current add-ons. Do not
+    // overwrite its complete snapshot with a second, different calculation.
+    if (stayChanged && data.quoteSnapshot === undefined) {
       const { data: current, error: currentError } = await supabase
         .from("enquiries")
         .select("*")
@@ -214,10 +218,9 @@ export const updateEnquiry = createServerFn({ method: "POST" })
            * first means a booking already saved that way keeps working when the
            * label is later reworded.
            */
-          const chosen = Array.isArray(current.addons) ? current.addons.map(String) : [];
-          const selectedAddons = (property.addons ?? []).filter(
-            (addon) => chosen.includes(addon.id) || chosen.includes(addon.label),
-          );
+          const { bookingAddonNames, selectedBookingAddons } = await import("@/lib/booking-quote");
+          const chosen = data.addons ?? bookingAddonNames(current as any);
+          const selectedAddons = selectedBookingAddons(property, chosen);
           const quote = moveIn && moveOut && rent
             ? stayQuote(
                 property,
@@ -225,7 +228,7 @@ export const updateEnquiry = createServerFn({ method: "POST" })
                 term as "long" | "short",
                 moveIn,
                 moveOut,
-                paymentTerm as "bimonthly" | "quarterly" | "full",
+                paymentTerm as import("@/data/properties").PaymentTerm,
                 selectedAddons,
               )
             : null;
@@ -233,10 +236,12 @@ export const updateEnquiry = createServerFn({ method: "POST" })
           patch["unit_type"] = room.unit_type;
           patch["room_name"] = room.name;
           patch["term"] = term;
-          patch["monthly_rent"] = rent;
+          patch["monthly_rent"] = quote?.monthlyAfter ?? rent;
           patch["first_payment"] = quote?.totalUpfront ?? 0;
           patch["quote_snapshot"] = {
             ...(current.quote_snapshot && typeof current.quote_snapshot === "object" ? current.quote_snapshot : {}),
+            addons: chosen,
+            paymentTerm,
             property,
             room: roomType,
             occupancy,
@@ -965,6 +970,18 @@ export const dismissDuplicate = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+/** Persist the same calculation the editor and PDF display. */
+function nextPaymentValues(values: Record<string, unknown>, items: InvoiceLine[]) {
+  const next = nextRentalPayment({
+    tenancyStart: String(values["tenancy_start"] ?? ""),
+    tenancyEnd: String(values["tenancy_end"] ?? ""),
+    monthlyRent: Number(values["monthly_rent"] ?? 0),
+    frequency: String(values["payment_frequency"] ?? ""),
+    items,
+  });
+  return { next_payment_date: next?.due ?? null, next_payment_amount: next?.amount ?? null };
+}
+
 export const createInvoice = createServerFn({ method: "POST" })
   .inputValidator((data: {
     enquiryId: string;
@@ -1026,6 +1043,7 @@ export const createInvoice = createServerFn({ method: "POST" })
       .from("invoices")
       .insert({
         ...data.values,
+        ...nextPaymentValues(data.values, lines),
         enquiry_id: data.enquiryId,
         invoice_date: invoiceDate,
         payment_terms: paymentTerms,
@@ -1169,6 +1187,7 @@ export const updateInvoice = createServerFn({ method: "POST" })
       .from("invoices")
       .update({
         ...data.values,
+        ...nextPaymentValues(data.values, lines),
         invoice_date: invoiceDate,
         payment_terms: data.paymentTerms || "NET15",
         issued_at: new Date(`${invoiceDate}T00:00:00Z`).toISOString(),

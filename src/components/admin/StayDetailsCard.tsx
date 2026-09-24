@@ -10,15 +10,17 @@ import { SHARING_PREFERENCES } from "@/data/form-options";
 import { SCHEDULES } from "@/lib/reference-data";
 import {
   addonsFor,
+  formatRM as money,
   stayQuote,
   termForRange,
   type Occupancy,
   type PaymentTerm,
 } from "@/data/properties";
-import { fmtDate, isSoldAsSingle, money, type BedRow } from "@/lib/ops-store";
+import { fmtDate, isSoldAsSingle, type BedRow } from "@/lib/ops-store";
 import { bedRent, offersTerm, wholeUnitRate, type SiteRoomType } from "@/lib/room-types";
 import { rowToProperty, rowToRoomType } from "@/lib/site-mappers";
 import { roomFitChanged } from "@/lib/stay-fit";
+import { bookingAddonNames, selectedBookingAddons, quoteAmountsMatch } from "@/lib/booking-quote";
 import { stayLength } from "@/lib/stay-length";
 
 /**
@@ -66,7 +68,7 @@ const fromRow = (row: any): Stay => ({
   moveIn: String(row.move_in ?? ""),
   moveOut: String(row.move_out ?? ""),
   paymentTerm: String(row.payment_term ?? ""),
-  addons: Array.isArray(row.addons) ? (row.addons as unknown[]).map(String) : [],
+  addons: bookingAddonNames(row),
 });
 
 const selectClass = "mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm";
@@ -246,7 +248,7 @@ export function StayDetailsCard({
     }
 
     const offered = property ? addonsFor(property, occupancy) : [];
-    const chosen = offered.filter((a) => s.addons.includes(a.label));
+    const chosen = property ? selectedBookingAddons(property, s.addons) : [];
     const plan = PAYMENT.find((p) => p.value === s.paymentTerm)?.value ?? "bimonthly";
     const quote =
       property && rent > 0 && term
@@ -280,21 +282,11 @@ export function StayDetailsCard({
     (snap.moveIn !== row.move_in ||
       snap.moveOut !== row.move_out ||
       snap.occupancy !== row.occupancy ||
-      /*
-       * The snapshot stores the room TYPE, whose id is the site row's `code`.
-       * A stay finds its room by `code` OR by `room_code` - two different
-       * columns - so comparing the snapshot against `room_code` said "out of
-       * date" forever whenever the match came from the other one, and Update
-       * quote could never clear it. Compared with the type resolved the same
-       * way, the two agree when nothing has changed.
-       */
+      snap.property?.slug !== row.residence_slug ||
       snap.room?.id !== (saved.roomType?.id ?? row.room_code) ||
-      (saved.quote !== null &&
-        // to the sen, not the ringgit: rounded to whole ringgit, a quote that
-        // had moved by less than RM1 read as unchanged, so the card offered
-        // nothing while the invoice would have charged the new figure
-        Math.round(Number(snap.quote?.totalUpfront ?? 0) * 100) !==
-          Math.round(saved.quote.totalUpfront * 100)));
+      ((snap.paymentTerm ?? snap.quote?.paymentTerm) != null &&
+        (snap.paymentTerm ?? snap.quote?.paymentTerm) !== row.payment_term) ||
+      (saved.quote !== null && !quoteAmountsMatch(snap.quote, saved.quote)));
 
   function patchFor(s: Stay, w: ReturnType<typeof work>, withQuote: boolean) {
     const roomName = w.roomRows.find((r) => r.code === s.roomCode)?.name;
@@ -319,6 +311,8 @@ export function StayDetailsCard({
       ...(withQuote && w.quote && w.property && w.roomType && w.term
         ? {
             quoteSnapshot: {
+              addons: s.addons,
+              paymentTerm: s.paymentTerm,
               property: w.property,
               room: w.roomType,
               occupancy: w.occupancy,
@@ -683,7 +677,7 @@ export function StayDetailsCard({
             {live.offered.length ? (
               <div className="mt-1.5 flex flex-wrap gap-2">
                 {live.offered.map((a) => {
-                  const on = draft.addons.includes(a.label);
+                  const on = draft.addons.includes(a.label) || draft.addons.includes(a.id);
                   return (
                     <button
                       key={a.id}
@@ -692,7 +686,7 @@ export function StayDetailsCard({
                       onClick={() =>
                         set({
                           addons: on
-                            ? draft.addons.filter((x) => x !== a.label)
+                            ? draft.addons.filter((x) => x !== a.label && x !== a.id)
                             : [...draft.addons, a.label],
                         })
                       }
@@ -748,7 +742,9 @@ export function StayDetailsCard({
             {PAYMENT.find((p) => p.value === row.payment_term)?.label ?? (row.payment_term || "—")}
           </Item>
           <Item label="Add-ons">
-            {Array.isArray(row.addons) && row.addons.length ? row.addons.join(", ") : "—"}
+            {bookingAddonNames(row)
+              .map((name) => saved.property?.addons?.find((a) => a.id === name)?.label ?? name)
+              .join(", ") || "—"}
           </Item>
           <Item
             label="Estimated initial payment (RM)"
