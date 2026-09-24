@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { Check, type LucideIcon } from "lucide-react";
 
 /**
  * Where you are in a form that comes in parts.
@@ -9,11 +9,15 @@ import { Check } from "lucide-react";
  * along the top answers the question a long form never does, which is how much
  * is left.
  *
+ * Drawn as marks on a line rather than as boxes. Boxes of equal weight read as
+ * three buttons; a line reads as a journey, which is what it is - and the line
+ * between two marks is what carries the sense of one following the other.
+ *
  * A step already finished can be gone back to. A typo in a legal name is worth
  * more than the tidiness of a one-way form.
  */
 
-export type FormStep = { n: number; label: string };
+export type FormStep = { n: number; label: string; icon: LucideIcon };
 
 export function FormSteps({
   steps,
@@ -29,45 +33,56 @@ export function FormSteps({
   onGo: (n: number) => void;
 }) {
   return (
-    <ol className="flex items-stretch gap-1 sm:gap-2">
+    <ol className="flex items-start">
       {steps.map((s, i) => {
         const done = s.n < furthest;
         const here = s.n === at;
         const reachable = s.n <= furthest;
+        const Icon = s.icon;
         return (
-          <li key={s.n} className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
+          <li key={s.n} className="flex min-w-0 flex-1 items-start">
             <button
               type="button"
               disabled={!reachable}
               aria-current={here ? "step" : undefined}
               onClick={() => reachable && onGo(s.n)}
-              className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors sm:px-3 ${
-                here
-                  ? "bg-brand-deep text-primary-foreground"
-                  : reachable
-                    ? "bg-background text-foreground hover:bg-muted"
-                    : "bg-background text-muted-foreground"
-              } ${reachable && !here ? "cursor-pointer" : ""} ${reachable ? "" : "cursor-not-allowed"}`}
+              className={`group flex min-w-0 flex-1 flex-col items-center gap-2 rounded-lg px-1 py-1 text-center ${
+                reachable ? "cursor-pointer" : "cursor-not-allowed"
+              }`}
             >
               <span
-                className={`flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-semibold ${
+                className={`flex size-10 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
                   here
-                    ? "border-primary-foreground/40 bg-primary-foreground/15 text-primary-foreground"
+                    ? "border-brand-deep bg-brand-deep text-primary-foreground"
                     : done
-                      ? "border-brand-deep bg-brand-deep text-primary-foreground"
-                      : "border-border text-muted-foreground"
+                      ? "border-brand bg-brand text-primary-foreground"
+                      : "border-border bg-background text-muted-foreground group-hover:border-brand/40"
                 }`}
               >
-                {done ? <Check className="size-3.5" /> : s.n}
+                {done ? <Check className="size-5" /> : <Icon className="size-5" />}
               </span>
-              {/* the name of the step is for the step you are on and the ones
-                  you can go back to; on a phone only the current one has room */}
-              <span className={`truncate text-xs font-medium ${here ? "" : "hidden sm:inline"}`}>
+              <span
+                className={`text-xs leading-tight ${
+                  here
+                    ? "font-semibold text-brand-deep"
+                    : reachable
+                      ? "font-medium text-foreground"
+                      : "text-muted-foreground"
+                }`}
+              >
                 {s.label}
               </span>
             </button>
+            {/* the line belongs between two marks, level with them, and is not
+                a step of its own - so it sits outside the button and takes no
+                click */}
             {i < steps.length - 1 ? (
-              <span aria-hidden className="hidden h-px w-3 shrink-0 bg-border sm:block" />
+              <span
+                aria-hidden
+                className={`mt-5 h-0.5 w-6 shrink-0 rounded-full sm:w-10 ${
+                  done ? "bg-brand" : "bg-border"
+                }`}
+              />
             ) : null}
           </li>
         );

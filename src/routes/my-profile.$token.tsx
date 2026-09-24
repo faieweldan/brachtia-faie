@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CalendarCheck, CheckCircle2, FileSignature, Loader2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -176,6 +176,17 @@ function PhoneField({
   );
 }
 
+/*
+ * TESTING ONLY - set back to true before this form goes to a student.
+ *
+ * False lets Next through with the profile half filled and the declaration
+ * unsigned, so steps 2 and 3 can be reached without typing a whole application
+ * first. Nothing else is relaxed: Submit still refuses, because a half-filled
+ * application saved as though it were finished is worse than one nobody could
+ * reach the end of.
+ */
+const STEPS_ARE_GATED = false;
+
 function MyProfilePage() {
   const { token } = Route.useParams();
   const [values, setValues] = useState<ProfileLinkFields | null>(null);
@@ -350,15 +361,15 @@ function MyProfilePage() {
    * declaration is signed.
    */
   function nextStep() {
-    if (step === 1) {
-      if (problems.length) {
+    if (STEPS_ARE_GATED) {
+      if (step === 1 && problems.length) {
         showProblems();
         return;
       }
-    }
-    if (step === 2 && !signed) {
-      toast.error("Please sign the declaration to continue");
-      return;
+      if (step === 2 && !signed) {
+        toast.error("Please sign the declaration to continue");
+        return;
+      }
     }
     const to = Math.min(step + 1, 3);
     setStep(to);
@@ -510,12 +521,20 @@ function MyProfilePage() {
         ) : null}
       </div>
 
-      <div className="mb-5">
+      {/* says so on the page, because a gate quietly left open is one nobody
+          remembers to close */}
+      {!STEPS_ARE_GATED ? (
+        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+          Testing mode: Next is not checking anything yet. Submit still is.
+        </div>
+      ) : null}
+
+      <div className="mb-6">
         <FormSteps
           steps={[
-            { n: 1, label: "Resident profile" },
-            { n: 2, label: "Sign declaration" },
-            { n: 3, label: "Schedule check-in" },
+            { n: 1, label: "Resident profile", icon: UserRound },
+            { n: 2, label: "Sign declaration", icon: FileSignature },
+            { n: 3, label: "Schedule check-in", icon: CalendarCheck },
           ]}
           at={step}
           furthest={furthest}
