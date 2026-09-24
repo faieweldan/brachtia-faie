@@ -1039,9 +1039,25 @@ export function stayQuote(
   };
 }
 
+/**
+ * Money being charged: always to the sen.
+ *
+ * A quote of RM4,770.81 printed as "RM4,771" and the invoice beside it then
+ * looked like it disagreed, so every figure anyone pays keeps its cents.
+ */
 export function formatRM(amount: number) {
-
   return `RM ${amount.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/**
+ * A rate on the website: whole ringgit, cents only if the rate has any.
+ *
+ * Rents are round numbers, and ".00" on every price pill pushed "RM" onto its
+ * own line. Nobody is being billed here - the amount they pay is quoted to the
+ * sen by formatRM.
+ */
+export function formatRate(amount: number) {
+  return `RM ${amount.toLocaleString("en-MY", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
 
 export function formatDate(iso: string) {

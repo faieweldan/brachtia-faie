@@ -3,7 +3,7 @@ import { Bath, ChevronRight, Eye, Images, Ruler } from "lucide-react";
 
 import {
   filterRoomTypes,
-  formatRM,
+  formatRate,
   viewLabel,
   type ContractTerm,
   type Occupancy,
@@ -82,7 +82,7 @@ export default function RoomPriceTable({
       <button
         type="button"
         aria-pressed={active}
-        aria-label={`${occLabel} ${formatRM(price)} per month`}
+        aria-label={`${occLabel} ${formatRate(price)} per month`}
         onClick={(e) => {
           e.stopPropagation();
           onSelect(room, occ);
@@ -106,7 +106,7 @@ export default function RoomPriceTable({
               active ? "text-primary-foreground" : "text-brand-deep"
             }`}
           >
-            {formatRM(price)}
+            {formatRate(price)}
           </span>
           <span
             className={`text-xs font-semibold ${

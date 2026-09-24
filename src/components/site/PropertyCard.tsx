@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, BedDouble, MapPin } from "lucide-react";
-import { availableCount, formatRM, priceFrom, type Property } from "@/data/properties";
+import { availableCount, formatRate, priceFrom, type Property } from "@/data/properties";
 import { Badge } from "@/components/ui/badge";
 
 export default function PropertyCard({ property }: { property: Property }) {
@@ -42,7 +42,7 @@ export default function PropertyCard({ property }: { property: Property }) {
           <div>
             <p className="text-xs text-muted-foreground">From</p>
             <p className="text-2xl font-bold text-brand">
-              {formatRM(priceFrom(property.slug))}
+              {formatRate(priceFrom(property.slug))}
               <span className="text-sm font-normal text-muted-foreground">/month</span>
             </p>
           </div>

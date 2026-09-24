@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import {
   availabilityFor,
   bedConfig,
-  formatRM,
+  formatRate,
   viewLabel,
   whatsappUrl,
   type Occupancy,
@@ -178,12 +178,12 @@ export default function RoomDetailDialog({
                         </td>
                         <td className="px-4 py-2.5 tabular-nums text-foreground">
                           {offered && room.rent.long[o]
-                            ? `${formatRM(room.rent.long[o]!)}${o === "twin" ? "/pax" : ""}`
+                            ? `${formatRate(room.rent.long[o]!)}${o === "twin" ? "/pax" : ""}`
                             : "Not offered"}
                         </td>
                         <td className="px-4 py-2.5 tabular-nums text-foreground">
                           {offered && room.rent.short[o]
-                            ? `${formatRM(room.rent.short[o]!)}${o === "twin" ? "/pax" : ""}`
+                            ? `${formatRate(room.rent.short[o]!)}${o === "twin" ? "/pax" : ""}`
                             : "Not offered"}
                         </td>
                       </tr>
