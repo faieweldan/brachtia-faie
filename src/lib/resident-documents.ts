@@ -32,12 +32,16 @@ export function safeExt(name: string, type: string) {
  * signed later, and the balance is paid after the room is confirmed - asking
  * for them here made the list look unfinished for everybody. They come back
  * when there is a document to sign and a balance to pay.
+ *
+ * The booking fee slip is not asked for either. It reaches admin with the
+ * payment - recorded against it, kept with its receipt, and sent back out on
+ * the same document - so asking the student to upload it a second time left a
+ * red "Not uploaded yet" on a profile whose fee was already paid and receipted.
  */
 export const STUDENT_DOCS = [
   { key: "photo", label: "Passport size photo", required: true },
   { key: "offer", label: "University offer / admission letter", required: true },
   { key: "id", label: "Passport / NRIC copy", required: true },
-  { key: "booking_proof", label: "Booking fee payment proof", required: true },
 ] as const;
 
 /**
