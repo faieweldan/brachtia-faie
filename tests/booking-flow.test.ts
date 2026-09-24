@@ -50,6 +50,20 @@ describe('advance rent and the next rental payment', () => {
     expect(nextRentalPayment({ tenancyStart: '2026-10-01', tenancyEnd: to, frequency: 'monthly', monthlyRent: 500,
       items: [{ kind: 'advance', amount: 500, quantity: 3 }, { kind: 'refundable', amount: 5000 }] })?.due).toBe('2027-01-05');
   });
+  test('the reported booking bills the first month advance rent did not pay for', () => {
+    // 24 Sept 2026, RM550/month, bi-monthly, one month in advance. Counting
+    // backwards from the due date billed October again - already paid for by
+    // the advance - and skipped December.
+    const advance = [{ kind: 'advance', amount: 128.33 }, { kind: 'advance', amount: 550 }];
+    expect(nextRentalPayment({ tenancyStart: '2026-09-24', tenancyEnd: '2027-09-24',
+      frequency: 'bimonthly', monthlyRent: 550, items: advance }))
+      .toEqual({ start: '2026-11-01', end: '2026-12-31', due: '2026-11-05', amount: 1100 });
+    // RM50 off the monthly rent is RM50 off each month of that period
+    expect(nextRentalPayment({ tenancyStart: '2026-09-24', tenancyEnd: '2027-09-24',
+      frequency: 'bimonthly', monthlyRent: 500,
+      items: [{ kind: 'advance', amount: 116.67 }, { kind: 'advance', amount: 500 }] })?.amount)
+      .toBe(1000);
+  });
   test('leap February is covered exactly', () => {
     expect(nextRentalPayment({ tenancyStart: '2028-02-15', tenancyEnd: '2028-05-31', frequency: 'monthly', monthlyRent: 580,
       items: [{ kind: 'advance', amount: 300 + 580 }] })?.due).toBe('2028-04-05');
