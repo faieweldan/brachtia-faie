@@ -838,8 +838,22 @@ export const getBookingBilling = createServerFn({ method: "GET" })
     // one invoice per booking - the booking fee is its first payment
     const invoice = ((live ?? []) as any[])[0] ?? null;
     if (!invoice) {
+      /*
+       * Cancelled, so the booking can generate again - but the invoice it once
+       * had still happened, and its history is the record of what the student
+       * was asked for. The card keeps a way in to it rather than going blank as
+       * though nothing was ever raised.
+       */
+      const { data: voided } = await supabase
+        .from("invoices")
+        .select("id, number")
+        .eq("enquiry_id", data.enquiryId)
+        .eq("status", "void")
+        .order("created_at", { ascending: false })
+        .limit(1);
       return {
         invoice: null,
+        voided: ((voided ?? []) as any[])[0] ?? null,
         replaces: "",
         items: [],
         payments: [],

@@ -394,6 +394,8 @@ function BookingDetail() {
     queryFn: () => getBookingActivity({ data: { enquiryId: id } }),
   });
   const invoice = (billing as any)?.invoice ?? null;
+  // the one it had before it was cancelled: gone from the card, kept on record
+  const voidedInvoice = (billing as any)?.voided ?? null;
   const invoiceItems = ((billing as any)?.items ?? []) as any[];
   const receipts = ((billing as any)?.receipts ?? []) as any[];
   const paidTotal = Number((billing as any)?.paid ?? 0);
@@ -614,9 +616,13 @@ function BookingDetail() {
    * What is frozen here is the document, for the record.
    */
   const invoiceVersions: VersionNav = {
-    reference: String(invoice?.number ?? ""),
-    load: async () =>
-      invoice?.id ? listInvoiceVersions({ data: { invoiceId: String(invoice.id) } }) : [],
+    reference: String(invoice?.number ?? voidedInvoice?.number ?? ""),
+    load: async () => {
+      // a cancelled invoice still has a history, and it is the same lineage the
+      // replacement will continue - so the card keeps a way in to it
+      const id = String(invoice?.id ?? voidedInvoice?.id ?? "");
+      return id ? listInvoiceVersions({ data: { invoiceId: id } }) : [];
+    },
     buildVersion: async (v) => {
       const { invoicePdfUrl } = await import("@/lib/invoice-pdf");
       // the document as it was stored, under the reference that version read
@@ -1825,7 +1831,38 @@ function BookingDetail() {
                   </>
                 ) : (
                   <>
-                    <p className="mt-1 text-xs text-muted-foreground">Not generated</p>
+                    {voidedInvoice ? (
+                      <div className="mt-1 flex items-center justify-between gap-2">
+                        <p className="text-xs text-muted-foreground">
+                          <span className="line-through">{voidedInvoice.number}</span> cancelled
+                        </p>
+                        {/* the history outlives the invoice: what the student was
+                            asked for is the record, whether or not it still stands */}
+                        <PdfPreviewButton
+                          size="sm"
+                          variant="ghost"
+                          aria-label={`View cancelled invoice ${voidedInvoice.number}`}
+                          title={`Invoice ${voidedInvoice.number} · cancelled`}
+                          fileName={`Brachtia-${voidedInvoice.number}.pdf`}
+                          build={async () => {
+                            const versions = await listInvoiceVersions({
+                              data: { invoiceId: String(voidedInvoice.id) },
+                            });
+                            const last = versions[versions.length - 1];
+                            if (!last) throw new Error("No version on record");
+                            return (await import("@/lib/invoice-pdf")).invoicePdfUrl({
+                              ...(last.body as any),
+                              reference: r.reference ?? null,
+                            });
+                          }}
+                          versions={invoiceVersions}
+                        >
+                          <Eye className="size-4" />
+                        </PdfPreviewButton>
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-xs text-muted-foreground">Not generated</p>
+                    )}
                     <Button
                       size="sm"
                       className="mt-2"
