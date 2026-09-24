@@ -16,6 +16,9 @@ import {
 } from "@/lib/profile-link.functions";
 import { compressImage, readableSize } from "@/lib/compress";
 import { DeclarationSection } from "@/components/site/DeclarationSection";
+import { FormSteps } from "@/components/site/FormSteps";
+import { CheckInStep, type CheckInChoice } from "@/components/site/CheckInStep";
+import { RESIDENT_DOCUMENTS } from "@/lib/resident-reading";
 import { ChoicePicker, DialPicker } from "@/components/site/ChoicePicker";
 import { getDeclarationByToken, type SignedDeclaration } from "@/lib/declaration.functions";
 import {
@@ -186,6 +189,19 @@ function MyProfilePage() {
   const [residentCode, setResidentCode] = useState("");
   // a field's problem is shown once they have left it, not mid-word
   const [touched, setTouched] = useState<Set<string>>(new Set());
+  /*
+   * Which part of the form is on screen, and how far they have got.
+   *
+   * `furthest` is kept apart from `step` so a finished step can be gone back
+   * to without losing the ones after it - a typo in a legal name is worth more
+   * than the tidiness of a one-way form.
+   */
+  const [step, setStep] = useState(1);
+  const [furthest, setFurthest] = useState(1);
+  const [moveIn, setMoveIn] = useState("");
+  const [checkIn, setCheckIn] = useState<CheckInChoice>({ on: "", slot: "", remind: false });
+  // the documents they have opened - Submit waits for both
+  const [read, setRead] = useState<Set<string>>(new Set());
 
   // remembered, not worked out from whether the two sides match: two empty
   // fields match, which is not the same as having been answered
@@ -226,6 +242,15 @@ function MyProfilePage() {
           if (v["nationality"] === "MYS" && v["id_number"])
             v["id_number"] = formatNric(v["id_number"]);
           setValues(v);
+          setMoveIn(String(res.moveIn ?? ""));
+          // a student coming back finds the arrival they already chose, rather
+          // than an empty form that looks like it lost their answer
+          if (res.checkIn)
+            setCheckIn({
+              on: String(res.checkIn.on ?? ""),
+              slot: String(res.checkIn.slot ?? ""),
+              remind: Boolean(res.checkIn.remind),
+            });
           // a student coming back to a form whose payor already matches keeps
           // the tick, rather than finding it cleared
           // read back from what was saved: "Self" is the answer itself, and a
@@ -277,6 +302,8 @@ function MyProfilePage() {
     : [];
   // worked out once, and read by both the count at the bottom and each field
   const problemByKey = new Map(problems.map((p) => [p.f.key, p.msg]));
+  // the documents still to be opened - Submit waits for them
+  const unread = RESIDENT_DOCUMENTS.filter((d) => !read.has(d.key));
 
   /** Photos are shrunk in the browser first - a phone photo of an IC is several MB. */
   async function uploadDoc(key: string, file: File) {
@@ -307,25 +334,62 @@ function MyProfilePage() {
     }
   }
 
+  /** Jump to a step already reached. Forward is earned, not clicked. */
+  function goToStep(n: number) {
+    if (n > furthest) return;
+    setStep(n);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  /**
+   * Move on, if this step is finished.
+   *
+   * Step 1 is finished when nothing is blank or badly shaped - the same check
+   * Submit makes, made here instead so a student is told at the point they
+   * filled it in rather than three screens later. Step 2 is finished when the
+   * declaration is signed.
+   */
+  function nextStep() {
+    if (step === 1) {
+      if (problems.length) {
+        showProblems();
+        return;
+      }
+    }
+    if (step === 2 && !signed) {
+      toast.error("Please sign the declaration to continue");
+      return;
+    }
+    const to = Math.min(step + 1, 3);
+    setStep(to);
+    setFurthest((was) => Math.max(was, to));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  /** Show every gap at once and put the cursor in the first one. */
+  function showProblems() {
+    setTouched(new Set(problems.map((p) => p.f.key)));
+    const first = document.getElementById(`f-${problems[0]!.f.key}`);
+    first?.scrollIntoView({ block: "center", behavior: "smooth" });
+    first?.querySelector<HTMLElement>("input, select, textarea, button")?.focus({
+      preventScroll: true,
+    });
+    toast.error(
+      `${problems.length} field${problems.length === 1 ? "" : "s"} still ${problems.length === 1 ? "needs" : "need"} an answer`,
+    );
+  }
+
   async function submit() {
     if (!values) return;
+    // a gap can only be on step 1, so that is where they are taken to fix it
     if (problems.length) {
-      // show every problem at once, and take them to the first - scrolled to,
-      // then focused, so the cursor is already where the answer goes
-      setTouched(new Set(problems.map((p) => p.f.key)));
-      const first = document.getElementById(`f-${problems[0]!.f.key}`);
-      first?.scrollIntoView({ block: "center", behavior: "smooth" });
-      first?.querySelector<HTMLElement>("input, select, textarea, button")?.focus({
-        preventScroll: true,
-      });
-      toast.error(
-        `${problems.length} field${problems.length === 1 ? "" : "s"} still ${problems.length === 1 ? "needs" : "need"} an answer`,
-      );
+      setStep(1);
+      showProblems();
       return;
     }
     setSaving(true);
     try {
-      const res = await submitProfileByToken({ data: { token, values } });
+      const res = await submitProfileByToken({ data: { token, values, checkIn } });
       if (!res.ok) {
         setError(res.error);
         return;
@@ -446,7 +510,20 @@ function MyProfilePage() {
         ) : null}
       </div>
 
-      <div className="space-y-4">
+      <div className="mb-5">
+        <FormSteps
+          steps={[
+            { n: 1, label: "Resident profile" },
+            { n: 2, label: "Sign declaration" },
+            { n: 3, label: "Schedule check-in" },
+          ]}
+          at={step}
+          furthest={furthest}
+          onGo={goToStep}
+        />
+      </div>
+
+      <div className={step === 1 ? "space-y-4" : "hidden"}>
         {/* a section whose questions are all put away - Employment for a
             student, Academic for someone working - is not a heading over
             nothing, so it is not drawn at all */}
@@ -701,9 +778,11 @@ function MyProfilePage() {
         </section>
       </div>
 
-      {/* last, because it refers back to everything above it - nobody can agree
-          to terms about their own tenancy before saying who they are */}
-      <div className="mt-5">
+      {/* its own step, because it refers back to everything before it - nobody
+          can agree to terms about their own tenancy before saying who they are,
+          and on one long page they could scroll straight past and do exactly
+          that */}
+      <div className={step === 2 ? "" : "hidden"}>
         <DeclarationSection
           token={token}
           fullName={values["full_name"] ?? ""}
@@ -713,6 +792,57 @@ function MyProfilePage() {
         />
       </div>
 
+      <div className={step === 3 ? "space-y-4" : "hidden"}>
+        <CheckInStep moveIn={moveIn} value={checkIn} onChange={setCheckIn} />
+
+        {/* agreeing to a document nobody put in front of them is not agreement */}
+        <section className="rounded-2xl bg-card p-5 shadow-sm sm:p-6">
+          <h2 className="text-base font-semibold text-brand-deep">Before you submit</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Please open both documents. Your declaration refers to them, so we ask that you have
+            seen them.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {RESIDENT_DOCUMENTS.map((d) => {
+              const opened = read.has(d.key);
+              return (
+                <li key={d.key}>
+                  <a
+                    href={d.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setRead((was) => new Set(was).add(d.key))}
+                    className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${
+                      opened ? "border-brand-deep/40 bg-brand-tint" : "border-border hover:bg-muted"
+                    }`}
+                  >
+                    <span
+                      aria-hidden
+                      className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold ${
+                        opened
+                          ? "border-brand-deep bg-brand-deep text-primary-foreground"
+                          : "border-border text-muted-foreground"
+                      }`}
+                    >
+                      {opened ? "✓" : ""}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-foreground underline underline-offset-2">
+                        {d.label}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">{d.note}</span>
+                      <span className="mt-1 block text-xs font-medium text-brand-deep">
+                        {opened ? "Opened" : "Opens in a new tab"}
+                      </span>
+                    </span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      </div>
+
       {/* The save button follows you down the page without walling off the
           field behind it. A slab with an edge reads as a thing sitting on top;
           a fade into the page colour lets the form run underneath and keeps
@@ -720,26 +850,47 @@ function MyProfilePage() {
           pointer so only the controls in it can be clicked. */}
       <div className="pointer-events-none sticky bottom-0 z-10 -mx-4 mt-4 bg-gradient-to-t from-brand-tint via-brand-tint/85 to-transparent px-4 pb-4 pt-12 sm:mx-0">
         <div className="pointer-events-auto flex items-center justify-end gap-3">
-          {problems.length ? (
-            <p className="mr-auto text-xs font-medium text-destructive">
-              {problems.length} field{problems.length === 1 ? "" : "s"} need
-              {problems.length === 1 ? "s" : ""} fixing
-            </p>
-          ) : (
-            /* said where the decision is made, not buried in a tickbox nobody
-               reads - this is the last thing between them and Brachtia having
-               it on record */
-            <p className="mr-auto text-xs text-muted-foreground">
-              Submitting confirms these details are correct.
-            </p>
-          )}
-          <Button
-            onClick={submit}
-            disabled={saving}
-            className="min-w-36 shadow-[0_2px_8px_rgba(16,24,40,0.12),0_12px_28px_-12px_rgba(16,24,40,0.35)]"
+          {/* one line, saying the thing that stands between them and finishing */}
+          <p
+            className={`mr-auto text-xs ${
+              step === 1 && problems.length
+                ? "font-medium text-destructive"
+                : "text-muted-foreground"
+            }`}
           >
-            {saving ? "Submitting…" : "Submit my details"}
-          </Button>
+            {step === 1
+              ? problems.length
+                ? `${problems.length} field${problems.length === 1 ? "" : "s"} need${problems.length === 1 ? "s" : ""} filling in`
+                : "Everything is filled in."
+              : step === 2
+                ? signed
+                  ? "Signed. One step to go."
+                  : "Sign the declaration to continue."
+                : unread.length
+                  ? `Please open the ${unread.map((d) => d.label).join(" and the ")}.`
+                  : "Submitting confirms these details are correct."}
+          </p>
+          {step > 1 ? (
+            <Button variant="outline" onClick={() => goToStep(step - 1)} disabled={saving}>
+              Back
+            </Button>
+          ) : null}
+          {step < 3 ? (
+            <Button
+              onClick={nextStep}
+              className="min-w-28 shadow-[0_2px_8px_rgba(16,24,40,0.12),0_12px_28px_-12px_rgba(16,24,40,0.35)]"
+            >
+              Next
+            </Button>
+          ) : (
+            <Button
+              onClick={submit}
+              disabled={saving || unread.length > 0}
+              className="min-w-36 shadow-[0_2px_8px_rgba(16,24,40,0.12),0_12px_28px_-12px_rgba(16,24,40,0.35)]"
+            >
+              {saving ? "Submitting…" : "Submit my details"}
+            </Button>
+          )}
         </div>
       </div>
     </Shell>

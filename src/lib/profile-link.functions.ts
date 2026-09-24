@@ -148,7 +148,9 @@ export const getProfileByToken = createServerFn({ method: "GET" })
 
     const { data: row, error } = await supabase
       .from("residents")
-      .select(`id, quickbooks_id, resident_code, enquiry_id, docs, ${EDITABLE.join(", ")}`)
+      .select(
+        `id, quickbooks_id, resident_code, enquiry_id, docs, checkin_on, checkin_slot, checkin_remind, ${EDITABLE.join(", ")}`,
+      )
       .eq("id", found.link.resident_id)
       .single();
     if (error) throw new Error(error.message);
@@ -186,6 +188,28 @@ export const getProfileByToken = createServerFn({ method: "GET" })
           fileName: String(d?.fileName ?? ""),
         }))
       : [];
+    /*
+     * The day their tenancy starts, so the check-in step can offer that day and
+     * the week after it and nothing else. The tenancy is the agreed date; the
+     * enquiry only says what they asked for, so it is the fallback.
+     */
+    let moveIn = "";
+    const { data: tenancy } = await supabase
+      .from("tenancies")
+      .select("start_date")
+      .eq("resident_id", row.id)
+      .order("start_date", { ascending: false })
+      .limit(1);
+    moveIn = String(((tenancy ?? []) as any[])[0]?.start_date ?? "");
+    if (!moveIn && row.enquiry_id) {
+      const { data: enq } = await supabase
+        .from("enquiries")
+        .select("move_in")
+        .eq("id", row.enquiry_id)
+        .maybeSingle();
+      moveIn = String((enq as any)?.move_in ?? "");
+    }
+
     return {
       ok: true as const,
       values,
@@ -193,11 +217,24 @@ export const getProfileByToken = createServerFn({ method: "GET" })
       residentId: row.id as string,
       // the ID they go by - not their university student ID, which is one of the fields
       residentCode: String(row.resident_code || row.quickbooks_id || ""),
+      moveIn,
+      checkIn: {
+        on: String((row as any).checkin_on ?? ""),
+        slot: String((row as any).checkin_slot ?? ""),
+        remind: Boolean((row as any).checkin_remind),
+      },
     };
   });
 
 export const submitProfileByToken = createServerFn({ method: "POST" })
-  .inputValidator((data: { token: string; values: ProfileLinkFields }) => data)
+  .inputValidator(
+    (data: {
+      token: string;
+      values: ProfileLinkFields;
+      /** what they said about arriving - a day and a time, or ask me later */
+      checkIn?: { on?: string; slot?: string; remind?: boolean };
+    }) => data,
+  )
   .handler(async ({ data }) => {
     const supabase = await admin();
     const found = await residentForToken(supabase, data.token);
@@ -209,6 +246,21 @@ export const submitProfileByToken = createServerFn({ method: "POST" })
       const v = data.values[key];
       if (typeof v === "string") row[key] = v.trim();
     }
+
+    /*
+     * When they said they would arrive. A request, not a booking - nothing is
+     * held for them until admin has a key and a person ready. "Remind me" is an
+     * answer too, and is kept as one so the booking can show it rather than
+     * looking like a form nobody finished.
+     */
+    if (data.checkIn) {
+      const remind = Boolean(data.checkIn.remind);
+      row["checkin_remind"] = remind;
+      row["checkin_on"] = remind ? null : data.checkIn.on || null;
+      row["checkin_slot"] = remind ? "" : (data.checkIn.slot ?? "");
+      row["checkin_asked_at"] = new Date().toISOString();
+    }
+
     if (!Object.keys(row).length) return { ok: true as const };
 
     const { error } = await supabase
