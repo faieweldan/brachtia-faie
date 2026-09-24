@@ -733,9 +733,7 @@ function AppointmentsPage() {
                         })}{" "}
                         · {formatSlot(a.starts_at)}
                       </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {a.duration_minutes} min
-                      </p>
+                      <p className="text-[11px] text-muted-foreground">{a.duration_minutes} min</p>
                     </div>
                     <div className="min-w-0">
                       <p className="truncate text-foreground">{a.full_name}</p>
@@ -749,7 +747,13 @@ function AppointmentsPage() {
                       {type?.name ?? a.type_slug}
                     </p>
                     <p className="truncate text-muted-foreground">{residence}</p>
-                    <p className="text-muted-foreground">{a.assigned_staff || "—"}</p>
+                    {/* a dash reads as unknown. Nobody is on this one yet, and
+                        that is a thing to do rather than a thing missing */}
+                    <p className="text-muted-foreground">
+                      {a.assigned_staff || (
+                        <span className="italic text-amber-700">Not assigned yet</span>
+                      )}
+                    </p>
                     <p>
                       <span
                         className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
@@ -783,7 +787,7 @@ function AppointmentsPage() {
             <>
               <DialogHeader className="space-y-1">
                 <DialogTitle className="flex flex-wrap items-center gap-2 text-lg">
-                  {form.id ? (form.full_name || "Appointment details") : "New appointment"}
+                  {form.id ? form.full_name || "Appointment details" : "New appointment"}
                   {form.id ? (
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
@@ -803,14 +807,11 @@ function AppointmentsPage() {
               </DialogHeader>
 
               {(() => {
-                const linkedBooking = form.enquiry_id
-                  ? enquiryById.get(form.enquiry_id)
-                  : null;
+                const linkedBooking = form.enquiry_id ? enquiryById.get(form.enquiry_id) : null;
                 const readOnly = Boolean(linkedBooking);
                 const stayMoveIn = form.move_in || linkedBooking?.move_in || "";
                 const stayMoveOut = form.move_out || linkedBooking?.move_out || "";
-                const staySharing =
-                  form.sharing_preference || linkedBooking?.occupancy || "";
+                const staySharing = form.sharing_preference || linkedBooking?.occupancy || "";
                 const startIso = new Date(`${form.date}T${form.time}:00+08:00`).toISOString();
                 const initials = (form.full_name || "?")
                   .split(" ")
@@ -861,9 +862,7 @@ function AppointmentsPage() {
                             <DayPicker
                               mode="single"
                               selected={new Date(`${form.date}T00:00:00`)}
-                              onSelect={(d) =>
-                                d && setField("date", d.toLocaleDateString("en-CA"))
-                              }
+                              onSelect={(d) => d && setField("date", d.toLocaleDateString("en-CA"))}
                               className="pointer-events-auto rounded-md border border-border bg-background p-2"
                             />
                             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -939,8 +938,7 @@ function AppointmentsPage() {
                                     ? {
                                         ...p,
                                         type_slug: e.target.value,
-                                        duration_minutes:
-                                          t?.duration_minutes ?? p.duration_minutes,
+                                        duration_minutes: t?.duration_minutes ?? p.duration_minutes,
                                       }
                                     : p,
                                 );
@@ -1126,9 +1124,7 @@ function AppointmentsPage() {
 
                         <div
                           className={`flex items-start gap-2 rounded-lg px-3 py-2 text-xs ${
-                            readOnly
-                              ? "bg-brand-tint text-brand-deep"
-                              : "bg-sky-50 text-sky-800"
+                            readOnly ? "bg-brand-tint text-brand-deep" : "bg-sky-50 text-sky-800"
                           }`}
                         >
                           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -1550,7 +1546,10 @@ function CalendarView({
 
       <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg bg-border text-xs">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-          <div key={d} className="bg-muted px-2 py-1.5 text-center font-medium text-muted-foreground">
+          <div
+            key={d}
+            className="bg-muted px-2 py-1.5 text-center font-medium text-muted-foreground"
+          >
             {d}
           </div>
         ))}

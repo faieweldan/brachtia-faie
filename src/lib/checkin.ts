@@ -5,6 +5,9 @@
  * judge a request against, and two copies of a rule is one rule and one guess.
  */
 
+/** The appointment type an arrival is booked as, as seeded in the database. */
+export const CHECKIN_TYPE = "check-in";
+
 /** Arrival may be the tenancy start day or any of the seven days after it. */
 export const CHECKIN_WINDOW_DAYS = 7;
 

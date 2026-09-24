@@ -226,6 +226,102 @@ export const getProfileByToken = createServerFn({ method: "GET" })
     };
   });
 
+import { CHECKIN_TYPE } from "@/lib/checkin";
+
+/**
+ * The student's arrival, put where staff already look for appointments.
+ *
+ * Pending, not confirmed - exactly as a viewing booked from the website is. A
+ * student naming a time is asking for it; somebody has to have a key and an
+ * hour free before it is a fact, and the Appointment manager is where that
+ * decision already gets made.
+ *
+ * One appointment per resident, moved rather than repeated: the form can be
+ * submitted as often as they like, and each save must not leave another arrival
+ * behind on the calendar. Choosing the reminder instead withdraws the one they
+ * had, because an arrival nobody intends to make is worse on a calendar than no
+ * arrival at all.
+ *
+ * Never throws. A student's application must not fail over a calendar entry.
+ */
+async function recordCheckInAppointment(
+  supabase: any,
+  residentId: string,
+  choice: { on?: string; slot?: string; remind?: boolean },
+) {
+  try {
+    const { data: resident } = await supabase
+      .from("residents")
+      .select("full_name, email, mobile, university, enquiry_id")
+      .eq("id", residentId)
+      .maybeSingle();
+    if (!resident) return;
+
+    // the one they already asked for, if any - found before anything is written
+    const { data: mine } = await supabase
+      .from("appointments")
+      .select("id")
+      .eq("type_slug", CHECKIN_TYPE)
+      .eq("resident_id", residentId)
+      .neq("status", "cancelled")
+      .limit(1);
+    const existing = ((mine ?? []) as any[])[0] ?? null;
+
+    if (choice.remind || !choice.on || !choice.slot) {
+      // withdrawn: the slot goes back, and the record of it having been asked
+      // for stays as a cancellation rather than vanishing
+      if (existing) {
+        await supabase
+          .from("appointments")
+          .update({ status: "cancelled", updated_at: new Date().toISOString() })
+          .eq("id", existing.id);
+      }
+      return;
+    }
+
+    const { data: enquiry } = resident.enquiry_id
+      ? await supabase
+          .from("enquiries")
+          .select("residence_slug, residence_name")
+          .eq("id", resident.enquiry_id)
+          .maybeSingle()
+      : { data: null };
+    const { data: type } = await supabase
+      .from("appointment_types")
+      .select("duration_minutes")
+      .eq("slug", CHECKIN_TYPE)
+      .maybeSingle();
+
+    // the time as Malaysia reads it; stored as the instant it names
+    const startsAt = new Date(`${choice.on}T${choice.slot}:00+08:00`).toISOString();
+    const row = {
+      type_slug: CHECKIN_TYPE,
+      mode: "in_person",
+      starts_at: startsAt,
+      duration_minutes: Number((type as any)?.duration_minutes ?? 60),
+      status: "pending",
+      resident_id: residentId,
+      enquiry_id: (resident as any).enquiry_id ?? null,
+      residence_slug: String((enquiry as any)?.residence_slug ?? ""),
+      residence_name: String((enquiry as any)?.residence_name ?? ""),
+      full_name: String((resident as any).full_name ?? ""),
+      email: String((resident as any).email ?? ""),
+      phone: String((resident as any).mobile ?? ""),
+      university: String((resident as any).university ?? ""),
+      source: "resident-form",
+      updated_at: new Date().toISOString(),
+    };
+
+    if (existing) {
+      await supabase.from("appointments").update(row).eq("id", existing.id);
+    } else {
+      await supabase.from("appointments").insert(row);
+    }
+  } catch (err) {
+    console.warn("check-in appointment not recorded", err);
+  }
+}
+
 export const submitProfileByToken = createServerFn({ method: "POST" })
   .inputValidator(
     (data: {
@@ -268,6 +364,11 @@ export const submitProfileByToken = createServerFn({ method: "POST" })
       .update(row as any)
       .eq("id", found.link.resident_id);
     if (error) throw new Error(error.message);
+
+    // the arrival goes on the calendar staff actually work from
+    if (data.checkIn) {
+      await recordCheckInAppointment(supabase, found.link.resident_id, data.checkIn);
+    }
 
     await supabase
       .from("profile_links")
