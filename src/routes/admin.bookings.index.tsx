@@ -15,7 +15,8 @@ import {
   STAGE_PILL,
   actionLabel,
   listActionLabel,
-  nextActionFor,
+  bookingNextAction,
+  upcomingViewing,
   slaText,
   stageLabel,
   type ActionKey,
@@ -86,12 +87,6 @@ function BookingsTable() {
     const hit = beds.find((b) => b.bed.enquiryId === row.id);
     if (!hit) return "—";
     return `${hit.unit.unitNo} ${hit.room.letter}`;
-  }
-
-  function upcomingViewing(row: any) {
-    return appointments
-      .filter((a) => a.enquiry_id === row.id && a.status !== "cancelled")
-      .sort((x, y) => new Date(x.starts_at).getTime() - new Date(y.starts_at).getTime())[0];
   }
 
   /** Pairs staff have already said are different people. */
@@ -176,8 +171,8 @@ function BookingsTable() {
   }
 
   const decorated = (data as any[]).map((r) => {
-    const viewing = upcomingViewing(r);
-    const next = nextActionFor(r, viewing?.starts_at);
+    const viewing = upcomingViewing(appointments, r.id);
+    const next = bookingNextAction(r, appointments);
     return { row: r, next, sla: slaText(next.due), viewing };
   });
 

@@ -64,7 +64,8 @@ import {
   STAGE_ORDER,
   STAGE_PILL,
   actionLabel,
-  nextActionFor,
+  bookingNextAction,
+  upcomingViewing,
   stageLabel,
   type ActionKey,
 } from "@/lib/bookings-pipeline";
@@ -305,9 +306,7 @@ function BookingDetail() {
   const linkedBeds = useMemo(() => beds.filter((b) => b.bed.enquiryId === id), [beds, id]);
   const assignedBed = linkedBeds[0];
 
-  const viewing = appointments
-    .filter((a) => a.enquiry_id === id && a.status !== "cancelled")
-    .sort((x, y) => new Date(x.starts_at).getTime() - new Date(y.starts_at).getTime())[0];
+  const viewing = upcomingViewing(appointments, id);
 
   /* ----- viewing scheduling ----- */
   const [viewingPanel, setViewingPanel] = useState(false);
@@ -522,7 +521,7 @@ function BookingDetail() {
     });
   }
 
-  const next = row ? nextActionFor(row, viewing?.starts_at, viewing?.assigned_staff) : null;
+  const next = row ? bookingNextAction(row, appointments) : null;
 
   if (isLoading || !row) {
     return (

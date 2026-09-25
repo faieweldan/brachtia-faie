@@ -195,6 +195,33 @@ export function nextActionFor(
   }
 }
 
+/**
+ * The viewing a booking is waiting on: its earliest appointment that still
+ * stands. A cancelled one is not a viewing anybody is going to - it stays on
+ * record, but it cannot be what the next action is about.
+ */
+export function upcomingViewing(appointments: any[], enquiryId: string) {
+  return appointments
+    .filter((a) => a.enquiry_id === enquiryId && a.status !== "cancelled")
+    .sort((x, y) => new Date(x.starts_at).getTime() - new Date(y.starts_at).getTime())[0];
+}
+
+/**
+ * The next action for a booking, worked out from the appointments themselves.
+ *
+ * Prefer this to calling `nextActionFor` directly. Its viewing details are
+ * separate arguments, and the bookings list passed the time but not the staff -
+ * so every booking with a viewing booked read as nobody assigned, and the list
+ * said "Assign staff" next to bookings that already had one while the booking
+ * page said "Generate invoice". Two screens disagreeing about the same booking
+ * is worse than either answer, and the way to stop it is to leave nothing for a
+ * caller to forget.
+ */
+export function bookingNextAction(row: any, appointments: any[]): NextAction {
+  const viewing = upcomingViewing(appointments, row.id);
+  return nextActionFor(row, viewing?.starts_at, viewing?.assigned_staff);
+}
+
 export function slaText(due?: number | undefined, now = Date.now()) {
   if (!due) return { text: "—", tone: "muted" as const, remaining: Number.MAX_SAFE_INTEGER };
   const remaining = due - now;
