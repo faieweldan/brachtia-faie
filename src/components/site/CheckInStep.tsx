@@ -74,7 +74,21 @@ export function CheckInStep({
     });
   }, [moveIn]);
 
-  const open = days.filter((d) => !d.tooSoon);
+  /*
+   * Short notice is marked, not refused.
+   *
+   * Every day in the window used to be greyed out until it was five days off,
+   * so a student whose tenancy starts on Saturday could not say they were
+   * arriving on Saturday. Their tenancy starts that day either way - they turn
+   * up with their bags whether or not the form let them say so, and refusing
+   * the date does not move the arrival, only the telling of it.
+   *
+   * The form asks rather than books: the request is saved pending and staff
+   * confirm it and put a name to it. So the notice period is theirs to judge
+   * against a real date, and it is said on the day rather than taken away.
+   */
+  const short = days.filter((d) => d.tooSoon);
+  const chosenIsShort = days.some((d) => d.iso === value.on && d.tooSoon);
   const off = value.remind;
   // the last day that needs no approval - past it the calendar marks, not blocks
   const lastInWindow = moveIn ? addDays(moveIn, CHECKIN_WINDOW_DAYS) : "";
@@ -165,14 +179,14 @@ export function CheckInStep({
             We do not have your move-in date yet, so we cannot offer days to choose from. Pick the
             reminder below and we will sort this out with you.
           </p>
-        ) : !open.length ? (
+        ) : short.length === days.length ? (
           <p className="mt-5 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Every day in your arrival window is less than {CHECKIN_NOTICE_DAYS} days away. Pick the
-            reminder below and message us — we will arrange your arrival with you directly.
+            Your tenancy starts soon, so every day below is less than {CHECKIN_NOTICE_DAYS} days
+            away. Choose the one you are coming and we will confirm it with you.
           </p>
         ) : null}
 
-        {moveIn && open.length ? (
+        {moveIn ? (
           <div className={`mt-6 transition-opacity ${off ? "pointer-events-none opacity-40" : ""}`}>
             <p className="text-sm font-semibold italic text-foreground">Date:</p>
             {/*
@@ -189,12 +203,21 @@ export function CheckInStep({
             >
               <option value="">Choose your arrival date</option>
               {days.map((d) => (
-                <option key={d.iso} value={d.iso} disabled={d.tooSoon}>
+                <option key={d.iso} value={d.iso}>
                   {d.label}
-                  {d.tooSoon ? `  (less than ${CHECKIN_NOTICE_DAYS} days away)` : ""}
+                  {d.tooSoon ? "  (short notice)" : ""}
                 </option>
               ))}
             </select>
+
+            {/* what the label on the day actually means for them, said once they
+                have picked one rather than as a warning beside every date */}
+            {chosenIsShort ? (
+              <p className="mt-2 text-xs text-amber-700">
+                That is less than {CHECKIN_NOTICE_DAYS} days away. We will confirm it with you, and
+                may ask for a different time if nobody can be there.
+              </p>
+            ) : null}
 
             <p className="mt-5 text-sm font-semibold italic text-foreground">Time:</p>
             <select
