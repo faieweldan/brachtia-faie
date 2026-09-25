@@ -199,7 +199,12 @@ function AppointmentsPage() {
   const [view, setView] = useState<"list" | "calendar">("list");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  /*
+   * "live" rather than "all": a cancelled appointment is a record, not a
+   * commitment, and it was being shown next to the ones somebody is actually
+   * turning up for. Seeing them is a question you have to ask for.
+   */
+  const [statusFilter, setStatusFilter] = useState("live");
   const [residenceFilter, setResidenceFilter] = useState("all");
   const [staffFilter, setStaffFilter] = useState("all");
   const [from, setFrom] = useState("");
@@ -261,7 +266,9 @@ function AppointmentsPage() {
     () =>
       appointments.filter((a) => {
         if (typeFilter !== "all" && a.type_slug !== typeFilter) return false;
-        if (statusFilter !== "all" && a.status !== statusFilter) return false;
+        if (statusFilter === "live") {
+          if (a.status === "cancelled") return false;
+        } else if (statusFilter !== "all" && a.status !== statusFilter) return false;
         if (residenceFilter !== "all") {
           const slugs: string[] = (a.residence_slugs ?? []).length
             ? a.residence_slugs
@@ -626,12 +633,13 @@ function AppointmentsPage() {
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
         >
-          <option value="all">All statuses</option>
+          <option value="live">All except cancelled</option>
           {STATUSES.map((s) => (
             <option key={s} value={s}>
               {STATUS_LABEL[s]}
             </option>
           ))}
+          <option value="all">All, including cancelled</option>
         </select>
 
         <select
@@ -722,7 +730,12 @@ function AppointmentsPage() {
                     onClick={() => openEdit(a)}
                     onKeyDown={(e) => e.key === "Enter" && openEdit(a)}
                     style={gridCols}
-                    className="grid cursor-pointer items-center gap-3 border-b border-border px-4 py-3 text-sm last:border-0 hover:bg-muted/40"
+                    /* a cancelled row is history sitting among live ones, so it
+                       steps back rather than competing for the eye - readable
+                       when looked at, quiet when scanned past */
+                    className={`grid cursor-pointer items-center gap-3 border-b border-border px-4 py-3 text-sm last:border-0 hover:bg-muted/40 ${
+                      a.status === "cancelled" ? "opacity-55" : ""
+                    }`}
                   >
                     <div>
                       <p className="font-medium text-foreground">
@@ -774,7 +787,18 @@ function AppointmentsPage() {
         <CalendarView
           month={month}
           onMonth={setMonth}
-          appointments={filtered}
+          /*
+           * The calendar answers "when is somebody expected?", and a cancelled
+           * appointment is nobody. Left on it, an hour that is free reads as
+           * taken - so a slot that could have been offered to the next student
+           * is quietly not offered. It only appears when it is what was asked
+           * for.
+           */
+          appointments={
+            statusFilter === "cancelled"
+              ? filtered
+              : filtered.filter((a) => a.status !== "cancelled")
+          }
           typeBySlug={typeBySlug}
           onSelect={openEdit}
         />
