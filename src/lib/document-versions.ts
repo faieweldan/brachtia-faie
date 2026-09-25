@@ -33,7 +33,18 @@ export function referenceFor(reference: string, version: number): string {
   return version > 1 ? `${reference}/${version - 1}` : reference;
 }
 
-/** What to call a version in a list: the original says so in words. */
-export function versionLabel(reference: string, version: number): string {
-  return version > 1 ? referenceFor(reference, version) : `${reference} · original`;
+/**
+ * What to call a version in a list.
+ *
+ * Only a version actually recorded from a save is the original. A backfilled
+ * one is the earliest still in the system on a booking that predates any of
+ * this - the quote before it was painted over and cannot be recovered - and
+ * calling that "the original" would be the system vouching for something it
+ * does not know.
+ */
+export function versionLabel(reference: string, version: number, issuedAs = "saved"): string {
+  if (version > 1) return referenceFor(reference, version);
+  return issuedAs === "backfilled"
+    ? `${reference} · earliest on record`
+    : `${reference} · original`;
 }

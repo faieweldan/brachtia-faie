@@ -287,6 +287,7 @@ export function PdfPreviewButton({
                           ? versionLabel(
                               versions.reference || s.version.reference,
                               s.version.version,
+                              s.version.issuedAs,
                             )
                           : "Working copy"}
                       </span>
