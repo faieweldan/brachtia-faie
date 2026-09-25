@@ -358,7 +358,7 @@ export const getViewingLink = createServerFn({ method: "GET" })
     const { data: row } = await supabaseAdmin
       .from("enquiries")
       .select(
-        "id,reference,full_name,email,phone,university,nationality,gender,intake,residence_slug,residence_name,room_name,unit_type,occupancy,move_in,move_out,monthly_rent,term",
+        "id,reference,status,full_name,email,phone,university,nationality,gender,intake,residence_slug,residence_name,room_name,unit_type,occupancy,move_in,move_out,monthly_rent,term",
       )
       .eq("viewing_token", data.token)
       .maybeSingle();
@@ -419,10 +419,20 @@ export const getViewingLink = createServerFn({ method: "GET" })
       .limit(1)
       .maybeSingle();
 
+    /*
+     * Whether this booking is still theirs to move on.
+     *
+     * Said as one answer rather than handing the page a stage to interpret: the
+     * page asks "may they still ask for an invoice", not "what stage is this",
+     * and the rule lives in one place for the page and the server that enforces
+     * it.
+     */
+    const { studentMayMoveStage } = await import("@/lib/bookings-pipeline");
     return {
       ok: true as const,
       booking: { ...row, unit_no: unitNo, unit_room: roomLetter },
       viewing: appt ?? null,
+      settled: !studentMayMoveStage(row.status),
     };
   });
 
@@ -450,6 +460,20 @@ export const skipViewingFromLink = createServerFn({ method: "POST" })
       .eq("viewing_token", data.token)
       .maybeSingle();
     if (!enquiry) return { ok: false as const };
+
+    /*
+     * Their link stays live after they have paid, and nothing here stopped a
+     * second press. A student whose fee was banked and whose resident had been
+     * made could drag their own booking back to Invoice requested, taking View
+     * resident off a booking that was holding their money.
+     *
+     * Nothing is written once it is past that: the page tells them what they
+     * already have, and anything they still want is a conversation with staff.
+     * The same rule the viewing booking already applied - this was the one way
+     * in that did not.
+     */
+    const { studentMayMoveStage } = await import("@/lib/bookings-pipeline");
+    if (!studentMayMoveStage(enquiry.status)) return { ok: true as const };
 
     const now = new Date().toISOString();
     const { error } = await supabaseAdmin

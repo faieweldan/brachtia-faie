@@ -108,6 +108,16 @@ function ViewingLinkPage() {
   const booking = linkQuery.data?.ok
     ? (linkQuery.data.booking as Record<string, string | number | null>)
     : null;
+  /*
+   * Their fee is in and their booking is being worked on by staff now.
+   *
+   * The link stays live, so a student who has paid can come back to this page
+   * and press "Request booking invoice" again. That used to set the stage
+   * afresh and pull a booked booking back to Invoice requested, so the page
+   * stops offering it - the server refuses it too, this is so they are not
+   * offered something that will not happen.
+   */
+  const settled = linkQuery.data?.ok ? Boolean(linkQuery.data.settled) : false;
   const slug = String(booking?.["residence_slug"] ?? "");
   const isoDate = date ? toISODate(date) : "";
 
@@ -387,31 +397,47 @@ function ViewingLinkPage() {
           </span>
         </button>
 
-        <button
-          type="button"
-          onClick={() => {
-            setView(view === "booking" ? "choose" : "booking");
-            requestAnimationFrame(() =>
-              document
-                .getElementById("booking-panel")
-                ?.scrollIntoView({ behavior: "smooth", block: "nearest" }),
-            );
-          }}
-          className="group relative overflow-hidden rounded-2xl border-2 border-brand-deep/70 bg-card p-5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-all hover:-translate-y-0.5 hover:border-brand-deep hover:shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_28px_-14px_rgba(16,24,40,0.3)]"
-        >
-          <span className="absolute inset-x-0 top-0 h-1 bg-brand-deep" aria-hidden />
-          <span className="flex size-11 items-center justify-center rounded-xl bg-brand-deep text-primary-foreground">
-            <KeyRound className="size-5" />
-          </span>
-          <span className="mt-3 block text-base font-bold text-brand-deep">Ready to book?</span>
-          <span className="mt-1 block text-sm leading-relaxed text-muted-foreground">
-            Proceed with the room above and request your booking invoice.
-          </span>
-          <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-deep">
-            {view === "booking" ? "Hide the details" : "Proceed to booking"}
-            <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-          </span>
-        </button>
+        {/* their booking is with staff now: this says where it stands instead of
+            offering to start it again */}
+        {settled ? (
+          <div className="relative overflow-hidden rounded-2xl border-2 border-brand-deep/70 bg-card p-5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+            <span className="absolute inset-x-0 top-0 h-1 bg-brand-deep" aria-hidden />
+            <span className="flex size-11 items-center justify-center rounded-xl bg-brand-deep text-primary-foreground">
+              <KeyRound className="size-5" />
+            </span>
+            <p className="mt-3 text-base font-bold text-brand-deep">Your booking is with us</p>
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+              We have your booking for the room above and our team is taking it from here. Message
+              us on WhatsApp if anything needs to change.
+            </p>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              setView(view === "booking" ? "choose" : "booking");
+              requestAnimationFrame(() =>
+                document
+                  .getElementById("booking-panel")
+                  ?.scrollIntoView({ behavior: "smooth", block: "nearest" }),
+              );
+            }}
+            className="group relative overflow-hidden rounded-2xl border-2 border-brand-deep/70 bg-card p-5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-all hover:-translate-y-0.5 hover:border-brand-deep hover:shadow-[0_1px_2px_rgba(16,24,40,0.04),0_12px_28px_-14px_rgba(16,24,40,0.3)]"
+          >
+            <span className="absolute inset-x-0 top-0 h-1 bg-brand-deep" aria-hidden />
+            <span className="flex size-11 items-center justify-center rounded-xl bg-brand-deep text-primary-foreground">
+              <KeyRound className="size-5" />
+            </span>
+            <span className="mt-3 block text-base font-bold text-brand-deep">Ready to book?</span>
+            <span className="mt-1 block text-sm leading-relaxed text-muted-foreground">
+              Proceed with the room above and request your booking invoice.
+            </span>
+            <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-deep">
+              {view === "booking" ? "Hide the details" : "Proceed to booking"}
+              <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+            </span>
+          </button>
+        )}
       </div>
 
       {/*
@@ -525,7 +551,7 @@ function ViewingLinkPage() {
             </Button>
           </div>
         </div>
-      ) : view === "booking" ? (
+      ) : view === "booking" && !settled ? (
         <div id="booking-panel" className="mt-8 scroll-mt-6">
           <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-brand-deep sm:text-3xl">
             Confirm your booking

@@ -268,3 +268,29 @@ export const SLA_TONE: Record<string, string> = {
   over: "text-rose-600",
   muted: "text-muted-foreground",
 };
+
+/**
+ * Stages a student's own link may still move a booking out of.
+ *
+ * Their link stays live after they have paid, and pressing "Request booking
+ * invoice" on it set the stage again with nothing to stop it - so a booking
+ * whose fee was banked and whose resident had been made was dragged back to
+ * Invoice requested, and View resident disappeared off a booking holding their
+ * money.
+ *
+ * Money and a resident are the line. Once an invoice is out, what happens to
+ * the booking is staff's to decide against what has been paid, and a student
+ * re-reading their link is not a decision. Anything they do from here shows up
+ * as an appointment, which is a request somebody confirms, and leaves the
+ * booking where it is.
+ */
+const STUDENT_MAY_MOVE: StageKey[] = [
+  "open",
+  "room_reserved",
+  "viewing_scheduled",
+  "invoice_requested",
+];
+
+export function studentMayMoveStage(status: string | null | undefined): boolean {
+  return STUDENT_MAY_MOVE.includes(String(status ?? "") as StageKey);
+}

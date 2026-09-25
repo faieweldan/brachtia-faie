@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { bookingNextAction, upcomingViewing, STAGE_ORDER, stageLabel } from '../src/lib/bookings-pipeline';
+import { bookingNextAction, upcomingViewing, STAGE_ORDER, stageLabel, studentMayMoveStage } from '../src/lib/bookings-pipeline';
 
 const booking = { id: 'b1', status: 'viewing_scheduled', stage_changed_at: '2026-09-20T00:00:00Z' };
 const appt = (over: Record<string, unknown> = {}) => ({
@@ -61,5 +61,26 @@ describe('a student who asked for their invoice', () => {
   test('once the invoice is out it is awaiting payment, and that asks for the fee', () => {
     expect(bookingNextAction({ ...booking, status: 'awaiting_fee' }, []).action)
       .toBe('upload_booking_fee');
+  });
+});
+
+describe("what a student's own link may still move", () => {
+  test("before any money, their link still decides the next step", () => {
+    for (const stage of ["open", "room_reserved", "viewing_scheduled", "invoice_requested"]) {
+      expect(studentMayMoveStage(stage)).toBe(true);
+    }
+  });
+  test("once the invoice is out it is staff's booking, not the link's", () => {
+    // the link stays live after they pay, and pressing "Request booking
+    // invoice" again dragged a booked booking back to Invoice requested -
+    // taking View resident off a booking holding their money
+    for (const stage of ["awaiting_fee", "awaiting_payment", "booked", "closed"]) {
+      expect(studentMayMoveStage(stage)).toBe(false);
+    }
+  });
+  test("a stage nobody recognises is not one a student may move", () => {
+    expect(studentMayMoveStage("")).toBe(false);
+    expect(studentMayMoveStage(null)).toBe(false);
+    expect(studentMayMoveStage("something new")).toBe(false);
   });
 });
