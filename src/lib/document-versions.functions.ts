@@ -115,7 +115,29 @@ export async function recordInvoiceVersion(supabase: any, invoiceId: string): Pr
   try {
     const [{ data: row }, { data: items }] = await Promise.all([
       supabase.from("invoices").select("*").eq("id", invoiceId).maybeSingle(),
-      supabase.from("invoice_items").select("*").eq("invoice_id", invoiceId).order("id"),
+      /*
+       * In the order the invoice lists them, which is the order every other
+       * read of these rows uses.
+       *
+       * This asked for them by id. The id is a random uuid, so the lines came
+       * back shuffled - and that shuffle was what got frozen, so a kept version
+       * listed the same charges in a different order from the invoice itself.
+       *
+       * It also defeated the dedupe below, which decides "nothing changed" by
+       * comparing one body with the last. Two reads of an unchanged invoice
+       * gave two different orders, so every save looked like a change and
+       * raised a version that said nothing new.
+       *
+       * created_at breaks a tie, so two lines saved with the same sort_order
+       * still come back the same way twice - the same tiebreak the backfill
+       * uses.
+       */
+      supabase
+        .from("invoice_items")
+        .select("*")
+        .eq("invoice_id", invoiceId)
+        .order("sort_order")
+        .order("created_at"),
     ]);
     if (!row) return;
     const { invoiceDocFromRow } = await import("@/lib/invoice-doc");
