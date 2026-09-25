@@ -1,3 +1,4 @@
+import { greetingName } from "@/lib/greeting";
 import { useEffect, useRef, useState } from "react";
 import { Check, Copy, FileText, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -19,9 +20,9 @@ import { recordBookingEvent } from "@/lib/booking-activity.functions";
  */
 
 /** Brachtia's wording, word for word. Only the link is filled in. */
-const welcomeMessage = (link: string, hasProof: boolean) =>
+const welcomeMessage = (name: string, link: string, hasProof: boolean) =>
   [
-    "Dear Student,",
+    `Dear ${greetingName(name)},`,
     "Thank you for your booking fee payment! 🎉 We’re excited to welcome you to Brachtia Homes.",
     // a proof is only uploaded sometimes - never promise a part that is not there
     hasProof
@@ -34,10 +35,10 @@ const welcomeMessage = (link: string, hasProof: boolean) =>
     "Brachtia Homes 🏡",
   ].join("\n");
 
-async function makeMessage(residentId: string, hasProof: boolean) {
+async function makeMessage(residentId: string, name: string, hasProof: boolean) {
   const { getOrCreateProfileLink } = await import("@/lib/profile-link.functions");
   const { token } = await getOrCreateProfileLink({ data: { residentId } });
-  return welcomeMessage(`${window.location.origin}/my-profile/${token}`, hasProof);
+  return welcomeMessage(name, `${window.location.origin}/my-profile/${token}`, hasProof);
 }
 
 /** A PDF the message says is attached - opened here, downloaded, then attached in WhatsApp. */
@@ -45,6 +46,7 @@ export type WelcomeAttachment = { label: string; fileName: string; build: () => 
 
 export function WelcomeMessageCard({
   residentId,
+  studentName,
   enquiryId,
   phone,
   attachments,
@@ -55,6 +57,8 @@ export function WelcomeMessageCard({
   highlight,
 }: {
   residentId: string;
+  /** greeted by name, not as "Student" */
+  studentName: string;
   enquiryId: string;
   phone: string;
   attachments: WelcomeAttachment[];
@@ -74,7 +78,7 @@ export function WelcomeMessageCard({
   async function prepare() {
     setLoading(true);
     try {
-      setMessage(await makeMessage(residentId, hasProof));
+      setMessage(await makeMessage(residentId, studentName, hasProof));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not create the link");
     } finally {
@@ -87,7 +91,7 @@ export function WelcomeMessageCard({
     if (sent) return;
     let live = true;
     setLoading(true);
-    makeMessage(residentId, hasProof)
+    makeMessage(residentId, studentName, hasProof)
       .then((m) => live && setMessage(m))
       .catch(() => live && toast.error("Could not create the link"))
       .finally(() => live && setLoading(false));

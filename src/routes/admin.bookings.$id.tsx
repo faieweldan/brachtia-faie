@@ -2032,6 +2032,7 @@ function BookingDetail() {
               sent={Boolean((row as any).welcome_sent_at)}
               onSent={() => void queryClient.invalidateQueries({ queryKey: ["admin"] })}
               residentId={row.resident_id}
+              studentName={row.full_name ?? ""}
               phone={row.phone ?? ""}
               hasProof={receipts.some(hasProofFor)}
               /*

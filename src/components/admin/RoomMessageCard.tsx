@@ -1,3 +1,4 @@
+import { greetingName } from "@/lib/greeting";
 import { useEffect, useState } from "react";
 import { Copy, Mail, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -145,7 +146,8 @@ export function RoomMessageCard({
   const auto: Outcome = roomReserved ? "available" : "unavailable";
   const outcome = picked ?? auto;
   const details: Details = {
-    student: studentName.trim() || "there",
+    // the name they answer to, the same as every other message Brachtia sends
+    student: greetingName(studentName),
     staff: staffName.trim() || TEAM,
     roomType: roomType.trim() || "room",
     residence: residenceName.trim() || "Brachtia Homes",
