@@ -30,6 +30,7 @@ export function invoiceDocFromRow(row: any, items: any[]): InvoiceDoc {
     full_name: row?.full_name ?? "",
     email: row?.email ?? "",
     phone: row?.phone ?? "",
+    university: row?.university ?? "",
     nationality: row?.nationality ?? "",
     residence_name: row?.residence_name ?? "",
     room_name: row?.room_name ?? "",

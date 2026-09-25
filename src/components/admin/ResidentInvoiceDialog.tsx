@@ -41,6 +41,7 @@ export type ResidentDetails = {
   fullName: string;
   email: string;
   phone: string;
+  university: string;
   nationality: string;
   residenceName: string;
   roomName: string;
@@ -216,6 +217,7 @@ export function ResidentInvoiceDialog({
     full_name: details.fullName,
     email: details.email,
     phone: details.phone,
+    university: details.university,
     nationality: details.nationality,
     residence_name: details.residenceName,
     room_name: details.roomName,

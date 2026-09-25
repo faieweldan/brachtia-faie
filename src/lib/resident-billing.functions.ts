@@ -635,6 +635,7 @@ function toBillingInvoice(
       full_name: String(raw.full_name ?? ""),
       email: String(raw.email ?? ""),
       phone: String(raw.phone ?? ""),
+      university: String(raw.university ?? ""),
       nationality: String(raw.nationality ?? ""),
       residence_name: String(raw.residence_name ?? ""),
       room_name: String(raw.room_name ?? ""),
