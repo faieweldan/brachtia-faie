@@ -10,6 +10,7 @@ import {
   type StayQuote,
 } from "@/data/properties";
 import { nextRentalPayment } from "@/lib/rental-schedule";
+import { SCHEDULES } from "@/lib/reference-data";
 import { stayLength } from "@/lib/stay-length";
 
 const GREEN: [number, number, number] = [26, 71, 52];
@@ -126,6 +127,12 @@ function build(
   }: QuoteInput,
   k: number,
 ) {
+  // the words Stay details and the rate tables use, so the quote says the same
+  // thing back rather than a second name for one cycle
+  const payEvery = quote.paymentTerm ?? paymentTerm;
+  const frequencyLabel = payEvery
+    ? (SCHEDULES.find((f) => f.value === payEvery)?.label ?? String(payEvery))
+    : "";
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
@@ -265,6 +272,17 @@ function build(
       // months and days is the way Stay details already says it, so the quote
       // and the admin page read alike
       ["Monthly rate", `${formatRM(quote.monthlyAfter)} / month  (${stayLength(moveIn, moveOut)})`],
+      /*
+       * How often they pay after moving in. It was on the quote's own snapshot
+       * and used further down to work out the next payment, but never said -
+       * so the document that tells a student what their stay costs never told
+       * them how often they would be asked for it.
+       *
+       * Whatever admin last set in Stay details, because the quote is rebuilt
+       * from the booking each time it is saved; the student's own choice on the
+       * website is what it starts as.
+       */
+      ...(frequencyLabel ? [["Payment frequency", frequencyLabel] as [string, string]] : []),
     ],
   });
 
@@ -318,12 +336,11 @@ function build(
     y,
   );
 
-  const frequency = quote.paymentTerm ?? paymentTerm;
-  const next = frequency
+  const next = payEvery
     ? nextRentalPayment({
         tenancyStart: moveIn,
         tenancyEnd: moveOut,
-        frequency,
+        frequency: payEvery,
         monthlyRent: quote.monthlyAfter,
         items: quote.firstPayment,
       })

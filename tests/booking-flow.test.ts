@@ -119,6 +119,17 @@ describe('booking add-ons and quote consistency', () => {
     const other = { ...q, firstPayment: q.firstPayment.map((l) => l.label === bedding.label ? { ...l, label: 'Another item' } : l) };
     expect(quoteAmountsMatch(q, other)).toBe(false);
   });
+  test('the quote carries the payment frequency, and admin can change it', () => {
+    // the student's choice on the website travels on the quote itself, which is
+    // what the PDF prints - so it cannot say one cycle while the booking bills
+    // another
+    const chosen = stayQuote(property, 1050, 'long', from, to, 'quarterly')!;
+    expect(chosen.paymentTerm).toBe('quarterly');
+    const overridden = stayQuote(property, 1050, 'long', from, to, 'monthly')!;
+    expect(overridden.paymentTerm).toBe('monthly');
+    // a quote saved before the field existed says nothing rather than guessing
+    expect(({ ...chosen, paymentTerm: undefined }).paymentTerm).toBeUndefined();
+  });
   test('amounts always show two decimal places', () => {
     expect(formatRM(4770.81)).toBe('RM 4,770.81');
     expect(formatRM(495)).toBe('RM 495.00');
