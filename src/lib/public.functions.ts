@@ -371,11 +371,18 @@ export const getViewingLink = createServerFn({ method: "GET" })
      * be worse than saying nothing.
      */
     type HeldBed = { rooms?: { letter?: string; units?: { unit_no?: string } | null } | null };
-    const { data: bed } = await supabaseAdmin
+    const { data: bed, error: bedError } = await supabaseAdmin
       .from("beds")
-      .select("label, rooms(letter, name, units(unit_no))")
+      .select("label, rooms(letter, units(unit_no))")
       .eq("enquiry_id", row.id)
       .limit(1);
+    /*
+     * Said out loud. This asked for a rooms.name that does not exist, so every
+     * lookup failed and every booking showed no unit - and with the error
+     * dropped on the floor there was nothing to say why. A held bed that cannot
+     * be read is a fault, not an empty result.
+     */
+    if (bedError) console.warn("unit lookup failed", bedError.message);
     const held = ((bed ?? []) as HeldBed[])[0] ?? null;
     const unitNo = String(held?.rooms?.units?.unit_no ?? "");
     const roomLetter = String(held?.rooms?.letter ?? "");
