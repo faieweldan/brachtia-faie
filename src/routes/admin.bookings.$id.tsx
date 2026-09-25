@@ -23,7 +23,7 @@ import { PdfPreviewButton, type VersionNav } from "@/components/admin/PdfPreview
 import { listInvoiceVersions, listQuoteVersions } from "@/lib/document-versions.functions";
 import { referenceFor } from "@/lib/document-versions";
 import { invoiceDocFromRow } from "@/lib/invoice-doc";
-import { quoteSnapshotFor } from "@/lib/booking-quote";
+import { quoteLeadFrom, quoteSnapshotFor } from "@/lib/booking-quote";
 import { loadProofFile } from "@/lib/payment-proof";
 import { BOOKING_FEE as FEE_AMOUNT } from "@/lib/invoices";
 import { company } from "@/data/properties";
@@ -674,8 +674,17 @@ function BookingDetail() {
     load: () => listQuoteVersions({ data: { enquiryId: id } }),
     buildVersion: async (v) => {
       const { quotePdfUrl } = await import("@/lib/quote-pdf");
+      const body = v.body as any;
       return quotePdfUrl({
-        ...(v.body as any),
+        ...body,
+        /*
+         * A kept version is a copy of the snapshot, so it inherited the gap the
+         * snapshot had: no employer on it, for a student's copy that named one.
+         * The booking fills what the copy never held - the same rule the live
+         * quote uses, and for the same reason, so stepping back through the
+         * arrows does not change who the quote says it is for.
+         */
+        lead: quoteLeadFrom(body, row),
         reference: referenceFor(String(row?.reference ?? v.reference), v.version),
       });
     },
