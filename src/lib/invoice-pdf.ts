@@ -306,6 +306,27 @@ async function buildInvoice(inv: InvoiceDoc) {
   // the resident ID used to sit here, in the grey line - it is a row in the
   // details below now, where it is read rather than skimmed past
   doc.text([inv.email, inv.phone].filter(Boolean).join("  ·  "), M, y);
+
+  /*
+   * Where they work, or where they study, under their contact and not among
+   * the tenancy.
+   *
+   * It was the last row of the details table, below the rent and the due date -
+   * a fact about the person filed with the facts about the room, which read as
+   * though it had been added on the end because there was nowhere else for it.
+   * Here it sits with the rest of who they are, which is what it is.
+   *
+   * One line, never both, and the line is skipped when there is nothing to put
+   * on it so the table does not drift down a blank.
+   */
+  const who =
+    inv.company || inv.occupation
+      ? [inv.occupation, inv.company].filter(Boolean).join("  ·  ")
+      : (inv.university ?? "");
+  if (who) {
+    y += 11;
+    doc.text(who, M, y);
+  }
   y += 14;
 
   const infoStyles = { fontSize: 8.5, cellPadding: { top: 1.8, bottom: 1.8, left: 0, right: 0 } };
@@ -368,21 +389,8 @@ async function buildInvoice(inv: InvoiceDoc) {
         due.toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" }),
       ],
       ...(inv.period ? [["Period", inv.period]] : []),
-      /*
-       * Who they are: their employer, or their university. One row, never both,
-       * and nothing at all when neither was given.
-       *
-       * The invoice only ever carried a university, so an employed resident's
-       * had this row quietly missing - their quotation named their employer and
-       * the invoice that followed said nothing. The quotation has printed it
-       * this way since it was fixed there; the same shape is used here so one
-       * booking's two documents cannot describe the same person differently.
-       */
-      ...(inv.company || inv.occupation
-        ? [["Employment", [inv.occupation, inv.company].filter(Boolean).join("  ·  ")]]
-        : inv.university
-          ? [["University", inv.university]]
-          : []),
+      // who they are is said under their name above, with the rest of them -
+      // this table is the tenancy, and their job was never one of its facts
     ],
   });
   y = doc.lastAutoTable.finalY + 18;
