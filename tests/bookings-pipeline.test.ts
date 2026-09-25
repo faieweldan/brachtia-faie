@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { bookingNextAction, upcomingViewing } from '../src/lib/bookings-pipeline';
+import { bookingNextAction, upcomingViewing, STAGE_ORDER, stageLabel } from '../src/lib/bookings-pipeline';
 
 const booking = { id: 'b1', status: 'viewing_scheduled', stage_changed_at: '2026-09-20T00:00:00Z' };
 const appt = (over: Record<string, unknown> = {}) => ({
@@ -40,5 +40,26 @@ describe('the next action a booking is waiting on', () => {
       .toBe('upload_booking_fee');
     expect(bookingNextAction({ ...booking, status: 'booked', resident_id: 'r1' }, []).action)
       .toBe('view_resident');
+  });
+});
+
+describe('a student who asked for their invoice', () => {
+  const requested = { ...booking, status: 'invoice_requested' };
+  test('is waiting on the invoice, not on a booking fee', () => {
+    // it used to be filed as awaiting_fee - the stage meaning the invoice went
+    // out - so staff were asked to collect money for an invoice nobody raised
+    expect(bookingNextAction(requested, []).action).toBe('generate_invoice');
+    expect(bookingNextAction(requested, []).label).toBe('Generate invoice');
+  });
+  test('sits between the viewing and the invoice going out', () => {
+    expect(STAGE_ORDER['viewing_scheduled']).toBeLessThan(STAGE_ORDER['invoice_requested']!);
+    expect(STAGE_ORDER['invoice_requested']).toBeLessThan(STAGE_ORDER['awaiting_fee']!);
+  });
+  test('says what is true of it on the list', () => {
+    expect(stageLabel('invoice_requested')).toBe('Invoice requested');
+  });
+  test('once the invoice is out it is awaiting payment, and that asks for the fee', () => {
+    expect(bookingNextAction({ ...booking, status: 'awaiting_fee' }, []).action)
+      .toBe('upload_booking_fee');
   });
 });

@@ -261,6 +261,7 @@ export async function releaseBooking(supabase: any, enquiryId: string) {
  *   the booking fee paid in full       Booked
  *   part of the booking fee paid       Awaiting balance
  *   a live invoice, nothing paid yet   Awaiting payment
+ *   the student asked for an invoice   Invoice requested
  *   a viewing booked, or one completed Viewing
  *   a bed held for it                  Room reserved
  *   none of these                      New
@@ -271,7 +272,7 @@ export async function releaseBooking(supabase: any, enquiryId: string) {
 export async function syncBookingStage(supabase: any, enquiryId: string) {
   const { data: enquiry, error } = await supabase
     .from("enquiries")
-    .select("status, viewing_completed_at, assigned_staff")
+    .select("status, viewing_completed_at, viewing_skipped_at, assigned_staff")
     .eq("id", enquiryId)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -303,17 +304,26 @@ export async function syncBookingStage(supabase: any, enquiryId: string) {
   // tolerance and all, so the stage and the resident cannot disagree
   const feeIn = paidTotal + 0.005 >= BOOKING_FEE;
 
+  /*
+   * Asking for the invoice comes above any viewing on purpose. It is the last
+   * thing the student said - they pressed "Request booking invoice" on their
+   * own link - and a viewing booked earlier does not take that back. Without
+   * this, every recompute quietly put them back to Viewing and the request
+   * disappeared.
+   */
   const next = feeIn
     ? "booked"
     : paidTotal > 0
       ? "awaiting_payment"
       : invoiceIds.length
         ? "awaiting_fee"
-        : (viewingRes.data ?? []).length || enquiry.viewing_completed_at
-          ? "viewing_scheduled"
-          : (bedRes.data ?? []).length
-            ? "room_reserved"
-            : "open";
+        : enquiry.viewing_skipped_at
+          ? "invoice_requested"
+          : (viewingRes.data ?? []).length || enquiry.viewing_completed_at
+            ? "viewing_scheduled"
+            : (bedRes.data ?? []).length
+              ? "room_reserved"
+              : "open";
   if (next === enquiry.status) return;
 
   const now = new Date().toISOString();

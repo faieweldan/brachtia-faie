@@ -455,7 +455,8 @@ export const skipViewingFromLink = createServerFn({ method: "POST" })
     const { error } = await supabaseAdmin
       .from("enquiries")
       .update({
-        status: "awaiting_fee",
+        // they asked for an invoice; raising it is what makes this Awaiting payment
+        status: "invoice_requested",
         // what they said, kept: without it this student and one who never
         // answered look identical on the booking page
         viewing_skipped_at: now,

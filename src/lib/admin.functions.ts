@@ -299,6 +299,7 @@ export const advanceEnquiryStage = createServerFn({ method: "POST" })
         | "room_reserved"
         | "viewing_scheduled"
         | "viewing_completed"
+        | "invoice_requested"
         | "awaiting_fee"
         | "awaiting_payment"
         | "booked"
@@ -358,6 +359,9 @@ export const advanceEnquiryStage = createServerFn({ method: "POST" })
       case "viewing_completed":
         patch["status"] = "viewing_scheduled";
         patch["viewing_completed_at"] = now;
+        break;
+      case "invoice_requested":
+        patch["status"] = "invoice_requested";
         break;
       case "awaiting_fee":
         patch["status"] = "awaiting_fee";
@@ -1115,9 +1119,12 @@ export const createInvoice = createServerFn({ method: "POST" })
       .select("status")
       .eq("id", data.enquiryId)
       .maybeSingle();
-    const beforeInvoice = ["open", "room_reserved", "viewing_scheduled"].includes(
-      String((enqNow as any)?.status ?? ""),
-    );
+    const beforeInvoice = [
+      "open",
+      "room_reserved",
+      "viewing_scheduled",
+      "invoice_requested",
+    ].includes(String((enqNow as any)?.status ?? ""));
     const stamp = new Date().toISOString();
     await supabase
       .from("enquiries")

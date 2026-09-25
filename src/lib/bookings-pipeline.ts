@@ -2,12 +2,13 @@
 /**
  * Pipeline, SLA and next-action rules for the Bookings module.
  *
- * A booking moves through seven stages, in order, each set by the thing that
+ * A booking moves through eight stages, in order, each set by the thing that
  * actually happened - never by a button that only says it did:
  *
  *   New               the enquiry arrives
  *   Room reserved     a room is reserved for it
  *   Viewing           a viewing is booked - optional
+ *   Invoice requested the student asked for their invoice; nobody has raised it
  *   Awaiting payment  the invoice is issued; none of the booking fee is in yet
  *   Awaiting balance  part of the booking fee is in, but not all of it
  *   Booked            the booking fee is in FULL and the room confirmed - the
@@ -23,6 +24,7 @@ export type StageKey =
   | "open"
   | "room_reserved"
   | "viewing_scheduled"
+  | "invoice_requested"
   | "awaiting_fee"
   | "awaiting_payment"
   | "booked"
@@ -32,6 +34,7 @@ export const STAGES: { value: StageKey; label: string }[] = [
   { value: "open", label: "New" },
   { value: "room_reserved", label: "Room reserved" },
   { value: "viewing_scheduled", label: "Viewing" },
+  { value: "invoice_requested", label: "Invoice requested" },
   { value: "awaiting_fee", label: "Awaiting payment" },
   { value: "awaiting_payment", label: "Awaiting balance" },
   { value: "booked", label: "Booked" },
@@ -47,6 +50,7 @@ export const stageLabel = (v: string) => STAGES.find((s) => s.value === v)?.labe
 export const STAGE_PILL: Record<string, string> = {
   open: "border-sky-200 bg-sky-50 text-sky-900",
   room_reserved: "border-violet-200 bg-violet-50 text-violet-900",
+  invoice_requested: "border-indigo-200 bg-indigo-50 text-indigo-900",
   viewing_scheduled: "border-amber-200 bg-amber-50 text-amber-900",
   awaiting_fee: "border-orange-200 bg-orange-50 text-orange-900",
   awaiting_payment: "border-rose-200 bg-rose-50 text-rose-900",
@@ -166,6 +170,20 @@ export function nextActionFor(
         window: DAY,
       };
     }
+    /*
+     * They pressed "Request booking invoice" on their link and there is no
+     * invoice yet. This used to be filed as Awaiting payment - the stage that
+     * means the invoice went out - so the list asked staff to collect a booking
+     * fee for an invoice nobody had raised, and Generate invoice never appeared
+     * at all. Asking for something is not the same as having been sent it.
+     */
+    case "invoice_requested":
+      return {
+        action: "generate_invoice",
+        label: "Generate invoice",
+        due: stageAt ? stageAt + DAY : undefined,
+        window: DAY,
+      };
     case "awaiting_fee": {
       const from = ts(row.invoice_issued_at) ?? stageAt;
       return {
