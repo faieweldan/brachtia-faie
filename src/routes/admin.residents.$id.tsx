@@ -38,7 +38,7 @@ import {
 } from "@/components/admin/ops-ui";
 import { TenancyCard } from "@/components/admin/TenancyCard";
 import { ResidentPayments } from "@/components/admin/ResidentPayments";
-import { STUDENT_DOCS, studentDocLabel } from "@/lib/resident-documents";
+import { RESIDENT_DOCS, residentDocsFor, residentDocLabel } from "@/lib/resident-documents";
 import {
   PAY_METHODS,
   SCHEDULES,
@@ -271,6 +271,26 @@ function ResidentProfilePage() {
 
   const set = (p: ResidentPatch) => setForm((f) => (f ? ({ ...f, ...p } as Resident) : f));
   const { pct, missing } = completeness(form);
+  /*
+   * The document rows: what this resident is asked for, then anything already
+   * uploaded that is not on that list any more.
+   *
+   * Without the second half, changing somebody from Student to Employed would
+   * take the row their offer letter is on off the page - the file is still in
+   * the bucket and still on the record, with nothing left that shows it.
+   */
+  const asked = residentDocsFor(form.currentStatus);
+  const docRows = [
+    ...asked,
+    ...form.docs
+      .filter((d) => !asked.some((r) => r.key === d.key))
+      .map((d) => ({
+        key: d.key,
+        label: RESIDENT_DOCS.find((r) => r.key === d.key)?.label ?? d.label ?? d.key,
+        required: false,
+        appliesTo: "any" as const,
+      })),
+  ];
   const tenancy = tenancies.find((t) => t.residentId === form.id);
   const placed = findBedForResident(units, form);
   const vacantBeds = allBeds(units).filter(
@@ -672,12 +692,23 @@ function ResidentProfilePage() {
                   title="Documents"
                   description="Uploads are recorded locally for now — file storage comes with the backend pass."
                 >
-                  {/* the documents the form asks the student for - one list, so
-                      the admin page cannot ask for more than the student is shown */}
-                  {STUDENT_DOCS.map((d) => {
+                  {/*
+                    The documents the form asks this resident for - one list, so
+                    the admin page cannot ask for more than the student is shown,
+                    and it follows Student or Employed the same way their form
+                    does: an offer letter for one, an employment letter for the
+                    other.
+
+                    Anything already uploaded is kept on the end even when it is
+                    not asked for any more. A resident who answered Student,
+                    sent their offer letter and later moved to Employed still
+                    has that file, and a row disappearing is how a file stops
+                    being findable without anybody deleting it.
+                  */}
+                  {docRows.map((d) => {
                     const doc = form.docs.find((x) => x.key === d.key);
                     // named the way the student form names it: IC copy or passport copy
-                    const label = studentDocLabel(d.key, form.nationality);
+                    const label = residentDocLabel(d.key, form.nationality);
                     return (
                       <DocumentRow
                         key={d.key}

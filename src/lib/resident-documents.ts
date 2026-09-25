@@ -38,18 +38,67 @@ export function safeExt(name: string, type: string) {
  * the same document - so asking the student to upload it a second time left a
  * red "Not uploaded yet" on a profile whose fee was already paid and receipted.
  */
-export const STUDENT_DOCS = [
-  { key: "photo", label: "Passport size photo", required: true },
-  { key: "offer", label: "University offer / admission letter", required: true },
-  { key: "id", label: "Passport / NRIC copy", required: true },
-] as const;
+export type ResidentDoc = {
+  key: string;
+  label: string;
+  required: boolean;
+  /** "student", "employed", or "any" - who is asked for it */
+  appliesTo: "student" | "employed" | "any";
+};
 
 /**
- * What a document is called for this student. The ID copy follows nationality -
+ * Brachtia is not only for students, and this list was.
+ *
+ * Everyone was asked for a "University offer / admission letter", marked
+ * required, whatever they had answered to Student or Employed. Somebody working
+ * cannot produce one - the form had already stopped asking them for a
+ * university and an intake, and then asked them to upload the letter from it.
+ *
+ * The employment letter takes that place, on the same terms. The photo and the
+ * ID are asked of everybody, and the order is kept so the list reads the same
+ * way for both: who you are, what you are doing, then your ID.
+ */
+export const RESIDENT_DOCS: ResidentDoc[] = [
+  { key: "photo", label: "Passport size photo", required: true, appliesTo: "any" },
+  {
+    key: "offer",
+    label: "University offer / admission letter",
+    required: true,
+    appliesTo: "student",
+  },
+  {
+    key: "employment",
+    label: "Employment letter",
+    required: true,
+    appliesTo: "employed",
+  },
+  { key: "id", label: "Passport / NRIC copy", required: true, appliesTo: "any" },
+];
+
+/**
+ * The documents to ask this person for.
+ *
+ * An answer that is neither - nobody has said yet, or a status this list does
+ * not know - is given the student set, which is what every resident was asked
+ * for before this existed. Better to ask a working person for one letter they
+ * have to skip than to ask a student for nothing and find out at check-in.
+ */
+export function residentDocsFor(currentStatus: string): ResidentDoc[] {
+  const employed =
+    String(currentStatus ?? "")
+      .trim()
+      .toLowerCase() === "employed";
+  return RESIDENT_DOCS.filter(
+    (d) => d.appliesTo === "any" || d.appliesTo === (employed ? "employed" : "student"),
+  );
+}
+
+/**
+ * What a document is called for this person. The ID copy follows nationality -
  * an IC copy for a Malaysian, a passport copy for everybody else - the same rule
  * that names the ID number field.
  */
-export function studentDocLabel(key: string, nationality: string): string {
+export function residentDocLabel(key: string, nationality: string): string {
   if (key === "id") return idDocLabelFor(nationality);
-  return STUDENT_DOCS.find((d) => d.key === key)?.label ?? key;
+  return RESIDENT_DOCS.find((d) => d.key === key)?.label ?? key;
 }

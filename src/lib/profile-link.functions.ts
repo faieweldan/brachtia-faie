@@ -404,12 +404,12 @@ export const uploadDocumentByToken = createServerFn({ method: "POST" })
     const token = String(data.get("token") ?? "");
     const key = String(data.get("key") ?? "");
     const file = data.get("file");
-    const { DOC_BUCKET, DOC_MIME_TYPES, MAX_DOC_BYTES, STUDENT_DOCS, safeExt, studentDocLabel } =
+    const { DOC_BUCKET, DOC_MIME_TYPES, MAX_DOC_BYTES, RESIDENT_DOCS, safeExt, residentDocLabel } =
       await import("@/lib/resident-documents");
 
     const found = await residentForToken(supabase, token);
     if ("error" in found) return { ok: false as const, error: found.error };
-    if (!STUDENT_DOCS.some((d) => d.key === key))
+    if (!RESIDENT_DOCS.some((d) => d.key === key))
       return { ok: false as const, error: "Unknown document." };
     if (!(file instanceof File)) return { ok: false as const, error: "No file provided." };
     if (file.size > MAX_DOC_BYTES)
@@ -432,7 +432,7 @@ export const uploadDocumentByToken = createServerFn({ method: "POST" })
       .single();
     const docs = Array.isArray(row?.docs) ? (row!.docs as any[]) : [];
     // the ID copy is recorded as what it is - an IC copy or a passport copy
-    const label = studentDocLabel(key, String(row?.nationality ?? ""));
+    const label = residentDocLabel(key, String(row?.nationality ?? ""));
     const next = [
       ...docs.filter((d) => d?.key !== key),
       { key, label, fileName: file.name, path, uploadedAt: new Date().toISOString() },

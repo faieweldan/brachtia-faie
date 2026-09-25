@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { STUDENT_DOCS, studentDocLabel } from "@/lib/resident-documents";
+import { residentDocsFor, residentDocLabel } from "@/lib/resident-documents";
 import {
   getProfileByToken,
   submitProfileByToken,
@@ -728,7 +728,10 @@ function MyProfilePage() {
             A clear phone photo is fine — we shrink it for you. PDFs work too.
           </p>
           <div className="mt-4 space-y-2">
-            {STUDENT_DOCS.map((d) => {
+            {/* what they are asked for follows the Student or Employed answer
+                above, the same way the fields do - somebody working was being
+                asked to upload a university offer letter they do not have */}
+            {residentDocsFor(values["current_status"] ?? "").map((d) => {
               const have = docs[d.key];
               return (
                 <div
@@ -740,7 +743,7 @@ function MyProfilePage() {
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
                       {/* follows the nationality picked above, like the ID number does */}
-                      {studentDocLabel(d.key, values["nationality"] ?? "")}
+                      {residentDocLabel(d.key, values["nationality"] ?? "")}
                       {/* every one of these is needed before the application can
                           be processed, so the dot says so on the row itself
                           rather than in a sentence nobody reads twice */}
