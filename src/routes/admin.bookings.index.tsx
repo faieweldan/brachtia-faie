@@ -69,6 +69,16 @@ function BookingsTable() {
   const [actionFilter, setActionFilter] = useState("all");
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "quote_id", dir: -1 });
   const [page, setPage] = useState(1);
+  /*
+   * Closed bookings, off by default.
+   *
+   * This list is the team's to-do view, and a closed booking has no next step -
+   * it sat between the ones that do, pushing live work onto a second page. It
+   * is not gone: the count below the filters says how many are out and puts
+   * them back in one click, so nothing is hidden without saying so, and asking
+   * for Closed in the stage filter still shows them.
+   */
+  const [showClosed, setShowClosed] = useState(false);
 
   const { data = [], isLoading } = useQuery({
     queryKey: ["admin", "enquiries"],
@@ -202,24 +212,28 @@ function BookingsTable() {
     },
   ];
 
-  const rows = decorated
-    .filter(({ row, next }) => {
-      /*
-       * A booking closed as a duplicate stays in this list. It is not hidden -
-       * its stage says Closed, which is the whole story, and hiding it meant
-       * staff could not see what had been done with it without changing filter.
-       */
-      if (stageFilter !== "all" && row.status !== stageFilter) return false;
-      if (staffFilter !== "all" && (row.assigned_staff || "") !== staffFilter) return false;
-      if (actionFilter !== "all" && next.action !== actionFilter) return false;
-      const q = query.trim().toLowerCase();
-      if (!q) return true;
-      return [row.reference, row.full_name, row.email, row.phone, row.residence_name, row.room_name]
-        .join(" ")
-        .toLowerCase()
-        .includes(q);
-    })
-    .sort((a, b) => {
+  /*
+   * Everything the filters and the search agree on, closed or not. Counted
+   * before the closed ones are dropped, so the count offering them back is a
+   * real number and not "some".
+   */
+  const matching = decorated.filter(({ row, next }) => {
+    if (stageFilter !== "all" && row.status !== stageFilter) return false;
+    if (staffFilter !== "all" && (row.assigned_staff || "") !== staffFilter) return false;
+    if (actionFilter !== "all" && next.action !== actionFilter) return false;
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return [row.reference, row.full_name, row.email, row.phone, row.residence_name, row.room_name]
+      .join(" ")
+      .toLowerCase()
+      .includes(q);
+  });
+
+  // asked for by name in the filter, it is shown whatever the toggle says
+  const closedShown = showClosed || stageFilter === "closed";
+  const closedCount = matching.filter(({ row }) => row_isClosed(row)).length;
+  const rows = (closedShown ? matching : matching.filter(({ row }) => !row_isClosed(row))).sort(
+    (a, b) => {
       const dir = sort.dir;
       switch (sort.key) {
         case "quote_id":
@@ -243,7 +257,8 @@ function BookingsTable() {
         default:
           return dir * (a.sla.remaining - b.sla.remaining);
       }
-    });
+    },
+  );
 
   function SortHead({ label, sortKey, className = "" }: { label: string; sortKey: SortKey; className?: string }) {
     const active = sort.key === sortKey;
@@ -348,6 +363,27 @@ function BookingsTable() {
           ))}
         </select>
       </div>
+
+      {/*
+        Closed bookings are out of the list, and this says so rather than the
+        list quietly being shorter. Only when there are some: a line explaining
+        that nothing is hidden is itself clutter on a list with nothing hidden.
+        It reads as a sentence, because it is telling them something, not
+        offering a third filter beside the three above.
+      */}
+      {closedCount > 0 && stageFilter !== "closed" ? (
+        <p className="mb-3 text-xs text-muted-foreground">
+          {closedCount} closed booking{closedCount === 1 ? "" : "s"}{" "}
+          {closedShown ? "shown" : "hidden"}.{" "}
+          <button
+            type="button"
+            className="font-medium text-brand underline underline-offset-2"
+            onClick={() => setShowClosed((was) => !was)}
+          >
+            {closedShown ? "Hide them" : "Show them"}
+          </button>
+        </p>
+      ) : null}
 
       <div className="overflow-x-auto rounded-2xl border border-border bg-card">
         <div className="min-w-[1120px]">
