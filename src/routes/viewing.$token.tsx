@@ -249,6 +249,14 @@ function ViewingLinkPage() {
           Your room
         </p>
         <p className="mt-1.5 text-lg font-bold leading-tight">{booking["residence_name"]}</p>
+        {/* the unit makes it a place rather than a description of one. Empty
+            until a bed is held, because inventing one is worse than silence */}
+        {booking["unit_no"] ? (
+          <p className="text-sm font-semibold text-primary-foreground/95">
+            Unit {String(booking["unit_no"])}
+            {booking["unit_room"] ? ` · Room ${String(booking["unit_room"])}` : ""}
+          </p>
+        ) : null}
         <p className="text-sm font-medium text-primary-foreground/90">{booking["room_name"]}</p>
       </div>
 
@@ -285,6 +293,7 @@ function ViewingLinkPage() {
                 ["Booking ID", booking["reference"]],
                 ["Name", booking["full_name"]],
                 ["Residence", booking["residence_name"]],
+                ["Unit", booking["unit_no"]],
                 ["Unit type", booking["unit_type"]],
                 ["Room", booking["room_name"]],
                 ["Occupancy", booking["occupancy"] === "twin" ? "Twin sharing" : "Single"],

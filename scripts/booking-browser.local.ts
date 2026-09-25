@@ -1,0 +1,11 @@
+import { chromium } from '/Users/rifaiewildani/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs';
+const browser = await chromium.launch({headless:true});
+const page = await browser.newPage({ viewport: {width:1440,height:1050} });
+page.on('pageerror',e=>console.error('Browser error:', e.message));
+await page.goto('http://127.0.0.1:5173/admin-unlock');
+await page.getByLabel('Passcode').fill(process.env.ADMIN_PASSCODE!);
+await page.getByRole('button',{name:'Unlock',exact:true}).click();
+await page.waitForURL('**/admin',{timeout:30000});
+await page.context().storageState({path:'/tmp/brachtia-browser-auth.json'});
+console.log('Local admin sign-in passed');
+await browser.close();

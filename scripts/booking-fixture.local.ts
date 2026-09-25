@@ -1,0 +1,31 @@
+import { createClient } from '@supabase/supabase-js';
+import { rowToProperty, rowToRoomType } from '../src/lib/site-mappers';
+import { stayQuote } from '../src/data/properties';
+const url = process.env.SUPABASE_URL!;
+if (new URL(url).hostname !== 'zyuadtrqcgocottxyzpk.supabase.co') throw Error('Test database only');
+const db = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY!, {auth:{persistSession:false}});
+const {data:rs,error} = await db.from('residences').select('*');
+if(error) throw error;
+const {data:rooms,error: re} = await db.from('room_types').select('*');
+if(re) throw re;
+if(process.argv[2] === 'cleanup') {
+ const fixture = await Bun.file('/tmp/brachtia-booking-fixture.json').json();
+ const {error} = await db.from('enquiries').delete().eq('id',fixture.id).eq('email','booking-flow-check@example.invalid');
+ if(error) throw error;
+ console.log('Temporary test booking removed');
+ process.exit();
+}
+const residence = rs!.find(r => r.addons?.some((a:any)=>a.chargeType==='onetime' && a.active!==false));
+if(!residence) throw Error('No configured test residence with add-ons');
+const room = rooms!.find(r => r.residence_id===residence.id && r.rent?.long?.single>0);
+if(!room) throw Error('No test room rate');
+const property = rowToProperty(residence);
+const roomType = rowToRoomType(room,residence.slug);
+const addon = property.addons!.find(a=>a.chargeType==='onetime'&&a.active!==false&&a.occupancies.includes('single'))!;
+if(!addon) throw Error('No single add-on');
+const quote=stayQuote(property,room.rent.long.single,'long','2026-10-15','2027-07-15','bimonthly',[addon])!;
+const snap={property,room:roomType,occupancy:'single',term:'long',moveIn:'2026-10-15',moveOut:'2027-07-15',paymentTerm:'bimonthly',addons:[addon.label],quote};
+const {data:enquiry,error:ie}=await db.from('enquiries').insert({full_name:'Booking flow test',email:'booking-flow-check@example.invalid',phone:'+60120000000',nationality:'Malaysian',university:'Test University',gender:'Male',assigned_staff:'Test',residence_slug:property.slug,residence_name:property.name,room_code:roomType.id,room_name:roomType.name,unit_type:roomType.unitType,occupancy:'single',move_in:snap.moveIn,move_out:snap.moveOut,term:'long',payment_term:'bimonthly',monthly_rent:quote.monthlyAfter,first_payment:quote.totalUpfront,addons:[addon.label],quote_snapshot:snap}).select('id').single();
+if(ie)throw ie;
+await Bun.write('/tmp/brachtia-booking-fixture.json',JSON.stringify({id:enquiry.id,rent:quote.monthlyAfter,addon:addon.label,addonPrice:addon.price,total:quote.totalUpfront,property,room:roomType,snapshot:snap}));
+console.log('Created isolated test booking',enquiry.id,'at rent',quote.monthlyAfter,'with add-on',addon.label);
