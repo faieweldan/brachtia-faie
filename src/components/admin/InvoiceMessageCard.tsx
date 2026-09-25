@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PdfPreviewButton } from "@/components/admin/PdfPreview";
 import { company, formatRM } from "@/data/properties";
 import { greetingName } from "@/lib/greeting";
+import { LANDLORD_ENTITY } from "@/lib/declaration";
 
 /**
  * The message that asks for the money, ready the moment the invoice exists.
@@ -23,11 +24,9 @@ import { greetingName } from "@/lib/greeting";
 
 const paymentMessage = (d: {
   name: string;
-  staff: string;
   reference: string;
   amount: number;
   dueDate: string;
-  residence: string;
   isBalance: boolean;
 }) => {
   // built as paragraphs, so a line that has nothing to say can be left out
@@ -36,20 +35,19 @@ const paymentMessage = (d: {
   if (d.dueDate) facts.push(`Payment due by: ${d.dueDate}`);
 
   return [
-    `Hi ${greetingName(d.name)}, this is ${d.staff} from Brachtia Homes 😊`,
-    d.isBalance
-      ? `Here is your invoice for ${d.residence} — ${d.reference}.`
-      : `Good news, your invoice for ${d.residence} is ready — ${d.reference}.`,
+    `Dear ${greetingName(d.name)},`,
+    `Please find your invoice details here — ${d.reference}.`,
     facts.join("\n"),
     [
       "I've attached the invoice, which has our bank details on it.",
-      `Once you've paid, please send the payment proof here and we'll issue your receipt. ${
+      `Once you've paid, please send the payment proof here and we'll issue your receipt.${
         d.isBalance
-          ? "Your room stays reserved for you in the meantime."
-          : `The ${company.bookingFee} booking fee secures your room.`
+          ? " Your room stays reserved for you in the meantime."
+          : ` The ${company.bookingFee} booking fee secures your room.`
       }`,
     ].join("\n"),
-    "Let me know if you have any questions!",
+    "Feel free to contact us if you have any questions. We look forward to working with you.",
+    ["Have a great day!", LANDLORD_ENTITY].join("\n"),
   ].join("\n\n");
 };
 
@@ -57,24 +55,20 @@ export type InvoiceAttachment = { label: string; fileName: string; build: () => 
 
 export function InvoiceMessageCard({
   studentName,
-  staffName,
   reference,
   amount,
   dueDate,
-  residence,
   phone,
   isBalance = false,
   attachments,
   id,
 }: {
   studentName: string;
-  staffName: string;
   /** the invoice number, as the student will see it on the paper */
   reference: string;
   /** what is still to pay, not what the invoice totalled */
   amount: number;
   dueDate: string;
-  residence: string;
   phone: string;
   /** the booking fee is already in, so this asks for the rest */
   isBalance?: boolean;
@@ -82,15 +76,7 @@ export function InvoiceMessageCard({
   id?: string;
 }) {
   const [message, setMessage] = useState(() =>
-    paymentMessage({
-      name: studentName,
-      staff: staffName.trim() || "the team",
-      reference,
-      amount,
-      dueDate,
-      residence,
-      isBalance,
-    }),
+    paymentMessage({ name: studentName, reference, amount, dueDate, isBalance }),
   );
   const [copied, setCopied] = useState(false);
 

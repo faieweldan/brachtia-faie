@@ -2033,11 +2033,9 @@ function BookingDetail() {
             <InvoiceMessageCard
               id="booking-invoice-message"
               studentName={row.full_name ?? ""}
-              staffName={row.assigned_staff ?? ""}
               reference={invoice.number}
               amount={balanceDue}
               dueDate={invoiceDueDate}
-              residence={row.residence_name ?? ""}
               phone={row.phone ?? ""}
               // the fee is in, so what is left is the balance rather than the lot
               isBalance={paidTotal > 0}
