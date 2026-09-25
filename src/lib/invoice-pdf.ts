@@ -37,7 +37,6 @@ export type InvoiceDoc = {
   resident_code?: string;
   email: string;
   phone: string;
-  university?: string;
   nationality?: string;
   residence_name: string;
   room_name: string;
@@ -365,7 +364,21 @@ async function buildInvoice(inv: InvoiceDoc) {
         due.toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" }),
       ],
       ...(inv.period ? [["Period", inv.period]] : []),
-      ...(inv.university ? [["University", inv.university]] : []),
+      /*
+       * No University row, and no Employment one either.
+       *
+       * It was here because students are the market, not because an invoice
+       * needs it: this document says who owes what for which room, and where
+       * somebody studies or works is not part of that. Printing it also meant
+       * an employed resident's invoice had the row silently missing, since only
+       * a university was ever carried - so the field said "student" by being
+       * the only thing it could say.
+       *
+       * The quotation still says who they are, which is the document where it
+       * belongs. enquiries and residents keep both answers, and the invoices
+       * table keeps its university column, so nothing is lost if this is ever
+       * wanted back - Dani, 25 Sept 2026.
+       */
     ],
   });
   y = doc.lastAutoTable.finalY + 18;

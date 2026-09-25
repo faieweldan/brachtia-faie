@@ -172,7 +172,7 @@ export const getProfileByToken = createServerFn({ method: "GET" })
     if (!values.current_status && row.enquiry_id) {
       const { data: enquiry } = await supabase
         .from("enquiries")
-        .select("current_status, university")
+        .select("current_status, university, company, occupation")
         .eq("id", row.enquiry_id)
         .maybeSingle();
       if (enquiry) {
@@ -180,6 +180,15 @@ export const getProfileByToken = createServerFn({ method: "GET" })
         // their intake is not their graduation year, so only the institution
         // comes across - the two say different things
         if (!values.university) values.university = String(enquiry.university ?? "");
+        /*
+         * And where somebody working works. Only the student half was carried
+         * across, so an employed applicant typed their employer on the enquiry
+         * and was asked for it again here - which is the asking-twice this was
+         * meant to stop. Company can be genuinely empty for someone
+         * self-employed, so it is only filled in when the enquiry has one.
+         */
+        if (!values.company) values.company = String(enquiry.company ?? "");
+        if (!values.occupation) values.occupation = String(enquiry.occupation ?? "");
       }
     }
     const docs = Array.isArray(row.docs)

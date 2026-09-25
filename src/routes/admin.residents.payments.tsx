@@ -871,7 +871,6 @@ function detailsFrom(inv: BillingInvoice): ResidentDetails {
     fullName: d.full_name,
     email: d.email,
     phone: d.phone,
-    university: d.university ?? "",
     nationality: d.nationality ?? "",
     residenceName: d.residence_name,
     roomName: d.room_name,
