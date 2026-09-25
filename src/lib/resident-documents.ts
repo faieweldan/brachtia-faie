@@ -102,3 +102,17 @@ export function residentDocLabel(key: string, nationality: string): string {
   if (key === "id") return idDocLabelFor(nationality);
   return RESIDENT_DOCS.find((d) => d.key === key)?.label ?? key;
 }
+
+/**
+ * The uploads still outstanding for this person.
+ *
+ * Only what they are actually shown counts. A student is never asked for an
+ * employment letter and must not be held up by one, and the same the other way
+ * round - which is the whole reason the list depends on their answer.
+ */
+export function missingResidentDocs(
+  currentStatus: string,
+  uploaded: Record<string, string>,
+): ResidentDoc[] {
+  return residentDocsFor(currentStatus).filter((d) => d.required && !uploaded[d.key]);
+}

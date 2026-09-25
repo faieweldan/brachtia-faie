@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { residentDocsFor, residentDocLabel, RESIDENT_DOCS } from "../src/lib/resident-documents";
+import {
+  residentDocsFor,
+  residentDocLabel,
+  missingResidentDocs,
+  RESIDENT_DOCS,
+} from "../src/lib/resident-documents";
 
 const keys = (s: string) => residentDocsFor(s).map((d) => d.key);
 
@@ -37,5 +42,29 @@ describe("what a resident is asked to upload", () => {
         expect(RESIDENT_DOCS.some((r) => r.key === d.key)).toBe(true);
       }
     }
+  });
+});
+
+describe("what still has to be uploaded before the form can be sent", () => {
+  const missing = (status: string, up: Record<string, string>) =>
+    missingResidentDocs(status, up).map((d) => d.key);
+
+  test("nothing uploaded means all three are outstanding", () => {
+    expect(missing("employed", {})).toEqual(["photo", "employment", "id"]);
+  });
+  test("a student is never held up by an employment letter", () => {
+    expect(missing("student", { photo: "a.jpg", offer: "b.pdf", id: "c.jpg" })).toEqual([]);
+  });
+  test("and somebody working is never held up by a university letter", () => {
+    expect(missing("employed", { photo: "a.jpg", employment: "b.pdf", id: "c.jpg" })).toEqual([]);
+  });
+  test("a student's offer letter does not stand in for an employment one", () => {
+    // they answered Student, uploaded, then changed to Employed
+    expect(missing("employed", { photo: "a.jpg", offer: "b.pdf", id: "c.jpg" })).toEqual([
+      "employment",
+    ]);
+  });
+  test("one left says which one", () => {
+    expect(missing("student", { photo: "a.jpg", id: "c.jpg" })).toEqual(["offer"]);
   });
 });

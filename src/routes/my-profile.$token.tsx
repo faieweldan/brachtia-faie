@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { residentDocsFor, residentDocLabel } from "@/lib/resident-documents";
+import { missingResidentDocs, residentDocsFor, residentDocLabel } from "@/lib/resident-documents";
 import {
   getProfileByToken,
   submitProfileByToken,
@@ -305,6 +305,16 @@ function MyProfilePage() {
   const problemByKey = new Map(problems.map((p) => [p.f.key, p.msg]));
   // the documents still to be opened - Submit waits for them
   const unread = RESIDENT_DOCUMENTS.filter((d) => !read.has(d.key));
+  /*
+   * The uploads still missing, for the answer they gave to Student or Employed.
+   *
+   * The dot beside each one said "required" and nothing checked it, so an
+   * application could be sent with none of them - the form asked for a passport
+   * copy in the same breath it accepted not having one. Only what this person is
+   * actually shown counts: a student is never asked for an employment letter and
+   * cannot be held up by one.
+   */
+  const missingDocs = missingResidentDocs(values?.["current_status"] ?? "", docs);
 
   /** Photos are shrunk in the browser first - a phone photo of an IC is several MB. */
   async function uploadDoc(key: string, file: File) {
@@ -355,6 +365,10 @@ function MyProfilePage() {
       showProblems();
       return;
     }
+    if (step === 1 && missingDocs.length) {
+      showMissingDocs();
+      return;
+    }
     if (step === 2 && !signed) {
       toast.error("Please sign the declaration to continue");
       return;
@@ -382,12 +396,28 @@ function MyProfilePage() {
     );
   }
 
+  /** Say which uploads are missing, and take them to the list. */
+  function showMissingDocs() {
+    document.getElementById("documents")?.scrollIntoView({ block: "start", behavior: "smooth" });
+    const names = missingDocs
+      .map((d) => residentDocLabel(d.key, values?.["nationality"] ?? ""))
+      .join(", ");
+    toast.error(
+      missingDocs.length === 1 ? `${names} is still to upload` : `Still to upload: ${names}`,
+    );
+  }
+
   async function submit() {
     if (!values) return;
     // a gap can only be on step 1, so that is where they are taken to fix it
     if (problems.length) {
       setStep(1);
       showProblems();
+      return;
+    }
+    if (missingDocs.length) {
+      setStep(1);
+      showMissingDocs();
       return;
     }
     setSaving(true);
@@ -722,7 +752,10 @@ function MyProfilePage() {
           </section>
         ))}
 
-        <section className="rounded-2xl border border-border bg-card p-5">
+        <section
+          id="documents"
+          className="scroll-mt-6 rounded-2xl border border-border bg-card p-5"
+        >
           <h2 className="text-sm font-semibold text-brand-deep">Documents</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
             A clear phone photo is fine — we shrink it for you. PDFs work too.
@@ -879,7 +912,11 @@ function MyProfilePage() {
             {step === 1
               ? problems.length
                 ? `${problems.length} field${problems.length === 1 ? "" : "s"} need${problems.length === 1 ? "s" : ""} filling in`
-                : "Everything is filled in."
+                : // the fields are done and the uploads are not - said here too,
+                  // so Next refusing is never a surprise
+                  missingDocs.length
+                  ? `${missingDocs.length} document${missingDocs.length === 1 ? "" : "s"} still to upload`
+                  : "Everything is filled in."
               : step === 2
                 ? !signed
                   ? "Sign the declaration to continue."
