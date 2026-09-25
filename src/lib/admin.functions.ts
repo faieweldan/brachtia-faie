@@ -2,7 +2,7 @@ import { nextRentalPayment } from "@/lib/rental-schedule";
 import { createServerFn } from "@tanstack/react-start";
 import { NEED_STAFF, logBookingEvent, rm, staffFor, when, words } from "@/lib/booking-events";
 
-import { BOOKING_FEE, liveInvoices } from "@/lib/invoices";
+import { BOOKING_FEE, lineQty, liveInvoices } from "@/lib/invoices";
 import { residentCodeFor } from "@/lib/resident-billing.functions";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -825,7 +825,8 @@ export const generateViewingToken = createServerFn({ method: "POST" })
 
 /* ---------------- Invoices, payments & receipts ---------------- */
 
-export type InvoiceLine = { label: string; kind: string; amount: number };
+/** amount is the price of one; the line is worth quantity x amount. */
+export type InvoiceLine = { label: string; kind: string; amount: number; quantity?: number };
 
 /**
  * A booking's money: its one invoice, what has been paid on it - the booking fee
@@ -1071,10 +1072,10 @@ export const createInvoice = createServerFn({ method: "POST" })
       ((voided ?? []) as any[]).find(
         (v) => !((taken ?? []) as any[]).some((t) => t.replaces_invoice_id === v.id),
       ) ?? null;
-    const total = lines.reduce((n, l) => n + Number(l.amount || 0), 0);
+    const total = lines.reduce((n, l) => n + Number(l.amount || 0) * lineQty(l.quantity), 0);
     const deposits = lines
       .filter((l) => l.kind === "refundable")
-      .reduce((n, l) => n + Number(l.amount || 0), 0);
+      .reduce((n, l) => n + Number(l.amount || 0) * lineQty(l.quantity), 0);
 
     const { data: inv, error } = await supabase
       .from("invoices")
@@ -1100,6 +1101,7 @@ export const createInvoice = createServerFn({ method: "POST" })
         label: l.label,
         kind: l.kind,
         amount: Number(l.amount || 0),
+        quantity: lineQty(l.quantity),
         sort_order: i,
       }));
       const ins = await supabase.from("invoice_items").insert(rows as any);
@@ -1213,7 +1215,8 @@ export const updateInvoice = createServerFn({ method: "POST" })
     }
     if (
       paidSoFar > 0 &&
-      data.items.reduce((n, l) => n + Number(l.amount || 0), 0) + 0.005 < paidSoFar
+      data.items.reduce((n, l) => n + Number(l.amount || 0) * lineQty(l.quantity), 0) + 0.005 <
+        paidSoFar
     ) {
       throw new Error(
         `${asRM(paidSoFar)} has been paid on this invoice, so it cannot be changed to less than that`,
@@ -1234,10 +1237,10 @@ export const updateInvoice = createServerFn({ method: "POST" })
         invoice_date: invoiceDate,
         payment_terms: data.paymentTerms || "NET15",
         issued_at: new Date(`${invoiceDate}T00:00:00Z`).toISOString(),
-        total: lines.reduce((n, l) => n + Number(l.amount || 0), 0),
+        total: lines.reduce((n, l) => n + Number(l.amount || 0) * lineQty(l.quantity), 0),
         deposits_total: lines
           .filter((l) => l.kind === "refundable")
-          .reduce((n, l) => n + Number(l.amount || 0), 0),
+          .reduce((n, l) => n + Number(l.amount || 0) * lineQty(l.quantity), 0),
         updated_at: new Date().toISOString(),
       } as any)
       .eq("id", data.invoiceId);
@@ -1255,6 +1258,7 @@ export const updateInvoice = createServerFn({ method: "POST" })
           label: l.label,
           kind: l.kind,
           amount: Number(l.amount || 0),
+          quantity: lineQty(l.quantity),
           sort_order: i,
         })) as any,
       );

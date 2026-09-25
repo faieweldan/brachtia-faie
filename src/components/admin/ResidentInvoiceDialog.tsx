@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { refreshMoney } from "@/lib/billing-client";
 import type { InvoiceDoc } from "@/lib/invoice-pdf";
+import { lineQty } from "@/lib/invoices";
 import { fmtDate, money } from "@/lib/ops-store";
 import { SCHEDULES } from "@/lib/reference-data";
 import {
@@ -53,9 +54,6 @@ export type ResidentDetails = {
 
 /** amount is the price of one; the line is worth quantity x amount. */
 type Line = { label: string; kind: string; amount: number; quantity: number };
-
-/** How many of a line there are - never none, and never a fraction of one. */
-const qty = (v: unknown) => Math.max(1, Math.round(Number(v) || 1));
 
 const TYPES = [
   { value: "rental", label: "Rental" },
@@ -190,7 +188,7 @@ export function ResidentInvoiceDialog({
 
   const isRental = kind === "rental";
   const type = isRental ? "rental" : "charge";
-  const total = lines.reduce((n, l) => n + Number(l.amount || 0) * qty(l.quantity), 0);
+  const total = lines.reduce((n, l) => n + Number(l.amount || 0) * lineQty(l.quantity), 0);
 
   function changeKind(next: string) {
     setKind(next);
@@ -434,7 +432,7 @@ export function ResidentInvoiceDialog({
               editing?.scheduled ? (
                 <div key={i} className="flex items-center gap-2 px-3 py-2 text-sm">
                   <span className="flex-1">{l.label || "—"}</span>
-                  <span className="w-16 text-right tabular-nums">{qty(l.quantity)}</span>
+                  <span className="w-16 text-right tabular-nums">{lineQty(l.quantity)}</span>
                   <span className="text-xs text-muted-foreground">×</span>
                   <span className="w-28 text-right tabular-nums">
                     {money(Number(l.amount) || 0)}

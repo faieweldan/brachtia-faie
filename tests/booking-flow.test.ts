@@ -3,6 +3,7 @@ import { properties, stayQuote, staySchedule, formatRM, type Addon } from '../sr
 import { bookingAddonNames, selectedBookingAddons, quoteAmountsMatch } from '../src/lib/booking-quote';
 import { nextRentalPayment, firstRentPeriod, buildPeriods, dueFor } from '../src/lib/rental-schedule';
 import { invoiceNextPayment, type InvoiceDoc } from '../src/lib/invoice-pdf';
+import { lineQty } from '../src/lib/invoices';
 
 const round = (n: number) => Math.round(n * 100) / 100;
 const bedding: Addon = { id: 'bedding', label: 'Single Bedding Set', price: 250, chargeType: 'onetime', items: [], occupancies: ['single'], active: true };
@@ -129,6 +130,12 @@ describe('booking add-ons and quote consistency', () => {
     expect(overridden.paymentTerm).toBe('monthly');
     // a quote saved before the field existed says nothing rather than guessing
     expect(({ ...chosen, paymentTerm: undefined }).paymentTerm).toBeUndefined();
+  });
+  test('a line with no quantity is worth one of itself, never none', () => {
+    // lines saved before quantity existed come back without it. Treating that as
+    // zero would quietly rewrite what an issued invoice is worth.
+    expect([undefined, null, '', 0, NaN, -3, 1.4].map(lineQty)).toEqual([1, 1, 1, 1, 1, 1, 1]);
+    expect([2, '3', 2.6].map(lineQty)).toEqual([2, 3, 3]);
   });
   test('amounts always show two decimal places', () => {
     expect(formatRM(4770.81)).toBe('RM 4,770.81');

@@ -2,6 +2,7 @@
 import { company, formatDate, formatRM } from "@/data/properties";
 import { nextRentalPayment, cycleEnd } from "@/lib/rental-schedule";
 import { stayLength } from "@/lib/stay-length";
+import { lineQty } from "@/lib/invoices";
 
 const GREEN: [number, number, number] = [26, 71, 52];
 const PEACH: [number, number, number] = [250, 240, 231];
@@ -380,8 +381,15 @@ async function buildInvoice(inv: InvoiceDoc) {
    * two damaged chairs, three months of a fee. Rent and the initial payment are
    * each one thing at one price, so those two columns would print "1" and then
    * the same amount twice on every line, which reads like a mistake.
+   *
+   * Unless one of them is not one thing. Two months of advance rent billed as a
+   * single line has to say "2 x RM1,050", or the student is shown a figure twice
+   * the rent they agreed with nothing on the paper explaining it.
    */
-  const itemised = inv.kind === "charge" || inv.kind === "checkout";
+  const itemised =
+    inv.kind === "charge" ||
+    inv.kind === "checkout" ||
+    inv.items.some((l) => lineQty(l.quantity) > 1);
 
   autoTable(doc, {
     startY: y,
@@ -400,7 +408,7 @@ async function buildInvoice(inv: InvoiceDoc) {
       : { 1: { halign: "right", cellWidth: 96 } },
     head: itemised ? [["Item", "Qty", "Unit price", "Amount"]] : [["Item", "Amount"]],
     body: inv.items.map((l) => {
-      const many = Math.max(1, Math.round(Number(l.quantity) || 1));
+      const many = lineQty(l.quantity);
       const label = l.kind === "refundable" ? `${l.label}  (refundable)` : l.label;
       // the line is still worth quantity x amount whether or not it is shown
       return itemised

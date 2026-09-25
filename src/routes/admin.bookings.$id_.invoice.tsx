@@ -23,7 +23,7 @@ import { INVOICE_TERMS } from "@/lib/invoice-terms";
 import { nextRentalPayment } from "@/lib/rental-schedule";
 import { bookingAddonNames, selectedBookingAddons } from "@/lib/booking-quote";
 import { Choice } from "@/components/admin/Choice";
-import { discountLabel, discountPerMonth, type DiscountType } from "@/lib/invoices";
+import { discountLabel, discountPerMonth, lineQty, type DiscountType } from "@/lib/invoices";
 import { PdfPreviewButton } from "@/components/admin/PdfPreview";
 import {
   addonsFor,
@@ -56,7 +56,8 @@ const KINDS = [
 const money = (n: number) =>
   `RM${Number(n || 0).toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-type Line = { label: string; kind: string; amount: number };
+/** amount is the price of one; the line is worth quantity x amount. */
+type Line = { label: string; kind: string; amount: number; quantity: number };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -137,6 +138,7 @@ function InvoiceGenerator() {
         label: String(l.label ?? ""),
         kind: String(l.kind ?? "onetime"),
         amount: Number(l.amount ?? 0),
+        quantity: lineQty(l.quantity),
       })),
     );
     setManual(true);
@@ -259,6 +261,7 @@ function InvoiceGenerator() {
       label: l.label,
       kind: String(l.kind),
       amount: Number(l.amount || 0),
+      quantity: 1,
     }));
   }, [property, rent, monthlyExtras, selectedAddons, frequency, r?.move_in, r?.move_out, r?.term]);
 
@@ -268,6 +271,7 @@ function InvoiceGenerator() {
         label: String(l.label ?? ""),
         kind: String(l.kind ?? "onetime"),
         amount: Number(l.amount ?? 0),
+        quantity: lineQty(l.quantity),
       })),
     [snapshot],
   );
@@ -311,9 +315,11 @@ function InvoiceGenerator() {
     JSON.stringify(lines) !== JSON.stringify(calculated);
 
 
-  const total = useMemo(() => lines.reduce((n, l) => n + Number(l.amount || 0), 0), [lines]);
+  // every figure below is the line's worth - how many, at the price of one
+  const lineTotal = (l: Line) => Number(l.amount || 0) * lineQty(l.quantity);
+  const total = useMemo(() => lines.reduce((n, l) => n + lineTotal(l), 0), [lines]);
   const deposits = useMemo(
-    () => lines.filter((l) => l.kind === "refundable").reduce((n, l) => n + Number(l.amount || 0), 0),
+    () => lines.filter((l) => l.kind === "refundable").reduce((n, l) => n + lineTotal(l), 0),
     [lines],
   );
 
@@ -765,18 +771,26 @@ function InvoiceGenerator() {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => editLines((l) => [...l, { label: "", kind: "onetime", amount: 0 }])}
+            onClick={() =>
+              editLines((l) => [...l, { label: "", kind: "onetime", amount: 0, quantity: 1 }])
+            }
           >
             <Plus className="size-4" /> Add line
           </Button>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[560px] text-sm">
+          <table className="w-full min-w-[720px] text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="py-2 pr-3 font-medium">Item</th>
                 <th className="py-2 pr-3 font-medium" style={{ width: "140px" }}>Type</th>
-                <th className="py-2 pl-3 text-right font-medium" style={{ width: "130px" }}>Amount (RM)</th>
+                <th className="py-2 pr-3 text-right font-medium" style={{ width: "70px" }}>
+                  Qty
+                </th>
+                <th className="py-2 pl-3 text-right font-medium" style={{ width: "130px" }}>
+                  Price each (RM)
+                </th>
+                <th className="py-2 pl-3 text-right font-medium" style={{ width: "120px" }}>Amount (RM)</th>
                 <th className="py-2" style={{ width: "36px" }} />
               </tr>
             </thead>
@@ -812,11 +826,32 @@ function InvoiceGenerator() {
                       ))}
                     </select>
                   </td>
+                  {/* how many, then the price of one - two months of advance
+                      rent is the rent typed once and a 2 here, not the rent
+                      doubled by hand */}
+                  <td className="py-2 pr-3">
+                    <Input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={l.quantity}
+                      aria-label="Quantity"
+                      className="h-8 text-right tabular-nums"
+                      onChange={(e) =>
+                        editLines((rows) =>
+                          rows.map((x, j) =>
+                            j === i ? { ...x, quantity: Number(e.target.value) } : x,
+                          ),
+                        )
+                      }
+                    />
+                  </td>
                   <td className="py-2 pl-3">
                     <Input
                       type="number"
                       value={l.amount}
-                      className="h-8 text-right"
+                      aria-label="Price each"
+                      className="h-8 text-right tabular-nums"
                       onChange={(e) =>
                         editLines((rows) =>
                           rows.map((x, j) =>
@@ -825,6 +860,11 @@ function InvoiceGenerator() {
                         )
                       }
                     />
+                  </td>
+                  {/* what the line is worth, so the multiplication is visible
+                      rather than only showing up in the total */}
+                  <td className="py-2 pl-3 text-right text-sm tabular-nums">
+                    {money(lineTotal(l))}
                   </td>
                   <td className="py-2 text-right">
                     <button
@@ -839,7 +879,7 @@ function InvoiceGenerator() {
               ))}
               {lines.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-6 text-center text-sm text-muted-foreground">
+                  <td colSpan={6} className="py-6 text-center text-sm text-muted-foreground">
                     No lines yet — add the first one.
                   </td>
                 </tr>

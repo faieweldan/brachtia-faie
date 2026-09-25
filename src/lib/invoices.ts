@@ -54,3 +54,16 @@ export function discountLabel(type: string | null | undefined, value: number) {
     ? `${value}%`
     : `RM${value.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+
+/**
+ * How many of a line there are.
+ *
+ * A line is worth `lineQty x amount`, where amount is the price of one. Old
+ * lines were saved before quantity existed and have none, so a missing, blank or
+ * nonsense quantity is one - never nothing, which would zero the line and quietly
+ * change what an issued invoice is worth. Whole numbers only: half an advance
+ * month is a different amount, not a fraction of a line.
+ */
+export function lineQty(v: unknown) {
+  return Math.max(1, Math.round(Number(v) || 1));
+}

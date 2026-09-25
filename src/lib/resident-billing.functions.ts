@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 
-import { billDueInvoices, discountLabel, liveInvoices } from "@/lib/invoices";
+import { billDueInvoices, discountLabel, lineQty, liveInvoices } from "@/lib/invoices";
 import type { InvoiceDoc } from "@/lib/invoice-pdf";
 import { DOC_BUCKET, DOC_MIME_TYPES, MAX_DOC_BYTES, safeExt } from "@/lib/resident-documents";
 
@@ -94,7 +94,6 @@ const num = (v: unknown) => Number(v ?? 0) || 0;
  * a missing or broken value is one of the thing rather than nothing at all -
  * which is also what every row written before the column existed means.
  */
-const qty = (v: unknown) => Math.max(1, Math.round(Number(v) || 1));
 
 /** The heading an invoice's PDF carries, by what it is for. */
 const HEADINGS = { rental: "Rental", charge: "Charges", checkout: "Checkout settlement" };
@@ -408,7 +407,7 @@ export const createResidentInvoice = createServerFn({ method: "POST" })
     const days = Math.round((Date.parse(data.dueDate) - Date.parse(data.invoiceDate)) / 86_400_000);
     if (days < 0) throw new Error("The due date is before the issue date");
     // a line is worth its price times how many of it there are
-    const total = items.reduce((n, l) => n + num(l.amount) * qty(l.quantity), 0);
+    const total = items.reduce((n, l) => n + num(l.amount) * lineQty(l.quantity), 0);
 
     const { data: inv, error } = await supabase
       .from("invoices")
@@ -428,7 +427,7 @@ export const createResidentInvoice = createServerFn({ method: "POST" })
         total,
         deposits_total: items
           .filter((l) => l.kind === "refundable")
-          .reduce((n, l) => n + num(l.amount) * qty(l.quantity), 0),
+          .reduce((n, l) => n + num(l.amount) * lineQty(l.quantity), 0),
       })
       .select("id, number")
       .maybeSingle();
@@ -440,7 +439,7 @@ export const createResidentInvoice = createServerFn({ method: "POST" })
         label: l.label,
         kind: l.kind,
         amount: num(l.amount),
-        quantity: qty(l.quantity),
+        quantity: lineQty(l.quantity),
         sort_order: i,
       })),
     );
@@ -510,7 +509,7 @@ export const updateResidentInvoice = createServerFn({ method: "POST" })
         period_start: data.periodStart || null,
         period_end: data.periodEnd || null,
         notes: data.notes,
-        total: items.reduce((n, l) => n + num(l.amount) * qty(l.quantity), 0),
+        total: items.reduce((n, l) => n + num(l.amount) * lineQty(l.quantity), 0),
         updated_at: new Date().toISOString(),
       })
       .eq("id", data.invoiceId)
@@ -529,7 +528,7 @@ export const updateResidentInvoice = createServerFn({ method: "POST" })
         label: l.label,
         kind: l.kind,
         amount: num(l.amount),
-        quantity: qty(l.quantity),
+        quantity: lineQty(l.quantity),
         sort_order: i,
       })),
     );
@@ -562,7 +561,7 @@ function toBillingInvoice(
     kind: String(i.kind ?? "fee"),
     amount: num(i.amount),
     // rows written before the column existed are one of the thing
-    quantity: qty(i.quantity),
+    quantity: lineQty(i.quantity),
   }));
   const myPayments = paymentRows.map((p: any) => ({
     id: String(p.id),
