@@ -14,7 +14,8 @@ import {
 import { Select, Text } from "@/components/admin/ops-ui";
 import { recordPayment } from "@/lib/admin.functions";
 import { afterPaymentRecorded, uploadProof } from "@/lib/billing-client";
-import { PAY_METHODS, money } from "@/lib/ops-store";
+import { formatRM } from "@/data/properties";
+import { PAY_METHODS } from "@/lib/ops-store";
 import { paymentProofUrl } from "@/lib/resident-billing.functions";
 
 export type PayableInvoice = {
@@ -126,7 +127,7 @@ export function RecordPaymentDialog({
           </DialogTitle>
           <DialogDescription>
             {invoice
-              ? [invoice.label, invoice.number, `${money(invoice.outstanding)} outstanding`]
+              ? [invoice.label, invoice.number, `${formatRM(invoice.outstanding)} outstanding`]
                   .filter(Boolean)
                   .join(" · ")
               : ""}
