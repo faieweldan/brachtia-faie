@@ -23,6 +23,7 @@ import { PdfPreviewButton, type VersionNav } from "@/components/admin/PdfPreview
 import { listInvoiceVersions, listQuoteVersions } from "@/lib/document-versions.functions";
 import { referenceFor } from "@/lib/document-versions";
 import { invoiceDocFromRow } from "@/lib/invoice-doc";
+import { quoteSnapshotFor } from "@/lib/booking-quote";
 import { loadProofFile } from "@/lib/payment-proof";
 import { BOOKING_FEE as FEE_AMOUNT } from "@/lib/invoices";
 import { company } from "@/data/properties";
@@ -580,7 +581,9 @@ function BookingDetail() {
    * be worse than keeping no version at all.
    */
   async function quoteBodyFor(r: any) {
-    const snap = r.quote_snapshot as any;
+    // the person on it filled in from the booking, so staff's copy names the
+    // same student - or employee - that their own download did
+    const snap = quoteSnapshotFor(r) as any;
     let quote = snap.quote;
     if (!quote) {
       // Older enquiries were saved without a computed quote — rebuild it.
@@ -1190,7 +1193,7 @@ function BookingDetail() {
               fileName={`Brachtia-Quote-${row.reference ?? "booking"}.pdf`}
               build={async () =>
                 (await import("@/lib/quote-pdf")).quotePdfUrl({
-                  ...(row.quote_snapshot as any),
+                  ...(quoteSnapshotFor(row) as any),
                   reference: row.reference,
                 })
               }
@@ -1774,7 +1777,7 @@ function BookingDetail() {
                     fileName={`Brachtia-Quote-${row.reference ?? "booking"}.pdf`}
                     build={async () =>
                       (await import("@/lib/quote-pdf")).quotePdfUrl({
-                        ...(row.quote_snapshot as any),
+                        ...(quoteSnapshotFor(row) as any),
                         reference: row.reference,
                       })
                     }

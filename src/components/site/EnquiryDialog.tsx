@@ -418,6 +418,12 @@ export default function EnquiryDialog({
                       name: leadData.name,
                       university: uni,
                       intake,
+                      // and the employer, on the same terms as the university
+                      // above. Only the student half was kept here, so staff's
+                      // copy of an employed applicant's quote named nobody
+                      // while the applicant's own download named their employer
+                      company: studying || selfEmployed ? "" : (leadData.company ?? ""),
+                      occupation: studying ? "" : (leadData.occupation ?? ""),
                       nationality: leadData.nationality,
                       gender: leadData.gender,
                       email: leadData.email,
