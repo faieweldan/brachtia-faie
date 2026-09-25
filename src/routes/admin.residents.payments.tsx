@@ -1,3 +1,4 @@
+import { loadProofFile } from "@/lib/payment-proof";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -90,14 +91,7 @@ const is = (r: LedgerRow, today: string, status: PaymentStatus) =>
  * than unlikely.
  */
 type TabKey =
-  | "all"
-  | "scheduled"
-  | "invoiced"
-  | "coming"
-  | "overdue"
-  | "partial"
-  | "paid"
-  | "cancelled";
+  "all" | "scheduled" | "invoiced" | "coming" | "overdue" | "partial" | "paid" | "cancelled";
 
 const TABS: {
   key: TabKey;
@@ -315,20 +309,25 @@ function CollectionsPage() {
     const pay = inv.payments.find((p) => p.id === last.paymentId);
     try {
       const { receiptPdfUrl } = await import("@/lib/invoice-pdf");
-      const url = await receiptPdfUrl({
-        number: last.number,
-        issued_at: last.issuedAt,
-        invoiceNumber: invoiceRef(inv.number, inv.type),
-        full_name: inv.doc.full_name,
-        ...(inv.doc.resident_code ? { resident_code: inv.doc.resident_code } : {}),
-        amount: last.amount,
-        balance_after: last.balanceAfter,
-        method: pay?.method ?? "",
-        reference: pay?.reference ?? "",
-        paid_on: pay?.paidOn ?? null,
-        description: pay?.description ?? "",
-        paid_to_date: last.paidToDate,
-      });
+      // the receipt, then the slip it was paid with - one document to download
+      // and send, rather than two things to find and attach
+      const url = await receiptPdfUrl(
+        {
+          number: last.number,
+          issued_at: last.issuedAt,
+          invoiceNumber: invoiceRef(inv.number, inv.type),
+          full_name: inv.doc.full_name,
+          ...(inv.doc.resident_code ? { resident_code: inv.doc.resident_code } : {}),
+          amount: last.amount,
+          balance_after: last.balanceAfter,
+          method: pay?.method ?? "",
+          reference: pay?.reference ?? "",
+          paid_on: pay?.paidOn ?? null,
+          description: pay?.description ?? "",
+          paid_to_date: last.paidToDate,
+        },
+        await loadProofFile(String(pay?.proofPath ?? "")),
+      );
       setPreview({ title: `Receipt ${last.number}`, fileName: `Brachtia-${last.number}.pdf`, url });
     } catch {
       toast.error("Could not make the receipt");

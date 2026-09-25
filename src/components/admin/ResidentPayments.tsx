@@ -1,3 +1,4 @@
+import { loadProofFile } from "@/lib/payment-proof";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -629,23 +630,28 @@ export function InvoiceDetail({ invoice, onPay }: { invoice: BillingInvoice; onP
                       aria-label={`View receipt ${receipt.number}`}
                       title={`Receipt ${receipt.number}`}
                       fileName={`Brachtia-${receipt.number}.pdf`}
+                      /* one document to download and send: the receipt, then
+                         the slip it was paid with on the pages after it */
                       build={async () =>
-                        (await import("@/lib/invoice-pdf")).receiptPdfUrl({
-                          number: receipt.number,
-                          issued_at: receipt.issuedAt,
-                          invoiceNumber: invoice.number,
-                          full_name: invoice.doc.full_name,
-                          ...(invoice.doc.resident_code
-                            ? { resident_code: invoice.doc.resident_code }
-                            : {}),
-                          amount: receipt.amount,
-                          balance_after: receipt.balanceAfter,
-                          method: p.method,
-                          reference: p.reference,
-                          paid_on: p.paidOn,
-                          description: p.description,
-                          paid_to_date: receipt.paidToDate,
-                        })
+                        (await import("@/lib/invoice-pdf")).receiptPdfUrl(
+                          {
+                            number: receipt.number,
+                            issued_at: receipt.issuedAt,
+                            invoiceNumber: invoice.number,
+                            full_name: invoice.doc.full_name,
+                            ...(invoice.doc.resident_code
+                              ? { resident_code: invoice.doc.resident_code }
+                              : {}),
+                            amount: receipt.amount,
+                            balance_after: receipt.balanceAfter,
+                            method: p.method,
+                            reference: p.reference,
+                            paid_on: p.paidOn,
+                            description: p.description,
+                            paid_to_date: receipt.paidToDate,
+                          },
+                          await loadProofFile(String(p.proofPath ?? "")),
+                        )
                       }
                     >
                       <Eye className="size-4" />

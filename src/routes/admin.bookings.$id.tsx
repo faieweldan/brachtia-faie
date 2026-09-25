@@ -23,6 +23,7 @@ import { PdfPreviewButton, type VersionNav } from "@/components/admin/PdfPreview
 import { listInvoiceVersions, listQuoteVersions } from "@/lib/document-versions.functions";
 import { referenceFor } from "@/lib/document-versions";
 import { invoiceDocFromRow } from "@/lib/invoice-doc";
+import { loadProofFile } from "@/lib/payment-proof";
 import { BOOKING_FEE as FEE_AMOUNT } from "@/lib/invoices";
 import { company } from "@/data/properties";
 import { WelcomeMessageCard } from "@/components/admin/WelcomeMessageCard";
@@ -487,24 +488,9 @@ function BookingDetail() {
   const hasProofFor = (rc: any) => Boolean(paymentFor(rc)?.proof_path);
 
   /** The bank slip behind a receipt, fetched so it can go into the welcome pack. */
+  /** The slip this receipt was paid with, read the way every screen reads it. */
   async function loadProof(rc: any) {
-    const path = String(paymentFor(rc)?.proof_path ?? "");
-    if (!path) return null;
-    try {
-      const { paymentProofUrl } = await import("@/lib/resident-billing.functions");
-      const { url } = await paymentProofUrl({ data: { path } });
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(String(res.status));
-      const blob = await res.blob();
-      return { name: path.split("/").pop() ?? "proof", type: blob.type, blob };
-    } catch {
-      // a proof was uploaded but will not open - say so, rather than quietly
-      // sending a document the student is told has three parts and has two
-      toast.error("Could not add the payment proof", {
-        description: "The invoice and receipt are still attached.",
-      });
-      return null;
-    }
+    return loadProofFile(String(paymentFor(rc)?.proof_path ?? ""));
   }
 
   /** The booking fee: the first payment on the invoice - from the receipt card or Next action. */
