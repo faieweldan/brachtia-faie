@@ -27,6 +27,7 @@ import { loadProofFile } from "@/lib/payment-proof";
 import { BOOKING_FEE as FEE_AMOUNT } from "@/lib/invoices";
 import { company } from "@/data/properties";
 import { WelcomeMessageCard } from "@/components/admin/WelcomeMessageCard";
+import { InvoiceMessageCard } from "@/components/admin/InvoiceMessageCard";
 import { StayDetailsCard } from "@/components/admin/StayDetailsCard";
 import { roomFitChanged, stayChanges } from "@/lib/stay-fit";
 import { offersTerm, wholeUnitRate, type SiteRoomType } from "@/lib/room-types";
@@ -398,6 +399,19 @@ function BookingDetail() {
   const invoice = (billing as any)?.invoice ?? null;
   // the one it had before it was cancelled: gone from the card, kept on record
   const voidedInvoice = (billing as any)?.voided ?? null;
+  /*
+   * When the invoice falls due, worked out the way the PDF works it out - the
+   * invoice date plus the NET days on it. It is not a column, so a message that
+   * named its own date would eventually name a different one from the paper.
+   */
+  const invoiceDueDate = (() => {
+    if (!invoice) return "";
+    const issued = invoice.invoice_date ?? invoice.issued_at;
+    if (!issued) return "";
+    const days = Number(/NET\s*(\d+)/i.exec(String(invoice.payment_terms ?? ""))?.[1] ?? 15);
+    const d = new Date(new Date(issued).getTime() + days * 86400000);
+    return d.toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" });
+  })();
   const invoiceItems = ((billing as any)?.items ?? []) as any[];
   const receipts = ((billing as any)?.receipts ?? []) as any[];
   const paidTotal = Number((billing as any)?.paid ?? 0);
@@ -2008,6 +2022,35 @@ function BookingDetail() {
             onClose={() => setPaying(null)}
             onRecorded={() => goTo("payment")}
           />
+
+          {/*
+            An invoice with money still owing on it: the message asking for it,
+            ready. Raising the invoice and telling the student were two jobs and
+            the second was done from memory, so the figures come off the invoice
+            here rather than being typed again.
+          */}
+          {invoice && balanceDue > 0 ? (
+            <InvoiceMessageCard
+              id="booking-invoice-message"
+              studentName={row.full_name ?? ""}
+              staffName={row.assigned_staff ?? ""}
+              reference={invoice.number}
+              amount={balanceDue}
+              dueDate={invoiceDueDate}
+              residence={row.residence_name ?? ""}
+              phone={row.phone ?? ""}
+              // the fee is in, so what is left is the balance rather than the lot
+              isBalance={paidTotal > 0}
+              attachments={[
+                {
+                  label: `Invoice ${invoice.number}`,
+                  fileName: `Brachtia-${invoice.number}.pdf`,
+                  build: async () =>
+                    (await import("@/lib/invoice-pdf")).invoicePdfUrl(invoiceDoc()),
+                },
+              ]}
+            />
+          ) : null}
 
           {/* the booking fee is in and admin has made them a resident: send their profile link */}
           {row.resident_id && (row.fee_received_at || paidTotal > 0) ? (
