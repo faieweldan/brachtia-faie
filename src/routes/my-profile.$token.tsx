@@ -177,17 +177,6 @@ function PhoneField({
   );
 }
 
-/*
- * TESTING ONLY - set back to true before this form goes to a student.
- *
- * False lets Next through with the profile half filled and the declaration
- * unsigned, so steps 2 and 3 can be reached without typing a whole application
- * first. Nothing else is relaxed: Submit still refuses, because a half-filled
- * application saved as though it were finished is worse than one nobody could
- * reach the end of.
- */
-const STEPS_ARE_GATED = false;
-
 function MyProfilePage() {
   const { token } = Route.useParams();
   const [values, setValues] = useState<ProfileLinkFields | null>(null);
@@ -362,19 +351,17 @@ function MyProfilePage() {
    * declaration is signed.
    */
   function nextStep() {
-    if (STEPS_ARE_GATED) {
-      if (step === 1 && problems.length) {
-        showProblems();
-        return;
-      }
-      if (step === 2 && !signed) {
-        toast.error("Please sign the declaration to continue");
-        return;
-      }
-      if (step === 2 && unread.length) {
-        toast.error("Please open the Tenancy Agreement and House Rules first");
-        return;
-      }
+    if (step === 1 && problems.length) {
+      showProblems();
+      return;
+    }
+    if (step === 2 && !signed) {
+      toast.error("Please sign the declaration to continue");
+      return;
+    }
+    if (step === 2 && unread.length) {
+      toast.error("Please open the Tenancy Agreement and House Rules first");
+      return;
     }
     const to = Math.min(step + 1, 3);
     setStep(to);
@@ -525,14 +512,6 @@ function MyProfilePage() {
           </div>
         ) : null}
       </div>
-
-      {/* says so on the page, because a gate quietly left open is one nobody
-          remembers to close */}
-      {!STEPS_ARE_GATED ? (
-        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-          Testing mode: Next is not checking anything yet. Submit still is.
-        </div>
-      ) : null}
 
       <div className="mb-6">
         <FormSteps
@@ -815,52 +794,58 @@ function MyProfilePage() {
           onSigned={setSigned}
         />
 
-        {/* agreeing to a document nobody put in front of them is not agreement */}
-        <section className="rounded-2xl bg-card p-5 shadow-sm sm:p-6">
-          <h2 className="text-base font-semibold text-brand-deep">What you are agreeing to</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Please open this before continuing. Your declaration above refers to it, so we ask that
-            you have seen it.
-          </p>
-          <ul className="mt-3 space-y-2">
-            {RESIDENT_DOCUMENTS.map((d) => {
-              const opened = read.has(d.key);
-              return (
-                <li key={d.key}>
-                  <a
-                    href={d.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => setRead((was) => new Set(was).add(d.key))}
-                    className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${
-                      opened ? "border-brand-deep/40 bg-brand-tint" : "border-border hover:bg-muted"
-                    }`}
-                  >
-                    <span
-                      aria-hidden
-                      className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold ${
+        {/* agreeing to a document nobody put in front of them is not agreement -
+            so while there is nothing to put in front of them, this whole panel
+            stays away rather than standing there empty asking them to open it */}
+        {RESIDENT_DOCUMENTS.length ? (
+          <section className="rounded-2xl bg-card p-5 shadow-sm sm:p-6">
+            <h2 className="text-base font-semibold text-brand-deep">What you are agreeing to</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Please open this before continuing. Your declaration above refers to it, so we ask
+              that you have seen it.
+            </p>
+            <ul className="mt-3 space-y-2">
+              {RESIDENT_DOCUMENTS.map((d) => {
+                const opened = read.has(d.key);
+                return (
+                  <li key={d.key}>
+                    <a
+                      href={d.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setRead((was) => new Set(was).add(d.key))}
+                      className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${
                         opened
-                          ? "border-brand-deep bg-brand-deep text-primary-foreground"
-                          : "border-border text-muted-foreground"
+                          ? "border-brand-deep/40 bg-brand-tint"
+                          : "border-border hover:bg-muted"
                       }`}
                     >
-                      {opened ? "✓" : ""}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium text-foreground underline underline-offset-2">
-                        {d.label}
+                      <span
+                        aria-hidden
+                        className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold ${
+                          opened
+                            ? "border-brand-deep bg-brand-deep text-primary-foreground"
+                            : "border-border text-muted-foreground"
+                        }`}
+                      >
+                        {opened ? "✓" : ""}
                       </span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">{d.note}</span>
-                      <span className="mt-1 block text-xs font-medium text-brand-deep">
-                        {opened ? "Opened" : "Opens in a new tab"}
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-foreground underline underline-offset-2">
+                          {d.label}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">{d.note}</span>
+                        <span className="mt-1 block text-xs font-medium text-brand-deep">
+                          {opened ? "Opened" : "Opens in a new tab"}
+                        </span>
                       </span>
-                    </span>
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ) : null}
       </div>
 
       <div className={step === 3 ? "space-y-4" : "hidden"}>
