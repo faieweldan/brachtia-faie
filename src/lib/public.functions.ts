@@ -370,22 +370,45 @@ export const getViewingLink = createServerFn({ method: "GET" })
      * a description. Empty until a bed is reserved, because inventing one would
      * be worse than saying nothing.
      */
-    type HeldBed = { rooms?: { letter?: string; units?: { unit_no?: string } | null } | null };
-    const { data: bed, error: bedError } = await supabaseAdmin
-      .from("beds")
-      .select("label, rooms(letter, units(unit_no))")
-      .eq("enquiry_id", row.id)
-      .limit(1);
     /*
-     * Said out loud. This asked for a rooms.name that does not exist, so every
-     * lookup failed and every booking showed no unit - and with the error
-     * dropped on the floor there was nothing to say why. A held bed that cannot
-     * be read is a fault, not an empty result.
+     * Three plain lookups rather than one nested select. Embedding beds ->
+     * rooms -> units asks PostgREST to infer two relationships, and when that
+     * inference fails it fails as an empty result - which is exactly what a
+     * booking with no bed held looks like, so the page cannot tell the two
+     * apart and neither could anybody reading it.
+     *
+     * A bed still holding a released booking is skipped: changing rooms leaves
+     * the old one behind, and the student must be told where they are now.
      */
-    if (bedError) console.warn("unit lookup failed", bedError.message);
-    const held = ((bed ?? []) as HeldBed[])[0] ?? null;
-    const unitNo = String(held?.rooms?.units?.unit_no ?? "");
-    const roomLetter = String(held?.rooms?.letter ?? "");
+    let unitNo = "";
+    let roomLetter = "";
+    const { data: beds, error: bedError } = await supabaseAdmin
+      .from("beds")
+      .select("room_id, status")
+      .eq("enquiry_id", row.id);
+    if (bedError) console.warn("unit lookup failed at beds", bedError.message);
+    const held =
+      ((beds ?? []) as { room_id: string; status: string }[]).find((b) => b.status !== "vacant") ??
+      null;
+    if (held?.room_id) {
+      const { data: theRoom, error: roomError } = await supabaseAdmin
+        .from("rooms")
+        .select("letter, unit_id")
+        .eq("id", held.room_id)
+        .maybeSingle();
+      if (roomError) console.warn("unit lookup failed at rooms", roomError.message);
+      roomLetter = String((theRoom as { letter?: string } | null)?.letter ?? "");
+      const unitId = (theRoom as { unit_id?: string } | null)?.unit_id;
+      if (unitId) {
+        const { data: theUnit, error: unitError } = await supabaseAdmin
+          .from("units")
+          .select("unit_no")
+          .eq("id", unitId)
+          .maybeSingle();
+        if (unitError) console.warn("unit lookup failed at units", unitError.message);
+        unitNo = String((theUnit as { unit_no?: string } | null)?.unit_no ?? "");
+      }
+    }
 
     const { data: appt } = await supabaseAdmin
       .from("appointments")
