@@ -22,8 +22,8 @@ import {
  *
  * Eight days is a small enough choice to show. A date field would hide them
  * behind a calendar the student has to open, guess at, and be refused by - so
- * the days themselves are on the page, and the ones too soon to staff are
- * visibly closed rather than silently rejected.
+ * the days themselves are on the page, and the ones at short notice say so
+ * rather than being closed: the request is confirmed by a person either way.
  *
  * Not knowing yet is a real answer. A student whose flight is not booked says
  * so and submits; what would be lost is the rest of the form, and Brachtia
@@ -85,10 +85,9 @@ export function CheckInStep({
    *
    * The form asks rather than books: the request is saved pending and staff
    * confirm it and put a name to it. So the notice period is theirs to judge
-   * against a real date, and it is said on the day rather than taken away.
+   * against a real date, and the day says so rather than refusing.
    */
   const short = days.filter((d) => d.tooSoon);
-  const chosenIsShort = days.some((d) => d.iso === value.on && d.tooSoon);
   const off = value.remind;
   // the last day that needs no approval - past it the calendar marks, not blocks
   const lastInWindow = moveIn ? addDays(moveIn, CHECKIN_WINDOW_DAYS) : "";
@@ -209,15 +208,6 @@ export function CheckInStep({
                 </option>
               ))}
             </select>
-
-            {/* what the label on the day actually means for them, said once they
-                have picked one rather than as a warning beside every date */}
-            {chosenIsShort ? (
-              <p className="mt-2 text-xs text-amber-700">
-                That is less than {CHECKIN_NOTICE_DAYS} days away. We will confirm it with you, and
-                may ask for a different time if nobody can be there.
-              </p>
-            ) : null}
 
             <p className="mt-5 text-sm font-semibold italic text-foreground">Time:</p>
             <select
