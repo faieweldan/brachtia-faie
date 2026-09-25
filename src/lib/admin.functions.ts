@@ -964,11 +964,23 @@ export const duplicatesOf = createServerFn({ method: "GET" })
      */
     const enquiries = supabase.from("enquiries") as any;
     const { data: rows, error } = await enquiries
-      .select("id, reference, full_name, email, phone, status, created_at")
+      .select("id, reference, full_name, email, phone, status, close_reason, created_at")
       .eq("duplicate_of", data.enquiryId)
       .order("created_at", { ascending: true });
     if (error) throw new Error(error.message);
-    return (rows ?? []) as any[];
+    /*
+     * Closed against this one, or only thought to be a repeat of it.
+     *
+     * Both are stored the same way, and this list called all of them closed -
+     * so a booking still being worked on appeared under "Closed against this
+     * booking" while its own page offered to close it. The page needs to tell
+     * them apart, so the answer says which is which rather than leaving it to
+     * be guessed from a status.
+     */
+    return ((rows ?? []) as any[]).map((r) => ({
+      ...r,
+      closedAsDuplicate: r.status === "closed" && r.close_reason === "Duplicate",
+    }));
   });
 
 /**
@@ -997,6 +1009,16 @@ export const listNotDuplicates = createServerFn({ method: "GET" }).handler(async
  * The ids are sorted before writing, so whichever way round staff were looking
  * lands on the same row. Dismissing twice is not an error - the second one is
  * the same statement as the first.
+ *
+ * It also takes down the guess the website made when the enquiry arrived. That
+ * guess lives in duplicate_of and the dismissal lived here, and nothing joined
+ * them - so a pair dismissed on the list lost its chip and the booking's own
+ * page carried on naming the other one. Staff said it once and had to say it
+ * again somewhere else.
+ *
+ * A booking CLOSED as a duplicate keeps its link whatever is dismissed here:
+ * that is a decision somebody made, not a guess, and it is undone by reopening
+ * the booking rather than by tidying a chip off a list.
  */
 export const dismissDuplicate = createServerFn({ method: "POST" })
   .inputValidator((data: { aId: string; bId: string }) => data)
@@ -1009,6 +1031,23 @@ export const dismissDuplicate = createServerFn({ method: "POST" })
         onConflict: "a_id,b_id",
       });
     if (error) throw new Error(error.message);
+
+    // whichever of the two points at the other, unless a person put it there
+    const enquiries = supabase.from("enquiries") as any;
+    const { data: linked } = await enquiries
+      .select("id, status, close_reason, duplicate_of")
+      .in("id", [a_id, b_id]);
+    for (const row of ((linked ?? []) as any[]).filter(
+      (r) =>
+        (r.id === a_id ? r.duplicate_of === b_id : r.duplicate_of === a_id) &&
+        !(r.status === "closed" && r.close_reason === "Duplicate"),
+    )) {
+      const { error: clearError } = await enquiries
+        .update({ duplicate_of: null, updated_at: new Date().toISOString() })
+        .eq("id", row.id);
+      // the pair is recorded either way - the chip is gone, which is what was asked
+      if (clearError) console.warn(`dismiss duplicate: ${clearError.message}`);
+    }
     return { ok: true as const };
   });
 

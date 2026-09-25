@@ -89,6 +89,7 @@ import {
   getBookingBilling,
   duplicateCandidates,
   duplicatesOf,
+  dismissDuplicate,
   createResidentFromBooking,
   cancelInvoice,
   listResidences,
@@ -233,6 +234,27 @@ function BookingDetail() {
     queryKey: ["admin", "enquiry", parentId],
     enabled: !!parentId,
     queryFn: () => getEnquiry({ data: { id: parentId } }),
+  });
+  /*
+   * Whether that link is a decision or a guess.
+   *
+   * Closed as a duplicate is something a person chose. Anything else is the
+   * website having noticed a matching email when the enquiry arrived, which is
+   * worth showing and must be refusable.
+   */
+  const closedAsDuplicate =
+    (row as any)?.status === "closed" && String((row as any)?.close_reason ?? "") === "Duplicate";
+
+  /** "Not the same person" - the same dismissal the bookings list offers. */
+  const notDuplicate = useMutation({
+    mutationFn: (input: { aId: string; bId: string }) => dismissDuplicate({ data: input }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["admin", "enquiry", id] });
+      await queryClient.invalidateQueries({ queryKey: ["admin", "duplicates-of", id] });
+      toast.success("Marked as a different person");
+    },
+    onError: (err: unknown) =>
+      toast.error(err instanceof Error ? err.message : "Could not dismiss that"),
   });
 
   const { data: apptData } = useQuery({
@@ -2098,10 +2120,11 @@ function BookingDetail() {
             />
           ) : null}
 
-          {/* What this booking was closed against. Said here and nowhere else:
-              the list shows a closed booking's stage only. */}
+          {/* What this booking was closed against, or what the website thought
+              it repeated. Said here and nowhere else: the list shows a closed
+              booking's stage only. */}
           {duplicateParent ? (
-            <Card title="Duplicate of">
+            <Card title={closedAsDuplicate ? "Duplicate of" : "Possible repeat"}>
               <button
                 type="button"
                 onClick={() =>
@@ -2123,9 +2146,35 @@ function BookingDetail() {
                   Open →
                 </span>
               </button>
-              <p className="mt-2 text-xs text-muted-foreground">
-                This enquiry was closed against that booking. Reopen it below if that was wrong.
-              </p>
+              {/*
+                A decision and a guess read differently, because they are
+                different things. Staff closing this against that booking is a
+                record of what somebody did, and it is undone by reopening.
+                The website noticing a matching email when the enquiry arrived
+                is a suggestion, and a suggestion has to be refusable - it said
+                "closed against" either way, which described something that had
+                not happened on a booking still being worked on.
+              */}
+              {closedAsDuplicate ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  This enquiry was closed against that booking. Reopen it below if that was wrong.
+                </p>
+              ) : (
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    Same email or phone, so this may be the same person enquiring again. Nothing has
+                    been closed.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={notDuplicate.isPending}
+                    onClick={() => notDuplicate.mutate({ aId: id, bId: parentId })}
+                  >
+                    Not the same person
+                  </Button>
+                </div>
+              )}
             </Card>
           ) : null}
 
@@ -2134,8 +2183,18 @@ function BookingDetail() {
               this is the way back to them. */}
           {duplicates.length ? (
             <Card title={`Duplicates (${duplicates.length})`}>
+              {/*
+                Some of these were closed against this booking and some only
+                look like repeats of it. Saying "closed" over all of them put
+                bookings still being worked on under a heading that said they
+                were finished with.
+              */}
               <p className="text-xs text-muted-foreground">
-                Closed against this booking. They are out of the bookings list, but still here.
+                {duplicates.every((d: any) => d.closedAsDuplicate)
+                  ? "Closed against this booking. They are out of the bookings list, but still here."
+                  : duplicates.some((d: any) => d.closedAsDuplicate)
+                    ? "Closed against this booking, or thought to be the same person enquiring again."
+                    : "The same email or phone as this booking. Nothing has been closed."}
               </p>
               <ul className="mt-3 divide-y divide-border">
                 {duplicates.map((d: any) => (
@@ -2153,6 +2212,11 @@ function BookingDetail() {
                         </span>
                         <span className="block truncate text-xs text-muted-foreground">
                           {[d.full_name, d.email].filter(Boolean).join(" · ")}
+                        </span>
+                        {/* which of the two this row is, so it does not have to
+                            be opened to find out */}
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          {d.closedAsDuplicate ? "Closed as a duplicate" : "Still open"}
                         </span>
                       </span>
                       <span className="shrink-0 text-xs font-medium text-brand underline-offset-2 hover:underline">
