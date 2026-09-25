@@ -298,6 +298,28 @@ export const RELATIONSHIP_OPTIONS = [
  */
 export const PAYOR_RELATIONSHIP_OPTIONS = RELATIONSHIP_OPTIONS.filter((o) => o.value !== "Self");
 
+/**
+ * Who to call, which is not the same question as who pays.
+ *
+ * The emergency contact borrowed the payor's list, so a student was offered
+ * "Sponsor" - who settles their fees, not who we ring at 2am - and "Self",
+ * which cannot be an emergency contact at all: somebody in an emergency is the
+ * one thing that person cannot also be. Meanwhile the answers people actually
+ * give were missing.
+ *
+ * Kept short. A long list of relatives invites a student to find the exact word
+ * instead of giving us a number that will be answered.
+ */
+export const EMERGENCY_RELATIONSHIP_OPTIONS = [
+  { value: "Parent", label: "Parent" },
+  { value: "Guardian", label: "Guardian" },
+  { value: "Sibling", label: "Sibling" },
+  { value: "Spouse", label: "Spouse" },
+  { value: "Relative", label: "Other relative" },
+  { value: "Friend", label: "Friend" },
+  { value: "Other", label: "Other" },
+];
+
 export const YES_NO_OPTIONS = [
   { value: "no", label: "No" },
   { value: "yes", label: "Yes" },
@@ -553,5 +575,39 @@ export function normRelationship(raw: string): Normalised {
     parents: "Parent",
     myself: "Self",
     "self-funded": "Self",
+  });
+}
+
+/**
+ * The same job for an emergency contact, against its own list.
+ *
+ * The words people write are relationships, not categories - "my mum", "elder
+ * brother", "uncle" - so they are mapped to the answer they mean rather than
+ * refused. "Sponsor" is kept pointing at Guardian: a record imported with it
+ * means somebody stands for this student, which is the nearest true thing.
+ */
+export function normEmergencyRelationship(raw: string): Normalised {
+  return normFromList(raw, EMERGENCY_RELATIONSHIP_OPTIONS, {
+    father: "Parent",
+    mother: "Parent",
+    dad: "Parent",
+    mum: "Parent",
+    mom: "Parent",
+    parents: "Parent",
+    brother: "Sibling",
+    sister: "Sibling",
+    sibling: "Sibling",
+    husband: "Spouse",
+    wife: "Spouse",
+    partner: "Spouse",
+    uncle: "Relative",
+    aunt: "Relative",
+    aunty: "Relative",
+    cousin: "Relative",
+    grandfather: "Relative",
+    grandmother: "Relative",
+    relative: "Relative",
+    family: "Relative",
+    sponsor: "Guardian",
   });
 }
