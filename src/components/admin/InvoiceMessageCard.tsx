@@ -8,6 +8,7 @@ import { PdfPreviewButton } from "@/components/admin/PdfPreview";
 import { company, formatRM } from "@/data/properties";
 import { greetingName } from "@/lib/greeting";
 import { LANDLORD_ENTITY } from "@/lib/declaration";
+import { BOOKING_FEE } from "@/lib/invoices";
 
 /**
  * The message that asks for the money, ready the moment the invoice exists.
@@ -26,13 +27,33 @@ const paymentMessage = (d: {
   name: string;
   reference: string;
   amount: number;
+  paid: number;
   dueDate: string;
   isBalance: boolean;
 }) => {
+  /*
+   * Almost nobody pays the whole thing at once. They send the RM500 first to
+   * hold the room and settle the rest later, so a message quoting only one
+   * large figure asks for something the student was never going to do, and
+   * leaves them working out the split themselves.
+   *
+   * The fee is only offered as a first step while it is still ahead of them
+   * AND the invoice is actually bigger than the fee - on a smaller invoice
+   * "pay RM500 first" would be asking for more than is owed.
+   */
+  const splitFee = !d.isBalance && d.amount > BOOKING_FEE;
+
   // built as paragraphs, so a line that has nothing to say can be left out
   // without taking a blank line with it
   const facts = [`Amount due: ${formatRM(d.amount)}`];
   if (d.dueDate) facts.push(`Payment due by: ${d.dueDate}`);
+  if (splitFee) {
+    facts.push(`To secure your room now: ${formatRM(BOOKING_FEE)} booking fee`);
+    facts.push(`Balance after that: ${formatRM(d.amount - BOOKING_FEE)}`);
+  } else if (d.paid > 0) {
+    // what they already sent, so the smaller figure above is not a surprise
+    facts.push(`Already received: ${formatRM(d.paid)} — thank you`);
+  }
 
   return [
     `Dear ${greetingName(d.name)},`,
@@ -43,7 +64,12 @@ const paymentMessage = (d: {
       `Once you've paid, please send the payment proof here and we'll issue your receipt.${
         d.isBalance
           ? " Your room stays reserved for you in the meantime."
-          : ` The ${company.bookingFee} booking fee secures your room.`
+          : splitFee
+            ? ` The ${company.bookingFee} booking fee secures your room straight away, and the balance is due by the date above.`
+            : d.amount >= BOOKING_FEE
+              ? ` The ${company.bookingFee} booking fee secures your room.`
+              : // owed less than the fee - naming it would ask for more than is due
+                ""
       }`,
     ].join("\n"),
     "Feel free to contact us if you have any questions. We look forward to working with you.",
@@ -57,6 +83,7 @@ export function InvoiceMessageCard({
   studentName,
   reference,
   amount,
+  paid = 0,
   dueDate,
   phone,
   isBalance = false,
@@ -68,6 +95,8 @@ export function InvoiceMessageCard({
   reference: string;
   /** what is still to pay, not what the invoice totalled */
   amount: number;
+  /** what has come in already - the difference between the two figures */
+  paid?: number;
   dueDate: string;
   phone: string;
   /** the booking fee is already in, so this asks for the rest */
@@ -76,7 +105,7 @@ export function InvoiceMessageCard({
   id?: string;
 }) {
   const [message, setMessage] = useState(() =>
-    paymentMessage({ name: studentName, reference, amount, dueDate, isBalance }),
+    paymentMessage({ name: studentName, reference, amount, paid, dueDate, isBalance }),
   );
   const [copied, setCopied] = useState(false);
 

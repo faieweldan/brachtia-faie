@@ -2035,6 +2035,7 @@ function BookingDetail() {
               studentName={row.full_name ?? ""}
               reference={invoice.number}
               amount={balanceDue}
+              paid={paidTotal}
               dueDate={invoiceDueDate}
               phone={row.phone ?? ""}
               // the fee is in, so what is left is the balance rather than the lot
