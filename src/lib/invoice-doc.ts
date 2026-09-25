@@ -31,6 +31,8 @@ export function invoiceDocFromRow(row: any, items: any[]): InvoiceDoc {
     email: row?.email ?? "",
     phone: row?.phone ?? "",
     university: row?.university ?? "",
+    company: row?.company ?? "",
+    occupation: row?.occupation ?? "",
     nationality: row?.nationality ?? "",
     residence_name: row?.residence_name ?? "",
     room_name: row?.room_name ?? "",

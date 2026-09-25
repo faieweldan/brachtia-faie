@@ -42,6 +42,9 @@ export type ResidentDetails = {
   email: string;
   phone: string;
   university: string;
+  /** where they work, when they are not studying */
+  company: string;
+  occupation: string;
   nationality: string;
   residenceName: string;
   roomName: string;
@@ -218,6 +221,8 @@ export function ResidentInvoiceDialog({
     email: details.email,
     phone: details.phone,
     university: details.university,
+    company: details.company,
+    occupation: details.occupation,
     nationality: details.nationality,
     residence_name: details.residenceName,
     room_name: details.roomName,

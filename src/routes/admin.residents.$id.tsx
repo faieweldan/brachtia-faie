@@ -840,6 +840,8 @@ function ResidentProfilePage() {
               email: form.email,
               phone: form.mobile,
               university: form.university,
+              company: form.company,
+              occupation: form.occupation,
               nationality: form.nationality,
               residenceName: placed?.unit.residenceName ?? "",
               roomName: placed ? `Unit ${placed.unit.unitNo} · Room ${placed.room.letter}` : "",

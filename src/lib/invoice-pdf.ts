@@ -38,6 +38,9 @@ export type InvoiceDoc = {
   email: string;
   phone: string;
   university?: string;
+  /** where they work, when they are not studying */
+  company?: string;
+  occupation?: string;
   nationality?: string;
   residence_name: string;
   room_name: string;
@@ -365,7 +368,21 @@ async function buildInvoice(inv: InvoiceDoc) {
         due.toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" }),
       ],
       ...(inv.period ? [["Period", inv.period]] : []),
-      ...(inv.university ? [["University", inv.university]] : []),
+      /*
+       * Who they are: their employer, or their university. One row, never both,
+       * and nothing at all when neither was given.
+       *
+       * The invoice only ever carried a university, so an employed resident's
+       * had this row quietly missing - their quotation named their employer and
+       * the invoice that followed said nothing. The quotation has printed it
+       * this way since it was fixed there; the same shape is used here so one
+       * booking's two documents cannot describe the same person differently.
+       */
+      ...(inv.company || inv.occupation
+        ? [["Employment", [inv.occupation, inv.company].filter(Boolean).join("  ·  ")]]
+        : inv.university
+          ? [["University", inv.university]]
+          : []),
     ],
   });
   y = doc.lastAutoTable.finalY + 18;
