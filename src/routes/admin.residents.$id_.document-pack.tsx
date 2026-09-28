@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
@@ -14,6 +16,18 @@ import {
   type AgreementDocType,
 } from "@/lib/tenancy-docs";
 import { generateDocumentPack } from "@/lib/tenancy-docs.functions";
+import { getPackTemplates } from "@/lib/templates.functions";
+import { renderTemplate, type MappingResult } from "@/lib/template-fields";
+import { MARK_CSS, Paper } from "@/components/admin/TemplatePaper";
+
+const TEMPLATE_KEY: Record<string, string> = {
+  agreement: "tenancy_agreement",
+  sched_a: "schedule_a",
+  sched_b: "schedule_b",
+  sched_c: "schedule_c",
+  access_card: "access_card_form",
+};
+const pretty = (k: string) => k.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 
 export const Route = createFileRoute("/admin/residents/$id_/document-pack")({
   component: DocumentPackPage,
@@ -70,6 +84,21 @@ function DocumentPackPage() {
 
   const [values, setValues] = useState<Record<string, string> | null>(null);
   const vals = values ?? defaults;
+  const fetchPack = useServerFn(getPackTemplates);
+  const pack = useQuery({
+    queryKey: ["pack-templates", id],
+    queryFn: () => fetchPack({ data: { residentId: id } }),
+  });
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const tpl = pack.data?.[TEMPLATE_KEY[selected]!] ?? null;
+  const results = useMemo(() => {
+    const out: Record<string, MappingResult> = {};
+    for (const r of tpl?.results ?? []) {
+      const o = overrides[r.key];
+      out[r.key] = o !== undefined ? { ...r, value: o, result: o.trim() ? "mapped" : r.result === "unmapped" ? "unmapped" : "missing" } : r;
+    }
+    return out;
+  }, [tpl, overrides]);
 
   if (!resident) {
     return (
@@ -93,11 +122,13 @@ function DocumentPackPage() {
     if (!resident) return;
     setGenerating(true);
     try {
+      const filled: Record<string, string> = {};
+      for (const t of Object.values(pack.data ?? {})) for (const r of t?.results ?? []) filled[r.key] = overrides[r.key] ?? r.value;
       const res = await generateDocumentPack({
         data: {
           residentId: resident.id,
           tenancyId: tenancy?.id,
-          mergeValues: vals,
+          mergeValues: { ...vals, ...filled },
           periodStart: vals["tenancy_start"],
           periodEnd: vals["tenancy_end"],
         },
@@ -156,52 +187,58 @@ function DocumentPackPage() {
           ))}
         </nav>
 
-        {/* CENTRE — preview (placeholder until templates are uploaded in Settings) */}
-        <div className="rounded-2xl border border-border bg-card p-5">
+        {/* CENTRE — the Active template from Settings, filled in */}
+        <div className="min-w-0 rounded-2xl border border-border bg-card p-4">
           <p className="mb-3 text-sm font-semibold text-brand-deep">
             {MENU.flatMap((g) => g.items).find((i) => i.key === selected)?.label}
+            {tpl && <span className="ml-2 text-xs font-normal text-muted-foreground">Template v{tpl.version}</span>}
           </p>
-          <div className="aspect-[1/1.3] w-full overflow-y-auto rounded-xl border border-border bg-white p-6 text-[11px] leading-relaxed text-neutral-700 shadow-sm">
-            <p className="text-center text-[13px] font-bold uppercase tracking-wide text-neutral-900">
-              {MENU.flatMap((g) => g.items).find((i) => i.key === selected)?.label}
-            </p>
-            <p className="mt-1 text-center text-[10px] text-neutral-400">
-              Placeholder preview — the real template is uploaded in Settings
-            </p>
-            <dl className="mt-5 space-y-2.5">
-              {fields.map((f) => (
-                <div key={f.key} className="flex gap-2">
-                  <dt className="w-32 shrink-0 font-semibold text-neutral-900">{f.label}</dt>
-                  <dd className="min-w-0 flex-1 border-b border-dotted border-neutral-300">
-                    {f.key === "monthly_rent" || f.key === "deposit"
-                      ? vals[f.key]
-                        ? money(Number(vals[f.key]))
-                        : "—"
-                      : f.key.includes("date") || f.key.includes("start") || f.key.includes("end")
-                        ? vals[f.key]
-                          ? fmtDate(vals[f.key])
-                          : "—"
-                        : vals[f.key] || "—"}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </div>
+          {pack.isLoading ? (
+            <p className="py-24 text-center text-sm text-muted-foreground">Loading template…</p>
+          ) : pack.isError ? (
+            <p className="py-24 text-center text-sm text-destructive">Could not load the template.</p>
+          ) : !tpl ? (
+            <div className="py-24 text-center text-sm text-muted-foreground">
+              <p>No active template for this document yet.</p>
+              <Link to="/admin/settings" search={{ tab: "templates" } as never} className="mt-2 inline-block text-primary underline">
+                Upload and activate one in Settings → Templates
+              </Link>
+            </div>
+          ) : (
+            <Paper>
+              <div className={MARK_CSS} dangerouslySetInnerHTML={{ __html: renderTemplate(tpl.html, results) }} />
+            </Paper>
+          )}
         </div>
 
-        {/* RIGHT — data review */}
+        {/* RIGHT — data review: every placeholder in this template */}
         <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
           <p className="text-xs font-semibold text-brand-deep">Data review</p>
-          {fields.map((f) => (
-            <div key={f.key} className="space-y-1">
-              <p className="text-xs text-muted-foreground">{f.label}</p>
-              <Input
-                type={f.key.includes("date") || f.key.includes("start") || f.key.includes("end") ? "date" : "text"}
-                value={vals[f.key] ?? ""}
-                onChange={(e) => setValues({ ...vals, [f.key]: e.target.value })}
-              />
-            </div>
-          ))}
+          {tpl ? (
+            tpl.placeholders.length ? (
+              tpl.placeholders.map((key) => {
+                const r = results[key];
+                return (
+                  <div key={key} className="space-y-1">
+                    <p className="text-xs text-muted-foreground">
+                      {pretty(key)}
+                      {r?.result === "unmapped" && <span className="ml-1 text-destructive">· not mapped</span>}
+                      {key.toLowerCase().startsWith("agreement_id") && !r?.value && <span className="ml-1">· issued on generate</span>}
+                    </p>
+                    <Input
+                      value={r?.value ?? ""}
+                      placeholder={r?.source === "Left blank" ? "Left blank (filled by hand)" : ""}
+                      onChange={(e) => setOverrides({ ...overrides, [key]: e.target.value })}
+                    />
+                  </div>
+                );
+              })
+            ) : (
+              <p className="text-xs text-muted-foreground">This template has no placeholders.</p>
+            )
+          ) : (
+            <p className="text-xs text-muted-foreground">Nothing to review until a template is active.</p>
+          )}
           <Button className="w-full" disabled={generating} onClick={() => void generate()}>
             {generating ? "Generating…" : "Generate Document Pack"}
           </Button>
