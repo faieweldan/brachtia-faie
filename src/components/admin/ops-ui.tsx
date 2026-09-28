@@ -195,6 +195,99 @@ export function DocumentRow({
   );
 }
 
+/**
+ * One of a resident's documents, with the file behind it.
+ *
+ * Two buttons and no more: the eye opens what is there, Edit holds everything
+ * that changes it. Replace and Remove used to sit side by side on every row,
+ * and there was no way to look at the file at all.
+ */
+export function ResidentDocumentRow({
+  label,
+  fileName,
+  uploadedAt,
+  onPreview,
+  onUpload,
+  onRemove,
+}: {
+  label: string;
+  fileName?: string | undefined;
+  uploadedAt?: string | undefined;
+  onPreview: () => Promise<void>;
+  onUpload: (file: File) => Promise<void>;
+  onRemove: () => Promise<void>;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    try {
+      await fn();
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-3 border-b border-border py-2.5 last:border-0">
+      <FileUp className="size-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-foreground">{label}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          {fileName
+            ? `${fileName}${uploadedAt ? ` · ${new Date(uploadedAt).toLocaleDateString("en-GB")}` : ""}`
+            : "Not uploaded"}
+        </p>
+      </div>
+      <input
+        ref={input}
+        type="file"
+        accept="image/*,application/pdf"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) void run(() => onUpload(f));
+        }}
+      />
+      <div className="flex items-center gap-1">
+        {busy ? <Loader2 className="size-4 animate-spin text-muted-foreground" /> : null}
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!fileName || busy}
+          aria-label={`Preview ${label}`}
+          title="Preview"
+          onClick={() => void run(onPreview)}
+        >
+          <Eye className="size-3.5" />
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline" disabled={busy}>
+              <Pencil className="mr-1 size-3.5" /> Edit
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => input.current?.click()}>
+              <Upload className="mr-2 size-3.5" /> {fileName ? "Replace" : "Upload"}
+            </DropdownMenuItem>
+            {fileName ? (
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onSelect={() => {
+                  if (window.confirm(`Remove ${label}? The file is deleted.`)) void run(onRemove);
+                }}
+              >
+                Remove
+              </DropdownMenuItem>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- small form helpers ---------- */
 
 /** A saved value shown as text. Same height and spacing as the input it replaces. */

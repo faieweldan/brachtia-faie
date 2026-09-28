@@ -848,3 +848,107 @@ export const importResidents = createServerFn({ method: "POST" })
 
     return report;
   });
+
+/* ---------------- a resident's documents, from the admin side ---------------- */
+
+/*
+ * The files live in the private resident-documents bucket, so nothing can link
+ * to them directly. Admin sees one through a signed link that expires after a
+ * few minutes - long enough to look, not long enough to be passed around.
+ */
+
+export const residentDocUrl = createServerFn({ method: "GET" })
+  .inputValidator((data: { residentId: string; key: string }) => data)
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    const { DOC_BUCKET } = await import("@/lib/resident-documents");
+    const { data: row } = await supabase
+      .from("residents")
+      .select("docs")
+      .eq("id", data.residentId)
+      .single();
+    const doc = (Array.isArray(row?.docs) ? (row!.docs as any[]) : []).find(
+      (d) => d?.key === data.key,
+    );
+    if (!doc?.path)
+      return {
+        ok: false as const,
+        error: "There is no stored file for this one - only its name was noted. Upload it again.",
+      };
+    const { data: signed, error } = await supabase.storage
+      .from(DOC_BUCKET)
+      .createSignedUrl(String(doc.path), 300);
+    if (error || !signed) return { ok: false as const, error: error?.message ?? "Could not open it." };
+    return { ok: true as const, url: signed.signedUrl as string };
+  });
+
+/**
+ * Admin puts a file in for a resident - the same bucket, path and record the
+ * student's own upload uses, so both sides always point at a real file.
+ */
+export const uploadResidentDoc = createServerFn({ method: "POST" })
+  .inputValidator((data: FormData) => data)
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    const residentId = String(data.get("residentId") ?? "");
+    const key = String(data.get("key") ?? "");
+    const file = data.get("file");
+    const { DOC_BUCKET, DOC_MIME_TYPES, MAX_DOC_BYTES, RESIDENT_DOCS, safeExt, residentDocLabel } =
+      await import("@/lib/resident-documents");
+
+    if (!isUuid(residentId)) return { ok: false as const, error: "Save the resident first." };
+    if (!RESIDENT_DOCS.some((d) => d.key === key))
+      return { ok: false as const, error: "Unknown document." };
+    if (!(file instanceof File)) return { ok: false as const, error: "No file provided." };
+    if (file.size > MAX_DOC_BYTES)
+      return { ok: false as const, error: "That file is larger than 8MB." };
+    if (file.type && !DOC_MIME_TYPES.includes(file.type))
+      return { ok: false as const, error: "Please upload a photo or a PDF." };
+
+    const path = `${residentId}/${key}-${Date.now().toString(36)}.${safeExt(file.name, file.type)}`;
+    const { error: upErr } = await supabase.storage
+      .from(DOC_BUCKET)
+      .upload(path, file, { contentType: file.type || "application/octet-stream", upsert: true });
+    if (upErr) return { ok: false as const, error: upErr.message };
+
+    const { data: row } = await supabase
+      .from("residents")
+      .select("docs, nationality")
+      .eq("id", residentId)
+      .single();
+    const docs = Array.isArray(row?.docs) ? (row!.docs as any[]) : [];
+    const label = residentDocLabel(key, String(row?.nationality ?? ""));
+    const next = [
+      ...docs.filter((d) => d?.key !== key),
+      { key, label, fileName: file.name, path, uploadedAt: new Date().toISOString() },
+    ];
+    const { error } = await supabase
+      .from("residents")
+      .update({ docs: next } as any)
+      .eq("id", residentId);
+    if (error) return { ok: false as const, error: error.message };
+    return { ok: true as const, docs: next as ResidentDoc[] };
+  });
+
+/** Take a document off the resident, and the file with it. */
+export const removeResidentDoc = createServerFn({ method: "POST" })
+  .inputValidator((data: { residentId: string; key: string }) => data)
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    const { DOC_BUCKET } = await import("@/lib/resident-documents");
+    const { data: row } = await supabase
+      .from("residents")
+      .select("docs")
+      .eq("id", data.residentId)
+      .single();
+    const docs = Array.isArray(row?.docs) ? (row!.docs as any[]) : [];
+    const gone = docs.find((d) => d?.key === data.key);
+    const next = docs.filter((d) => d?.key !== data.key);
+    const { error } = await supabase
+      .from("residents")
+      .update({ docs: next } as any)
+      .eq("id", data.residentId);
+    if (error) return { ok: false as const, error: error.message };
+    if (gone?.path) await supabase.storage.from(DOC_BUCKET).remove([String(gone.path)]);
+    return { ok: true as const, docs: next as ResidentDoc[] };
+  });

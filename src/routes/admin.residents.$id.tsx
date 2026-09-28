@@ -27,7 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  DocumentRow,
+  ResidentDocumentRow,
   EmptyState,
   Panel,
   Combo,
@@ -39,6 +39,8 @@ import {
 import { TenancyCard } from "@/components/admin/TenancyCard";
 import { ResidentPayments } from "@/components/admin/ResidentPayments";
 import { RESIDENT_DOCS, residentDocsFor, residentDocLabel } from "@/lib/resident-documents";
+import { compressImage } from "@/lib/compress";
+import { removeResidentDoc, residentDocUrl, uploadResidentDoc } from "@/lib/residents.functions";
 import {
   PAY_METHODS,
   SCHEDULES,
@@ -690,7 +692,7 @@ function ResidentProfilePage() {
               <section id="sec-documents" ref={sectionRef("documents")} className="scroll-mt-24">
                 <Panel
                   title="Documents"
-                  description="Uploads are recorded locally for now — file storage comes with the backend pass."
+                  description="Files the student sent, and any added here. Preview opens a private link."
                 >
                   {/*
                     The documents the form asks this resident for - one list, so
@@ -710,25 +712,51 @@ function ResidentProfilePage() {
                     // named the way the student form names it: IC copy or passport copy
                     const label = residentDocLabel(d.key, form.nationality);
                     return (
-                      <DocumentRow
+                      <ResidentDocumentRow
                         key={d.key}
                         label={label}
                         fileName={doc?.fileName}
                         uploadedAt={doc?.uploadedAt}
-                        onUpload={(name) =>
-                          set({
-                            docs: [
-                              ...form.docs.filter((x) => x.key !== d.key),
-                              {
-                                key: d.key,
-                                label,
-                                fileName: name,
-                                uploadedAt: new Date().toISOString(),
-                              },
-                            ],
-                          })
-                        }
-                        onClear={() => set({ docs: form.docs.filter((x) => x.key !== d.key) })}
+                        onPreview={async () => {
+                          // opened before the link is fetched, so the browser
+                          // treats it as the click it came from and not a pop-up
+                          const tab = window.open("", "_blank");
+                          const res = await residentDocUrl({
+                            data: { residentId: form.id, key: d.key },
+                          });
+                          if (!res.ok) {
+                            tab?.close();
+                            toast.error(res.error);
+                            return;
+                          }
+                          if (tab) tab.location.href = res.url;
+                          else window.location.href = res.url;
+                        }}
+                        onUpload={async (file) => {
+                          const small = await compressImage(file);
+                          const fd = new FormData();
+                          fd.set("residentId", form.id);
+                          fd.set("key", d.key);
+                          fd.set("file", small);
+                          const res = await uploadResidentDoc({ data: fd });
+                          if (!res.ok) {
+                            toast.error(res.error);
+                            return;
+                          }
+                          set({ docs: res.docs });
+                          toast.success(`${label} uploaded`);
+                        }}
+                        onRemove={async () => {
+                          const res = await removeResidentDoc({
+                            data: { residentId: form.id, key: d.key },
+                          });
+                          if (!res.ok) {
+                            toast.error(res.error);
+                            return;
+                          }
+                          set({ docs: res.docs });
+                          toast.success(`${label} removed`);
+                        }}
                       />
                     );
                   })}

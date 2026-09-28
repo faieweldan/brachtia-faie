@@ -73,6 +73,8 @@ export type ResidentDoc = {
   label: string;
   fileName?: string | undefined;
   uploadedAt?: string | undefined;
+  /** where the file sits in the private bucket; absent when only a name was ever noted */
+  path?: string | undefined;
 };
 
 export type Resident = {
