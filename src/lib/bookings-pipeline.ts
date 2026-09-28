@@ -214,13 +214,23 @@ export function nextActionFor(
 }
 
 /**
- * The viewing a booking is waiting on: its earliest appointment that still
- * stands. A cancelled one is not a viewing anybody is going to - it stays on
- * record, but it cannot be what the next action is about.
+ * The viewing a booking is waiting on: its earliest viewing that still stands.
+ * A cancelled one is not a viewing anybody is going to - it stays on record,
+ * but it cannot be what the next action is about.
+ *
+ * Viewings only. A booking can also have the student's arrival check-in, and
+ * without this the Viewing card slid over to the check-in once the viewing was
+ * cancelled - labelled "Viewing", with a Cancel button that cancelled the
+ * student's arrival.
  */
 export function upcomingViewing(appointments: any[], enquiryId: string) {
   return appointments
-    .filter((a) => a.enquiry_id === enquiryId && a.status !== "cancelled")
+    .filter(
+      (a) =>
+        a.enquiry_id === enquiryId &&
+        a.status !== "cancelled" &&
+        String(a.type_slug ?? "").startsWith("viewing"),
+    )
     .sort((x, y) => new Date(x.starts_at).getTime() - new Date(y.starts_at).getTime())[0];
 }
 

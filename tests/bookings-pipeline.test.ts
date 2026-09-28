@@ -3,8 +3,8 @@ import { bookingNextAction, upcomingViewing, STAGE_ORDER, stageLabel, studentMay
 
 const booking = { id: 'b1', status: 'viewing_scheduled', stage_changed_at: '2026-09-20T00:00:00Z' };
 const appt = (over: Record<string, unknown> = {}) => ({
-  id: 'a1', enquiry_id: 'b1', starts_at: '2026-09-28T02:00:00Z', status: 'scheduled',
-  assigned_staff: '', ...over,
+  id: 'a1', enquiry_id: 'b1', type_slug: 'viewing-in-person', starts_at: '2026-09-28T02:00:00Z',
+  status: 'scheduled', assigned_staff: '', ...over,
 });
 
 describe('the next action a booking is waiting on', () => {
@@ -31,6 +31,15 @@ describe('the next action a booking is waiting on', () => {
   test('the earliest standing viewing is the one that counts', () => {
     const later = appt({ id: 'a2', starts_at: '2026-10-05T02:00:00Z', assigned_staff: 'Valsala' });
     expect(upcomingViewing([later, appt()], 'b1')?.id).toBe('a1');
+  });
+  test('the student\'s check-in is never taken for their viewing', () => {
+    // the viewing was cancelled; the arrival check-in on the same booking must
+    // not slide into the Viewing card, where Cancel would cancel their arrival
+    const checkIn = appt({ id: 'c1', type_slug: 'check-in', starts_at: '2026-10-01T05:00:00Z' });
+    expect(upcomingViewing([appt({ status: 'cancelled' }), checkIn], 'b1')).toBeUndefined();
+  });
+  test('a virtual viewing counts as a viewing', () => {
+    expect(upcomingViewing([appt({ type_slug: 'viewing-virtual' })], 'b1')?.id).toBe('a1');
   });
   test('another booking\'s viewing is never borrowed', () => {
     expect(upcomingViewing([appt({ enquiry_id: 'other' })], 'b1')).toBeUndefined();
