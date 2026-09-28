@@ -12,7 +12,6 @@ import {
   saveRoomType,
 } from "@/lib/admin.functions";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -92,7 +91,6 @@ const NAV = [
   { id: "basics", label: "Basics" },
   { id: "photos", label: "Photos" },
   { id: "facilities", label: "Facilities" },
-  { id: "inclusions", label: "Inclusions" },
   { id: "location", label: "Location" },
   { id: "terms", label: "Terms & fees" },
   { id: "addons", label: "Add-ons" },
