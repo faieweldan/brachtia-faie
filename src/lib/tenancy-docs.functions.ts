@@ -31,7 +31,15 @@ const tenancyRef = (v?: string) => (v && UUID.test(v) ? v : null);
 
 async function versions(db: any): Promise<Record<string, string>> {
   const { activeVersionIds } = await import("@/lib/template-versions.server");
-  return activeVersionIds(db);
+  const byKey = await activeVersionIds(db);
+  // Settings names the templates differently from the document types
+  return {
+    agreement: byKey["tenancy_agreement"] ?? "",
+    sched_a: byKey["schedule_a"] ?? "",
+    sched_b: byKey["schedule_b"] ?? "",
+    sched_c: byKey["schedule_c"] ?? "",
+    access_card: byKey["access_card_form"] ?? "",
+  };
 }
 
 function toDoc(row: any): AgreementDoc {
@@ -167,7 +175,7 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
         period_start: data.periodStart || null,
         period_end: data.periodEnd || null,
         merge_values: data.mergeValues,
-        template_version_id: tv[t] ?? null,
+        template_version_id: tv[t] || null,
       })),
     );
     if (dErr) throw new Error(dErr.message);
@@ -176,7 +184,7 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
       resident_id: data.residentId,
       reason: "Initial Tenancy",
       status: "generated",
-      template_version_id: tv["access_card"] ?? null,
+      template_version_id: tv["access_card"] || null,
     });
     if (cErr) throw new Error(cErr.message);
 
@@ -222,7 +230,7 @@ export const reviseSchedule = createServerFn({ method: "POST" })
       period_end: data.periodEnd || current.period_end,
       merge_values: data.mergeValues,
       supersedes: current.id,
-      template_version_id: tv[data.docType] ?? null,
+      template_version_id: tv[data.docType] || null,
     });
     if (iErr) throw new Error(iErr.message);
     return { ok: true as const };
@@ -270,7 +278,7 @@ export const renewAgreement = createServerFn({ method: "POST" })
         period_start: data.periodStart || null,
         period_end: data.periodEnd || null,
         merge_values: data.mergeValues,
-        template_version_id: tv[t] ?? null,
+        template_version_id: tv[t] || null,
       })),
     );
     if (dErr) throw new Error(dErr.message);
@@ -296,7 +304,7 @@ export const createAccessCardForm = createServerFn({ method: "POST" })
     const tv = await versions(db);
     const { error } = await db
       .from("access_card_forms")
-      .insert({ resident_id: data.residentId, reason: data.reason, status: "generated", template_version_id: tv["access_card"] ?? null });
+      .insert({ resident_id: data.residentId, reason: data.reason, status: "generated", template_version_id: tv["access_card"] || null });
     if (error) throw new Error(error.message);
     return { ok: true as const };
   });
