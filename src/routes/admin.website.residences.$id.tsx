@@ -12,6 +12,7 @@ import {
   saveRoomType,
 } from "@/lib/admin.functions";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -85,12 +86,75 @@ const EDITABLE_KEYS = [
   "fee_config",
   "addons",
   "unit_rates",
+  "rental_terms",
 ];
+
+/* Default inclusions/exclusions per rental type; admin can tick/untick. */
+const RENTAL_TERM_OPTIONS = [
+  "Wi-Fi",
+  "Basic Common Area Cleaning",
+  "Sewage Fee",
+  "Electricity",
+  "Water Charges",
+  "Sewerage Charges",
+];
+
+type RentalTerms = {
+  room: { included: string[]; excluded: string[] };
+  unit: { included: string[]; excluded: string[] };
+};
+
+const DEFAULT_RENTAL_TERMS: RentalTerms = {
+  room: {
+    included: ["Wi-Fi", "Basic Common Area Cleaning", "Sewage Fee"],
+    excluded: ["Electricity", "Water Charges"],
+  },
+  unit: {
+    included: ["Wi-Fi"],
+    excluded: ["Basic Common Area Cleaning", "Electricity", "Water", "Sewerage Charges"],
+  },
+};
+
+function rentalTermsOf(form: any): RentalTerms {
+  const t = form?.rental_terms;
+  if (t?.room && t?.unit) return t as RentalTerms;
+  return DEFAULT_RENTAL_TERMS;
+}
+
+function TermChecklist({
+  label,
+  values,
+  onChange,
+}: {
+  label: string;
+  values: string[];
+  onChange: (v: string[]) => void;
+}) {
+  const toggle = (opt: string, on: boolean) =>
+    onChange(on ? [...values, opt] : values.filter((v) => v !== opt));
+  return (
+    <div className="space-y-2">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <div className="space-y-1.5">
+        {RENTAL_TERM_OPTIONS.map((opt) => (
+          <label key={opt} className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={values.includes(opt)}
+              onCheckedChange={(c) => toggle(opt, c === true)}
+            />
+            {opt}
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 const NAV = [
   { id: "basics", label: "Basics" },
   { id: "photos", label: "Photos" },
   { id: "facilities", label: "Facilities" },
+  { id: "inclusions", label: "Inclusions" },
   { id: "location", label: "Location" },
   { id: "terms", label: "Terms & fees" },
   { id: "addons", label: "Add-ons" },
@@ -322,6 +386,43 @@ function ResidenceEditor() {
                   />
                 </div>
               </div>
+            </Section>
+
+            {/* Inclusions & exclusions per rental type */}
+            <Section
+              id="inclusions"
+              title="Inclusions & exclusions"
+              description="Defaults for room rental and whole-unit rental. Tick to include, untick to exclude — change them whenever a residence differs."
+            >
+              {(() => {
+                const terms = rentalTermsOf(form);
+                const setTerms = (kind: "room" | "unit", part: "included" | "excluded", v: string[]) =>
+                  set("rental_terms", { ...terms, [kind]: { ...terms[kind], [part]: v } });
+                return (
+                  <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                    <TermChecklist
+                      label="Room rental — included"
+                      values={terms.room.included}
+                      onChange={(v) => setTerms("room", "included", v)}
+                    />
+                    <TermChecklist
+                      label="Room rental — excluded"
+                      values={terms.room.excluded}
+                      onChange={(v) => setTerms("room", "excluded", v)}
+                    />
+                    <TermChecklist
+                      label="Unit rental — included"
+                      values={terms.unit.included}
+                      onChange={(v) => setTerms("unit", "included", v)}
+                    />
+                    <TermChecklist
+                      label="Unit rental — excluded"
+                      values={terms.unit.excluded}
+                      onChange={(v) => setTerms("unit", "excluded", v)}
+                    />
+                  </div>
+                );
+              })()}
             </Section>
 
             {/* Location */}
