@@ -31,7 +31,15 @@ const tenancyRef = (v?: string) => (v && UUID.test(v) ? v : null);
 
 async function versions(db: any): Promise<Record<string, string>> {
   const { activeVersionIds } = await import("@/lib/template-versions.server");
-  return activeVersionIds(db);
+  const byKey = await activeVersionIds(db);
+  // Settings names the templates differently from the document types
+  return {
+    agreement: byKey["tenancy_agreement"] ?? "",
+    sched_a: byKey["schedule_a"] ?? "",
+    sched_b: byKey["schedule_b"] ?? "",
+    sched_c: byKey["schedule_c"] ?? "",
+    access_card: byKey["access_card_form"] ?? "",
+  };
 }
 
 function toDoc(row: any): AgreementDoc {
@@ -167,7 +175,7 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
         period_start: data.periodStart || null,
         period_end: data.periodEnd || null,
         merge_values: data.mergeValues,
-        template_version_id: tv[t] ?? null,
+        template_version_id: tv[t] || null,
       })),
     );
     if (dErr) throw new Error(dErr.message);
@@ -176,7 +184,7 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
       resident_id: data.residentId,
       reason: "Initial Tenancy",
       status: "generated",
-      template_version_id: tv["access_card"] ?? null,
+      template_version_id: tv["access_card"] || null,
     });
     if (cErr) throw new Error(cErr.message);
 
@@ -222,7 +230,7 @@ export const reviseSchedule = createServerFn({ method: "POST" })
       period_end: data.periodEnd || current.period_end,
       merge_values: data.mergeValues,
       supersedes: current.id,
-      template_version_id: tv[data.docType] ?? null,
+      template_version_id: tv[data.docType] || null,
     });
     if (iErr) throw new Error(iErr.message);
     return { ok: true as const };
@@ -270,7 +278,7 @@ export const renewAgreement = createServerFn({ method: "POST" })
         period_start: data.periodStart || null,
         period_end: data.periodEnd || null,
         merge_values: data.mergeValues,
-        template_version_id: tv[t] ?? null,
+        template_version_id: tv[t] || null,
       })),
     );
     if (dErr) throw new Error(dErr.message);
@@ -296,7 +304,7 @@ export const createAccessCardForm = createServerFn({ method: "POST" })
     const tv = await versions(db);
     const { error } = await db
       .from("access_card_forms")
-      .insert({ resident_id: data.residentId, reason: data.reason, status: "generated", template_version_id: tv["access_card"] ?? null });
+      .insert({ resident_id: data.residentId, reason: data.reason, status: "generated", template_version_id: tv["access_card"] || null });
     if (error) throw new Error(error.message);
     return { ok: true as const };
   });
@@ -311,4 +319,36 @@ export const updateAccessCard = createServerFn({ method: "POST" })
     const { error } = await db.from("access_card_forms").update(patch).eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true as const };
+  });
+
+/**
+ * Open a generated document: the exact template version it was generated with,
+ * plus the values snapshotted at generation. Later template changes never alter it.
+ */
+export const getDocumentView = createServerFn({ method: "GET" })
+  .inputValidator((data: { kind: "agreement" | "card"; id: string }) => data)
+  .handler(async ({ data }) => {
+    const db = await admin();
+    let versionId: string | null = null;
+    let values: Record<string, string> = {};
+    if (data.kind === "agreement") {
+      const { data: doc, error } = await db.from("agreement_documents").select("template_version_id, merge_values").eq("id", data.id).single();
+      if (error) throw new Error(error.message);
+      versionId = doc.template_version_id;
+      values = doc.merge_values ?? {};
+    } else {
+      const { data: card, error } = await db.from("access_card_forms").select("resident_id, template_version_id").eq("id", data.id).single();
+      if (error) throw new Error(error.message);
+      versionId = card.template_version_id;
+      // access card forms share the pack's reviewed values
+      const { data: ag } = await db.from("tenancy_agreements").select("id").eq("resident_id", card.resident_id).order("created_at", { ascending: false }).limit(1);
+      if (ag?.length) {
+        const { data: d } = await db.from("agreement_documents").select("merge_values").eq("agreement_id", ag[0].id).limit(1);
+        values = d?.[0]?.merge_values ?? {};
+      }
+    }
+    if (!versionId) return { html: null as string | null, version: null as number | null, values };
+    const { data: tv, error: tErr } = await db.from("template_versions").select("content_html, version").eq("id", versionId).single();
+    if (tErr) throw new Error(tErr.message);
+    return { html: tv.content_html as string, version: tv.version as number, values };
   });
