@@ -23,6 +23,12 @@ export async function upsertViewing(opts: {
   mode: ViewingMode;
   assignedStaff?: string;
   appointmentId?: string;
+  /**
+   * The student booked or moved it themselves. It is still confirmed to them,
+   * but it arrives as "new" so admin can see it came in; opening it makes it
+   * "confirmed" again (see markAppointmentSeen).
+   */
+  byStudent?: boolean;
 }) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const enquiry = opts.enquiry;
@@ -54,7 +60,7 @@ export async function upsertViewing(opts: {
     mode: opts.mode,
     starts_at: opts.startsAt,
     duration_minutes: (type?.duration_minutes as number | undefined) ?? 30,
-    status: "confirmed",
+    status: opts.byStudent ? "new" : "confirmed",
     full_name: enquiry.full_name ?? "",
     email: enquiry.email ?? "",
     phone: enquiry.phone ?? "",

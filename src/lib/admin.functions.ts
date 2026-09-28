@@ -448,16 +448,25 @@ export const saveAppointment = createServerFn({ method: "POST" })
 /**
  * Admin has opened a new appointment, so it is no longer new.
  *
- * Only a "new" one is moved. If somebody changed it in the meantime - confirmed
- * it, cancelled it - their answer stands.
+ * It goes to what it would have been had nobody needed telling: a viewing the
+ * student booked on a free slot through their booking link was confirmed to
+ * them on the spot, so it becomes "confirmed"; anything else waits as
+ * "pending". Only a "new" one is moved - if somebody changed it in the
+ * meantime, their answer stands.
  */
 export const markAppointmentSeen = createServerFn({ method: "POST" })
   .inputValidator((data: { id: string }) => data)
   .handler(async ({ data }) => {
     const supabase = await admin();
+    const { data: row } = await supabase
+      .from("appointments")
+      .select("source")
+      .eq("id", data.id)
+      .maybeSingle();
+    const next = (row as any)?.source === "booking" ? "confirmed" : "pending";
     const { error } = await supabase
       .from("appointments")
-      .update({ status: "pending", updated_at: new Date().toISOString() } as any)
+      .update({ status: next, updated_at: new Date().toISOString() } as any)
       .eq("id", data.id)
       .eq("status", "new");
     if (error) throw new Error(error.message);

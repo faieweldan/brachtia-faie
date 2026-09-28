@@ -514,6 +514,7 @@ export const confirmViewingFromLink = createServerFn({ method: "POST" })
       enquiry,
       startsAt: data.startsAt,
       mode: data.mode,
+      byStudent: true,
       ...(existing ? { appointmentId: (existing as any).id as string } : {}),
     });
     return { ok: true as const };
