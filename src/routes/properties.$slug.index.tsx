@@ -431,7 +431,9 @@ function PropertyPage() {
                     />
                     )}
                     <Button asChild size="lg" variant="outline" className="w-full">
-                      <Link to="/book-viewing">Can&rsquo;t Decide? Book a viewing first</Link>
+                      <Link to="/book-viewing" search={{ property: property.slug }}>
+                        Can&rsquo;t Decide? Book a viewing first
+                      </Link>
                     </Button>
                   </>
                   );

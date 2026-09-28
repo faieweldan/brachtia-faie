@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { Menu, X, MessageCircle, ChevronDown } from "lucide-react";
 import { company, properties, whatsappUrl } from "@/data/properties";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,22 @@ const linkClass =
   "text-sm font-medium text-foreground/75 transition-colors hover:text-brand";
 
 export default function Header() {
+  /*
+   * Book a Viewing starts with choosing where. From anywhere else it goes to
+   * the residences; on a residence's own page it books that residence, and on
+   * a laptop it steps aside, because the price panel beside the rooms already
+   * offers the same thing. On a phone that panel is far down the page, so the
+   * button stays.
+   */
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const residenceSlug = /^\/properties\/([^/]+)\/?$/.exec(pathname)?.[1] ?? "";
+  const viewingLink = residenceSlug ? (
+    <Link to="/book-viewing" search={{ property: residenceSlug }}>
+      Book a Viewing
+    </Link>
+  ) : (
+    <Link to="/properties">Book a Viewing</Link>
+  );
   const [open, setOpen] = useState(false);
 
   return (
@@ -61,8 +77,8 @@ export default function Header() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          <Button asChild variant="outline" size="sm">
-            <Link to="/book-viewing">Book a Viewing</Link>
+          <Button asChild variant="outline" size="sm" className={residenceSlug ? "lg:hidden" : ""}>
+            {viewingLink}
           </Button>
           <Button asChild size="sm">
             <a href={whatsappUrl("Hi Brachtia Homes, I'd like to enquire about student accommodation.")} target="_blank" rel="noreferrer">
@@ -130,7 +146,7 @@ export default function Header() {
 
             <div className="flex gap-2 py-3">
               <Button asChild variant="outline" className="flex-1" onClick={() => setOpen(false)}>
-                <Link to="/book-viewing">Book a Viewing</Link>
+                {viewingLink}
               </Button>
               <Button asChild className="flex-1">
                 <a href={whatsappUrl("Hi Brachtia Homes, I'd like to enquire about student accommodation.")} target="_blank" rel="noreferrer">
