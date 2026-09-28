@@ -711,6 +711,82 @@ function ResidentProfilePage() {
               </Button>
             </DialogContent>
           </Dialog>
+
+          <ActionDialog open={roomChange} onOpenChange={setRoomChange}>
+            <ActionDialogContent className="admin-ui">
+              <ActionDialogHeader>
+                <ActionDialogTitle className="text-base font-bold text-brand-deep">
+                  Room Change
+                </ActionDialogTitle>
+                <ActionDialogDescription>
+                  The resident moves to the new bed, and revised Schedule A and Schedule C are
+                  issued under the same Agreement No. Previous versions are kept.
+                </ActionDialogDescription>
+              </ActionDialogHeader>
+              <Select
+                label="New bed"
+                value={newBedId}
+                onChange={setNewBedId}
+                options={vacantBeds
+                  .filter(({ bed }) => bed.id !== placed?.bed.id)
+                  .map(({ unit, room, bed }) => ({
+                    value: bed.id,
+                    label: `${unit.unitNo} · Room ${room.letter} · ${bed.label}`,
+                  }))}
+                placeholder="Select bed"
+              />
+              <Button disabled={!newBedId || actionBusy} onClick={() => void doRoomChange()}>
+                {actionBusy ? "Changing…" : "Confirm room change"}
+              </Button>
+            </ActionDialogContent>
+          </ActionDialog>
+
+          <ActionDialog open={updateTenancyOpen} onOpenChange={setUpdateTenancyOpen}>
+            <ActionDialogContent className="admin-ui">
+              <ActionDialogHeader>
+                <ActionDialogTitle className="text-base font-bold text-brand-deep">
+                  Update Tenancy
+                </ActionDialogTitle>
+                <ActionDialogDescription>
+                  Date or rent changes issue a revised Schedule A under the same Agreement No.
+                  Tick renewal to start a brand-new agreement instead.
+                </ActionDialogDescription>
+              </ActionDialogHeader>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="space-y-1.5">
+                  <p className="text-xs text-muted-foreground">Tenancy start</p>
+                  <Input
+                    type="date"
+                    value={tenancyEdit.start}
+                    onChange={(e) => setTenancyEdit({ ...tenancyEdit, start: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-xs text-muted-foreground">Tenancy end</p>
+                  <Input
+                    type="date"
+                    value={tenancyEdit.end}
+                    onChange={(e) => setTenancyEdit({ ...tenancyEdit, end: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-xs text-muted-foreground">Monthly rent (RM)</p>
+                  <Input
+                    type="number"
+                    value={tenancyEdit.rent}
+                    onChange={(e) => setTenancyEdit({ ...tenancyEdit, rent: e.target.value })}
+                  />
+                </div>
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox checked={asRenewal} onCheckedChange={(v) => setAsRenewal(!!v)} />
+                This is a renewal — create a new Agreement No.
+              </label>
+              <Button disabled={actionBusy} onClick={() => void doUpdateTenancy()}>
+                {actionBusy ? "Saving…" : asRenewal ? "Create renewal" : "Save & revise Schedule A"}
+              </Button>
+            </ActionDialogContent>
+          </ActionDialog>
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-border pt-4 sm:grid-cols-4 lg:grid-cols-7">
