@@ -465,6 +465,112 @@ function ResidentProfilePage() {
   const canDelete = isFormer && !form.quickbooksId.trim();
   const nameTyped = confirmName.trim().toLowerCase() === form.fullName.trim().toLowerCase();
 
+  /** the agreement the resident's documents currently live under, if any */
+  async function latestAgreementId(): Promise<string | null> {
+    const { getTenancyDocs } = await import("@/lib/tenancy-docs.functions");
+    const { agreements } = await getTenancyDocs({ data: { residentId: form!.id } });
+    return agreements[0]?.id ?? null;
+  }
+
+  /**
+   * Room Change: move the resident to the new bed, then issue revised
+   * Schedule A and Schedule C under the same Agreement No. Previous versions
+   * are kept by the server.
+   */
+  async function doRoomChange() {
+    if (!form || !newBedId) return;
+    setActionBusy(true);
+    try {
+      const row = findBed(units, newBedId);
+      const oldBed = placed?.bed;
+      const updated = {
+        ...form,
+        bedId: newBedId,
+        roomId: row?.room.id,
+        unitId: row?.unit.id,
+        occupancy: row?.room.occupancy ?? form.occupancy,
+      } as Resident;
+      await saveResidentRecord(updated);
+      setForm(updated);
+      if (oldBed) vacateBed(oldBed.id);
+      if (row) {
+        updateBed(newBedId, {
+          status: "booked",
+          residentId: form.id,
+          residentName: form.fullName,
+          university: form.university,
+          nationality: form.nationality,
+          gender: form.gender,
+          studentId: form.studentId,
+        });
+      }
+      const agreementId = await latestAgreementId();
+      if (agreementId) {
+        const newPlaced = row
+          ? { unit: row.unit, room: row.room, bed: row.bed }
+          : undefined;
+        const vals = currentMergeValues(updated, tenancy, newPlaced);
+        await reviseSchedule({ data: { agreementId, docType: "sched_a", mergeValues: vals } });
+        await reviseSchedule({ data: { agreementId, docType: "sched_c", mergeValues: vals } });
+        toast.success("Room changed — revised Schedule A and C issued");
+      } else {
+        toast.success("Room changed");
+      }
+      setRoomChange(false);
+      setNewBedId("");
+      await queryClient.invalidateQueries({ queryKey: ["tenancy-docs", form.id] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not change the room");
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
+  /**
+   * Update Tenancy: date and/or rent changes issue a revised Schedule A under
+   * the same Agreement No.; a renewal starts a brand-new agreement instead.
+   */
+  async function doUpdateTenancy() {
+    if (!form || !tenancy) return;
+    setActionBusy(true);
+    try {
+      const start = tenancyEdit.start || tenancy.start;
+      const end = tenancyEdit.end || tenancy.end;
+      const rent = tenancyEdit.rent ? Number(tenancyEdit.rent) : tenancy.rent;
+      saveTenancy({ ...tenancy, start, end, rent });
+      const vals = currentMergeValues(form, { ...tenancy, start, end, rent }, placed);
+      if (asRenewal) {
+        const res = await renewAgreement({
+          data: {
+            residentId: form.id,
+            tenancyId: tenancy.id,
+            mergeValues: vals,
+            periodStart: start,
+            periodEnd: end,
+          },
+        });
+        toast.success(`Renewal created — ${res.agreementNo}`);
+      } else {
+        const agreementId = await latestAgreementId();
+        if (agreementId) {
+          await reviseSchedule({
+            data: { agreementId, docType: "sched_a", mergeValues: vals, periodStart: start, periodEnd: end },
+          });
+          toast.success("Tenancy updated — revised Schedule A issued");
+        } else {
+          toast.success("Tenancy updated");
+        }
+      }
+      setUpdateTenancyOpen(false);
+      setAsRenewal(false);
+      await queryClient.invalidateQueries({ queryKey: ["tenancy-docs", form.id] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not update the tenancy");
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
   async function deleteForever() {
     if (!form) return;
     try {
