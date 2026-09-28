@@ -96,7 +96,7 @@ function TemplateWorkspace() {
   }
 
   function insert(key: string) {
-    if (!editing) return toast.message("Click Edit / New draft first");
+    if (!editing) { toast.message("Click Edit / New draft first"); return; }
     editorRef.current?.focus();
     document.execCommand("insertText", false, `{{${key}}}`);
     setDraftHtml(editorRef.current?.innerHTML ?? draftHtml);
@@ -126,7 +126,7 @@ function TemplateWorkspace() {
   }
 
   async function doActivate() {
-    if (bad.length) return toast.error("Fix the unrecognised placeholders first");
+    if (bad.length) { toast.error("Fix the unrecognised placeholders first"); return; }
     setBusy(true);
     try {
       await activate({ data: { versionId: selected!.id } });
@@ -335,7 +335,7 @@ function ResidentPicker({ open, onOpenChange, onPick }: { open: boolean; onOpenC
         <DialogHeader><DialogTitle>Select Test Resident</DialogTitle></DialogHeader>
         <Input autoFocus placeholder="Search by name or Resident ID" value={q} onChange={(e) => setQ(e.target.value)} />
         <ul className="max-h-72 space-y-1 overflow-y-auto">
-          {(data ?? []).map((r) => (
+          {(data ?? []).map((r: { id: string; name: string; code: string }) => (
             <li key={r.id}>
               <button onClick={() => onPick(r.id)} className="flex w-full justify-between rounded-lg px-2 py-1.5 text-left text-sm hover:bg-muted">
                 <span>{r.name}</span><span className="text-xs text-muted-foreground">{r.code || "—"}</span>

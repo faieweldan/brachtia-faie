@@ -123,7 +123,7 @@ function AddTemplateDialog({ open, onOpenChange }: { open: boolean; onOpenChange
   const [busy, setBusy] = useState(false);
 
   async function submit() {
-    if (!name.trim()) return toast.error("Enter a template name");
+    if (!name.trim()) { toast.error("Enter a template name"); return; }
     setBusy(true);
     try {
       let html = file ? await docxToHtml(file) : "";
