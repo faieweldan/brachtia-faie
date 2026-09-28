@@ -148,7 +148,7 @@ export type Mappings = Record<string, Mapping>;
 
 /** best guess for a placeholder, or null */
 export function suggestMapping(ph: string): Mapping | null {
-  const k = ph.trim().toLowerCase();
+  const k = ph.trim().toLowerCase().replace(/[\s-]+/g, "_");
   const key = FIELD_BY_KEY.has(k) ? k : ALIASES[k];
   if (key) return { kind: "field", key };
   if (k.includes("signature_date")) return { kind: "blank" };
@@ -161,7 +161,7 @@ export const mappingFor = (ph: string, m: Mappings | undefined): Mapping | null 
 const isComplete = (m: Mapping | null) =>
   !!m && (m.kind === "blank" || (m.kind === "field" && FIELD_BY_KEY.has(m.key)) || (m.kind === "formula" && m.expr.trim() !== ""));
 
-const PH = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
+const PH = /\{\{\s*([a-zA-Z0-9_][a-zA-Z0-9_ \-]*?)\s*\}\}/g;
 
 export function detectPlaceholders(html: string): string[] {
   const out = new Set<string>();
