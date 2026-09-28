@@ -170,7 +170,17 @@ export function ResidentInvoiceDialog({
     editing ? editing.periodEnd.slice(0, 10) : startAs === "rental" ? first.end : "",
   );
   const [lines, setLines] = useState<Line[]>(
-    editing ? editing.items : startAs === "rental" ? [first.line] : [firstLine(startAs)],
+    editing
+      ? // one amount per line: a line saved as 2 x RM50 comes back as RM100,
+        // so nothing is lost now that there is no quantity to show
+        editing.items.map((l) => ({
+          ...l,
+          amount: Number(l.amount || 0) * lineQty(l.quantity),
+          quantity: 1,
+        }))
+      : startAs === "rental"
+        ? [first.line]
+        : [firstLine(startAs)],
   );
   // a scheduled invoice's date is the day it is billed
   const [invoiceDate, setInvoiceDate] = useState(
@@ -415,14 +425,9 @@ export function ResidentInvoiceDialog({
             )}
           </div>
           <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
-            {/* the boxes below are unlabelled on their own - this names them, so
-                nobody types a price into the quantity */}
+            {/* the boxes below are unlabelled on their own - this names them */}
             <div className="flex items-center gap-2 bg-muted/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               <span className="flex-1">Description</span>
-              <span className="w-16 text-right">Qty</span>
-              <span className="invisible text-xs" aria-hidden>
-                ×
-              </span>
               <span className="w-28 text-right">Amount (RM)</span>
               <span className="size-8 shrink-0" aria-hidden />
             </div>
@@ -432,13 +437,11 @@ export function ResidentInvoiceDialog({
                * scheduled period's rent is the schedule's, and editing it here
                * put one invoice out of step with every other period. Laid out
                * on the same columns as the header above, so the figures still
-               * line up under Qty and Amount.
+               * line up under Amount.
                */
               editing?.scheduled ? (
                 <div key={i} className="flex items-center gap-2 px-3 py-2 text-sm">
                   <span className="flex-1">{l.label || "—"}</span>
-                  <span className="w-16 text-right tabular-nums">{lineQty(l.quantity)}</span>
-                  <span className="text-xs text-muted-foreground">×</span>
                   <span className="w-28 text-right tabular-nums">
                     {money(Number(l.amount) || 0)}
                   </span>
@@ -452,24 +455,13 @@ export function ResidentInvoiceDialog({
                     className="h-8 flex-1"
                     onChange={(e) => edit(i, { label: e.target.value })}
                   />
-                  {/* how many, then the price of one - the line is worth the two
-                      multiplied, which is what the total below adds up */}
-                  <Input
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={l.quantity}
-                    aria-label="Quantity"
-                    className="h-8 w-16 text-right tabular-nums"
-                    onChange={(e) => edit(i, { quantity: Number(e.target.value) })}
-                  />
-                  <span className="text-xs text-muted-foreground">×</span>
+                  {/* the line's amount, as it is - no quantity and price each */}
                   <Input
                     type="number"
                     value={l.amount}
-                    aria-label="Price each"
+                    aria-label="Amount"
                     className="h-8 w-28 text-right tabular-nums"
-                    onChange={(e) => edit(i, { amount: Number(e.target.value) })}
+                    onChange={(e) => edit(i, { amount: Number(e.target.value), quantity: 1 })}
                   />
                   <Button
                     size="icon"

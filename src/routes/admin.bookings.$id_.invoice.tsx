@@ -138,8 +138,10 @@ function InvoiceGenerator() {
       ((editing.items ?? []) as any[]).map((l) => ({
         label: String(l.label ?? ""),
         kind: String(l.kind ?? "onetime"),
-        amount: Number(l.amount ?? 0),
-        quantity: lineQty(l.quantity),
+        // one amount per line: a line saved as 2 x RM1,050 comes back as
+        // RM2,100, so nothing is lost now that there is no quantity to show
+        amount: Number(l.amount ?? 0) * lineQty(l.quantity),
+        quantity: 1,
       })),
     );
     setManual(true);
@@ -216,15 +218,12 @@ function InvoiceGenerator() {
   const property = snapshot?.property as Property | undefined;
 
   /*
-   * Add-ons the student picked, unless admin changes them while raising this
-   * invoice - a student who decides on a bedding set after enquiring, or drops
-   * one, would otherwise leave admin no way to charge for it.
-   *
-   * The choice lives on the invoice, not the booking: raising an invoice is not
-   * the moment to rewrite the stay the student was quoted.
+   * The add-ons on the booking. A student who decides on a bedding set after
+   * enquiring, or drops one, is changed in the booking's Stay details - the
+   * quote and the invoice then follow it, instead of the invoice charging for
+   * extras the booking does not know about.
    */
-  const [addonOverride, setAddonOverride] = useState<string[] | null>(null);
-  const addonNames = addonOverride ?? bookingAddonNames(r ?? {});
+  const addonNames = bookingAddonNames(r ?? {});
   const offeredAddons = useMemo(
     () => (property ? addonsFor(property, (r?.occupancy ?? "single") as Occupancy) : []),
     [property, r?.occupancy],
@@ -235,12 +234,6 @@ function InvoiceGenerator() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [property, addonNames.join(" ")],
   );
-  const toggleAddon = (a: Addon) => {
-    const on = addonNames.includes(a.id) || addonNames.includes(a.label);
-    setAddonOverride(
-      on ? addonNames.filter((x) => x !== a.id && x !== a.label) : [...addonNames, a.id],
-    );
-  };
   const monthlyExtras = selectedAddons
     .filter((a) => a.chargeType === "monthly")
     .reduce((sum, a) => sum + a.price, 0);
@@ -271,8 +264,10 @@ function InvoiceGenerator() {
       ((snapshot?.quote?.firstPayment as any[] | undefined) ?? []).map((l) => ({
         label: String(l.label ?? ""),
         kind: String(l.kind ?? "onetime"),
-        amount: Number(l.amount ?? 0),
-        quantity: lineQty(l.quantity),
+        // one amount per line: a line saved as 2 x RM1,050 comes back as
+        // RM2,100, so nothing is lost now that there is no quantity to show
+        amount: Number(l.amount ?? 0) * lineQty(l.quantity),
+        quantity: 1,
       })),
     [snapshot],
   );
@@ -662,38 +657,39 @@ function InvoiceGenerator() {
             <Choice value={frequency} readOnly options={SCHEDULES} className="h-8 max-w-56" />
           </Field>
         </div>
+        {/*
+          Add-ons are chosen in one place: the booking's Stay details. Ticking
+          them here as well let the invoice charge for extras the booking and
+          its quote knew nothing about, so here they are shown, not changed.
+        */}
         {offeredAddons.length ? (
           <div className="mt-4 border-t border-border pt-4">
             <p className="text-xs text-muted-foreground">Add-ons</p>
-            <div className="mt-1.5 flex flex-wrap gap-2">
-              {offeredAddons.map((a) => {
-                const on = addonNames.includes(a.id) || addonNames.includes(a.label);
-                return (
-                  <button
+            {selectedAddons.length ? (
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {selectedAddons.map((a) => (
+                  <span
                     key={a.id}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => toggleAddon(a)}
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors ${
-                      on
-                        ? "border-brand-deep bg-brand-deep text-primary-foreground"
-                        : "border-border bg-background text-foreground hover:bg-muted"
-                    }`}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-brand-deep bg-brand-deep px-3 py-1 text-xs text-primary-foreground"
                   >
-                    {on ? <Check className="size-3" /> : null}
+                    <Check className="size-3" />
                     {a.label}
-                    <span className={on ? "text-primary-foreground/80" : "text-muted-foreground"}>
+                    <span className="text-primary-foreground/80">
                       {money(a.price)}
                       {a.chargeType === "monthly" ? "/mo" : ""}
                     </span>
-                  </button>
-                );
-              })}
-            </div>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1 text-sm text-foreground">None</p>
+            )}
             <p className="mt-1.5 text-xs text-muted-foreground">
-              {addonOverride
-                ? "Changed for this invoice only — the booking keeps what the student picked."
-                : "Picked by the student on the booking. Tick or untick to charge differently here."}
+              As chosen in the booking&rsquo;s{" "}
+              <Link to="/admin/bookings/$id" params={{ id }} className="font-semibold underline">
+                Stay details
+              </Link>
+              . Change them there.
             </p>
           </div>
         ) : null}
@@ -788,13 +784,7 @@ function InvoiceGenerator() {
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="py-2 pr-3 font-medium">Item</th>
                 <th className="py-2 pr-3 font-medium" style={{ width: "140px" }}>Type</th>
-                <th className="py-2 pr-3 text-right font-medium" style={{ width: "70px" }}>
-                  Qty
-                </th>
-                <th className="py-2 pl-3 text-right font-medium" style={{ width: "130px" }}>
-                  Price each (RM)
-                </th>
-                <th className="py-2 pl-3 text-right font-medium" style={{ width: "120px" }}>Amount (RM)</th>
+                <th className="py-2 pl-3 text-right font-medium" style={{ width: "150px" }}>Amount (RM)</th>
                 <th className="py-2" style={{ width: "36px" }} />
               </tr>
             </thead>
@@ -830,45 +820,23 @@ function InvoiceGenerator() {
                       ))}
                     </select>
                   </td>
-                  {/* how many, then the price of one - two months of advance
-                      rent is the rent typed once and a 2 here, not the rent
-                      doubled by hand */}
-                  <td className="py-2 pr-3">
-                    <Input
-                      type="number"
-                      min={1}
-                      step={1}
-                      value={l.quantity}
-                      aria-label="Quantity"
-                      className="h-8 text-right tabular-nums"
-                      onChange={(e) =>
-                        editLines((rows) =>
-                          rows.map((x, j) =>
-                            j === i ? { ...x, quantity: Number(e.target.value) } : x,
-                          ),
-                        )
-                      }
-                    />
-                  </td>
+                  {/* the line's amount, typed as it is. Quantity and a price
+                      each are gone: the one line that used them - advance
+                      rent - is now worked out in full, extra month included */}
                   <td className="py-2 pl-3">
                     <Input
                       type="number"
                       value={l.amount}
-                      aria-label="Price each"
+                      aria-label="Amount"
                       className="h-8 text-right tabular-nums"
                       onChange={(e) =>
                         editLines((rows) =>
                           rows.map((x, j) =>
-                            j === i ? { ...x, amount: Number(e.target.value) } : x,
+                            j === i ? { ...x, amount: Number(e.target.value), quantity: 1 } : x,
                           ),
                         )
                       }
                     />
-                  </td>
-                  {/* what the line is worth, so the multiplication is visible
-                      rather than only showing up in the total */}
-                  <td className="py-2 pl-3 text-right text-sm tabular-nums">
-                    {money(lineTotal(l))}
                   </td>
                   <td className="py-2 text-right">
                     <button
@@ -883,7 +851,7 @@ function InvoiceGenerator() {
               ))}
               {lines.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-6 text-center text-sm text-muted-foreground">
+                  <td colSpan={4} className="py-6 text-center text-sm text-muted-foreground">
                     No lines yet — add the first one.
                   </td>
                 </tr>
