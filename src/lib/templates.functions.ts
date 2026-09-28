@@ -173,10 +173,3 @@ export const testMapping = createServerFn({ method: "POST" })
     };
   });
 
-/** the Active version id for a document key, recorded on generated documents */
-export async function activeVersionIdFor(db: any, docKey: string): Promise<string | null> {
-  const { data: t } = await db.from("document_templates").select("id").eq("doc_key", docKey).maybeSingle();
-  if (!t) return null;
-  const { data: v } = await db.from("template_versions").select("id").eq("template_id", t.id).eq("status", "active").maybeSingle();
-  return v?.id ?? null;
-}
