@@ -1,92 +1,80 @@
-# Preserve exact legal-document formatting
+# Google Docs legal-document templates
 
 ## Decision
 
-Keep **Microsoft Word (.docx) as the master template** and produce both:
+Use **Google Docs as the rendering source** and support both ways of creating a template version:
 
-1. the populated Word document, with placeholders replaced inside the original file; and
-2. a PDF rendered by Microsoft Word, used for the fixed-page preview and final PDF download.
+1. **Google Docs link** — recommended when exact Google Docs formatting is required.
+2. **Word (.docx) upload** — import the file into Google Docs, then let admin review the imported layout before activation.
 
-Do not use Google Docs or rebuild the file as webpage text. Google Docs can change a Word document during import, while a PDF-only template would make future placeholder and wording changes harder.
+Each generated document will be downloadable as both a Google-rendered PDF and an exported Word file.
 
-## Important page-size check
+## Formatting promise
 
-The uploaded Tenancy Agreement currently declares **US Letter (8.5 × 11 inches)**, not A4. Exact preservation and forced A4 conversion conflict because changing the page size can move text and page breaks.
+- A Google Docs link preserves the source Google Doc's page size, margins, fonts, spacing, tables, headers, footers, alignment, and page breaks when Google exports it to PDF.
+- A Word upload may change slightly during Google's one-time DOCX-to-Google-Docs import. The imported version must be previewed and approved before activation.
+- The system will never use the current reconstructed webpage text as the legal preview.
 
-The system will preserve the template's native page size and clearly flag a non-A4 upload. To satisfy both requirements, the source template must first be set to A4 in Microsoft Word and uploaded again. Schedule A will receive the same validation.
+## Template workflow
 
-## What will change
+### Google Docs link
 
-### 1. Preserve the original Word file
+- Admin pastes a Google Docs URL.
+- The app reads the document and its placeholders through the Google Docs connection.
+- The app stores the source document ID on that template version.
+- The PDF exported by Google becomes the fixed-page preview.
 
-- Stop treating the converted webpage version as the legal template.
-- Keep each uploaded `.docx` as the authoritative version.
-- Detect placeholders directly from the Word document, including text split across Word formatting runs.
-- Keep the existing field-mapping panel, version history, Draft/Active workflow, and resident test selection.
-- Replace placeholder text within the DOCX package without rebuilding paragraphs, tables, headers, footers, or sections.
+### Word upload
 
-Example: `{{Resident_full_name}}` will be replaced where it already sits in the Word file. Its surrounding font, bold/italic style, alignment, table cell, spacing, and page position remain unchanged.
+- Admin uploads the `.docx` as today.
+- The app imports it into the connected Google Drive as a Google Doc.
+- The imported Google Doc becomes that template version's source.
+- Admin sees the Google-rendered PDF and must approve the layout before activation.
+- The original uploaded DOCX remains privately stored for audit/history.
 
-### 2. Generate an exact PDF through Microsoft Word
+## Placeholder mapping
 
-- Link Brachtia's Microsoft Word/OneDrive account to the project.
-- After placeholder replacement, temporarily send the populated DOCX to Microsoft Word, request Microsoft's PDF conversion, and return the PDF to the app.
-- Save both generated files privately against the agreement document:
-  - populated `.docx`
-  - matching `.pdf`
-- Remove the temporary OneDrive copy after conversion where the service permits it.
-- Surface Microsoft conversion failures clearly; never fall back to the current webpage renderer for a legal document.
+- Detect placeholders from Google Docs content, including paragraphs, tables, headers, and footers where the API exposes them.
+- Keep the existing mapping choices, formulas, missing-value checks, version history, Draft/Active workflow, and resident Test Mapping.
+- Fill placeholders by copying the source Google Doc, replacing text in the copy, then exporting the result.
+- Never edit the master source document during Test Mapping or document generation.
 
-### 3. Fixed document viewer
+## Fixed document viewer
 
-Use the generated PDF itself for all legal-document previews:
+Use the actual Google-exported PDF for every preview:
 
-- neutral grey viewer background
-- separate fixed pages with white backgrounds, subtle borders, and shadows
-- the source document's page size, margins, fonts, spacing, tables, headers, footers, alignment, and page breaks
-- controls: `Page 1 of X`, previous/next page, Zoom Out, percentage, Zoom In, and Fit Page
-- no responsive text reflow when the centre panel changes width
+- neutral grey background
+- fixed white pages with subtle border/shadow
+- no text reflow when the panel changes width
+- controls for previous page, next page, `Page 1 of X`, Zoom Out, percentage, Zoom In, and Fit Page
 
-The same viewer will be used in:
+Use the same viewer in Settings → Templates, Test Mapping, Create Document Pack, and View generated document.
 
-- Settings → Templates
-- Test Mapping
-- Create Document Pack
-- View generated document
+## Generation and downloads
 
-### 4. Template and test previews
+- Generate Document Pack copies each active Google Docs template, replaces placeholders with the reviewed resident values, and exports both PDF and DOCX.
+- Save both generated files privately against the exact generated-document record and template version.
+- Each row offers **View PDF**, **Download PDF**, and **Download Word**.
+- Existing generated records without stored files remain marked as older records; they are not silently rebuilt from a newer template.
+- Delete temporary Google Drive copies after both exports complete.
 
-- On upload or replacement, generate an unfilled PDF preview from the original DOCX.
-- Test Mapping will create a temporary populated DOCX and PDF using the selected resident, then show that PDF in the same viewer.
-- Test files will not create an Agreement No., agreement record, or permanent resident document.
-- Placeholder highlights and mapping status remain in the right panel rather than being painted over the document itself, preserving an honest representation of the final file.
+## Data and security
 
-### 5. Document generation and downloads
-
-- Generate Document Pack will snapshot the chosen values and active template version as it does now.
-- It will additionally create and store the real populated DOCX and Microsoft-rendered PDF for every available active template.
-- Each generated-document row will offer **View PDF**, **Download PDF**, and **Download Word**.
-- Existing generated records without stored files will show that they predate exact-file generation; they will not be silently regenerated from a newer template.
-
-## Technical details
-
-- Replace `mammoth`/generic HTML as the legal rendering path. It currently discards page geometry and reconstructs content as HTML, which causes the layout shown in the screenshots.
-- Use a DOCX templating library that edits OOXML text runs while retaining the rest of the package.
-- Use the Microsoft Word connector server-side for DOCX upload and PDF conversion; credentials never enter the browser.
-- Add private storage paths and generation state/error fields to template versions and generated agreement documents.
-- Add secure server functions for template preview generation, test generation, final generation, and authenticated file download.
-- Make database changes idempotent, apply them to `test-bratchia`, and record the SQL for Lovable Cloud in `docs/PENDING-ON-LOVABLE.md`.
-- Record the Word-as-source/PDF-as-preview architecture in `AGENTS.md`.
+- Store the Google document ID, original upload path, preview PDF path, import/review status, generated PDF/DOCX paths, and generation errors.
+- Google credentials remain server-side; template and generated files remain private.
+- Use the workspace-owned Google Docs and Google Drive connections because this is one Brachtia-controlled template library, not each resident's personal Google account.
+- Make migrations repeatable, apply them to `test-bratchia`, and list the same SQL in `docs/PENDING-ON-LOVABLE.md` for the live database.
+- Record the Google-Docs-source/PDF-preview architecture in `AGENTS.md`.
 
 ## Validation
 
-- Compare every page of both uploaded samples against Microsoft Word/PDF output, including the logo, margins, typography, tables, signatures, headers/footers, and page numbering.
-- Confirm long and short mapped values do not alter formatting beyond Word's normal text-flow behaviour.
-- Confirm Test Mapping, document-pack review, generated-document viewing, Word download, and PDF download all use the same template version and values.
-- Check desktop and mobile viewer controls without resizing document content.
-- Confirm private files cannot be opened without an active admin session.
-- Verify the app build and the latest error logs before completion.
+- Test a native Google Docs link and both uploaded Word samples.
+- Compare every exported PDF page with its Google Docs source: logo, margins, typography, tables, signatures, headers/footers, and page numbers.
+- Verify Test Mapping and final generation use copies and never alter the source.
+- Verify PDF preview, PDF download, and Word download all use the same template version and saved values.
+- Verify private files cannot be opened without an active admin session.
+- Verify desktop/mobile viewer controls, app build, and current error logs.
 
 ## Prerequisite
 
-A workspace owner must link a Microsoft Word connection when the connection card is presented during implementation. Without it, the app can preserve and download the populated Word file, but it cannot produce a Microsoft-rendered exact PDF.
+Link one Brachtia Google account to both **Google Docs** and **Google Drive** when the connection cards appear. Google Docs handles document text replacement; Google Drive handles DOCX import and PDF/DOCX export.
