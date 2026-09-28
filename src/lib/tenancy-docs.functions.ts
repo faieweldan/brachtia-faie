@@ -25,6 +25,11 @@ async function admin(): Promise<any> {
 
 const str = (v: unknown) => (v == null ? "" : String(v));
 
+async function versions(db: any): Promise<Record<string, string>> {
+  const { activeVersionIds } = await import("@/lib/template-versions.server");
+  return activeVersionIds(db);
+}
+
 function toDoc(row: any): AgreementDoc {
   return {
     id: row.id,
@@ -147,6 +152,7 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
 
     const docTypes: AgreementDocType[] = ["agreement", "sched_a", "sched_b", "sched_c"];
     const today = new Date().toISOString().slice(0, 10);
+    const tv = await versions(db);
     const { error: dErr } = await db.from("agreement_documents").insert(
       docTypes.map((t) => ({
         agreement_id: agreement.id,
@@ -157,6 +163,7 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
         period_start: data.periodStart || null,
         period_end: data.periodEnd || null,
         merge_values: data.mergeValues,
+        template_version_id: tv[t] ?? null,
       })),
     );
     if (dErr) throw new Error(dErr.message);
@@ -165,6 +172,7 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
       resident_id: data.residentId,
       reason: "Initial Tenancy",
       status: "generated",
+      template_version_id: tv["access_card"] ?? null,
     });
     if (cErr) throw new Error(cErr.message);
 
@@ -199,6 +207,7 @@ export const reviseSchedule = createServerFn({ method: "POST" })
     if (!current) throw new Error("No existing schedule to revise");
 
     const today = new Date().toISOString().slice(0, 10);
+    const tv = await versions(db);
     const { error: iErr } = await db.from("agreement_documents").insert({
       agreement_id: data.agreementId,
       doc_type: data.docType,
@@ -209,6 +218,7 @@ export const reviseSchedule = createServerFn({ method: "POST" })
       period_end: data.periodEnd || current.period_end,
       merge_values: data.mergeValues,
       supersedes: current.id,
+      template_version_id: tv[data.docType] ?? null,
     });
     if (iErr) throw new Error(iErr.message);
     return { ok: true as const };
@@ -245,6 +255,7 @@ export const renewAgreement = createServerFn({ method: "POST" })
 
     const docTypes: AgreementDocType[] = ["agreement", "sched_a", "sched_b", "sched_c"];
     const today = new Date().toISOString().slice(0, 10);
+    const tv = await versions(db);
     const { error: dErr } = await db.from("agreement_documents").insert(
       docTypes.map((t) => ({
         agreement_id: agreement.id,
@@ -255,6 +266,7 @@ export const renewAgreement = createServerFn({ method: "POST" })
         period_start: data.periodStart || null,
         period_end: data.periodEnd || null,
         merge_values: data.mergeValues,
+        template_version_id: tv[t] ?? null,
       })),
     );
     if (dErr) throw new Error(dErr.message);
@@ -277,9 +289,10 @@ export const createAccessCardForm = createServerFn({ method: "POST" })
   .inputValidator((data: { residentId: string; reason: string }) => data)
   .handler(async ({ data }) => {
     const db = await admin();
+    const tv = await versions(db);
     const { error } = await db
       .from("access_card_forms")
-      .insert({ resident_id: data.residentId, reason: data.reason, status: "generated" });
+      .insert({ resident_id: data.residentId, reason: data.reason, status: "generated", template_version_id: tv["access_card"] ?? null });
     if (error) throw new Error(error.message);
     return { ok: true as const };
   });
