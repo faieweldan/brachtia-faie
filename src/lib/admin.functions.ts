@@ -4,6 +4,7 @@ import { NEED_STAFF, logBookingEvent, rm, staffFor, when, words } from "@/lib/bo
 
 import { BOOKING_FEE, discountPerMonth, lineQty, liveInvoices } from "@/lib/invoices";
 import { residentCodeFor } from "@/lib/resident-billing.functions";
+import { cleanPhone } from "@/lib/reference-data";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -131,7 +132,7 @@ export const updateEnquiry = createServerFn({ method: "POST" })
     if (data.residentId !== undefined) patch["resident_id"] = data.residentId;
     if (data.fullName !== undefined) patch["full_name"] = data.fullName;
     if (data.email !== undefined) patch["email"] = data.email;
-    if (data.phone !== undefined) patch["phone"] = data.phone;
+    if (data.phone !== undefined) patch["phone"] = cleanPhone(data.phone);
     if (data.nationality !== undefined) patch["nationality"] = data.nationality;
     if (data.university !== undefined) patch["university"] = data.university;
     if (data.company !== undefined) patch["company"] = data.company;

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { generateViewingToken } from "@/lib/admin.functions";
+import { waDigits } from "@/lib/reference-data";
 
 /**
  * The reply a student gets after their enquiry is checked: their room is
@@ -162,7 +163,7 @@ export function RoomMessageCard({
   const subject = drafts[subjectKey] ?? SUBJECT;
   const setDraft = (key: string, value: string) => setDrafts((d) => ({ ...d, [key]: value }));
 
-  const digits = phone.replace(/\D/g, "");
+  const digits = waDigits(phone);
 
   async function copy() {
     const text = channel === "email" ? `Subject: ${subject}\n\n${body}` : body;

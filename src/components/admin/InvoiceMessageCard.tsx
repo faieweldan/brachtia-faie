@@ -9,6 +9,7 @@ import { company, formatRM } from "@/data/properties";
 import { greetingName } from "@/lib/greeting";
 import { LANDLORD_ENTITY } from "@/lib/declaration";
 import { BOOKING_FEE } from "@/lib/invoices";
+import { waDigits } from "@/lib/reference-data";
 
 /**
  * The message that asks for the money, ready the moment the invoice exists.
@@ -115,7 +116,7 @@ export function InvoiceMessageCard({
     toast.success("Message copied", { description: "Paste it into WhatsApp." });
   }
 
-  const digits = phone.replace(/\D/g, "");
+  const digits = waDigits(phone);
 
   return (
     <div id={id} className="scroll-mt-6 rounded-xl border border-border bg-card p-4">

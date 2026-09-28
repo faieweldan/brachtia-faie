@@ -24,7 +24,7 @@ import {
 import { countryByIso, type Country } from "@/data/countries";
 import CountryCombobox from "@/components/site/CountryCombobox";
 import { checkEnquiryDuplicate, submitEnquiry, type EnquiryInput } from "@/lib/public.functions";
-import { STATUS_OPTIONS } from "@/lib/reference-data";
+import { STATUS_OPTIONS, joinPhone } from "@/lib/reference-data";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -187,7 +187,7 @@ export default function EnquiryDialog({
   const quote = stay.quote ?? null;
 
   const dial = countryByIso(dialIso)?.dial ?? "+60";
-  const mobileCombined = mobileNumber ? `${dial} ${mobileNumber}`.trim() : "";
+  const mobileCombined = mobileNumber ? joinPhone(dial, mobileNumber) : "";
   const nationality = nationalityIso ? (countryByIso(nationalityIso)?.name ?? "") : "";
 
   const stayComplete = Boolean(room && occupancy && stay.moveIn && stay.moveOut);

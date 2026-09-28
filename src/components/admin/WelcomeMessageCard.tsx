@@ -7,6 +7,7 @@ import { PdfPreviewButton } from "@/components/admin/PdfPreview";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { recordBookingEvent } from "@/lib/booking-activity.functions";
+import { waDigits } from "@/lib/reference-data";
 
 /**
  * The WhatsApp message sent once the booking fee is in and the resident created:
@@ -120,7 +121,7 @@ export function WelcomeMessageCard({
     markSent();
   }
 
-  const digits = phone.replace(/\D/g, "");
+  const digits = waDigits(phone);
 
   return (
     <div

@@ -42,8 +42,10 @@ import {
   type PaymentTerm,
   type Property,
   inBillingOrder,
+  formatRM,
 } from "@/data/properties";
 import { DateInput } from "@/components/ui/date-input";
+import { cleanPhone } from "@/lib/reference-data";
 
 export const Route = createFileRoute("/admin/bookings/$id_/invoice")({
   component: InvoiceGenerator,
@@ -62,8 +64,8 @@ const KINDS = [
   { value: "onetime", label: "One-time" },
 ];
 
-const money = (n: number) =>
-  `RM${Number(n || 0).toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+// written the way the quote and invoice PDFs write it
+const money = (n: number) => formatRM(Number(n || 0));
 
 /** amount is the price of one; the line is worth quantity x amount. */
 type Line = { label: string; kind: string; amount: number; quantity: number };
@@ -539,7 +541,7 @@ function InvoiceGenerator() {
             <Value v={r.email} />
           </Field>
           <Field label="Mobile">
-            <Value v={r.phone} />
+            <Value v={cleanPhone(r.phone ?? "")} />
           </Field>
           <Field label="Residence">
             <Value v={r.residence_name} />
@@ -561,10 +563,10 @@ function InvoiceGenerator() {
             <Value v={r.occupancy} className="capitalize" />
           </Field>
           <Field label="Tenancy start">
-            <Value v={r.move_in} />
+            <Value v={r.move_in ? formatDate(r.move_in) : ""} />
           </Field>
           <Field label="Tenancy end">
-            <Value v={r.move_out} />
+            <Value v={r.move_out ? formatDate(r.move_out) : ""} />
           </Field>
           {/* Rent is agreed on the booking and only stated here, so an invoice
               cannot quietly be raised at a price nobody agreed to. A discount is

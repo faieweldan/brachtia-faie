@@ -2,6 +2,7 @@
 
 import { discountLabel } from "@/lib/invoices";
 import type { InvoiceDoc } from "@/lib/invoice-pdf";
+import { cleanPhone } from "@/lib/reference-data";
 
 /**
  * One stored invoice, turned into the document its PDF is printed from.
@@ -29,7 +30,7 @@ export function invoiceDocFromRow(row: any, items: any[]): InvoiceDoc {
     // disagrees with the "NET15" printed beside it
     full_name: row?.full_name ?? "",
     email: row?.email ?? "",
-    phone: row?.phone ?? "",
+    phone: cleanPhone(row?.phone ?? ""),
     university: row?.university ?? "",
     company: row?.company ?? "",
     occupation: row?.occupation ?? "",

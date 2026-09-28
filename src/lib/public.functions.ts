@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { cleanPhone } from "@/lib/reference-data";
 
 const enquirySchema = z.object({
   residenceSlug: z.string().max(120).default(""),
@@ -17,7 +18,7 @@ const enquirySchema = z.object({
   addons: z.array(z.string().max(120)).max(20).default([]),
   fullName: z.string().trim().min(2).max(100),
   email: z.string().trim().email().max(255),
-  phone: z.string().trim().min(5).max(30),
+  phone: z.string().trim().min(5).max(30).transform((v) => cleanPhone(v)),
   nationality: z.string().trim().max(80).default(""),
   // student or employed - a working applicant is never asked for a university
   currentStatus: z.string().trim().max(40).default(""),
@@ -277,7 +278,7 @@ const appointmentSchema = z.object({
   startsAt: z.string().min(10).max(40),
   fullName: z.string().trim().min(2).max(100),
   email: z.string().trim().email().max(255),
-  phone: z.string().trim().min(5).max(30),
+  phone: z.string().trim().min(5).max(30).transform((v) => cleanPhone(v)),
   university: z.string().trim().max(160).default(""),
   nationality: z.string().trim().max(80).default(""),
   intake: z.string().trim().max(40).default(""),

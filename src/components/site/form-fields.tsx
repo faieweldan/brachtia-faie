@@ -1,6 +1,7 @@
 import CountryCombobox from "@/components/site/CountryCombobox";
 import { Label } from "@/components/ui/label";
 import { countryByIso, type Country } from "@/data/countries";
+import { joinPhone } from "@/lib/reference-data";
 
 export const fieldClass =
   "h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-brand/40";
@@ -118,7 +119,7 @@ export function PhoneField({
       <input
         type="hidden"
         name={name}
-        value={number ? `${countryByIso(dialIso)?.dial ?? "+60"} ${number}`.trim() : ""}
+        value={number ? joinPhone(countryByIso(dialIso)?.dial ?? "+60", number) : ""}
       />
     </div>
   );

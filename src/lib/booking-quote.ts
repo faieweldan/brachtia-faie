@@ -1,4 +1,5 @@
 import type { Addon, Property, StayQuote } from "@/data/properties";
+import { cleanPhone } from "@/lib/reference-data";
 
 /** The booking's own answers about the person, used to fill gaps in a snapshot. */
 type BookingPerson = {
@@ -95,7 +96,7 @@ export function quoteLeadFrom(
     nationality: pick(lead["nationality"], row?.nationality),
     gender: pick(lead["gender"], row?.gender),
     email: pick(lead["email"], row?.email),
-    mobile: pick(lead["mobile"], row?.phone),
+    mobile: cleanPhone(String(pick(lead["mobile"], row?.phone) ?? "")),
   };
 }
 

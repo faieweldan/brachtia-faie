@@ -56,6 +56,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { DateInput } from "@/components/ui/date-input";
+import { cleanPhone } from "@/lib/reference-data";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -114,13 +115,7 @@ function ReadValue({ children, icon }: { children?: React.ReactNode; icon?: Reac
   );
 }
 
-function formatPhone(raw: string) {
-  const p = (raw || "").trim();
-  if (!p) return "";
-  if (p.startsWith("+")) return p;
-  if (p.startsWith("0")) return `+60 ${p.slice(1)}`;
-  return `+60 ${p}`;
-}
+const formatPhone = (raw: string) => cleanPhone(raw);
 
 function localDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Kuala_Lumpur" });

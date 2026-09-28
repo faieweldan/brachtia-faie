@@ -346,6 +346,37 @@ export function joinPhone(dial: string, rest: string): string {
   return dial ? `${dial} ${n}` : n;
 }
 
+/**
+ * Any phone number as it should be written: "+60 189658709".
+ *
+ * The trunk 0 is how a number is dialled inside the country, never after the
+ * code - "+60 0189658709" is not a number anybody can call, and as a WhatsApp
+ * link (600189658709) it opened a chat with nobody. The website's enquiry and
+ * viewing forms stored it that way, so it is taken off here: for what they
+ * send now, and for what was stored before when it is shown.
+ *
+ * A number with no code is read as Malaysian, unless it already starts with
+ * the code without its plus (60123306815).
+ */
+export function cleanPhone(raw: string, fallbackDial = "+60"): string {
+  const v = String(raw ?? "").trim();
+  if (!v) return "";
+  if (v.startsWith("+")) {
+    const { dial, rest } = splitPhone(v);
+    return dial ? joinPhone(dial, rest) : v;
+  }
+  let digits = v.replace(/\D/g, "");
+  if (!digits) return v;
+  const code = fallbackDial.slice(1);
+  if (digits.startsWith(code) && digits.length > 10) digits = digits.slice(code.length);
+  return joinPhone(fallbackDial, digits);
+}
+
+/** The number as wa.me wants it: code and number, digits only - 60189658709. */
+export function waDigits(raw: string): string {
+  return cleanPhone(raw).replace(/\D/g, "");
+}
+
 /* -------------------------------------------------------------------------
  * Normalising what is already written down.
  *

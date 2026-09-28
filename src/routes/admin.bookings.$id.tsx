@@ -26,7 +26,7 @@ import { invoiceDocFromRow } from "@/lib/invoice-doc";
 import { quoteLeadFrom, quoteSnapshotFor } from "@/lib/booking-quote";
 import { loadProofFile } from "@/lib/payment-proof";
 import { BOOKING_FEE as FEE_AMOUNT } from "@/lib/invoices";
-import { company } from "@/data/properties";
+import { company, formatRM } from "@/data/properties";
 import { WelcomeMessageCard } from "@/components/admin/WelcomeMessageCard";
 import { InvoiceMessageCard } from "@/components/admin/InvoiceMessageCard";
 import { StayDetailsCard } from "@/components/admin/StayDetailsCard";
@@ -117,6 +117,7 @@ import {
 import { Calendar as DayPicker } from "@/components/ui/calendar";
 import { Textarea } from "@/components/ui/textarea";
 import { DateInput } from "@/components/ui/date-input";
+import { cleanPhone, waDigits } from "@/lib/reference-data";
 
 export const Route = createFileRoute("/admin/bookings/$id")({
   component: BookingDetail,
@@ -132,8 +133,8 @@ const CLOSE_DUPLICATE = "Duplicate";
 const CLOSE_OTHER = "Other";
 const CLOSE_REASONS = ["Lost to competitor", "No response", "Budget", CLOSE_DUPLICATE, "Other"];
 
-const money = (n: number) =>
-  `RM ${Number(n || 0).toLocaleString("en-MY", { maximumFractionDigits: 0 })}`;
+// to the sen, as the quote and invoice print it - RM4,770.81 is not RM4,771
+const money = (n: number) => formatRM(Number(n || 0));
 
 const fullDate = (d?: string | null) =>
   d
@@ -157,12 +158,7 @@ const fullDateTime = (d?: string | null) =>
  * it as an unknown number - it wants 60123306815. A number already written with
  * its country code is left alone.
  */
-function waNumber(phone: string) {
-  const digits = String(phone ?? "").replace(/\D/g, "");
-  if (!digits) return "";
-  if (digits.startsWith("60")) return digits;
-  return digits.startsWith("0") ? `60${digits.slice(1)}` : digits;
-}
+const waNumber = (phone: string) => waDigits(phone);
 
 function hasSnapshot(row: any) {
   const q = row?.quote_snapshot;
@@ -2862,7 +2858,9 @@ function EditableCard({
                               ? row[k] === "Other" && row[`${k}_other`]
                                 ? `Other — ${row[`${k}_other`]}`
                                 : row[k] || "—"
-                              : row[k] || "—"
+                              : k === "phone"
+                                ? cleanPhone(String(row[k] ?? "")) || "—"
+                                : row[k] || "—"
               }
             />
           ))}
