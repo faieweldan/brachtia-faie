@@ -95,7 +95,9 @@ export default function RoomDetailDialog({
             setLightboxIndex(i);
             setLightboxOpen(true);
           }}
-          className="aspect-[4/3] w-full rounded-t-lg sm:aspect-[16/10]"
+          // short enough that the room's name, description and rates are in
+          // view when it opens - the photo is a taste; View full is the look
+          className="h-56 w-full rounded-t-lg sm:h-64"
         />
 
         <PhotoLightbox
