@@ -15,6 +15,13 @@
       "when": 1790577010540,
       "tag": "0001_next_agreement_no_function",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790578311923,
+      "tag": "0002_document_templates",
+      "breakpoints": true
     }
   ]
 }

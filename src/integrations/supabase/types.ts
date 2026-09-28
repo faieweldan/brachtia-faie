@@ -23,6 +23,7 @@ export type Database = {
           reason: string
           resident_id: string
           status: string
+          template_version_id: string | null
         }
         Insert: {
           card_no?: string
@@ -32,6 +33,7 @@ export type Database = {
           reason?: string
           resident_id: string
           status?: string
+          template_version_id?: string | null
         }
         Update: {
           card_no?: string
@@ -41,6 +43,7 @@ export type Database = {
           reason?: string
           resident_id?: string
           status?: string
+          template_version_id?: string | null
         }
         Relationships: [
           {
@@ -48,6 +51,13 @@ export type Database = {
             columns: ["resident_id"]
             isOneToOne: false
             referencedRelation: "residents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "access_card_forms_template_version_id_fkey"
+            columns: ["template_version_id"]
+            isOneToOne: false
+            referencedRelation: "template_versions"
             referencedColumns: ["id"]
           },
         ]
@@ -64,6 +74,7 @@ export type Database = {
           period_start: string | null
           status: string
           supersedes: string | null
+          template_version_id: string | null
           version: number
         }
         Insert: {
@@ -77,6 +88,7 @@ export type Database = {
           period_start?: string | null
           status?: string
           supersedes?: string | null
+          template_version_id?: string | null
           version?: number
         }
         Update: {
@@ -90,6 +102,7 @@ export type Database = {
           period_start?: string | null
           status?: string
           supersedes?: string | null
+          template_version_id?: string | null
           version?: number
         }
         Relationships: [
@@ -105,6 +118,13 @@ export type Database = {
             columns: ["supersedes"]
             isOneToOne: false
             referencedRelation: "agreement_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreement_documents_template_version_id_fkey"
+            columns: ["template_version_id"]
+            isOneToOne: false
+            referencedRelation: "template_versions"
             referencedColumns: ["id"]
           },
         ]
@@ -533,6 +553,33 @@ export type Database = {
           effective_from?: string
           id?: string
           version?: string
+        }
+        Relationships: []
+      }
+      document_templates: {
+        Row: {
+          category: string
+          created_at: string
+          doc_key: string
+          id: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          doc_key?: string
+          id?: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          doc_key?: string
+          id?: string
+          name?: string
+          sort_order?: number
         }
         Relationships: []
       }
@@ -1785,6 +1832,56 @@ export type Database = {
           },
         ]
       }
+      template_versions: {
+        Row: {
+          activated_at: string | null
+          content_html: string
+          created_at: string
+          file_name: string
+          file_path: string
+          id: string
+          placeholders: string[]
+          status: string
+          template_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          activated_at?: string | null
+          content_html?: string
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          id?: string
+          placeholders?: string[]
+          status?: string
+          template_id: string
+          updated_at?: string
+          version: number
+        }
+        Update: {
+          activated_at?: string | null
+          content_html?: string
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          id?: string
+          placeholders?: string[]
+          status?: string
+          template_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_versions_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "document_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenancies: {
         Row: {
           bed_id: string | null
@@ -1966,6 +2063,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      activate_template_version: {
+        Args: { _version_id: string }
+        Returns: undefined
+      }
       bill_due_invoices: { Args: never; Returns: number }
       has_role: {
         Args: {
