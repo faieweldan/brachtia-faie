@@ -19,6 +19,9 @@ export type Database = {
           card_no: string
           created_at: string
           form_date: string
+          generated_docx_path: string | null
+          generated_pdf_path: string | null
+          generation_error: string | null
           id: string
           reason: string
           resident_id: string
@@ -29,6 +32,9 @@ export type Database = {
           card_no?: string
           created_at?: string
           form_date?: string
+          generated_docx_path?: string | null
+          generated_pdf_path?: string | null
+          generation_error?: string | null
           id?: string
           reason?: string
           resident_id: string
@@ -39,6 +45,9 @@ export type Database = {
           card_no?: string
           created_at?: string
           form_date?: string
+          generated_docx_path?: string | null
+          generated_pdf_path?: string | null
+          generation_error?: string | null
           id?: string
           reason?: string
           resident_id?: string
@@ -68,6 +77,9 @@ export type Database = {
           created_at: string
           doc_type: string
           effective_date: string | null
+          generated_docx_path: string | null
+          generated_pdf_path: string | null
+          generation_error: string | null
           id: string
           merge_values: Json
           period_end: string | null
@@ -82,6 +94,9 @@ export type Database = {
           created_at?: string
           doc_type: string
           effective_date?: string | null
+          generated_docx_path?: string | null
+          generated_pdf_path?: string | null
+          generation_error?: string | null
           id?: string
           merge_values?: Json
           period_end?: string | null
@@ -96,6 +111,9 @@ export type Database = {
           created_at?: string
           doc_type?: string
           effective_date?: string | null
+          generated_docx_path?: string | null
+          generated_pdf_path?: string | null
+          generation_error?: string | null
           id?: string
           merge_values?: Json
           period_end?: string | null
@@ -1842,9 +1860,14 @@ export type Database = {
           created_at: string
           file_name: string
           file_path: string
+          google_document_id: string | null
           id: string
+          import_error: string | null
+          import_status: string
           mappings: Json
           placeholders: string[]
+          preview_pdf_path: string | null
+          source_kind: string
           status: string
           template_id: string
           updated_at: string
@@ -1856,9 +1879,14 @@ export type Database = {
           created_at?: string
           file_name?: string
           file_path?: string
+          google_document_id?: string | null
           id?: string
+          import_error?: string | null
+          import_status?: string
           mappings?: Json
           placeholders?: string[]
+          preview_pdf_path?: string | null
+          source_kind?: string
           status?: string
           template_id: string
           updated_at?: string
@@ -1870,9 +1898,14 @@ export type Database = {
           created_at?: string
           file_name?: string
           file_path?: string
+          google_document_id?: string | null
           id?: string
+          import_error?: string | null
+          import_status?: string
           mappings?: Json
           placeholders?: string[]
+          preview_pdf_path?: string | null
+          source_kind?: string
           status?: string
           template_id?: string
           updated_at?: string
