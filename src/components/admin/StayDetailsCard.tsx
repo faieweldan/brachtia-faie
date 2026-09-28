@@ -23,6 +23,7 @@ import { roomFitChanged } from "@/lib/stay-fit";
 import { bookingAddonNames, selectedBookingAddons, quoteAmountsMatch } from "@/lib/booking-quote";
 import { stayLength } from "@/lib/stay-length";
 import { DateInput } from "@/components/ui/date-input";
+import { BOOKING_FEE } from "@/lib/invoices";
 
 /**
  * A booking's stay, worked out the way the website works it out.
@@ -124,6 +125,8 @@ export function StayDetailsCard({
   canEdit,
   onBlocked,
   onSave,
+  invoice,
+  onQuoteUpdated,
 }: {
   row: any;
   /** residence rows and room type rows - listResidences */
@@ -136,7 +139,18 @@ export function StayDetailsCard({
   /** says why, and points at the staff field */
   onBlocked: () => void;
   onSave: (patch: Record<string, unknown>) => Promise<unknown>;
+  /** the booking's first invoice, if one has been raised, and what is paid on it */
+  invoice?: { number: string; paid: number } | null | undefined;
+  /** after Update quote: bring that invoice into line with the new quote */
+  onQuoteUpdated?: (() => Promise<unknown>) | undefined;
 }) {
+  /*
+   * Update quote changes the invoice too, while it can still be changed: no
+   * invoice yet, or no more than the booking fee paid on it. Past that, the
+   * invoice is what the student is paying against, so the quote is not
+   * rewritten under it either - the two would no longer agree.
+   */
+  const invoiceLocked = Boolean(invoice && invoice.paid > BOOKING_FEE + 0.005);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Stay>(() => fromRow(row));
   const [busy, setBusy] = useState(false);
@@ -346,6 +360,18 @@ export function StayDetailsCard({
       toast.error("The quote needs a room rate, move in and move out");
       return;
     }
+    if (withQuote && invoiceLocked) {
+      toast.error("More than the booking fee is paid, so the quote and invoice can no longer change");
+      return;
+    }
+    if (
+      withQuote &&
+      invoice &&
+      !window.confirm(
+        `Update the quote and invoice ${invoice.number}?\n\nThe invoice will change to match the stay. It is kept in its history as the previous version, and the student should be sent the new one.`,
+      )
+    )
+      return;
     const patch = patchFor(s, w, withQuote);
     /*
      * The snapshot has conditions of its own, so a save could quietly leave it
@@ -362,12 +388,16 @@ export function StayDetailsCard({
     setBusy(true);
     try {
       await onSave(patch);
+      if (withQuote && invoice && onQuoteUpdated) await onQuoteUpdated();
       // the quote is rebuilt from the stay as it now stands, so "out of date"
       // is answered by this save - say so plainly rather than leaving the user
       // to notice the warning has gone
-      toast.success(withQuote ? "Quote updated" : "Stay details saved", {
-        ...(withQuote ? { description: "It now matches the stay details." } : {}),
-      });
+      toast.success(
+        withQuote ? (invoice ? "Quote and invoice updated" : "Quote updated") : "Stay details saved",
+        {
+          ...(withQuote ? { description: "It now matches the stay details." } : {}),
+        },
+      );
       setEditing(false);
     } catch {
       // the page already says what went wrong
@@ -485,13 +515,17 @@ export function StayDetailsCard({
             <Button
               size="sm"
               variant="outline"
-              disabled={busy || !(editing ? live.quote : saved.quote)}
+              disabled={busy || invoiceLocked || !(editing ? live.quote : saved.quote)}
               /* a greyed button with no reason on it is the commonest failure
                  there is: the explanation sat in a line above and read as a
                  separate remark rather than as why this cannot be pressed */
               title={
-                (editing ? live.quote : saved.quote)
-                  ? undefined
+                invoiceLocked
+                  ? "More than the booking fee is paid on the invoice, so the quote can no longer change"
+                  : (editing ? live.quote : saved.quote)
+                  ? invoice
+                    ? `Also updates invoice ${invoice.number}`
+                    : undefined
                   : priceProblem || "The quote needs a room rate, move in and move out"
               }
               onClick={() =>

@@ -2,7 +2,7 @@ import { nextRentalPayment } from "@/lib/rental-schedule";
 import { createServerFn } from "@tanstack/react-start";
 import { NEED_STAFF, logBookingEvent, rm, staffFor, when, words } from "@/lib/booking-events";
 
-import { BOOKING_FEE, lineQty, liveInvoices } from "@/lib/invoices";
+import { BOOKING_FEE, discountPerMonth, lineQty, liveInvoices } from "@/lib/invoices";
 import { residentCodeFor } from "@/lib/resident-billing.functions";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -1270,98 +1270,174 @@ const asRM = (n: number) => `RM${n.toFixed(2)}`;
  * Never below what is already in: an invoice for less than has been paid puts
  * the student in credit, and there is nothing here that holds credit.
  */
+type InvoiceRewrite = {
+  invoiceId: string;
+  values: Record<string, unknown>;
+  items: InvoiceLine[];
+  invoiceDate?: string | undefined;
+  paymentTerms?: string | undefined;
+};
+
+/**
+ * Change an invoice's lines and details, keeping the old one as a version.
+ *
+ * Shared by editing an invoice and by Update quote on a booking, so both are
+ * held to the same rules - refused once more than the booking fee is paid,
+ * never below what has been paid - and both leave the same history.
+ */
+async function rewriteInvoice(supabase: any, data: InvoiceRewrite) {
+  const { data: inv } = await supabase
+    .from("invoices")
+    .select("id, number, enquiry_id, status, invoice_type")
+    .eq("id", data.invoiceId)
+    .maybeSingle();
+  if (!inv || (inv as any).status === "void") throw new Error("Invoice not found");
+  // the same tolerance the fee is tested with everywhere else, so one booking
+  // is never over the fee here and under it there
+  const paidSoFar = await paidTotalOnInvoice(supabase, data.invoiceId);
+  if (paidSoFar > BOOKING_FEE + 0.005) {
+    throw new Error(
+      `More than the ${asRM(BOOKING_FEE)} booking fee has been paid on this invoice, so it can no longer be changed`,
+    );
+  }
+  if (
+    paidSoFar > 0 &&
+    data.items.reduce((n, l) => n + Number(l.amount || 0) * lineQty(l.quantity), 0) + 0.005 <
+      paidSoFar
+  ) {
+    throw new Error(
+      `${asRM(paidSoFar)} has been paid on this invoice, so it cannot be changed to less than that`,
+    );
+  }
+  // an invoice on a booking is changed by the booking's staff member
+  const staff = (inv as any).enquiry_id ? await staffFor(supabase, (inv as any).enquiry_id) : "";
+
+  const enquiryId = (inv as any).enquiry_id as string | null;
+  const lines = data.items;
+  const invoiceDate = data.invoiceDate || new Date().toISOString().slice(0, 10);
+
+  const { error } = await supabase
+    .from("invoices")
+    .update({
+      ...data.values,
+      ...nextPaymentValues(data.values, lines),
+      invoice_date: invoiceDate,
+      payment_terms: data.paymentTerms || "NET15",
+      issued_at: new Date(`${invoiceDate}T00:00:00Z`).toISOString(),
+      total: lines.reduce((n, l) => n + Number(l.amount || 0) * lineQty(l.quantity), 0),
+      deposits_total: lines
+        .filter((l) => l.kind === "refundable")
+        .reduce((n, l) => n + Number(l.amount || 0) * lineQty(l.quantity), 0),
+      updated_at: new Date().toISOString(),
+    } as any)
+    .eq("id", data.invoiceId);
+  if (error) throw new Error(error.message);
+
+  const { error: dropErr } = await supabase
+    .from("invoice_items")
+    .delete()
+    .eq("invoice_id", data.invoiceId);
+  if (dropErr) throw new Error(dropErr.message);
+  if (lines.length) {
+    const { error: itemErr } = await supabase.from("invoice_items").insert(
+      lines.map((l, i) => ({
+        invoice_id: data.invoiceId,
+        label: l.label,
+        kind: l.kind,
+        amount: Number(l.amount || 0),
+        quantity: lineQty(l.quantity),
+        sort_order: i,
+      })) as any,
+    );
+    if (itemErr) throw new Error(itemErr.message);
+  }
+  if (enquiryId) {
+    await logBookingEvent(supabase, {
+      enquiryId,
+      staff,
+      kind: "invoice_edited",
+      ref: String((inv as any).number ?? ""),
+      summary: `Invoice ${(inv as any).number} edited · ${rm(lines.reduce((n, l) => n + Number(l.amount || 0), 0))}`,
+    });
+  }
+  // the edited invoice becomes the next revision of the one raised before it
+  {
+    const { recordInvoiceVersion } = await import("@/lib/document-versions.functions");
+    await recordInvoiceVersion(supabase, data.invoiceId);
+  }
+  return { id: data.invoiceId, number: String((inv as any).number ?? "") };
+}
+
 export const updateInvoice = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: {
-      invoiceId: string;
-      values: Record<string, unknown>;
-      items: InvoiceLine[];
-      invoiceDate?: string;
-      paymentTerms?: string;
-    }) => data,
-  )
+  .inputValidator((data: InvoiceRewrite) => data)
+  .handler(async ({ data }) => rewriteInvoice(await admin(), data));
+
+/**
+ * Bring a booking's first invoice into line with its quote, after Update quote.
+ *
+ * Nothing to do when no invoice has been raised yet - the invoice will be
+ * worked out from the stay when it is. Refused, like any edit, once more than
+ * the booking fee is paid. The discount already on the invoice is kept: it was
+ * given to the student, and changing the stay does not take it away.
+ */
+export const syncInvoiceWithQuote = createServerFn({ method: "POST" })
+  .inputValidator((data: { enquiryId: string }) => data)
   .handler(async ({ data }) => {
     const supabase = await admin();
-    const { data: inv } = await supabase
-      .from("invoices")
-      .select("id, number, enquiry_id, status, invoice_type")
-      .eq("id", data.invoiceId)
+    const { firstInvoiceLines } = await import("@/lib/invoice-lines");
+    const { bookingAddonNames, selectedBookingAddons } = await import("@/lib/booking-quote");
+
+    const { data: row } = await supabase
+      .from("enquiries")
+      .select("*")
+      .eq("id", data.enquiryId)
       .maybeSingle();
-    if (!inv || (inv as any).status === "void") throw new Error("Invoice not found");
-    // the same tolerance the fee is tested with everywhere else, so one booking
-    // is never over the fee here and under it there
-    const paidSoFar = await paidTotalOnInvoice(supabase, data.invoiceId);
-    if (paidSoFar > BOOKING_FEE + 0.005) {
-      throw new Error(
-        `More than the ${asRM(BOOKING_FEE)} booking fee has been paid on this invoice, so it can no longer be changed`,
-      );
-    }
-    if (
-      paidSoFar > 0 &&
-      data.items.reduce((n, l) => n + Number(l.amount || 0) * lineQty(l.quantity), 0) + 0.005 <
-        paidSoFar
-    ) {
-      throw new Error(
-        `${asRM(paidSoFar)} has been paid on this invoice, so it cannot be changed to less than that`,
-      );
-    }
-    // an invoice on a booking is changed by the booking's staff member
-    const staff = (inv as any).enquiry_id ? await staffFor(supabase, (inv as any).enquiry_id) : "";
+    if (!row) throw new Error("Booking not found");
+    const r = row as any;
 
-    const enquiryId = (inv as any).enquiry_id as string | null;
-    const lines = data.items;
-    const invoiceDate = data.invoiceDate || new Date().toISOString().slice(0, 10);
+    const { data: invs } = await liveInvoices(supabase, "*")
+      .eq("enquiry_id", data.enquiryId)
+      .eq("invoice_type", "initial")
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const inv = ((invs ?? []) as any[])[0];
+    if (!inv) return { ok: true as const, invoice: null };
 
-    const { error } = await supabase
-      .from("invoices")
-      .update({
-        ...data.values,
-        ...nextPaymentValues(data.values, lines),
-        invoice_date: invoiceDate,
-        payment_terms: data.paymentTerms || "NET15",
-        issued_at: new Date(`${invoiceDate}T00:00:00Z`).toISOString(),
-        total: lines.reduce((n, l) => n + Number(l.amount || 0) * lineQty(l.quantity), 0),
-        deposits_total: lines
-          .filter((l) => l.kind === "refundable")
-          .reduce((n, l) => n + Number(l.amount || 0) * lineQty(l.quantity), 0),
-        updated_at: new Date().toISOString(),
-      } as any)
-      .eq("id", data.invoiceId);
-    if (error) throw new Error(error.message);
+    const property = r.quote_snapshot?.property;
+    const listRent = Number(r.monthly_rent || r.quote_snapshot?.quote?.monthlyAfter || 0);
+    const discount = discountPerMonth(listRent, inv.discount_type, Number(inv.discount_value || 0));
+    const rent = listRent - discount;
+    const frequency = String(r.payment_term || inv.payment_frequency || "bimonthly");
+    const lines = property
+      ? firstInvoiceLines({
+          property,
+          rent,
+          addons: selectedBookingAddons(property, bookingAddonNames(r)),
+          term: r.term === "short" ? "short" : "long",
+          moveIn: r.move_in,
+          moveOut: r.move_out,
+          frequency: frequency as any,
+        })
+      : null;
+    if (!lines)
+      throw new Error("The stay has no rent or dates, so the invoice could not be worked out");
 
-    const { error: dropErr } = await supabase
-      .from("invoice_items")
-      .delete()
-      .eq("invoice_id", data.invoiceId);
-    if (dropErr) throw new Error(dropErr.message);
-    if (lines.length) {
-      const { error: itemErr } = await supabase.from("invoice_items").insert(
-        lines.map((l, i) => ({
-          invoice_id: data.invoiceId,
-          label: l.label,
-          kind: l.kind,
-          amount: Number(l.amount || 0),
-          quantity: lineQty(l.quantity),
-          sort_order: i,
-        })) as any,
-      );
-      if (itemErr) throw new Error(itemErr.message);
-    }
-    if (enquiryId) {
-      await logBookingEvent(supabase, {
-        enquiryId,
-        staff,
-        kind: "invoice_edited",
-        ref: String((inv as any).number ?? ""),
-        summary: `Invoice ${(inv as any).number} edited · ${rm(lines.reduce((n, l) => n + Number(l.amount || 0), 0))}`,
-      });
-    }
-    // the edited invoice becomes the next revision of the one raised before it
-    {
-      const { recordInvoiceVersion } = await import("@/lib/document-versions.functions");
-      await recordInvoiceVersion(supabase, data.invoiceId);
-    }
-    return { id: data.invoiceId, number: String((inv as any).number ?? "") };
+    const saved = await rewriteInvoice(supabase, {
+      invoiceId: inv.id,
+      items: lines,
+      invoiceDate: String(inv.invoice_date ?? "") || undefined,
+      paymentTerms: String(inv.payment_terms ?? "") || undefined,
+      values: {
+        occupancy: r.occupancy ?? inv.occupancy ?? "",
+        residence_name: r.residence_name ?? inv.residence_name ?? "",
+        tenancy_start: r.move_in ?? null,
+        tenancy_end: r.move_out ?? null,
+        monthly_rent: rent,
+        list_rent: discount > 0 ? listRent : null,
+        payment_frequency: frequency,
+      },
+    });
+    return { ok: true as const, invoice: saved };
   });
 
 /**

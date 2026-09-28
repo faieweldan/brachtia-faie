@@ -22,6 +22,7 @@ import { SCHEDULES } from "@/lib/reference-data";
 import { INVOICE_TERMS } from "@/lib/invoice-terms";
 import { nextRentalPayment } from "@/lib/rental-schedule";
 import { bookingAddonNames, selectedBookingAddons } from "@/lib/booking-quote";
+import { firstInvoiceLines } from "@/lib/invoice-lines";
 import { Choice } from "@/components/admin/Choice";
 import {
   BOOKING_FEE,
@@ -252,25 +253,22 @@ function InvoiceGenerator() {
     .filter((a) => a.chargeType === "monthly")
     .reduce((sum, a) => sum + a.price, 0);
 
-  /* Everything on the invoice is derived from monthly rent + payment frequency. */
+  /*
+   * Everything on the invoice is derived from monthly rent + payment frequency,
+   * by the same rule Update quote uses on the booking (invoice-lines.ts). The
+   * lowered rent prices the whole invoice: advance rent and the deposits with it.
+   */
   const calculated = useMemo<Line[] | null>(() => {
     if (!property || !rent || !r?.move_in || !r?.move_out) return null;
-    const term = (r.term === "short" ? "short" : "long") as ContractTerm;
-    // every cycle prices itself now, so monthly no longer borrows the bi-monthly
-    // one and have its advance line filtered back out afterwards
-    const cycle = frequency as PaymentTerm;
-    // the lowered rent prices the whole invoice: advance rent and the deposits with it
-    // Booking rent already includes recurring extras. Add them only once;
-    // keep their names/prices when rebuilding one-time charges as well.
-    const baseRent = Math.max(0, rent - monthlyExtras);
-    const q = stayQuote(property, baseRent, term, r.move_in, r.move_out, cycle, selectedAddons);
-    if (!q) return null;
-    return q.firstPayment.map((l) => ({
-      label: l.label,
-      kind: String(l.kind),
-      amount: Number(l.amount || 0),
-      quantity: 1,
-    }));
+    return firstInvoiceLines({
+      property,
+      rent,
+      addons: selectedAddons,
+      term: (r.term === "short" ? "short" : "long") as ContractTerm,
+      moveIn: r.move_in,
+      moveOut: r.move_out,
+      frequency: frequency as PaymentTerm,
+    });
   }, [property, rent, monthlyExtras, selectedAddons, frequency, r?.move_in, r?.move_out, r?.term]);
 
   const snapshotLines = useMemo<Line[]>(

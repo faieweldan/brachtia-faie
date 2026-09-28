@@ -88,6 +88,7 @@ import {
   cancelViewing,
   generateViewingToken,
   getBookingBilling,
+  syncInvoiceWithQuote,
   duplicateCandidates,
   duplicatesOf,
   dismissDuplicate,
@@ -1239,6 +1240,28 @@ function BookingDetail() {
             assignedBed={assignedBed}
             canEdit={Boolean(row.assigned_staff)}
             onBlocked={() => void needStaff()}
+            invoice={
+              (billing as any)?.invoice
+                ? {
+                    number: String((billing as any).invoice.number ?? ""),
+                    paid: Number((billing as any).paid ?? 0),
+                  }
+                : null
+            }
+            onQuoteUpdated={async () => {
+              try {
+                await syncInvoiceWithQuote({ data: { enquiryId: id } });
+              } catch (err) {
+                // the quote is saved; say plainly that the invoice was not
+                toast.error("The quote was updated, but the invoice was not", {
+                  description: err instanceof Error ? err.message : undefined,
+                });
+                throw err;
+              } finally {
+                void queryClient.invalidateQueries({ queryKey: ["admin"] });
+                void queryClient.invalidateQueries({ queryKey: ["billing-ledger"] });
+              }
+            }}
             onSave={async (patch) => {
               // a new room type, unit type, residence or occupancy: the reserved room was
               // picked for the old one, so it is released first and a matching one reserved again
