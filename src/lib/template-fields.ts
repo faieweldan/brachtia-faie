@@ -60,8 +60,8 @@ const DEFAULT_RENTAL_TERMS: Record<string, { included: string[]; excluded: strin
 };
 const rentalTermList = (c: MappingContext, part: "included" | "excluded") => {
   const terms = (c.residence?.["rental_terms"] as any) ?? DEFAULT_RENTAL_TERMS;
-  const kind = c.unit?.["whole_unit"] ? "unit" : "room";
-  const list = terms?.[kind]?.[part] ?? DEFAULT_RENTAL_TERMS[kind][part];
+  const kind: "room" | "unit" = c.unit?.["whole_unit"] ? "unit" : "room";
+  const list = terms?.[kind]?.[part] ?? DEFAULT_RENTAL_TERMS[kind]![part];
   return Array.isArray(list) ? list.join(", ") : "";
 };
 
