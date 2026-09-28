@@ -276,7 +276,7 @@ async function recordCheckInAppointment(
     // the one they already asked for, if any - found before anything is written
     const { data: mine } = await supabase
       .from("appointments")
-      .select("id")
+      .select("id, starts_at, status")
       .eq("type_slug", CHECKIN_TYPE)
       .eq("resident_id", residentId)
       .neq("status", "cancelled")
@@ -315,7 +315,6 @@ async function recordCheckInAppointment(
       mode: "in_person",
       starts_at: startsAt,
       duration_minutes: Number((type as any)?.duration_minutes ?? 60),
-      status: "pending",
       resident_id: residentId,
       enquiry_id: (resident as any).enquiry_id ?? null,
       residence_slug: String((enquiry as any)?.residence_slug ?? ""),
@@ -329,9 +328,20 @@ async function recordCheckInAppointment(
     };
 
     if (existing) {
-      await supabase.from("appointments").update(row).eq("id", existing.id);
+      /*
+       * Saving the form again must not undo what admin has done. It used to
+       * write "pending" every time, so a student fixing a typo in their phone
+       * number knocked an already confirmed check-in back to pending. Only a
+       * new time makes it new again - that is a change admin has to see.
+       */
+      const moved =
+        new Date(String(existing.starts_at)).getTime() !== new Date(startsAt).getTime();
+      await supabase
+        .from("appointments")
+        .update(moved ? { ...row, status: "new" } : row)
+        .eq("id", existing.id);
     } else {
-      await supabase.from("appointments").insert(row);
+      await supabase.from("appointments").insert({ ...row, status: "new" });
     }
   } catch (err) {
     console.warn("check-in appointment not recorded", err);

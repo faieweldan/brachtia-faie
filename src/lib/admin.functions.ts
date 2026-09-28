@@ -22,7 +22,8 @@ export const adminOverview = createServerFn({ method: "GET" })
       supabase
         .from("appointments")
         .select("id", { count: "exact", head: true })
-        .eq("status", "pending"),
+        // new and pending both still need somebody to act on them
+        .in("status", ["new", "pending"]),
       supabase
         .from("appointments")
         .select("*")
@@ -440,6 +441,25 @@ export const saveAppointment = createServerFn({ method: "POST" })
       ? supabase.from("appointments").update(values as any).eq("id", data.id)
       : supabase.from("appointments").insert(values as any);
     const { error } = await q;
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+/**
+ * Admin has opened a new appointment, so it is no longer new.
+ *
+ * Only a "new" one is moved. If somebody changed it in the meantime - confirmed
+ * it, cancelled it - their answer stands.
+ */
+export const markAppointmentSeen = createServerFn({ method: "POST" })
+  .inputValidator((data: { id: string }) => data)
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    const { error } = await supabase
+      .from("appointments")
+      .update({ status: "pending", updated_at: new Date().toISOString() } as any)
+      .eq("id", data.id)
+      .eq("status", "new");
     if (error) throw new Error(error.message);
     return { ok: true };
   });

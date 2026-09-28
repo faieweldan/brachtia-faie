@@ -331,7 +331,8 @@ export const bookAppointment = createServerFn({ method: "POST" })
       mode: data.mode,
       starts_at: data.startsAt,
       duration_minutes: (type?.duration_minutes as number | undefined) ?? 30,
-      status: "pending",
+      // a student's own booking: new until admin opens it
+      status: "new",
       full_name: data.fullName,
       email: data.email,
       phone: data.phone,

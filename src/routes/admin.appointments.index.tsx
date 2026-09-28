@@ -23,6 +23,7 @@ import { toast } from "sonner";
 
 import {
   listAppointments,
+  markAppointmentSeen,
   saveAppointment,
   deleteAppointment,
   listEnquiries,
@@ -58,9 +59,16 @@ export const Route = createFileRoute("/admin/appointments/")({
   component: AppointmentsPage,
 });
 
-const STATUSES = ["pending", "confirmed", "completed", "no_show", "cancelled"] as const;
+/*
+ * "new" is what a student's own booking arrives as, so admin can tell what has
+ * come in since they last looked - the date alone does not say that. Opening it
+ * moves it to "pending". Anything admin makes by hand starts at "pending",
+ * because admin already knows about it.
+ */
+const STATUSES = ["new", "pending", "confirmed", "completed", "no_show", "cancelled"] as const;
 
 const STATUS_LABEL: Record<string, string> = {
+  new: "New",
   pending: "Pending",
   confirmed: "Confirmed",
   completed: "Completed",
@@ -69,6 +77,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const STATUS_PILL: Record<string, string> = {
+  new: "bg-sky-100 text-sky-800",
   pending: "bg-amber-100 text-amber-800",
   confirmed: "bg-emerald-100 text-emerald-800",
   completed: "bg-slate-200 text-slate-700",
@@ -328,6 +337,10 @@ function AppointmentsPage() {
       }
     };
     return [...filtered].sort((a, b) => {
+      // anything nobody has opened yet stays at the top, whatever the sort
+      const aNew = a.status === "new" ? 0 : 1;
+      const bNew = b.status === "new" ? 0 : 1;
+      if (aNew !== bNew) return aNew - bNew;
       const x = val(a);
       const y = val(b);
       if (x === y) return (a.starts_at ?? "").localeCompare(b.starts_at ?? "");
@@ -380,6 +393,13 @@ function AppointmentsPage() {
   }
 
   function openEdit(a: any) {
+    // opening it is noticing it: it stops being new, for every admin
+    const seen = a.status === "new";
+    if (seen) {
+      void markAppointmentSeen({ data: { id: a.id } }).then(() =>
+        queryClient.invalidateQueries({ queryKey: ["admin"] }),
+      );
+    }
     const d = new Date(a.starts_at);
     setForm({
       id: a.id,
@@ -400,7 +420,7 @@ function AppointmentsPage() {
         timeZone: "Asia/Kuala_Lumpur",
       }),
       duration_minutes: a.duration_minutes ?? 30,
-      status: a.status ?? "pending",
+      status: seen ? "pending" : (a.status ?? "pending"),
       assigned_staff: a.assigned_staff ?? "",
       full_name: a.full_name ?? "",
       email: a.email ?? "",
