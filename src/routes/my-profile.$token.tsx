@@ -26,7 +26,7 @@ import { compressImage, readableSize } from "@/lib/compress";
 import { DeclarationSection } from "@/components/site/DeclarationSection";
 import { FormSteps } from "@/components/site/FormSteps";
 import { CheckInStep } from "@/components/site/CheckInStep";
-import { todayISO, type CheckInChoice } from "@/lib/checkin";
+import type { CheckInChoice } from "@/lib/checkin";
 import { DateInput } from "@/components/ui/date-input";
 import { downloadIcs, googleCalendarUrl, type CalendarEvent } from "@/lib/calendar";
 import { RESIDENT_DOCUMENTS } from "@/lib/resident-reading";
@@ -41,9 +41,11 @@ import {
   splitPhone,
 } from "@/lib/reference-data";
 import {
+  MIN_RESIDENT_AGE,
   RESIDENT_SECTIONS,
   emailProblem,
   fieldShown,
+  latestBirthDate,
   formatNric,
   nricProblem,
   phoneDigits,
@@ -128,6 +130,9 @@ function problemFor(f: ResidentField, values: ProfileLinkFields): string {
   if (f.key === "medical_detail" && !value.trim())
     return "Please tell us what the condition or allergy is.";
   if (!value.trim()) return `${f.label} is needed.`;
+  // residents are at least sixteen
+  if (f.key === "dob" && value > latestBirthDate())
+    return `Residents must be at least ${MIN_RESIDENT_AGE} years old.`;
   if (f.kind === "email") return emailProblem(value);
   if (f.kind === "phone") {
     const { dial, rest } = splitPhone(value);
@@ -793,11 +798,11 @@ function MyProfilePage() {
                         />
                       )
                     ) : f.kind === "date" ? (
-                      // day first whatever the phone's language, and a
-                      // birthday cannot be later than today
+                      // day first whatever the phone's language, and no
+                      // birthday that makes them younger than sixteen
                       <DateInput
                         value={value}
-                        max={todayISO()}
+                        max={latestBirthDate()}
                         aria-label={f.label}
                         data-invalid={problem ? "true" : undefined}
                         className={problem ? "border-destructive" : undefined}
