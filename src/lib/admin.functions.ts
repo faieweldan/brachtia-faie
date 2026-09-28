@@ -1612,3 +1612,119 @@ export const createResidentFromBooking = createServerFn({ method: "POST" })
     const { residentFromBooking } = await import("@/lib/booking-lifecycle");
     return residentFromBooking(supabase, data.enquiryId);
   });
+
+/* ---------------- arrival check-in ---------------- */
+
+export type CheckInContext = {
+  resident: { id: string; name: string; code: string } | null;
+  residenceName: string;
+  place: string;
+  tenancy: { start: string; end: string } | null;
+  tasks: Record<string, { done: boolean; by: string; at: string }>;
+  /** false until the checkin_tasks column exists on this database */
+  tasksReady: boolean;
+};
+
+/**
+ * Everything the check-in window shows about who is arriving and where to.
+ * Read fresh each time it opens, because a bed or tenancy can change after the
+ * student asked for their slot.
+ */
+export const getCheckInContext = createServerFn({ method: "GET" })
+  .inputValidator((data: { appointmentId: string }) => data)
+  .handler(async ({ data }): Promise<CheckInContext> => {
+    const supabase = await admin();
+    const { heldPlace, placeLabel } = await import("@/lib/held-place");
+
+    // "*" rather than naming the column, so a database that has not had the
+    // check-in migration yet still answers - tasksReady then says so
+    const { data: appt, error } = await supabase
+      .from("appointments")
+      .select("*")
+      .eq("id", data.appointmentId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    const a = (appt ?? {}) as any;
+    const tasksReady = Object.prototype.hasOwnProperty.call(a, "checkin_tasks");
+
+    let resident: CheckInContext["resident"] = null;
+    let enquiryId = String(a.enquiry_id ?? "");
+    let tenancy: CheckInContext["tenancy"] = null;
+    const residentId = String(a.resident_id ?? "");
+    if (residentId) {
+      const { data: r } = await supabase
+        .from("residents")
+        .select("id, full_name, resident_code, quickbooks_id, enquiry_id")
+        .eq("id", residentId)
+        .maybeSingle();
+      if (r) {
+        resident = {
+          id: String(r.id),
+          name: String(r.full_name ?? ""),
+          code: String(r.resident_code || r.quickbooks_id || ""),
+        };
+        enquiryId = enquiryId || String(r.enquiry_id ?? "");
+      }
+      const { data: t } = await supabase
+        .from("tenancies")
+        .select("start_date, end_date")
+        .eq("resident_id", residentId)
+        .order("start_date", { ascending: false })
+        .limit(1);
+      const row = ((t ?? []) as any[])[0];
+      if (row) tenancy = { start: String(row.start_date ?? ""), end: String(row.end_date ?? "") };
+    }
+
+    const place = enquiryId ? await heldPlace(supabase, enquiryId) : null;
+    return {
+      resident,
+      residenceName: String(a.residence_name ?? ""),
+      place: place ? placeLabel(place.unitNo, place.roomLetter) : "",
+      tenancy,
+      tasks: (tasksReady && a.checkin_tasks && typeof a.checkin_tasks === "object"
+        ? a.checkin_tasks
+        : {}) as CheckInContext["tasks"],
+      tasksReady,
+    };
+  });
+
+/**
+ * Tick or untick one check-in task, in the name of the staff member assigned
+ * to the appointment - the same rule the booking trail follows: a step with no
+ * name against it is a step nobody can answer for.
+ */
+export const setCheckInTask = createServerFn({ method: "POST" })
+  .inputValidator((data: { appointmentId: string; key: string; done: boolean }) => data)
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    const { CHECKIN_TASKS } = await import("@/lib/checkin-tasks");
+    if (!CHECKIN_TASKS.some((t) => t.key === data.key))
+      return { ok: false as const, error: "Unknown task." };
+
+    const { data: appt, error } = await supabase
+      .from("appointments")
+      .select("*")
+      .eq("id", data.appointmentId)
+      .maybeSingle();
+    if (error) return { ok: false as const, error: error.message };
+    const a = (appt ?? {}) as any;
+    if (!Object.prototype.hasOwnProperty.call(a, "checkin_tasks"))
+      return {
+        ok: false as const,
+        error: "The task list needs a database update before it can be saved.",
+      };
+    const staff = String(a.assigned_staff ?? "").trim();
+    if (!staff)
+      return { ok: false as const, error: "Assign a staff member and save the appointment first - they are who ticks it." };
+
+    const tasks = {
+      ...((a.checkin_tasks ?? {}) as Record<string, { done: boolean; by: string; at: string }>),
+    };
+    tasks[data.key] = { done: data.done, by: staff, at: new Date().toISOString() };
+    const { error: saveError } = await supabase
+      .from("appointments")
+      .update({ checkin_tasks: tasks, updated_at: new Date().toISOString() } as any)
+      .eq("id", data.appointmentId);
+    if (saveError) return { ok: false as const, error: saveError.message };
+    return { ok: true as const, tasks };
+  });

@@ -32,6 +32,7 @@ import {
 import { fetchDaySlots } from "@/lib/public.functions";
 import { formatSlot } from "@/lib/slots";
 import { useOps } from "@/lib/ops-store";
+import { CheckInPanel } from "@/components/admin/CheckInPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -1180,6 +1181,11 @@ function AppointmentsPage() {
                         </div>
                       </div>
                     </section>
+
+                    {/* a check-in also needs where they are going and what to do */}
+                    {form.id && form.type_slug === "check-in" ? (
+                      <CheckInPanel appointmentId={form.id} />
+                    ) : null}
 
                     {/* Person */}
                     <section className="overflow-hidden rounded-xl border border-border">
