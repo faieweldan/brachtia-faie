@@ -120,7 +120,7 @@ export const saveDraft = createServerFn({ method: "POST" })
     const next = Math.max(0, ...all.map((r) => r.version)) + 1;
     const { data: ins, error } = await db
       .from("template_versions")
-      .insert({ template_id: data.templateId, version: next, status: "draft", file_path: from.file_path, file_name: from.file_name, ...patch })
+      .insert({ template_id: data.templateId, version: next, status: "draft", file_path: from?.file_path ?? "", file_name: from?.file_name ?? "", ...patch })
       .select("id")
       .single();
     if (error) throw new Error("Could not create draft");
