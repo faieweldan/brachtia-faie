@@ -54,6 +54,7 @@ export type Database = {
         Row: {
           admin_notes: string
           assigned_staff: string
+          checkin_tasks: Json
           company: string
           created_at: string
           current_status: string
@@ -92,6 +93,7 @@ export type Database = {
         Insert: {
           admin_notes?: string
           assigned_staff?: string
+          checkin_tasks?: Json
           company?: string
           created_at?: string
           current_status?: string
@@ -130,6 +132,7 @@ export type Database = {
         Update: {
           admin_notes?: string
           assigned_staff?: string
+          checkin_tasks?: Json
           company?: string
           created_at?: string
           current_status?: string
@@ -697,10 +700,65 @@ export type Database = {
           },
         ]
       }
+      invoice_versions: {
+        Row: {
+          created_at: string
+          created_by: string
+          document: Json
+          id: string
+          invoice_id: string
+          issued_as: string
+          number: string
+          root_invoice_id: string | null
+          total: number
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          document?: Json
+          id?: string
+          invoice_id: string
+          issued_as?: string
+          number?: string
+          root_invoice_id?: string | null
+          total?: number
+          version: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          document?: Json
+          id?: string
+          invoice_id?: string
+          issued_as?: string
+          number?: string
+          root_invoice_id?: string | null
+          total?: number
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_versions_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_versions_root_invoice_id_fkey"
+            columns: ["root_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoices: {
         Row: {
           auto_scheduled: boolean
           bill_on: string | null
+          company: string
           created_at: string
           deposits_total: number
           discount_note: string
@@ -721,6 +779,7 @@ export type Database = {
           notes: string
           number: string
           occupancy: string
+          occupation: string
           payment_frequency: string
           payment_terms: string
           period_end: string | null
@@ -742,6 +801,7 @@ export type Database = {
         Insert: {
           auto_scheduled?: boolean
           bill_on?: string | null
+          company?: string
           created_at?: string
           deposits_total?: number
           discount_note?: string
@@ -762,6 +822,7 @@ export type Database = {
           notes?: string
           number?: string
           occupancy?: string
+          occupation?: string
           payment_frequency?: string
           payment_terms?: string
           period_end?: string | null
@@ -783,6 +844,7 @@ export type Database = {
         Update: {
           auto_scheduled?: boolean
           bill_on?: string | null
+          company?: string
           created_at?: string
           deposits_total?: number
           discount_note?: string
@@ -803,6 +865,7 @@ export type Database = {
           notes?: string
           number?: string
           occupancy?: string
+          occupation?: string
           payment_frequency?: string
           payment_terms?: string
           period_end?: string | null
@@ -939,6 +1002,53 @@ export type Database = {
             columns: ["resident_id"]
             isOneToOne: false
             referencedRelation: "residents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quote_versions: {
+        Row: {
+          created_at: string
+          created_by: string
+          enquiry_id: string
+          id: string
+          issued_as: string
+          monthly_rent: number
+          reference: string
+          snapshot: Json
+          total_upfront: number
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          enquiry_id: string
+          id?: string
+          issued_as?: string
+          monthly_rent?: number
+          reference?: string
+          snapshot?: Json
+          total_upfront?: number
+          version: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          enquiry_id?: string
+          id?: string
+          issued_as?: string
+          monthly_rent?: number
+          reference?: string
+          snapshot?: Json
+          total_upfront?: number
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quote_versions_enquiry_id_fkey"
+            columns: ["enquiry_id"]
+            isOneToOne: false
+            referencedRelation: "enquiries"
             referencedColumns: ["id"]
           },
         ]
@@ -1235,6 +1345,10 @@ export type Database = {
       residents: {
         Row: {
           address: string
+          checkin_asked_at: string | null
+          checkin_on: string | null
+          checkin_remind: boolean
+          checkin_slot: string
           company: string
           country: string
           course: string
@@ -1295,6 +1409,10 @@ export type Database = {
         }
         Insert: {
           address?: string
+          checkin_asked_at?: string | null
+          checkin_on?: string | null
+          checkin_remind?: boolean
+          checkin_slot?: string
           company?: string
           country?: string
           course?: string
@@ -1355,6 +1473,10 @@ export type Database = {
         }
         Update: {
           address?: string
+          checkin_asked_at?: string | null
+          checkin_on?: string | null
+          checkin_remind?: boolean
+          checkin_slot?: string
           company?: string
           country?: string
           course?: string
