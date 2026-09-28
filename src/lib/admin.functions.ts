@@ -243,28 +243,25 @@ export const updateEnquiry = createServerFn({ method: "POST" })
           patch["unit_type"] = room.unit_type;
           patch["room_name"] = room.name;
           patch["term"] = term;
-          patch["monthly_rent"] = quote?.monthlyAfter ?? rent;
-          patch["first_payment"] = quote?.totalUpfront ?? 0;
-          patch["quote_snapshot"] = {
-            ...(current.quote_snapshot && typeof current.quote_snapshot === "object" ? current.quote_snapshot : {}),
-            addons: chosen,
-            paymentTerm,
-            property,
-            room: roomType,
-            occupancy,
-            term,
-            moveIn,
-            moveOut,
-            quote,
-          };
+          // the card already priced the stay - the assigned bed's rent, say -
+          // so its figures stand; these are only filled when it sent none
+          if (data.monthlyRent === undefined) patch["monthly_rent"] = quote?.monthlyAfter ?? rent;
+          if (data.firstPayment === undefined) patch["first_payment"] = quote?.totalUpfront ?? 0;
+          /*
+           * The quote itself is NOT rewritten here. Save on Stay details saves
+           * the stay; the quote only changes when admin presses Update quote,
+           * which sends it. Rebuilding it on every save meant the quote was
+           * never out of date - so "Quote is out of date" never showed, and
+           * the quote changed under a student without anybody choosing to.
+           */
         }
       }
     }
     const { error } = await supabase.from("enquiries").update(patch as any).eq("id", data.id);
     if (error) throw new Error(error.message);
     // a changed quote becomes the next revision of the one the student asked
-    // for - recorded here, where both the card's own quote and the one worked
-    // out above have landed, so neither can go unrecorded
+    // for - recorded here, where Update quote's new quote lands. A plain save
+    // of the stay no longer changes the quote, so it records nothing
     if (patch["quote_snapshot"]) {
       const { data: saved } = await supabase
         .from("enquiries")
