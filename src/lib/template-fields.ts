@@ -50,6 +50,21 @@ const payLines = (c: MappingContext): { label: string; amount: number }[] =>
 const payLine = (prefix: string) => (c: MappingContext) =>
   money(payLines(c).find((l) => String(l.label).startsWith(prefix))?.amount);
 
+/**
+ * Inclusions/exclusions from the residence's rental_terms, picked by rental
+ * type: whole-unit rentals use the "unit" lists, room rentals the "room" lists.
+ */
+const DEFAULT_RENTAL_TERMS: Record<string, { included: string[]; excluded: string[] }> = {
+  room: { included: ["Wi-Fi", "Basic Common Area Cleaning", "Sewage Fee"], excluded: ["Electricity", "Water Charges"] },
+  unit: { included: ["Wi-Fi"], excluded: ["Basic Common Area Cleaning", "Electricity", "Water", "Sewerage Charges"] },
+};
+const rentalTermList = (c: MappingContext, part: "included" | "excluded") => {
+  const terms = (c.residence?.["rental_terms"] as any) ?? DEFAULT_RENTAL_TERMS;
+  const kind = c.unit?.["whole_unit"] ? "unit" : "room";
+  const list = terms?.[kind]?.[part] ?? DEFAULT_RENTAL_TERMS[kind][part];
+  return Array.isArray(list) ? list.join(", ") : "";
+};
+
 export const TEMPLATE_FIELDS: TemplateField[] = [
   // — Resident Record: everything on the profile —
   { key: "resident_full_name", label: "Full name", source: "Resident Record", get: r("full_name") },
