@@ -109,6 +109,22 @@ export function declarationBody(): string {
   ].join("\n");
 }
 
+/**
+ * The signed copy as the student is shown it.
+ *
+ * The stored text keeps the version and the company line - that is the record,
+ * and the server's hash is taken against it - but the student does not need to
+ * read either. Only the display drops them, so what was signed stays exactly
+ * what was signed.
+ */
+export function shownBody(body: string): string {
+  return body
+    .split("\n")
+    .filter((line) => !line.startsWith(`${LANDLORD_ENTITY} · Reg No`))
+    .map((line) => line.replace(/\s*\(v\d+\)\s*$/, ""))
+    .join("\n");
+}
+
 /** Names compared the way a person would: spacing and case do not matter. */
 export function nameMatches(typed: string, onFile: string): boolean {
   const norm = (v: string) => v.trim().replace(/\s+/g, " ").toLowerCase();

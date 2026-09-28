@@ -11,7 +11,7 @@ import {
   DECLARATION_INTRO,
   DECLARATION_TERMS,
   DECLARATION_TITLE,
-  LANDLORD_ENTITY,
+  shownBody,
   idMatches,
   nameMatches,
 } from "@/lib/declaration";
@@ -67,13 +67,12 @@ export function DeclarationSection({
                 year: "numeric",
                 hour: "2-digit",
                 minute: "2-digit",
-              })}{" "}
-              · version {signed.version}
+              })}
             </p>
           </div>
         </div>
         <pre className="mt-4 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
-          {signed.body}
+          {shownBody(signed.body)}
         </pre>
       </section>
     );
@@ -127,22 +126,18 @@ export function DeclarationSection({
       <h2 className="border-b border-border pb-3 text-base font-semibold tracking-tight text-brand-deep">
         {DECLARATION_TITLE}
       </h2>
-      <p className="mt-3 text-sm text-muted-foreground">
-        Please read each term and tick it. This is the agreement between you and {LANDLORD_ENTITY}.
-      </p>
-
       <p className="mt-4 text-sm leading-relaxed text-foreground">{DECLARATION_INTRO}</p>
 
       {/* a contract, laid out as one: each term gets the full width of the page
           and a rule of its own, rather than being packed into a list inside a
           box. Reading it is the point, so nothing crowds it. */}
-      <ul className="mt-5 -mx-5 divide-y divide-border border-y border-border sm:-mx-6">
+      <ul className="mt-5 divide-y divide-border overflow-hidden rounded-xl border border-border">
         {DECLARATION_TERMS.map((t, i) => (
           <li key={i}>
             {/* a ticked term tints, so progress down a long contract is visible
                 at a glance and the unread ones stand out */}
             <label
-              className={`flex cursor-pointer items-start gap-4 px-5 py-4 transition-colors sm:px-6 ${
+              className={`flex cursor-pointer items-start gap-4 px-4 py-4 transition-colors ${
                 ticked[i] ? "bg-brand-tint/70" : "hover:bg-muted/40"
               }`}
             >
