@@ -304,12 +304,7 @@ export const bookAppointment = createServerFn({ method: "POST" })
       .eq("slug", data.residenceSlug)
       .maybeSingle();
 
-    const typeSlug =
-      data.kind === "check-in"
-        ? "check-in"
-        : data.mode === "virtual"
-          ? "viewing-virtual"
-          : "viewing-in-person";
+    const typeSlug = data.mode === "virtual" ? "viewing-virtual" : "viewing-in-person";
     const { data: type } = await supabaseAdmin
       .from("appointment_types")
       .select("duration_minutes")

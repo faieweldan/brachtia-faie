@@ -1,7 +1,13 @@
-import type { ReactNode } from "react";
-import { Check, FileUp, Upload } from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
+import { Check, Eye, FileUp, Loader2, Pencil, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { BedStatus } from "@/lib/ops-store";
