@@ -4,8 +4,8 @@
  * left blank). Shared by the Templates workspace and the server.
  */
 
-export type FieldSource = "Resident Record" | "Booking Record" | "Room Record" | "Tenancy Record" | "Other";
-export const FIELD_SOURCES: FieldSource[] = ["Resident Record", "Booking Record", "Room Record", "Tenancy Record", "Other"];
+export type FieldSource = "Resident Record" | "Booking Record" | "Initial Payment" | "Room Record" | "Tenancy Record" | "Other";
+export const FIELD_SOURCES: FieldSource[] = ["Resident Record", "Booking Record", "Initial Payment", "Room Record", "Tenancy Record", "Other"];
 
 export type MappingContext = {
   resident: Record<string, any> | null;
