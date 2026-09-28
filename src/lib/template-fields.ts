@@ -35,6 +35,20 @@ const rent = (c: MappingContext) => c.bed?.["rent"] ?? c.room?.["rent"] ?? c.enq
 const start = (c: MappingContext) => c.tenancy?.["start_date"] ?? c.bed?.["tenancy_start"] ?? c.resident?.["move_in"];
 const end = (c: MappingContext) => c.tenancy?.["end_date"] ?? c.bed?.["tenancy_end"] ?? c.enquiry?.["move_out"];
 const r = (k: string) => (c: MappingContext) => c.resident?.[k];
+const e = (k: string) => (c: MappingContext) => c.enquiry?.[k];
+
+const money = (v: unknown) => {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "";
+  return `RM ${n.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
+/** The saved quote's first-payment lines, e.g. "Security deposit (2 months)". */
+const payLines = (c: MappingContext): { label: string; amount: number }[] =>
+  (c.enquiry?.["quote_snapshot"] as any)?.quote?.firstPayment ?? [];
+/** Amount of the first-payment line whose label starts with `prefix`. */
+const payLine = (prefix: string) => (c: MappingContext) =>
+  money(payLines(c).find((l) => String(l.label).startsWith(prefix))?.amount);
 
 export const TEMPLATE_FIELDS: TemplateField[] = [
   { key: "resident_full_name", label: "Full name", source: "Resident Record", get: r("full_name") },
