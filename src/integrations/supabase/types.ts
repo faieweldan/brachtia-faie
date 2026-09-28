@@ -1333,6 +1333,7 @@ export type Database = {
           points_of_interest: Json
           pricing: Json
           published: boolean
+          rental_terms: Json
           single_bed_options: Json
           slug: string
           sort_order: number
@@ -1368,6 +1369,7 @@ export type Database = {
           points_of_interest?: Json
           pricing?: Json
           published?: boolean
+          rental_terms?: Json
           single_bed_options?: Json
           slug: string
           sort_order?: number
@@ -1403,6 +1405,7 @@ export type Database = {
           points_of_interest?: Json
           pricing?: Json
           published?: boolean
+          rental_terms?: Json
           single_bed_options?: Json
           slug?: string
           sort_order?: number
