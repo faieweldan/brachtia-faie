@@ -15,7 +15,7 @@ import {
 } from "@/lib/tenancy-docs";
 import { generateDocumentPack } from "@/lib/tenancy-docs.functions";
 
-export const Route = createFileRoute("/admin/residents/$id/document-pack")({
+export const Route = createFileRoute("/admin/residents/$id_/document-pack")({
   component: DocumentPackPage,
 });
 
