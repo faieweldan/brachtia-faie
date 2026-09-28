@@ -372,51 +372,9 @@ export const getViewingLink = createServerFn({ method: "GET" })
       .maybeSingle();
     if (!row) return { ok: false as const };
 
-    /*
-     * The unit their bed sits in, once one is held for them. Named rather than
-     * implied: "Unit A-07-03 · Room C" is a place, where "Room C" on its own is
-     * a description. Empty until a bed is reserved, because inventing one would
-     * be worse than saying nothing.
-     */
-    /*
-     * Three plain lookups rather than one nested select. Embedding beds ->
-     * rooms -> units asks PostgREST to infer two relationships, and when that
-     * inference fails it fails as an empty result - which is exactly what a
-     * booking with no bed held looks like, so the page cannot tell the two
-     * apart and neither could anybody reading it.
-     *
-     * A bed still holding a released booking is skipped: changing rooms leaves
-     * the old one behind, and the student must be told where they are now.
-     */
-    let unitNo = "";
-    let roomLetter = "";
-    const { data: beds, error: bedError } = await supabaseAdmin
-      .from("beds")
-      .select("room_id, status")
-      .eq("enquiry_id", row.id);
-    if (bedError) console.warn("unit lookup failed at beds", bedError.message);
-    const held =
-      ((beds ?? []) as { room_id: string; status: string }[]).find((b) => b.status !== "vacant") ??
-      null;
-    if (held?.room_id) {
-      const { data: theRoom, error: roomError } = await supabaseAdmin
-        .from("rooms")
-        .select("letter, unit_id")
-        .eq("id", held.room_id)
-        .maybeSingle();
-      if (roomError) console.warn("unit lookup failed at rooms", roomError.message);
-      roomLetter = String((theRoom as { letter?: string } | null)?.letter ?? "");
-      const unitId = (theRoom as { unit_id?: string } | null)?.unit_id;
-      if (unitId) {
-        const { data: theUnit, error: unitError } = await supabaseAdmin
-          .from("units")
-          .select("unit_no")
-          .eq("id", unitId)
-          .maybeSingle();
-        if (unitError) console.warn("unit lookup failed at units", unitError.message);
-        unitNo = String((theUnit as { unit_no?: string } | null)?.unit_no ?? "");
-      }
-    }
+    // the unit and room their bed is in, once one is held for them
+    const { heldPlace } = await import("@/lib/held-place");
+    const { unitNo, roomLetter } = await heldPlace(supabaseAdmin, row.id);
 
     const { data: appt } = await supabaseAdmin
       .from("appointments")

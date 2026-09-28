@@ -210,6 +210,7 @@ function MyProfilePage() {
   const [furthest, setFurthest] = useState(1);
   const [moveIn, setMoveIn] = useState("");
   const [residenceName, setResidenceName] = useState("");
+  const [placeName, setPlaceName] = useState("");
   const [checkIn, setCheckIn] = useState<CheckInChoice>({ on: "", slot: "", remind: false });
   // the documents they have opened - Submit waits for both
   const [read, setRead] = useState<Set<string>>(new Set());
@@ -255,6 +256,7 @@ function MyProfilePage() {
           setValues(v);
           setMoveIn(String(res.moveIn ?? ""));
           setResidenceName(String((res as any).residenceName ?? ""));
+          setPlaceName(String((res as any).placeName ?? ""));
           // a student coming back finds the arrival they already chose, rather
           // than an empty form that looks like it lost their answer
           if (res.checkIn)
@@ -467,7 +469,8 @@ function MyProfilePage() {
             endsAt: new Date(
               new Date(`${checkIn.on}T${checkIn.slot}:00+08:00`).getTime() + 60 * 60000,
             ).toISOString(),
-            location: residenceName || "Brachtia Homes",
+            // the unit and room are what gets them to the right door on the day
+            location: [placeName, residenceName].filter(Boolean).join(", ") || "Brachtia Homes",
             details:
               "Your arrival check-in with Brachtia Homes: a tour, your keys and access card. Full initial payment must be cleared before keys are handed over. We will confirm this slot with you.",
           }
@@ -497,6 +500,7 @@ function MyProfilePage() {
                 Your arrival check-in request
               </p>
               <p className="mt-1 text-sm font-semibold text-brand-deep">{arrivalLabel}</p>
+              {placeName ? <p className="text-sm text-foreground">{placeName}</p> : null}
               {residenceName ? (
                 <p className="text-sm text-muted-foreground">{residenceName}</p>
               ) : null}

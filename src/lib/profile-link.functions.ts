@@ -220,6 +220,9 @@ export const getProfileByToken = createServerFn({ method: "GET" })
       if (!moveIn) moveIn = String((enq as any)?.move_in ?? "");
       residenceName = String((enq as any)?.residence_name ?? "");
     }
+    const { heldPlace, placeLabel } = await import("@/lib/held-place");
+    const place = row.enquiry_id ? await heldPlace(supabase, row.enquiry_id) : null;
+    const placeName = place ? placeLabel(place.unitNo, place.roomLetter) : "";
 
     return {
       ok: true as const,
@@ -230,6 +233,7 @@ export const getProfileByToken = createServerFn({ method: "GET" })
       residentCode: String(row.resident_code || row.quickbooks_id || ""),
       moveIn,
       residenceName,
+      placeName,
       checkIn: {
         on: String((row as any).checkin_on ?? ""),
         slot: String((row as any).checkin_slot ?? ""),
