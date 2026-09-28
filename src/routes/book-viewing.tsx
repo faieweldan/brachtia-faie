@@ -245,8 +245,10 @@ function BookViewingPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {/* to the residences, not straight into one: the student has not
+                chosen where yet, and picking the residence is the first step */}
             <Button asChild className="rounded-full">
-              <Link to="/properties/$slug" params={{ slug }}>
+              <Link to="/properties">
                 Check availability <ArrowRight className="size-4" />
               </Link>
             </Button>
