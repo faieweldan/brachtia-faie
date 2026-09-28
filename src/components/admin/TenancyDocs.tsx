@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DocumentViewDialog } from "@/components/admin/DocumentViewDialog";
 import { EmptyState, Panel, Select, StatusPill } from "@/components/admin/ops-ui";
 import { fmtDate, money, type Resident, type Tenancy } from "@/lib/ops-store";
 import {
@@ -73,6 +74,7 @@ function DocumentRow({
   onChanged: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [viewing, setViewing] = useState<{ kind: "agreement"; id: string; title: string } | null>(null);
   const versions = versionsOf(agreement, doc.docType);
   const hasHistory = versions.length > 1;
   const nextStatus = DOC_STATUSES[DOC_STATUSES.findIndex((s) => s.key === doc.status) + 1];
@@ -124,11 +126,17 @@ function DocumentRow({
           <StatusPill status={doc.status} label={docLabel(doc.status)} />
         </td>
         <td className="py-2.5 text-right">
-          {nextStatus ? (
-            <Button size="sm" variant="outline" onClick={() => void advance()}>
-              Mark {nextStatus.label}
+          <span className="inline-flex flex-wrap justify-end gap-1.5">
+            <Button size="sm" variant="ghost" onClick={() => setViewing({ kind: "agreement", id: doc.id, title: DOC_TYPE_LABELS[doc.docType] })}>
+              View
             </Button>
-          ) : null}
+            {nextStatus ? (
+              <Button size="sm" variant="outline" onClick={() => void advance()}>
+                Mark {nextStatus.label}
+              </Button>
+            ) : null}
+          </span>
+          <DocumentViewDialog target={viewing} title={viewing?.title ?? ""} onClose={() => setViewing(null)} />
         </td>
       </tr>
       {open
@@ -223,6 +231,7 @@ function AccessCardTable({
   onChanged: () => void;
 }) {
   const [adding, setAdding] = useState(false);
+  const [viewCard, setViewCard] = useState<{ id: string; n: number } | null>(null);
   const [reason, setReason] = useState(ACCESS_CARD_REASONS[1] ?? "Lost Card");
   const [cardNoFor, setCardNoFor] = useState<string | null>(null);
   const [cardNo, setCardNo] = useState("");
@@ -307,6 +316,9 @@ function AccessCardTable({
                     </td>
                     <td className="py-2.5 text-right">
                       <span className="inline-flex flex-wrap justify-end gap-1.5">
+                        <Button size="sm" variant="ghost" onClick={() => setViewCard({ id: c.id, n: cards.length - i })}>
+                          View
+                        </Button>
                         {next && next.key !== "issued" ? (
                           <Button size="sm" variant="outline" onClick={() => void setStatus(c, next.key)}>
                             Mark {next.label}
@@ -390,6 +402,7 @@ function AccessCardTable({
           </Button>
         </DialogContent>
       </Dialog>
+      <DocumentViewDialog target={viewCard ? { kind: "card", id: viewCard.id } : null} title={viewCard ? `Access Card Form ${viewCard.n}` : ""} onClose={() => setViewCard(null)} />
     </Panel>
   );
 }
