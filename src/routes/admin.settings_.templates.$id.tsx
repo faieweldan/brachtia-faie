@@ -23,6 +23,7 @@ import {
   saveDraft,
   searchResidents,
   testMapping,
+  type DocTemplate,
 } from "@/lib/templates.functions";
 
 export const Route = createFileRoute("/admin/settings_/templates/$id")({
