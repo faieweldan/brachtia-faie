@@ -574,9 +574,22 @@ function toBillingInvoice(
   }));
   const paid = myPayments.reduce((n, p) => n + p.amount, 0);
   const total = num(raw.total);
+  /*
+   * Deposits held: the total stored on the invoice, else its lines typed
+   * Refundable - the Type column is what says a line comes back, the same test
+   * every other screen uses. Matching "deposit" in the name is only for old
+   * imported lines that carry no Type at all; used first, it counted a
+   * one-time "deposit top-up" as refundable and missed a refundable line
+   * named anything else.
+   */
+  const typed = myItems.filter((i) => i.kind === "refundable");
   const deposits =
     num(raw.deposits_total) ||
-    myItems.filter((i) => isDeposit(i.kind, i.label)).reduce((n, i) => n + i.amount, 0);
+    (typed.length ? typed : myItems.filter((i) => isDeposit(i.kind, i.label))).reduce(
+      // amount is the price of one, so an old "2 x" line counts twice
+      (n, i) => n + i.amount * i.quantity,
+      0,
+    );
 
   const type = (["initial", "rental", "charge", "checkout"] as const).includes(raw.invoice_type)
     ? (raw.invoice_type as BillingInvoice["type"])
