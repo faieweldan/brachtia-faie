@@ -419,53 +419,6 @@ export function nricProblem(v: string): string {
   return d.length === 12 ? "" : "An NRIC has 12 digits.";
 }
 
-/**
- * How the admin resident page groups a section's fields.
- *
- * Each card was one flat grid - sixteen fields for Personal, every one the same
- * weight - and an address, which always took a whole row, left the field
- * before it stranded with empty space beside it. Grouped, the card answers the
- * questions admin comes with: who they are, how to reach them, where they live.
- *
- * `address` groups read as one line, the way an address is written, and open
- * into their separate boxes when the card is edited. A field missing from
- * every group still shows, at the end of its card, so nothing added to
- * RESIDENT_SECTIONS later can quietly disappear from the page.
- *
- * The student's own form does not use this; it keeps its single list.
- */
-export type ResidentGroup = { title: string; keys: string[]; address?: boolean };
-
-export const RESIDENT_GROUPS: Record<string, ResidentGroup[]> = {
-  personal: [
-    {
-      title: "Identity",
-      keys: ["full_name", "dob", "id_number", "gender", "nationality", "marital_status", "race", "religion"],
-    },
-    { title: "Contact", keys: ["email", "mobile"] },
-    { title: "Home address", keys: ["address", "postcode", "state", "country"], address: true },
-    { title: "Health", keys: ["medical_condition", "medical_detail"] },
-  ],
-  emergency: [
-    { title: "Who", keys: ["ec_name", "ec_relationship"] },
-    { title: "Contact", keys: ["ec_mobile", "ec_email"] },
-    {
-      title: "Address",
-      keys: ["ec_address", "ec_postcode", "ec_state", "ec_country"],
-      address: true,
-    },
-  ],
-  payment: [
-    { title: "How they pay", keys: ["pay_method", "pay_schedule"] },
-    { title: "Payor", keys: ["payer_name", "payer_relationship", "payer_mobile", "payer_email"] },
-    {
-      title: "Billing address",
-      keys: ["payer_address", "payer_postcode", "payer_state", "payer_country"],
-      address: true,
-    },
-  ],
-};
-
 /** The youngest a resident can be, in years. */
 export const MIN_RESIDENT_AGE = 16;
 
