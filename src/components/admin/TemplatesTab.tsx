@@ -48,6 +48,10 @@ export function TemplatesTab() {
     >
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : !data?.length ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">
+          No templates yet. Use <span className="font-medium text-foreground">Add Template</span> to upload your first one.
+        </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
