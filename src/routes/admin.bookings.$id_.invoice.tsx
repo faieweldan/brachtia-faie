@@ -367,7 +367,7 @@ function InvoiceGenerator() {
    */
   const missingDetails = (
     [
-      ["Student", r?.full_name],
+      ["Resident", r?.full_name],
       ["Email", r?.email],
       ["Mobile", r?.phone],
       ["Residence", r?.residence_name],
@@ -531,7 +531,7 @@ function InvoiceGenerator() {
           </Link>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
-          <Field label="Student">
+          <Field label="Resident">
             <Value v={r.full_name} className="font-medium" />
           </Field>
           <Field label="Email">
