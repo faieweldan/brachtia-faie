@@ -1,0 +1,2 @@
+ALTER TABLE public.residences ADD COLUMN IF NOT EXISTS rental_terms jsonb NOT NULL DEFAULT '{"room":{"included":["Wi-Fi","Basic Common Area Cleaning","Sewage Fee"],"excluded":["Electricity","Water Charges"]},"unit":{"included":["Wi-Fi"],"excluded":["Basic Common Area Cleaning","Electricity","Water","Sewerage Charges"]}}'::jsonb;
+COMMENT ON COLUMN public.residences.rental_terms IS 'Default inclusions/exclusions per rental type: {room:{included,excluded}, unit:{included,excluded}}. Admin-editable.';

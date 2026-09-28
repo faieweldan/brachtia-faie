@@ -324,6 +324,7 @@ function ResidenceEditor() {
               </div>
             </Section>
 
+
             {/* Location */}
             <Section id="location" title="Where you'll be">
               <div className="grid gap-4 sm:grid-cols-3">
