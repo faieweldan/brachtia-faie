@@ -174,11 +174,8 @@ export const searchResidents = createServerFn({ method: "GET" })
     return (rows ?? []).map((r: any) => ({ id: r.id as string, name: r.full_name as string, code: (r.resident_code ?? "") as string }));
   });
 
-/** Read-only: gathers a resident's linked records and checks each placeholder. Writes nothing. */
-export const testMapping = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ residentId: z.string().uuid(), placeholders: z.array(z.string().max(80)).max(300), mappings: mappingSchema.optional() }).parse(d))
-  .handler(async ({ data }) => {
-    const db = await admin();
+async function buildContext(db: any, residentId: string) {
+  const data = { residentId };
     const { data: resident } = await db.from("residents").select("*").eq("id", data.residentId).maybeSingle();
     if (!resident) throw new Error("Resident not found");
     const [{ data: bed }, { data: tenancy }, { data: enquiry }] = await Promise.all([
@@ -191,9 +188,40 @@ export const testMapping = createServerFn({ method: "POST" })
     const { data: residence } = unit ? await db.from("residences").select("id, name, slug").eq("id", unit.residence_id).maybeSingle() : { data: null };
     const { data: agreement } = await db.from("tenancy_agreements").select("agreement_no, created_at").eq("resident_id", data.residentId).order("created_at", { ascending: false }).limit(1).maybeSingle();
     const ctx: MappingContext = { resident, enquiry, bed, room, unit, residence, tenancy, agreement };
+  return { resident, ctx };
+}
+
+/** Read-only: gathers a resident's linked records and checks each placeholder. Writes nothing. */
+export const testMapping = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ residentId: z.string().uuid(), placeholders: z.array(z.string().max(80)).max(300), mappings: mappingSchema.optional() }).parse(d))
+  .handler(async ({ data }) => {
+    const db = await admin();
+    const { resident, ctx } = await buildContext(db, data.residentId);
     return {
       resident: { id: resident.id as string, name: resident.full_name as string, code: (resident.resident_code ?? "") as string },
       results: testMappingFor(data.placeholders, ctx, data.mappings),
     };
   });
 
+
+const PACK_KEYS = ["tenancy_agreement", "schedule_a", "schedule_b", "schedule_c", "access_card_form"] as const;
+
+/** The Active template per document in the pack, filled with this resident's details. Read-only. */
+export const getPackTemplates = createServerFn({ method: "GET" })
+  .inputValidator((d) => z.object({ residentId: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const db = await admin();
+    const { ctx } = await buildContext(db, data.residentId);
+    const { data: rows } = await db
+      .from("template_versions")
+      .select("id, version, content_html, mappings, document_templates!inner(doc_key, name)")
+      .eq("status", "active");
+    const out: Record<string, { name: string; version: number; html: string; placeholders: string[]; results: ReturnType<typeof testMappingFor> } | null> = {};
+    for (const k of PACK_KEYS) {
+      const row = (rows ?? []).find((r: any) => r.document_templates.doc_key === k);
+      if (!row) { out[k] = null; continue; }
+      const placeholders = detectPlaceholders(row.content_html ?? "");
+      out[k] = { name: row.document_templates.name, version: row.version, html: row.content_html ?? "", placeholders, results: testMappingFor(placeholders, ctx, row.mappings ?? {}) };
+    }
+    return out;
+  });
