@@ -779,6 +779,11 @@ export function costBreakdown(property: Property, rent: number, term: ContractTe
       kind: "advance",
     },
   ];
+  lines.push({
+    label: `Security deposit (${formatMonths(cfg.securityMonths)})`,
+    amount: rent * cfg.securityMonths,
+    kind: "refundable",
+  });
   if (cfg.utilitiesMonths > 0) {
     lines.push({
       label: `Utilities deposit (${formatMonths(cfg.utilitiesMonths)})`,
@@ -787,19 +792,14 @@ export function costBreakdown(property: Property, rent: number, term: ContractTe
     });
   }
   lines.push({
-    label: `Security deposit (${formatMonths(cfg.securityMonths)})`,
-    amount: rent * cfg.securityMonths,
-    kind: "refundable",
+    label: term === "long" ? "Admin + agreement charges" : "Admin charges",
+    amount: cfg.adminFee,
+    kind: "onetime",
   });
   lines.push({ label: "Access card deposit", amount: cfg.accessCardDeposit, kind: "refundable" });
   if (cfg.accessCardCharge > 0) {
     lines.push({ label: "Resident card charges", amount: cfg.accessCardCharge, kind: "onetime" });
   }
-  lines.push({
-    label: term === "long" ? "Admin + agreement charges" : "Admin charges",
-    amount: cfg.adminFee,
-    kind: "onetime",
-  });
   const total = lines.reduce((sum, l) => sum + l.amount, 0);
   return { lines, total };
 }
@@ -1024,6 +1024,18 @@ export function stayQuote(
       kind: "advance",
     });
   }
+  /*
+   * The order Brachtia bills in, top to bottom (Dani, 28 Sep 2026): rent,
+   * security deposit, utilities deposit, admin + agreement, access card
+   * deposit, resident card, then one-time extras such as the starter kit.
+   * The quote, its preview, the website calculator and the invoice all
+   * print these lines in the order they are pushed here.
+   */
+  lines.push({
+    label: `Security deposit (${formatMonths(cfg.securityMonths)})`,
+    amount: round2(rent * cfg.securityMonths),
+    kind: "refundable",
+  });
   if (cfg.utilitiesMonths > 0) {
     lines.push({
       label: `Utilities deposit (${formatMonths(cfg.utilitiesMonths)})`,
@@ -1032,19 +1044,14 @@ export function stayQuote(
     });
   }
   lines.push({
-    label: `Security deposit (${formatMonths(cfg.securityMonths)})`,
-    amount: round2(rent * cfg.securityMonths),
-    kind: "refundable",
+    label: term === "long" ? "Admin + agreement charges" : "Admin charges",
+    amount: cfg.adminFee,
+    kind: "onetime",
   });
   lines.push({ label: "Access card deposit", amount: cfg.accessCardDeposit, kind: "refundable" });
   if (cfg.accessCardCharge > 0) {
     lines.push({ label: "Resident card charges", amount: cfg.accessCardCharge, kind: "onetime" });
   }
-  lines.push({
-    label: term === "long" ? "Admin + agreement charges" : "Admin charges",
-    amount: cfg.adminFee,
-    kind: "onetime",
-  });
 
   for (const a of selectedAddons.filter((x) => x.chargeType === "onetime")) {
     lines.push({ label: a.label, amount: a.price, kind: "onetime" });
