@@ -2,9 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   CalendarCheck,
-  CalendarPlus,
   CheckCircle2,
-  Download,
   FileSignature,
   Loader2,
   UserRound,
@@ -28,7 +26,8 @@ import { FormSteps } from "@/components/site/FormSteps";
 import { CheckInStep } from "@/components/site/CheckInStep";
 import type { CheckInChoice } from "@/lib/checkin";
 import { DateInput } from "@/components/ui/date-input";
-import { downloadIcs, googleCalendarUrl, type CalendarEvent } from "@/lib/calendar";
+import type { CalendarEvent } from "@/lib/calendar";
+import { AddToCalendar } from "@/components/site/AddToCalendar";
 import { RESIDENT_DOCUMENTS } from "@/lib/resident-reading";
 import { ChoicePicker, DialPicker } from "@/components/site/ChoicePicker";
 import { getDeclarationByToken, type SignedDeclaration } from "@/lib/declaration.functions";
@@ -513,23 +512,11 @@ function MyProfilePage() {
               <p className="mt-2 text-xs text-muted-foreground">
                 We will confirm this slot with you before the day.
               </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <a
-                  href={googleCalendarUrl(arrival)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-                >
-                  <CalendarPlus className="size-3.5" /> Google Calendar
-                </a>
-                <button
-                  type="button"
-                  onClick={() => downloadIcs(arrival, "brachtia-arrival-check-in.ics")}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
-                >
-                  <Download className="size-3.5" /> Apple / Outlook
-                </button>
-              </div>
+              <AddToCalendar
+                className="mt-3"
+                event={arrival}
+                fileName="brachtia-arrival-check-in.ics"
+              />
             </div>
           ) : checkIn.remind ? (
             <p className="mt-3 max-w-sm rounded-xl bg-muted/50 px-4 py-3 text-sm text-muted-foreground">

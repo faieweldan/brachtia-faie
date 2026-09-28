@@ -43,6 +43,7 @@ import {
 import { z } from "zod";
 import { DateInput } from "@/components/ui/date-input";
 import { todayISO } from "@/lib/checkin";
+import { AddToCalendar, viewingEvent } from "@/components/site/AddToCalendar";
 
 const leadBase = z.object({
   name: z.string().trim().min(2, "Enter your full name").max(100),
@@ -132,7 +133,7 @@ function BookViewingPage() {
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [slot, setSlot] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [done, setDone] = useState<{ slot: string } | null>(null);
+  const [done, setDone] = useState<{ slot: string; where: string } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [dialIso, setDialIso] = useState("MY");
   const [mobileNumber, setMobileNumber] = useState("");
@@ -201,6 +202,16 @@ function BookViewingPage() {
           at <strong className="text-foreground">{formatSlot(done.slot)}</strong>. We'll confirm by
           email and WhatsApp within 24 hours.
         </p>
+        <AddToCalendar
+          className="mt-5 justify-center"
+          fileName="brachtia-viewing.ics"
+          event={viewingEvent({
+            uid: `viewing-${done.slot}`,
+            startsAt: done.slot,
+            virtual: mode === "virtual",
+            where: done.where,
+          })}
+        />
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Button asChild variant="outline" size="lg" className="rounded-full">
             <a
@@ -461,7 +472,11 @@ function BookViewingPage() {
                   },
                 });
                 if (!res.ok) throw new Error("failed");
-                setDone({ slot });
+                setDone({
+                  slot,
+                  // where they are going, for the calendar entry they can save
+                  where: slugs.map((s) => properties.find((p) => p.slug === s)?.name ?? s).join(" & "),
+                });
               } catch {
                 toast.error("Couldn't book that slot", {
                   description: "Please try another time or message us on WhatsApp.",

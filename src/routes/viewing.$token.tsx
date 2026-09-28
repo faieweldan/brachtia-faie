@@ -23,6 +23,7 @@ import { stayLength } from "@/lib/stay-length";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
+import { AddToCalendar, viewingEvent } from "@/components/site/AddToCalendar";
 
 // the page opens on a choice, not on a calendar - it is not a booking form
 const title = "Your room is available | Brachtia Homes";
@@ -235,6 +236,18 @@ function ViewingLinkPage() {
               </strong>{" "}
               at <strong className="text-foreground">{formatSlot(done.slot)}</strong>.
             </p>
+          ) : null}
+          {"slot" in done ? (
+            <AddToCalendar
+              className="mt-5 justify-center"
+              fileName="brachtia-viewing.ics"
+              event={viewingEvent({
+                uid: `viewing-${String(booking["reference"] ?? done.slot)}`,
+                startsAt: done.slot,
+                virtual: mode === "virtual",
+                where: String(booking["residence_name"] ?? ""),
+              })}
+            />
           ) : (
             <p className="mt-3 text-muted-foreground">
               No viewing needed — we&apos;ll send your booking invoice shortly. You can still ask
