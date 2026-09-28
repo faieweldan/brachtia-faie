@@ -55,8 +55,8 @@ const payLine = (prefix: string) => (c: MappingContext) =>
  * type: whole-unit rentals use the "unit" lists, room rentals the "room" lists.
  */
 const DEFAULT_RENTAL_TERMS: Record<string, { included: string[]; excluded: string[] }> = {
-  room: { included: ["Wi-Fi", "Basic Common Area Cleaning", "Sewerage Charges"], excluded: ["Electricity", "Water Charges"] },
-  unit: { included: ["Wi-Fi"], excluded: ["Basic Common Area Cleaning", "Electricity", "Water", "Sewerage Charges"] },
+  room: { included: ["Wi-Fi", "Monthly Basic Common Area Cleaning", "Sewerage Charges"], excluded: ["Electricity", "Water Charges"] },
+  unit: { included: ["Wi-Fi"], excluded: ["Monthly Basic Common Area Cleaning", "Electricity", "Water", "Sewerage Charges"] },
 };
 const rentalTermList = (c: MappingContext, part: "included" | "excluded") => {
   const terms = (c.residence?.["rental_terms"] as any) ?? DEFAULT_RENTAL_TERMS;
