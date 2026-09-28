@@ -49,8 +49,10 @@ describe("what still has to be uploaded before the form can be sent", () => {
   const missing = (status: string, up: Record<string, string>) =>
     missingResidentDocs(status, up).map((d) => d.key);
 
-  test("nothing uploaded means all three are outstanding", () => {
-    expect(missing("employed", {})).toEqual(["photo", "employment", "id"]);
+  test("nothing uploaded means every required one is outstanding", () => {
+    expect(missing("student", {})).toEqual(["photo", "offer", "id"]);
+    // the employment letter is optional, so it never holds anybody up
+    expect(missing("employed", {})).toEqual(["photo", "id"]);
   });
   test("a student is never held up by an employment letter", () => {
     expect(missing("student", { photo: "a.jpg", offer: "b.pdf", id: "c.jpg" })).toEqual([]);
@@ -58,11 +60,9 @@ describe("what still has to be uploaded before the form can be sent", () => {
   test("and somebody working is never held up by a university letter", () => {
     expect(missing("employed", { photo: "a.jpg", employment: "b.pdf", id: "c.jpg" })).toEqual([]);
   });
-  test("a student's offer letter does not stand in for an employment one", () => {
-    // they answered Student, uploaded, then changed to Employed
-    expect(missing("employed", { photo: "a.jpg", offer: "b.pdf", id: "c.jpg" })).toEqual([
-      "employment",
-    ]);
+  test("somebody working is done once the photo and ID are in", () => {
+    // they answered Student, uploaded an offer letter, then changed to Employed
+    expect(missing("employed", { photo: "a.jpg", offer: "b.pdf", id: "c.jpg" })).toEqual([]);
   });
   test("one left says which one", () => {
     expect(missing("student", { photo: "a.jpg", id: "c.jpg" })).toEqual(["offer"]);

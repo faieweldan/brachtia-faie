@@ -66,10 +66,12 @@ export const RESIDENT_DOCS: ResidentDoc[] = [
     required: true,
     appliesTo: "student",
   },
+  // asked for, but not required: some employers will not write one, and a
+  // working resident should not be held up waiting on their company
   {
     key: "employment",
     label: "Employment letter",
-    required: true,
+    required: false,
     appliesTo: "employed",
   },
   { key: "id", label: "Passport / NRIC copy", required: true, appliesTo: "any" },
