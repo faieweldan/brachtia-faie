@@ -129,11 +129,6 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
       .limit(1);
     if (existing?.length) throw new Error("This resident already has a document pack");
 
-    const { data: noRow, error: noErr } = await db.rpc("nextval_agreement_no" as never).maybeSingle();
-    void noRow;
-    void noErr;
-    // the sequence is read with plain SQL through rpc is not exposed; use a
-    // server-side select on the sequence via a helper function instead
     const { data: seqRow, error: seqErr } = await db.rpc("next_agreement_no" as never);
     if (seqErr) throw new Error((seqErr as any).message ?? "Could not number the agreement");
     const agreementNo = `TA-${String(seqRow).padStart(4, "0")}`;

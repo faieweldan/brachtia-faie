@@ -1975,6 +1975,7 @@ export type Database = {
         Returns: boolean
       }
       invoice_category_code: { Args: { invoice_type: string }; Returns: string }
+      next_agreement_no: { Args: never; Returns: number }
       next_enquiry_reference: { Args: never; Returns: string }
       next_invoice_number: { Args: { invoice_type: string }; Returns: string }
       next_invoice_reference: { Args: never; Returns: string }
