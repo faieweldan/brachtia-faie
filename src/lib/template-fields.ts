@@ -120,6 +120,9 @@ export const FIELD_BY_KEY = new Map(TEMPLATE_FIELDS.map((f) => [f.key, f]));
 
 /** Placeholder names in uploaded documents that mean an existing field. */
 const ALIASES: Record<string, string> = {
+  payment_frequency: "payment_schedule",
+  schedule_a_effective_date: "tenancy_start",
+  effective_date: "tenancy_start",
   resident_name: "resident_full_name",
   full_name: "resident_full_name",
   id_number: "passport_no",
