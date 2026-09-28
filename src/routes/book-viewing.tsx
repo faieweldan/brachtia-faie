@@ -41,6 +41,8 @@ import {
   intakeMonths,
 } from "@/data/form-options";
 import { z } from "zod";
+import { DateInput } from "@/components/ui/date-input";
+import { todayISO } from "@/lib/checkin";
 
 const leadBase = z.object({
   name: z.string().trim().min(2, "Enter your full name").max(100),
@@ -690,11 +692,12 @@ function BookViewingPage() {
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-1.5">
                         <Label htmlFor="bv-movein">Move-in date</Label>
-                        <input
+                        <DateInput
+                          bare
                           id="bv-movein"
-                          type="date"
                           className={fieldClass}
                           value={moveIn}
+                          min={todayISO()}
                           onChange={(e) => setMoveIn(e.target.value)}
                           data-invalid={errors['moveIn'] ? "true" : undefined}
                         />
@@ -702,11 +705,12 @@ function BookViewingPage() {
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="bv-moveout">Move-out date</Label>
-                        <input
+                        <DateInput
+                          bare
                           id="bv-moveout"
-                          type="date"
                           className={fieldClass}
                           value={moveOut}
+                          min={moveIn || todayISO()}
                           onChange={(e) => setMoveOut(e.target.value)}
                           data-invalid={errors['moveOut'] ? "true" : undefined}
                         />

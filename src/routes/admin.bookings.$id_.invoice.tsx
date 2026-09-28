@@ -35,6 +35,7 @@ import {
   type PaymentTerm,
   type Property,
 } from "@/data/properties";
+import { DateInput } from "@/components/ui/date-input";
 
 export const Route = createFileRoute("/admin/bookings/$id_/invoice")({
   component: InvoiceGenerator,
@@ -726,8 +727,7 @@ function InvoiceGenerator() {
         <h2 className="mb-3 text-sm font-semibold text-foreground">Invoice settings</h2>
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Invoice date">
-            <Input
-              type="date"
+            <DateInput
               value={invoiceDate}
               onChange={(e) => setInvoiceDate(e.target.value)}
               className="h-9"

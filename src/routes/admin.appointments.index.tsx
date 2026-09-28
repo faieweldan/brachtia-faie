@@ -54,6 +54,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { DateInput } from "@/components/ui/date-input";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -695,16 +696,16 @@ function AppointmentsPage() {
         {view === "list" ? (
           <div className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-input bg-background px-2 py-1">
             <span className="text-[11px] font-medium text-muted-foreground">Date range</span>
-            <input
-              type="date"
+            <DateInput
+              bare
               aria-label="From date"
               className="h-7 rounded-md border-0 bg-transparent px-1 text-xs outline-none"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
             />
             <span className="text-xs text-muted-foreground">–</span>
-            <input
-              type="date"
+            <DateInput
+              bare
               aria-label="To date"
               className="h-7 rounded-md border-0 bg-transparent px-1 text-xs outline-none"
               value={to}
@@ -1479,8 +1480,7 @@ function AppointmentsPage() {
                               {stayMoveIn ? longDate(`${stayMoveIn}T00:00:00+08:00`) : "—"}
                             </p>
                           ) : (
-                            <Input
-                              type="date"
+                            <DateInput
                               value={form.move_in}
                               onChange={(e) => setField("move_in", e.target.value)}
                             />
@@ -1493,8 +1493,7 @@ function AppointmentsPage() {
                               {stayMoveOut ? longDate(`${stayMoveOut}T00:00:00+08:00`) : "—"}
                             </p>
                           ) : (
-                            <Input
-                              type="date"
+                            <DateInput
                               value={form.move_out}
                               onChange={(e) => setField("move_out", e.target.value)}
                             />

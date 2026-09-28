@@ -40,6 +40,8 @@ import {
 
 import { GENDERS, HEARD_ABOUT, UNIVERSITIES, intakeMonths } from "@/data/form-options";
 import { fieldClass } from "@/components/site/form-fields";
+import { DateInput } from "@/components/ui/date-input";
+import { todayISO } from "@/lib/checkin";
 
 const staySchema = z.object({
   roomId: z.string().min(1, "Select a room type"),
@@ -569,13 +571,13 @@ export default function EnquiryDialog({
                         Move-in date
                         <Req />
                       </Label>
-                      <Input
+                      <DateInput
                         id="en-movein"
                         name="moveIn"
-                        type="date"
                         className="h-11 rounded-xl"
                         data-invalid={errors["moveIn"] ? "true" : undefined}
                         value={stay.moveIn}
+                        min={todayISO()}
                         onChange={(e) => onStayChange({ moveIn: e.target.value })}
                       />
                       <FieldError msg={errors["moveIn"]} />
@@ -586,13 +588,13 @@ export default function EnquiryDialog({
                         Move-out date
                         <Req />
                       </Label>
-                      <Input
+                      <DateInput
                         id="en-moveout"
                         name="moveOut"
-                        type="date"
                         className="h-11 rounded-xl"
                         data-invalid={errors["moveOut"] ? "true" : undefined}
                         value={stay.moveOut}
+                        min={stay.moveIn || todayISO()}
                         onChange={(e) => onStayChange({ moveOut: e.target.value })}
                       />
                       <FieldError msg={errors["moveOut"]} />

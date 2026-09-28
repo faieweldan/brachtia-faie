@@ -16,6 +16,7 @@ import {
 import { formatTime } from "@/lib/slots";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -420,8 +421,7 @@ function SettingsPage() {
                   <label className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Applies from
                   </label>
-                  <Input
-                    type="date"
+                  <DateInput
                     className="mt-1 h-9 w-[160px]"
                     value={dates[group]?.from ?? ""}
                     onChange={(e) =>
@@ -436,8 +436,7 @@ function SettingsPage() {
                   <label className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Until
                   </label>
-                  <Input
-                    type="date"
+                  <DateInput
                     className="mt-1 h-9 w-[160px]"
                     value={dates[group]?.to ?? ""}
                     onChange={(e) =>
@@ -480,8 +479,7 @@ function SettingsPage() {
           <div className="mt-4 space-y-3 rounded-lg border border-border p-3">
             <div className="flex flex-wrap items-center gap-3">
               <label className="text-sm text-foreground">Date</label>
-              <Input
-                type="date"
+              <DateInput
                 className="w-44"
                 value={newBlock.date}
                 onChange={(e) => setNewBlock({ ...newBlock, date: e.target.value })}

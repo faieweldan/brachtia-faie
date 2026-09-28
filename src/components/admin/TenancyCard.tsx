@@ -12,6 +12,7 @@ import {
   type Tenancy,
   type TenancyStage,
 } from "@/lib/ops-store";
+import { DateInput } from "@/components/ui/date-input";
 
 export const TENANCY_STAGES: { key: TenancyStage; label: string }[] = [
   { key: "draft", label: "Draft generated" },
@@ -47,15 +48,15 @@ export function TenancyCard({
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="space-y-1.5">
           <p className="text-xs text-muted-foreground">Tenancy start</p>
-          <Input type="date" value={t.start} onChange={(e) => patch({ start: e.target.value })} />
+          <DateInput value={t.start} onChange={(e) => patch({ start: e.target.value })} />
         </div>
         <div className="space-y-1.5">
           <p className="text-xs text-muted-foreground">Tenancy end</p>
-          <Input type="date" value={t.end} onChange={(e) => patch({ end: e.target.value })} />
+          <DateInput value={t.end} onChange={(e) => patch({ end: e.target.value })} />
         </div>
         <div className="space-y-1.5">
           <p className="text-xs text-muted-foreground">Check-in date</p>
-          <Input type="date" value={t.checkinDate} onChange={(e) => patch({ checkinDate: e.target.value })} />
+          <DateInput value={t.checkinDate} onChange={(e) => patch({ checkinDate: e.target.value })} />
         </div>
       </div>
 

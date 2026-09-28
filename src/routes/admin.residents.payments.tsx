@@ -61,6 +61,7 @@ import {
 import { fmtDate, money } from "@/lib/ops-store";
 import { paymentStateOf, type PaymentStatus } from "@/lib/payment-status";
 import { getInvoiceBilling, type BillingInvoice } from "@/lib/resident-billing.functions";
+import { DateInput } from "@/components/ui/date-input";
 
 export const Route = createFileRoute("/admin/residents/payments")({
   component: CollectionsPage,
@@ -414,8 +415,8 @@ function CollectionsPage() {
         <div className="flex flex-wrap items-end gap-x-3 gap-y-3 px-5 py-4">
           <FilterField label="Date">
             <div className="flex h-9 items-center rounded-md border border-input bg-background focus-within:ring-2 focus-within:ring-ring/40">
-              <input
-                type="date"
+              <DateInput
+                bare
                 value={from}
                 max={to || undefined}
                 onChange={(e) => setFrom(e.target.value)}
@@ -423,8 +424,8 @@ function CollectionsPage() {
                 className="h-full w-[8.25rem] bg-transparent px-2.5 text-sm outline-none"
               />
               <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-              <input
-                type="date"
+              <DateInput
+                bare
                 value={to}
                 min={from || undefined}
                 onChange={(e) => setTo(e.target.value)}

@@ -22,6 +22,7 @@ import { rowToProperty, rowToRoomType } from "@/lib/site-mappers";
 import { roomFitChanged } from "@/lib/stay-fit";
 import { bookingAddonNames, selectedBookingAddons, quoteAmountsMatch } from "@/lib/booking-quote";
 import { stayLength } from "@/lib/stay-length";
+import { DateInput } from "@/components/ui/date-input";
 
 /**
  * A booking's stay, worked out the way the website works it out.
@@ -637,8 +638,7 @@ export function StayDetailsCard({
           </div>
           <div>
             <label className="text-xs text-muted-foreground">Move in</label>
-            <Input
-              type="date"
+            <DateInput
               value={draft.moveIn}
               onChange={(e) => set({ moveIn: e.target.value })}
               className="mt-1"
@@ -646,8 +646,7 @@ export function StayDetailsCard({
           </div>
           <div>
             <label className="text-xs text-muted-foreground">Move out</label>
-            <Input
-              type="date"
+            <DateInput
               value={draft.moveOut}
               onChange={(e) => set({ moveOut: e.target.value })}
               className="mt-1"

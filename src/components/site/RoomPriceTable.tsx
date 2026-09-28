@@ -14,6 +14,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import RoomDetailDialog from "./RoomDetailDialog";
+import { DateInput } from "@/components/ui/date-input";
+import { todayISO } from "@/lib/checkin";
 
 export default function RoomPriceTable({
   property,
@@ -130,9 +132,11 @@ export default function RoomPriceTable({
             <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Move-in date
             </span>
-            <input
-              type="date"
+            <DateInput
+              bare
               value={moveIn}
+              // a move-in in the past is not a stay anybody can book
+              min={todayISO()}
               onChange={(e) => onMoveInChange(e.target.value)}
               className="w-full bg-transparent text-sm font-bold text-foreground outline-none"
             />
@@ -142,8 +146,8 @@ export default function RoomPriceTable({
             <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Move-out date
             </span>
-            <input
-              type="date"
+            <DateInput
+              bare
               value={moveOut}
               min={moveIn}
               onChange={(e) => onMoveOutChange(e.target.value)}

@@ -36,6 +36,7 @@ import {
   sponsorLabel,
   residentIdOf,
 } from "@/lib/ops-store";
+import { DateInput } from "@/components/ui/date-input";
 
 /**
  * Which residence is open lives in the address, not in memory.
@@ -395,11 +396,11 @@ function InventoryPage() {
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1.5">
               <p className="text-xs text-muted-foreground">Available from</p>
-              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+              <DateInput value={from} onChange={(e) => setFrom(e.target.value)} />
             </div>
             <div className="space-y-1.5">
               <p className="text-xs text-muted-foreground">to</p>
-              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+              <DateInput value={to} onChange={(e) => setTo(e.target.value)} />
             </div>
           </div>
         </div>

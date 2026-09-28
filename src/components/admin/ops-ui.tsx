@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { DateInput, isoToDmy } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { BedStatus } from "@/lib/ops-store";
@@ -359,17 +360,25 @@ export function Text({
   /** marks it with the dot until it has something in it */
   required?: boolean;
 }) {
-  if (readOnly) return <ReadOnlyField label={label} value={display ?? value} />;
+  // a date reads day first here too, typed or shown
+  if (readOnly)
+    return (
+      <ReadOnlyField label={label} value={display ?? (type === "date" ? isoToDmy(value) : value)} />
+    );
   return (
     <div className="space-y-1.5">
       <FieldLabel label={label} required={required} filled={!!value.trim()} />
-      <Input
-        type={type}
-        value={value}
-        placeholder={placeholder}
-        autoFocus={autoFocus}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      {type === "date" ? (
+        <DateInput value={value} autoFocus={autoFocus} onChange={(e) => onChange(e.target.value)} />
+      ) : (
+        <Input
+          type={type}
+          value={value}
+          placeholder={placeholder}
+          autoFocus={autoFocus}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
     </div>
   );
 }
