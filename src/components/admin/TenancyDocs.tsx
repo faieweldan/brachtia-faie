@@ -223,7 +223,7 @@ function AccessCardTable({
   onChanged: () => void;
 }) {
   const [adding, setAdding] = useState(false);
-  const [reason, setReason] = useState(ACCESS_CARD_REASONS[1]);
+  const [reason, setReason] = useState(ACCESS_CARD_REASONS[1] ?? "Lost Card");
   const [cardNoFor, setCardNoFor] = useState<string | null>(null);
   const [cardNo, setCardNo] = useState("");
 
@@ -450,7 +450,7 @@ export function TenancyDocs({
         description="Legal agreement records and revisions. Earlier versions are always kept."
       >
         <div className="space-y-3">
-          {data.agreements.map((a) => (
+          {(data.agreements as TenancyAgreement[]).map((a) => (
             <AgreementBlock key={a.id} agreement={a} onChanged={refresh} />
           ))}
         </div>
@@ -465,7 +465,7 @@ export function currentMergeValues(
   resident: Resident,
   tenancy: Tenancy | undefined,
   placed:
-    | { unit: { unitNo: string; residenceName: string }; room: { letter: string }; bed: { label: string; rent?: number } }
+    | { unit: { unitNo: string; residenceName: string }; room: { letter: string }; bed: { label: string; rent?: number | undefined } }
     | undefined,
   overrides: Record<string, string> = {},
 ): Record<string, string> {

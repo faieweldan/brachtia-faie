@@ -98,8 +98,8 @@ function DocumentPackPage() {
           residentId: resident.id,
           tenancyId: tenancy?.id,
           mergeValues: vals,
-          periodStart: vals.tenancy_start,
-          periodEnd: vals.tenancy_end,
+          periodStart: vals["tenancy_start"],
+          periodEnd: vals["tenancy_end"],
         },
       });
       toast.success(`Document pack generated — ${res.agreementNo}`);

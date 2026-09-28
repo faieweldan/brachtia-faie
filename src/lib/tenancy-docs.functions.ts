@@ -113,10 +113,10 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
   .inputValidator(
     (data: {
       residentId: string;
-      tenancyId?: string;
+      tenancyId?: string | undefined;
       mergeValues: Record<string, string>;
-      periodStart?: string;
-      periodEnd?: string;
+      periodStart?: string | undefined;
+      periodEnd?: string | undefined;
     }) => data,
   )
   .handler(async ({ data }) => {
@@ -219,10 +219,10 @@ export const renewAgreement = createServerFn({ method: "POST" })
   .inputValidator(
     (data: {
       residentId: string;
-      tenancyId?: string;
+      tenancyId?: string | undefined;
       mergeValues: Record<string, string>;
-      periodStart?: string;
-      periodEnd?: string;
+      periodStart?: string | undefined;
+      periodEnd?: string | undefined;
     }) => data,
   )
   .handler(async ({ data }) => {
@@ -289,8 +289,8 @@ export const updateAccessCard = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const db = await admin();
     const patch: Record<string, string> = {};
-    if (data.status !== undefined) patch.status = data.status;
-    if (data.cardNo !== undefined) patch.card_no = data.cardNo;
+    if (data.status !== undefined) patch["status"] = data.status;
+    if (data.cardNo !== undefined) patch["card_no"] = data.cardNo;
     const { error } = await db.from("access_card_forms").update(patch).eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true as const };
