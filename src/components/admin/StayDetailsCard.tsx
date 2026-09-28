@@ -337,6 +337,8 @@ export function StayDetailsCard({
               quote: w.quote,
               lead: snap?.lead ?? {
                 name: row.full_name ?? "",
+                // studying or working, as every other copy of the quote says
+                currentStatus: row.current_status ?? "",
                 university: row.university ?? "",
                 intake: row.intake ?? "",
                 // somebody working has an employer where a student has a

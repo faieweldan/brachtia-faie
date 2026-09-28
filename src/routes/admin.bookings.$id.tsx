@@ -616,6 +616,28 @@ function BookingDetail() {
     return { ...snap, quote };
   }
 
+  /**
+   * The booking's current quote, exactly as it is printed - the content and
+   * the reference. Every way admin opens the current quote (download, and the
+   * two preview buttons) goes through this, so they cannot print it
+   * differently. They did: preview left off the version in the reference, and
+   * could not print an older booking whose saved quote had no figures.
+   */
+  async function currentQuoteDoc(r: any) {
+    const body = await quoteBodyFor(r);
+    if (!body) return null;
+    // the version already on record for this quote, so the paper carries the
+    // same reference the history shows
+    const versions = await listQuoteVersions({ data: { enquiryId: id } }).catch(() => []);
+    const current = versions[versions.length - 1];
+    return {
+      ...body,
+      reference: current
+        ? referenceFor(String(r.reference ?? ""), current.version)
+        : (r.reference ?? undefined),
+    };
+  }
+
   async function downloadQuote(r: any) {
     if (!hasSnapshot(r)) {
       toast.error("No quote snapshot on this enquiry");
@@ -624,16 +646,9 @@ function BookingDetail() {
     setDownloading(true);
     try {
       const { downloadStayQuote } = await import("@/lib/quote-pdf");
-      const body = await quoteBodyFor(r);
-      if (!body) return;
-      // the version already on record for this quote, so the paper carries the
-      // same reference the history shows
-      const versions = await listQuoteVersions({ data: { enquiryId: id } }).catch(() => []);
-      const current = versions[versions.length - 1];
-      await downloadStayQuote({
-        ...body,
-        reference: current ? referenceFor(String(r.reference ?? ""), current.version) : r.reference,
-      });
+      const doc = await currentQuoteDoc(r);
+      if (!doc) return;
+      await downloadStayQuote(doc);
     } catch (err) {
       console.error(err);
       toast.error("Could not build the quotation");
@@ -1203,10 +1218,11 @@ function BookingDetail() {
               title={`Quote ${row.reference ?? ""}`.trim()}
               fileName={`Brachtia-Quote-${row.reference ?? "booking"}.pdf`}
               build={async () =>
-                (await import("@/lib/quote-pdf")).quotePdfUrl({
-                  ...(quoteSnapshotFor(row) as any),
-                  reference: row.reference,
-                })
+                (async () => {
+                  const doc = await currentQuoteDoc(row);
+                  if (!doc) throw new Error("This quote has no dates or rate to print");
+                  return (await import("@/lib/quote-pdf")).quotePdfUrl(doc);
+                })()
               }
               versions={quoteVersions}
             >
@@ -1809,10 +1825,11 @@ function BookingDetail() {
                     title={`Quote ${row.reference ?? ""}`.trim()}
                     fileName={`Brachtia-Quote-${row.reference ?? "booking"}.pdf`}
                     build={async () =>
-                      (await import("@/lib/quote-pdf")).quotePdfUrl({
-                        ...(quoteSnapshotFor(row) as any),
-                        reference: row.reference,
-                      })
+                      (async () => {
+                        const doc = await currentQuoteDoc(row);
+                        if (!doc) throw new Error("This quote has no dates or rate to print");
+                        return (await import("@/lib/quote-pdf")).quotePdfUrl(doc);
+                      })()
                     }
                     versions={quoteVersions}
                   >
