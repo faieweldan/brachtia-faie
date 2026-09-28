@@ -212,7 +212,8 @@ export function DeclarationSection({
           {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
           Sign declaration
         </Button>
-        {blocker ? <p className="text-xs text-muted-foreground">{blocker}</p> : null}
+        {/* red so it is noticed: it is the one thing still stopping them signing */}
+        {blocker ? <p className="text-xs font-medium text-destructive">{blocker}</p> : null}
       </div>
     </section>
   );
