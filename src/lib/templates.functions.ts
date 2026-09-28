@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { detectPlaceholders, testMappingFor, unmapped, type MappingContext } from "@/lib/template-fields";
+import { detectPlaceholders, testMappingFor, unmapped, type MappingContext, type Mappings } from "@/lib/template-fields";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -19,6 +19,7 @@ export type TemplateVersion = {
   contentHtml: string;
   fileName: string;
   placeholders: string[];
+  mappings: Mappings;
   createdAt: string;
   updatedAt: string;
   activatedAt: string | null;
@@ -39,6 +40,7 @@ const toVersion = (r: any): TemplateVersion => ({
   contentHtml: r.content_html ?? "",
   fileName: r.file_name ?? "",
   placeholders: r.placeholders ?? [],
+  mappings: r.mappings ?? {},
   createdAt: r.created_at,
   updatedAt: r.updated_at,
   activatedAt: r.activated_at,
@@ -71,6 +73,27 @@ async function storeFile(db: any, templateId: string, file?: { name: string; bas
   if (error) throw new Error("File upload failed");
   return { file_path: path, file_name: file.name };
 }
+
+const mappingSchema = z.record(
+  z.string().max(80),
+  z.union([
+    z.object({ kind: z.literal("field"), key: z.string().max(80) }),
+    z.object({ kind: z.literal("formula"), expr: z.string().max(500) }),
+    z.object({ kind: z.literal("blank") }),
+  ]),
+);
+
+/** Save placeholder mappings — drafts only. */
+export const saveMappings = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ versionId: z.string().uuid(), mappings: mappingSchema }).parse(d))
+  .handler(async ({ data }) => {
+    const db = await admin();
+    const { data: v } = await db.from("template_versions").select("status").eq("id", data.versionId).single();
+    if (!v || v.status !== "draft") throw new Error("Only a draft's mappings can be changed");
+    const { error } = await db.from("template_versions").update({ mappings: data.mappings, updated_at: new Date().toISOString() }).eq("id", data.versionId);
+    if (error) throw new Error("Could not save mappings");
+    return { ok: true };
+  });
 
 const fileSchema = z.object({ name: z.string().max(200), base64: z.string().max(28_000_000) }).optional();
 
@@ -120,7 +143,7 @@ export const saveDraft = createServerFn({ method: "POST" })
     const next = Math.max(0, ...all.map((r) => r.version)) + 1;
     const { data: ins, error } = await db
       .from("template_versions")
-      .insert({ template_id: data.templateId, version: next, status: "draft", file_path: from?.file_path ?? "", file_name: from?.file_name ?? "", ...patch })
+      .insert({ template_id: data.templateId, version: next, status: "draft", file_path: from?.file_path ?? "", file_name: from?.file_name ?? "", mappings: from?.mappings ?? {}, ...patch })
       .select("id")
       .single();
     if (error) throw new Error("Could not create draft");
@@ -131,10 +154,10 @@ export const activateVersion = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ versionId: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
     const db = await admin();
-    const { data: v } = await db.from("template_versions").select("status, content_html").eq("id", data.versionId).single();
+    const { data: v } = await db.from("template_versions").select("status, content_html, mappings").eq("id", data.versionId).single();
     if (!v || v.status !== "draft") throw new Error("Only a draft can be activated");
-    const bad = unmapped(detectPlaceholders(v.content_html));
-    if (bad.length) throw new Error(`Unrecognised placeholders: ${bad.join(", ")}`);
+    const bad = unmapped(detectPlaceholders(v.content_html), v.mappings ?? {});
+    if (bad.length) throw new Error(`Unmapped placeholders: ${bad.join(", ")}`);
     const { error } = await db.rpc("activate_template_version", { _version_id: data.versionId });
     if (error) throw new Error("Could not activate");
     return { ok: true };
@@ -153,7 +176,7 @@ export const searchResidents = createServerFn({ method: "GET" })
 
 /** Read-only: gathers a resident's linked records and checks each placeholder. Writes nothing. */
 export const testMapping = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ residentId: z.string().uuid(), placeholders: z.array(z.string().max(80)).max(300) }).parse(d))
+  .inputValidator((d) => z.object({ residentId: z.string().uuid(), placeholders: z.array(z.string().max(80)).max(300), mappings: mappingSchema.optional() }).parse(d))
   .handler(async ({ data }) => {
     const db = await admin();
     const { data: resident } = await db.from("residents").select("*").eq("id", data.residentId).maybeSingle();
@@ -166,10 +189,11 @@ export const testMapping = createServerFn({ method: "POST" })
     const { data: room } = bed ? await db.from("rooms").select("*").eq("id", bed.room_id).maybeSingle() : { data: null };
     const { data: unit } = room ? await db.from("units").select("*").eq("id", room.unit_id).maybeSingle() : { data: null };
     const { data: residence } = unit ? await db.from("residences").select("id, name, slug").eq("id", unit.residence_id).maybeSingle() : { data: null };
-    const ctx: MappingContext = { resident, enquiry, bed, room, unit, residence, tenancy };
+    const { data: agreement } = await db.from("tenancy_agreements").select("agreement_no, created_at").eq("resident_id", data.residentId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const ctx: MappingContext = { resident, enquiry, bed, room, unit, residence, tenancy, agreement };
     return {
       resident: { id: resident.id as string, name: resident.full_name as string, code: (resident.resident_code ?? "") as string },
-      results: testMappingFor(data.placeholders, ctx),
+      results: testMappingFor(data.placeholders, ctx, data.mappings),
     };
   });
 
