@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { CalendarCheck, CheckCircle2, FileSignature, Loader2, UserRound } from "lucide-react";
+import {
+  CalendarCheck,
+  CalendarPlus,
+  CheckCircle2,
+  Download,
+  FileSignature,
+  Loader2,
+  UserRound,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -19,6 +27,7 @@ import { DeclarationSection } from "@/components/site/DeclarationSection";
 import { FormSteps } from "@/components/site/FormSteps";
 import { CheckInStep } from "@/components/site/CheckInStep";
 import type { CheckInChoice } from "@/lib/checkin";
+import { downloadIcs, googleCalendarUrl, type CalendarEvent } from "@/lib/calendar";
 import { RESIDENT_DOCUMENTS } from "@/lib/resident-reading";
 import { ChoicePicker, DialPicker } from "@/components/site/ChoicePicker";
 import { getDeclarationByToken, type SignedDeclaration } from "@/lib/declaration.functions";
@@ -200,6 +209,7 @@ function MyProfilePage() {
   const [step, setStep] = useState(1);
   const [furthest, setFurthest] = useState(1);
   const [moveIn, setMoveIn] = useState("");
+  const [residenceName, setResidenceName] = useState("");
   const [checkIn, setCheckIn] = useState<CheckInChoice>({ on: "", slot: "", remind: false });
   // the documents they have opened - Submit waits for both
   const [read, setRead] = useState<Set<string>>(new Set());
@@ -244,6 +254,7 @@ function MyProfilePage() {
             v["id_number"] = formatNric(v["id_number"]);
           setValues(v);
           setMoveIn(String(res.moveIn ?? ""));
+          setResidenceName(String((res as any).residenceName ?? ""));
           // a student coming back finds the arrival they already chose, rather
           // than an empty form that looks like it lost their answer
           if (res.checkIn)
@@ -444,14 +455,81 @@ function MyProfilePage() {
   }
 
   if (done) {
+    // the arrival they asked for, as something they can keep - only when there
+    // is a day and a time to keep; a reminder request has nothing to put in a diary
+    const arrival: CalendarEvent | null =
+      checkIn.on && checkIn.slot
+        ? {
+            uid: `checkin-${token}`,
+            title: `Arrival check-in${residenceName ? ` — ${residenceName}` : " — Brachtia Homes"}`,
+            startsAt: new Date(`${checkIn.on}T${checkIn.slot}:00+08:00`).toISOString(),
+            // a check-in is booked as an hour
+            endsAt: new Date(
+              new Date(`${checkIn.on}T${checkIn.slot}:00+08:00`).getTime() + 60 * 60000,
+            ).toISOString(),
+            location: residenceName || "Brachtia Homes",
+            details:
+              "Your arrival check-in with Brachtia Homes: a tour, your keys and access card. Full initial payment must be cleared before keys are handed over. We will confirm this slot with you.",
+          }
+        : null;
+    const arrivalLabel = arrival
+      ? `${new Date(`${checkIn.on}T00:00:00`).toLocaleDateString("en-GB", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })} at ${checkIn.slot}`
+      : "";
+
     return (
       <Shell>
         <div className="flex flex-col items-center gap-3 py-8 text-center">
           <CheckCircle2 className="size-10 text-brand" />
-          <h1 className="text-xl font-bold text-brand-deep">Thank you</h1>
+          <h1 className="text-xl font-bold text-brand-deep">Thank you — your application is in</h1>
           <p className="max-w-sm text-sm text-muted-foreground">
-            Your details are saved. You can close this page — reopen the same link any time to
-            change something.
+            We have your details, documents and signed declaration. Our team will review them and
+            be in touch.
+          </p>
+
+          {arrival ? (
+            <div className="mt-3 w-full max-w-sm rounded-xl border border-border bg-card p-4 text-left">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Your arrival check-in request
+              </p>
+              <p className="mt-1 text-sm font-semibold text-brand-deep">{arrivalLabel}</p>
+              {residenceName ? (
+                <p className="text-sm text-muted-foreground">{residenceName}</p>
+              ) : null}
+              <p className="mt-2 text-xs text-muted-foreground">
+                We will confirm this slot with you before the day.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <a
+                  href={googleCalendarUrl(arrival)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+                >
+                  <CalendarPlus className="size-3.5" /> Google Calendar
+                </a>
+                <button
+                  type="button"
+                  onClick={() => downloadIcs(arrival, "brachtia-arrival-check-in.ics")}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+                >
+                  <Download className="size-3.5" /> Apple / Outlook
+                </button>
+              </div>
+            </div>
+          ) : checkIn.remind ? (
+            <p className="mt-3 max-w-sm rounded-xl bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
+              You asked us to remind you about your arrival. We will be in touch about a week
+              before you move in.
+            </p>
+          ) : null}
+
+          <p className="mt-2 max-w-sm text-xs text-muted-foreground">
+            You can close this page. Reopen the same link any time to change something.
           </p>
         </div>
       </Shell>

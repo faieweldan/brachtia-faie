@@ -209,13 +209,16 @@ export const getProfileByToken = createServerFn({ method: "GET" })
       .order("start_date", { ascending: false })
       .limit(1);
     moveIn = String(((tenancy ?? []) as any[])[0]?.start_date ?? "");
-    if (!moveIn && row.enquiry_id) {
+    // where they are arriving, so the calendar entry they save says so
+    let residenceName = "";
+    if (row.enquiry_id) {
       const { data: enq } = await supabase
         .from("enquiries")
-        .select("move_in")
+        .select("move_in, residence_name")
         .eq("id", row.enquiry_id)
         .maybeSingle();
-      moveIn = String((enq as any)?.move_in ?? "");
+      if (!moveIn) moveIn = String((enq as any)?.move_in ?? "");
+      residenceName = String((enq as any)?.residence_name ?? "");
     }
 
     return {
@@ -226,6 +229,7 @@ export const getProfileByToken = createServerFn({ method: "GET" })
       // the ID they go by - not their university student ID, which is one of the fields
       residentCode: String(row.resident_code || row.quickbooks_id || ""),
       moveIn,
+      residenceName,
       checkIn: {
         on: String((row as any).checkin_on ?? ""),
         slot: String((row as any).checkin_slot ?? ""),
