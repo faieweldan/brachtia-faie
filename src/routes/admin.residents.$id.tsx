@@ -218,6 +218,13 @@ function ResidentProfilePage() {
   // deleting a former resident for good asks for their name to be typed back
   const [deleting, setDeleting] = useState(false);
   const [confirmName, setConfirmName] = useState("");
+  // header actions that change the tenancy and issue revised documents
+  const [roomChange, setRoomChange] = useState(false);
+  const [newBedId, setNewBedId] = useState("");
+  const [updateTenancyOpen, setUpdateTenancyOpen] = useState(false);
+  const [tenancyEdit, setTenancyEdit] = useState({ start: "", end: "", rent: "" });
+  const [asRenewal, setAsRenewal] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
   const isEditing = (key: string) => !!editing[key];
   const editAction = (key: string) => (
     <Button
