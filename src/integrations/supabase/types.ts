@@ -1840,6 +1840,7 @@ export type Database = {
           file_name: string
           file_path: string
           id: string
+          mappings: Json
           placeholders: string[]
           status: string
           template_id: string
@@ -1853,6 +1854,7 @@ export type Database = {
           file_name?: string
           file_path?: string
           id?: string
+          mappings?: Json
           placeholders?: string[]
           status?: string
           template_id: string
@@ -1866,6 +1868,7 @@ export type Database = {
           file_name?: string
           file_path?: string
           id?: string
+          mappings?: Json
           placeholders?: string[]
           status?: string
           template_id?: string
