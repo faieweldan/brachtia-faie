@@ -23,7 +23,13 @@ import { INVOICE_TERMS } from "@/lib/invoice-terms";
 import { nextRentalPayment } from "@/lib/rental-schedule";
 import { bookingAddonNames, selectedBookingAddons } from "@/lib/booking-quote";
 import { Choice } from "@/components/admin/Choice";
-import { discountLabel, discountPerMonth, lineQty, type DiscountType } from "@/lib/invoices";
+import {
+  BOOKING_FEE,
+  discountLabel,
+  discountPerMonth,
+  lineQty,
+  type DiscountType,
+} from "@/lib/invoices";
 import { PdfPreviewButton } from "@/components/admin/PdfPreview";
 import {
   addonsFor,
@@ -130,6 +136,14 @@ function InvoiceGenerator() {
   });
   const editing =
     editingId && (billing as any)?.invoice?.id === editingId ? (billing as any) : null;
+  /*
+   * Changing an issued invoice makes a new version of it - the old one is kept
+   * in its history - and only while no more than the booking fee is paid on
+   * it. The server has always refused past that; the button now says so
+   * before it is pressed, rather than after.
+   */
+  const paidOnEditing = Number(editing?.paid ?? 0);
+  const lockedByPayment = Boolean(editing) && paidOnEditing > BOOKING_FEE + 0.005;
   const [loadedEdit, setLoadedEdit] = useState(false);
   useEffect(() => {
     if (!editing || loadedEdit) return;
@@ -964,6 +978,7 @@ function InvoiceGenerator() {
         <Button
           disabled={
             !roomAssigned ||
+            lockedByPayment ||
             // the invoice states these - it is not issued with them blank
             missingDetails.length > 0 ||
             lines.length === 0 ||
@@ -972,16 +987,32 @@ function InvoiceGenerator() {
             (discount > 0 && !discountNote.trim())
           }
           title={
-            missingDetails.length
+            lockedByPayment
+              ? `RM${paidOnEditing.toFixed(2)} is already paid on this invoice - more than the booking fee - so it can no longer be changed`
+              : missingDetails.length
               ? `Still blank on the booking: ${missingDetails.join(", ")}`
               : discount > 0 && !discountNote.trim()
                 ? "Say why the discount was given"
                 : undefined
           }
-          onClick={() => create.mutate()}
+          onClick={() => {
+            if (
+              editing &&
+              !window.confirm(
+                `Create a new version of ${editing.invoice.number}?\n\nThe invoice as it is now is kept in its history as the previous version. The student should be sent the new one.`,
+              )
+            )
+              return;
+            create.mutate();
+          }}
         >
-          {create.isPending ? "Saving…" : editing ? "Save changes" : "Generate invoice"}
+          {create.isPending ? "Saving…" : editing ? "Create new invoice" : "Generate invoice"}
         </Button>
+        {lockedByPayment ? (
+          <p className="basis-full text-right text-xs text-muted-foreground">
+            More than the booking fee is paid on this invoice, so it can no longer be changed.
+          </p>
+        ) : null}
       </div>
     </div>
   );
