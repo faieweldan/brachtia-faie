@@ -50,7 +50,7 @@ Independent table: `Form | Date | Reason | Card No. | Status | Action`.
 - Workflow: **Form Generated → Submitted → Card Received → Issued**; issued cards can later be marked **Returned / Lost / Damaged**. Card number entered when received, before marking issued.
 - Every application is a new record; nothing is overwritten.
 
-### C. Checkout Statement
+### C. Checkout Statement (Remove this for now, we will work on it later)
 
 Hidden until **Initiate Check-out** is triggered. Then shows:
 
