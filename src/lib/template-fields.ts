@@ -130,6 +130,14 @@ const ALIASES: Record<string, string> = {
   start_date: "tenancy_start",
   end_date: "tenancy_end",
   rent: "monthly_rent",
+  security_deposit: "deposit",
+  utility_deposit: "utilities_deposit",
+  utilities_deposit: "utilities_deposit",
+  card_deposit: "access_card_deposit",
+  admin_fee: "admin_charges",
+  total_initial_payment: "first_payment_total",
+  move_in_date: "booking_move_in",
+  move_out_date: "booking_move_out",
 };
 
 export type Mapping =
