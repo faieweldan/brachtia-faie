@@ -632,7 +632,32 @@ function ResidentProfilePage() {
             something to deactivate on the way past. Only a record made here with
             no Brachtia ID - a test - can still be deactivated and deleted.
           */}
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="flex shrink-0 flex-wrap items-center gap-1">
+            {tenancy && !isNew ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setNewBedId("");
+                    setRoomChange(true);
+                  }}
+                >
+                  Room Change
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setTenancyEdit({ start: tenancy.start, end: tenancy.end, rent: String(tenancy.rent || "") });
+                    setAsRenewal(false);
+                    setUpdateTenancyOpen(true);
+                  }}
+                >
+                  Update Tenancy
+                </Button>
+              </>
+            ) : null}
             {isEmptyDraft ? (
               <Button size="sm" variant="outline" onClick={discard}>
                 <Trash2 className="mr-1 size-3.5" /> Discard
