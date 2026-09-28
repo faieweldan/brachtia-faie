@@ -14,6 +14,101 @@ export type Database = {
   }
   public: {
     Tables: {
+      access_card_forms: {
+        Row: {
+          card_no: string
+          created_at: string
+          form_date: string
+          id: string
+          reason: string
+          resident_id: string
+          status: string
+        }
+        Insert: {
+          card_no?: string
+          created_at?: string
+          form_date?: string
+          id?: string
+          reason?: string
+          resident_id: string
+          status?: string
+        }
+        Update: {
+          card_no?: string
+          created_at?: string
+          form_date?: string
+          id?: string
+          reason?: string
+          resident_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "access_card_forms_resident_id_fkey"
+            columns: ["resident_id"]
+            isOneToOne: false
+            referencedRelation: "residents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agreement_documents: {
+        Row: {
+          agreement_id: string
+          created_at: string
+          doc_type: string
+          effective_date: string | null
+          id: string
+          merge_values: Json
+          period_end: string | null
+          period_start: string | null
+          status: string
+          supersedes: string | null
+          version: number
+        }
+        Insert: {
+          agreement_id: string
+          created_at?: string
+          doc_type: string
+          effective_date?: string | null
+          id?: string
+          merge_values?: Json
+          period_end?: string | null
+          period_start?: string | null
+          status?: string
+          supersedes?: string | null
+          version?: number
+        }
+        Update: {
+          agreement_id?: string
+          created_at?: string
+          doc_type?: string
+          effective_date?: string | null
+          id?: string
+          merge_values?: Json
+          period_end?: string | null
+          period_start?: string | null
+          status?: string
+          supersedes?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agreement_documents_agreement_id_fkey"
+            columns: ["agreement_id"]
+            isOneToOne: false
+            referencedRelation: "tenancy_agreements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreement_documents_supersedes_fkey"
+            columns: ["supersedes"]
+            isOneToOne: false
+            referencedRelation: "agreement_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointment_types: {
         Row: {
           active: boolean
@@ -1734,6 +1829,48 @@ export type Database = {
             columns: ["resident_id"]
             isOneToOne: false
             referencedRelation: "residents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenancy_agreements: {
+        Row: {
+          agreement_no: string
+          created_at: string
+          id: string
+          kind: string
+          resident_id: string
+          tenancy_id: string | null
+        }
+        Insert: {
+          agreement_no: string
+          created_at?: string
+          id?: string
+          kind?: string
+          resident_id: string
+          tenancy_id?: string | null
+        }
+        Update: {
+          agreement_no?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          resident_id?: string
+          tenancy_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenancy_agreements_resident_id_fkey"
+            columns: ["resident_id"]
+            isOneToOne: false
+            referencedRelation: "residents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenancy_agreements_tenancy_id_fkey"
+            columns: ["tenancy_id"]
+            isOneToOne: false
+            referencedRelation: "tenancies"
             referencedColumns: ["id"]
           },
         ]
