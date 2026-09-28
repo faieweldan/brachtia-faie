@@ -43,6 +43,7 @@ import {
   SHARING_LABEL,
   SHARING_PREFERENCES,
   UNIVERSITIES,
+  UNIVERSITY_VALUES,
   GENDERS,
   HEARD_ABOUT,
   ENQUIRY_STATUS,
@@ -1330,23 +1331,48 @@ function AppointmentsPage() {
                           ) : (
                             <>
                             <Field label="University">
+                              {/*
+                                A university the student typed after picking
+                                Other ("penn state") is not one of the list, so
+                                the dropdown showed "—" as if nothing was given.
+                                It now shows as Other, with the name in a box
+                                under it - the same way the student's form asks.
+                              */}
                               {readOnly ? (
                                 <ReadValue icon={<GraduationCap className="h-3.5 w-3.5" />}>
-                                  {form.university}
+                                  {UNIVERSITIES.find((u) => u.value === form.university && u.value !== "Other")
+                                    ?.label ?? (form.university === "Other" ? "" : form.university)}
                                 </ReadValue>
                               ) : (
-                                <select
-                                  className={`${selectClass} w-full`}
-                                  value={form.university}
-                                  onChange={(e) => setField("university", e.target.value)}
-                                >
-                                  <option value="">—</option>
-                                  {UNIVERSITIES.map((u) => (
-                                    <option key={u.value} value={u.value}>
-                                      {u.label}
-                                    </option>
-                                  ))}
-                                </select>
+                                <div className="space-y-2">
+                                  <select
+                                    className={`${selectClass} w-full`}
+                                    value={
+                                      !form.university || UNIVERSITY_VALUES.includes(form.university)
+                                        ? form.university
+                                        : "Other"
+                                    }
+                                    onChange={(e) => setField("university", e.target.value)}
+                                  >
+                                    <option value="">—</option>
+                                    {UNIVERSITIES.map((u) => (
+                                      <option key={u.value} value={u.value}>
+                                        {u.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  {form.university &&
+                                  (form.university === "Other" ||
+                                    !UNIVERSITY_VALUES.includes(form.university)) ? (
+                                    <Input
+                                      placeholder="Type the university"
+                                      aria-label="University name"
+                                      value={form.university === "Other" ? "" : form.university}
+                                      // an emptied box stays open on Other rather than vanishing
+                                      onChange={(e) => setField("university", e.target.value || "Other")}
+                                    />
+                                  ) : null}
+                                </div>
                               )}
                             </Field>
                             <Field label="Intake">
