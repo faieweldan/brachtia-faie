@@ -436,7 +436,12 @@ export const saveAppointment = createServerFn({ method: "POST" })
   .inputValidator((data: { id?: string; values: Record<string, unknown> }) => data)
   .handler(async ({ data }) => {
     const supabase = await admin();
-    const values = { ...data.values, updated_at: new Date().toISOString() };
+    const values: Record<string, unknown> = { ...data.values, updated_at: new Date().toISOString() };
+    // a staff member taking it confirms it; nobody taking it puts it back to pending
+    if (typeof values["status"] === "string" && typeof values["assigned_staff"] === "string") {
+      const { statusWithStaff } = await import("@/lib/appointment-status");
+      values["status"] = statusWithStaff(values["status"], values["assigned_staff"]);
+    }
     const q = data.id
       ? supabase.from("appointments").update(values as any).eq("id", data.id)
       : supabase.from("appointments").insert(values as any);
@@ -446,24 +451,21 @@ export const saveAppointment = createServerFn({ method: "POST" })
   });
 
 /**
- * Admin has opened a new appointment, so it is no longer new.
- *
- * It goes to what it would have been had nobody needed telling: a viewing the
- * student booked on a free slot through their booking link was confirmed to
- * them on the spot, so it becomes "confirmed"; anything else waits as
- * "pending". Only a "new" one is moved - if somebody changed it in the
- * meantime, their answer stands.
+ * Admin has opened a new appointment, so it is no longer new: "pending" if
+ * nobody is taking it yet, "confirmed" if somebody already is. Only a "new"
+ * one is moved - if somebody changed it in the meantime, their answer stands.
  */
 export const markAppointmentSeen = createServerFn({ method: "POST" })
   .inputValidator((data: { id: string }) => data)
   .handler(async ({ data }) => {
     const supabase = await admin();
+    const { statusWhenOpened } = await import("@/lib/appointment-status");
     const { data: row } = await supabase
       .from("appointments")
-      .select("source")
+      .select("assigned_staff")
       .eq("id", data.id)
       .maybeSingle();
-    const next = (row as any)?.source === "booking" ? "confirmed" : "pending";
+    const next = statusWhenOpened("new", String((row as any)?.assigned_staff ?? ""));
     const { error } = await supabase
       .from("appointments")
       .update({ status: next, updated_at: new Date().toISOString() } as any)
@@ -775,16 +777,22 @@ export const assignViewingStaff = createServerFn({ method: "POST" })
 
     const { data: appt } = await supabase
       .from("appointments")
-      .select("enquiry_id, starts_at")
+      .select("enquiry_id, starts_at, status")
       .eq("id", data.appointmentId)
       .maybeSingle();
     const enquiryId = ((appt as any)?.enquiry_id ?? null) as string | null;
     // the booking's own staff member records it, whoever is taking the viewing
     const staff = enquiryId ? await staffFor(supabase, enquiryId) : "";
 
+    const { statusWithStaff } = await import("@/lib/appointment-status");
     const { error } = await supabase
       .from("appointments")
-      .update({ assigned_staff: staffName, updated_at: new Date().toISOString() } as any)
+      .update({
+        assigned_staff: staffName,
+        // somebody is taking it now, so it is confirmed
+        status: statusWithStaff(String((appt as any)?.status ?? ""), staffName),
+        updated_at: new Date().toISOString(),
+      } as any)
       .eq("id", data.appointmentId);
     if (error) throw new Error(error.message);
 

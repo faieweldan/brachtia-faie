@@ -24,9 +24,8 @@ export async function upsertViewing(opts: {
   assignedStaff?: string;
   appointmentId?: string;
   /**
-   * The student booked or moved it themselves. It is still confirmed to them,
-   * but it arrives as "new" so admin can see it came in; opening it makes it
-   * "confirmed" again (see markAppointmentSeen).
+   * The student booked or moved it themselves, so it arrives as "new" for
+   * admin to notice (see appointment-status.ts).
    */
   byStudent?: boolean;
 }) {

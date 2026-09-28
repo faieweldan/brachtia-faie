@@ -33,6 +33,7 @@ import { fetchDaySlots } from "@/lib/public.functions";
 import { formatSlot } from "@/lib/slots";
 import { useOps } from "@/lib/ops-store";
 import { CheckInPanel } from "@/components/admin/CheckInPanel";
+import { statusWhenOpened } from "@/lib/appointment-status";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -63,9 +64,9 @@ export const Route = createFileRoute("/admin/appointments/")({
 /*
  * "new" is what a student's own booking arrives as, so admin can tell what has
  * come in since they last looked - the date alone does not say that. Opening it
- * moves it on: to "confirmed" for a viewing the student booked on a free slot
- * (they were already told it is confirmed), otherwise to "pending". Anything
- * admin makes by hand skips "new", because admin already knows about it.
+ * makes it "pending", and a staff member taking it makes it "confirmed" (see
+ * appointment-status.ts). Anything admin makes by hand skips "new", because
+ * admin already knows about it.
  */
 const STATUSES = ["new", "pending", "confirmed", "completed", "no_show", "cancelled"] as const;
 
@@ -423,7 +424,9 @@ function AppointmentsPage() {
       }),
       duration_minutes: a.duration_minutes ?? 30,
       // the same answer markAppointmentSeen saves
-      status: seen ? (a.source === "booking" ? "confirmed" : "pending") : (a.status ?? "pending"),
+      status: seen
+        ? statusWhenOpened("new", a.assigned_staff ?? "")
+        : (a.status ?? "pending"),
       assigned_staff: a.assigned_staff ?? "",
       full_name: a.full_name ?? "",
       email: a.email ?? "",
