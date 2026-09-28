@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Minus, Plus, X } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 export type Photo = { src: string; caption?: string; badge?: string };
@@ -21,6 +21,25 @@ export default function PhotoLightbox({
 }) {
   const count = photos.length;
   const touchX = useRef<number | null>(null);
+
+  /*
+   * Zoom, so a student can look at the actual furniture and finishes rather
+   * than a photo fitted to the screen. Double-click or the buttons zoom; a
+   * zoomed photo is dragged to look around. Each photo starts unzoomed.
+   */
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
+  const MAX_ZOOM = 4;
+  const zoomTo = useCallback((next: number) => {
+    const z = Math.min(MAX_ZOOM, Math.max(1, Math.round(next * 100) / 100));
+    setZoom(z);
+    if (z === 1) setPan({ x: 0, y: 0 });
+  }, []);
+  useEffect(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }, [index, open]);
 
   const go = useCallback(
     (next: number) => {
@@ -71,7 +90,7 @@ export default function PhotoLightbox({
         </div>
 
         <div
-          className="relative flex min-h-0 flex-1 items-center justify-center px-2 sm:px-16"
+          className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-2 sm:px-16"
           onTouchStart={(e) => {
             touchX.current = e.touches[0]?.clientX ?? null;
           }}
@@ -79,17 +98,66 @@ export default function PhotoLightbox({
             const start = touchX.current;
             const end = e.changedTouches[0]?.clientX ?? null;
             touchX.current = null;
-            if (start == null || end == null) return;
+            // a swipe on a zoomed photo is looking around it, not moving on
+            if (start == null || end == null || zoom > 1) return;
             if (Math.abs(end - start) > 45) go(index + (end < start ? 1 : -1));
           }}
+          onWheel={(e) => zoomTo(zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15))}
         >
           {current ? (
             <img
               src={current.src}
               alt={current.caption || title}
-              className="max-h-full max-w-full object-contain"
+              draggable={false}
+              onDoubleClick={() => zoomTo(zoom > 1 ? 1 : 2.5)}
+              onPointerDown={(e) => {
+                if (zoom === 1) return;
+                e.currentTarget.setPointerCapture(e.pointerId);
+                drag.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y };
+              }}
+              onPointerMove={(e) => {
+                const d = drag.current;
+                if (!d) return;
+                setPan({ x: d.px + (e.clientX - d.x) / zoom, y: d.py + (e.clientY - d.y) / zoom });
+              }}
+              onPointerUp={() => {
+                drag.current = null;
+              }}
+              style={{ transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)` }}
+              className={`max-h-full max-w-full select-none object-contain transition-transform duration-150 ${
+                zoom > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in"
+              }`}
             />
           ) : null}
+
+          <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-background/15 p-1 text-background">
+            <button
+              type="button"
+              aria-label="Zoom out"
+              disabled={zoom <= 1}
+              onClick={() => zoomTo(zoom - 0.5)}
+              className="grid size-8 place-items-center rounded-full transition hover:bg-background/25 disabled:opacity-40"
+            >
+              <Minus className="size-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="Reset zoom"
+              onClick={() => zoomTo(1)}
+              className="min-w-12 rounded-full px-2 text-xs font-semibold tabular-nums transition hover:bg-background/25"
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <button
+              type="button"
+              aria-label="Zoom in"
+              disabled={zoom >= MAX_ZOOM}
+              onClick={() => zoomTo(zoom + 0.5)}
+              className="grid size-8 place-items-center rounded-full transition hover:bg-background/25 disabled:opacity-40"
+            >
+              <Plus className="size-4" />
+            </button>
+          </div>
 
           {count > 1 && (
             <>
