@@ -102,6 +102,19 @@ export type EnquiryStay = {
   addons?: string[] | undefined;
 };
 
+/**
+ * The mark on a field that has to be answered. Read out to screen readers as
+ * "required", so the star is not the only thing that says so.
+ */
+function Req() {
+  return (
+    <span className="ml-0.5 text-destructive">
+      <span aria-hidden>*</span>
+      <span className="sr-only"> (required)</span>
+    </span>
+  );
+}
+
 function FieldError({ msg }: { msg?: string | undefined }) {
   if (!msg) return null;
   return <p className="text-xs font-medium text-destructive">{msg}</p>;
@@ -456,7 +469,7 @@ export default function EnquiryDialog({
               </DialogTitle>
               <DialogDescription>
                 Takes about 2 minutes. We reply within 24 hours with availability and your
-                quotation.
+                quotation. Fields marked <span className="text-destructive">*</span> are required.
               </DialogDescription>
             </DialogHeader>
 
@@ -507,7 +520,10 @@ export default function EnquiryDialog({
                 ) : (
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5">
-                      <Label htmlFor="en-room">Room type</Label>
+                      <Label htmlFor="en-room">
+                        Room type
+                        <Req />
+                      </Label>
                       <select
                         id="en-room"
                         name="roomId"
@@ -529,7 +545,10 @@ export default function EnquiryDialog({
                     </div>
 
                     <div className="space-y-1.5">
-                      <Label htmlFor="en-occ">Occupancy</Label>
+                      <Label htmlFor="en-occ">
+                        Occupancy
+                        <Req />
+                      </Label>
                       <select
                         id="en-occ"
                         name="occupancy"
@@ -552,7 +571,10 @@ export default function EnquiryDialog({
                     </div>
 
                     <div className="space-y-1.5">
-                      <Label htmlFor="en-movein">Move-in date</Label>
+                      <Label htmlFor="en-movein">
+                        Move-in date
+                        <Req />
+                      </Label>
                       <Input
                         id="en-movein"
                         name="moveIn"
@@ -566,7 +588,10 @@ export default function EnquiryDialog({
                     </div>
 
                     <div className="space-y-1.5">
-                      <Label htmlFor="en-moveout">Move-out date</Label>
+                      <Label htmlFor="en-moveout">
+                        Move-out date
+                        <Req />
+                      </Label>
                       <Input
                         id="en-moveout"
                         name="moveOut"
@@ -590,7 +615,10 @@ export default function EnquiryDialog({
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5 sm:col-span-2">
-                    <Label htmlFor="en-name">Full name</Label>
+                    <Label htmlFor="en-name">
+                      Full name
+                      <Req />
+                    </Label>
                     <Input
                       id="en-name"
                       name="name"
@@ -603,7 +631,10 @@ export default function EnquiryDialog({
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="en-email">Email</Label>
+                    <Label htmlFor="en-email">
+                      Email
+                      <Req />
+                    </Label>
                     <Input
                       id="en-email"
                       name="email"
@@ -617,7 +648,10 @@ export default function EnquiryDialog({
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="en-mobile-number">Mobile / WhatsApp</Label>
+                    <Label htmlFor="en-mobile-number">
+                      Mobile / WhatsApp
+                      <Req />
+                    </Label>
                     <div
                       className={`flex h-11 items-stretch overflow-hidden rounded-xl border ${
                         errors["mobile"] ? "border-destructive" : "border-input"
@@ -657,7 +691,10 @@ export default function EnquiryDialog({
                   Current status
                 </p>
                 <div className="space-y-1.5">
-                  <Label htmlFor="en-status">Are you studying or working?</Label>
+                  <Label htmlFor="en-status">
+                    Are you studying or working?
+                    <Req />
+                  </Label>
                   <select
                     id="en-status"
                     className={fieldClass}
@@ -682,7 +719,11 @@ export default function EnquiryDialog({
                 {status === "employed" ? (
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-1.5">
-                      <Label htmlFor="en-company">Company / Organisation</Label>
+                      <Label htmlFor="en-company">
+                        Company / Organisation
+                        {/* self-employed people have no company to name */}
+                        {selfEmployed ? null : <Req />}
+                      </Label>
                       <Input
                         id="en-company"
                         name="company"
@@ -714,7 +755,10 @@ export default function EnquiryDialog({
                     </div>
 
                     <div className="space-y-1.5">
-                      <Label htmlFor="en-occupation">Occupation / Job Title</Label>
+                      <Label htmlFor="en-occupation">
+                        Occupation / Job Title
+                        <Req />
+                      </Label>
                       <Input
                         id="en-occupation"
                         name="occupation"
@@ -740,7 +784,10 @@ export default function EnquiryDialog({
                   {status === "student" ? (
                     <>
                       <div className="space-y-1.5">
-                        <Label htmlFor="en-uni">University</Label>
+                        <Label htmlFor="en-uni">
+                          University
+                          <Req />
+                        </Label>
                         <select
                           id="en-uni"
                           className={fieldClass}
@@ -771,7 +818,10 @@ export default function EnquiryDialog({
                       </div>
 
                       <div className="space-y-1.5">
-                        <Label htmlFor="en-intake">Intake</Label>
+                        <Label htmlFor="en-intake">
+                          Intake
+                          <Req />
+                        </Label>
                         <select
                           id="en-intake"
                           name="intake"
@@ -794,7 +844,10 @@ export default function EnquiryDialog({
                   ) : null}
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="en-nat">Nationality</Label>
+                    <Label htmlFor="en-nat">
+                      Nationality
+                      <Req />
+                    </Label>
                     <CountryCombobox
                       id="en-nat"
                       value={nationalityIso}
@@ -808,7 +861,10 @@ export default function EnquiryDialog({
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="en-gender">Gender</Label>
+                    <Label htmlFor="en-gender">
+                      Gender
+                      <Req />
+                    </Label>
                     <select
                       id="en-gender"
                       name="gender"
@@ -829,7 +885,10 @@ export default function EnquiryDialog({
                   </div>
 
                   <div className="space-y-1.5 sm:col-span-2">
-                    <Label htmlFor="en-heard">How did you hear about us?</Label>
+                    <Label htmlFor="en-heard">
+                      How did you hear about us?
+                      <Req />
+                    </Label>
                     <select
                       id="en-heard"
                       className={fieldClass}
