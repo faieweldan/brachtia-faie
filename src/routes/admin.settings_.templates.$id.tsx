@@ -155,7 +155,7 @@ function TemplateWorkspace() {
     <div className="mx-auto max-w-[1400px] space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <Link to="/admin/settings" search={{ tab: "templates" } as never} className="inline-flex items-center text-xs text-muted-foreground hover:text-foreground">
+          <Link to="/admin/settings" search={{ tab: "templates" }} className="inline-flex items-center text-xs text-muted-foreground hover:text-foreground">
             <ArrowLeft className="mr-1 h-3.5 w-3.5" /> Templates
           </Link>
           <h1 className="text-xl font-bold text-brand-deep">{tpl.name}</h1>
