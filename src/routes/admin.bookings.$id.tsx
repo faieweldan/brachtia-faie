@@ -115,6 +115,7 @@ import {
 } from "@/components/ui/select";
 import { Calendar as DayPicker } from "@/components/ui/calendar";
 import { Textarea } from "@/components/ui/textarea";
+import { DateInput } from "@/components/ui/date-input";
 
 export const Route = createFileRoute("/admin/bookings/$id")({
   component: BookingDetail,
@@ -2771,9 +2772,15 @@ function EditableCard({
                     />
                   ) : null}
                 </div>
+              ) : kind === "date" ? (
+                <DateInput
+                  value={draft[k] ?? ""}
+                  onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
+                  className="mt-1"
+                />
               ) : (
                 <Input
-                  type={kind === "date" ? "date" : kind === "number" ? "number" : "text"}
+                  type={kind === "number" ? "number" : "text"}
                   value={draft[k] ?? ""}
                   onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
                   className="mt-1"

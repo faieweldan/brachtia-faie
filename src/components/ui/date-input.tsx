@@ -25,6 +25,8 @@ export type DateInputProps = {
   /** yyyy-mm-dd, or "" for no date */
   value: string;
   onChange?: ((e: DateChange) => void) | undefined;
+  /** when the box is left - forms use it to show what is wrong */
+  onBlur?: (() => void) | undefined;
   /** earliest allowed day, yyyy-mm-dd */
   min?: string | undefined;
   /** latest allowed day, yyyy-mm-dd */
@@ -95,6 +97,7 @@ export const DateInput = React.forwardRef<HTMLInputElement, DateInputProps>(func
     autoFocus,
     placeholder = "dd/mm/yyyy",
     bare,
+    onBlur,
     ...aria
   },
   ref,
@@ -151,8 +154,8 @@ export const DateInput = React.forwardRef<HTMLInputElement, DateInputProps>(func
         }}
         onBlur={() => {
           // a half-typed or refused date goes back to the one on record
-          if (!text) return;
-          if (!typedIso || outOfRange(typedIso)) setText(isoToDmy(value));
+          if (text && (!typedIso || outOfRange(typedIso))) setText(isoToDmy(value));
+          onBlur?.();
         }}
       />
       <Popover open={open} onOpenChange={setOpen}>

@@ -26,7 +26,8 @@ import { compressImage, readableSize } from "@/lib/compress";
 import { DeclarationSection } from "@/components/site/DeclarationSection";
 import { FormSteps } from "@/components/site/FormSteps";
 import { CheckInStep } from "@/components/site/CheckInStep";
-import type { CheckInChoice } from "@/lib/checkin";
+import { todayISO, type CheckInChoice } from "@/lib/checkin";
+import { DateInput } from "@/components/ui/date-input";
 import { downloadIcs, googleCalendarUrl, type CalendarEvent } from "@/lib/calendar";
 import { RESIDENT_DOCUMENTS } from "@/lib/resident-reading";
 import { ChoicePicker, DialPicker } from "@/components/site/ChoicePicker";
@@ -791,9 +792,21 @@ function MyProfilePage() {
                           onChange={(v) => set(f.key, v)}
                         />
                       )
+                    ) : f.kind === "date" ? (
+                      // day first whatever the phone's language, and a
+                      // birthday cannot be later than today
+                      <DateInput
+                        value={value}
+                        max={todayISO()}
+                        aria-label={f.label}
+                        data-invalid={problem ? "true" : undefined}
+                        className={problem ? "border-destructive" : undefined}
+                        onChange={(e) => set(f.key, e.target.value)}
+                        onBlur={() => touch(f.key)}
+                      />
                     ) : (
                       <Input
-                        type={f.kind === "email" ? "email" : f.kind === "date" ? "date" : "text"}
+                        type={f.kind === "email" ? "email" : "text"}
                         inputMode={f.kind === "id" && malaysian ? "numeric" : undefined}
                         value={value}
                         placeholder={
