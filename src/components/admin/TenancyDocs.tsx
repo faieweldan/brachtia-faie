@@ -231,6 +231,7 @@ function AccessCardTable({
   onChanged: () => void;
 }) {
   const [adding, setAdding] = useState(false);
+  const [viewCard, setViewCard] = useState<{ id: string; n: number } | null>(null);
   const [reason, setReason] = useState(ACCESS_CARD_REASONS[1] ?? "Lost Card");
   const [cardNoFor, setCardNoFor] = useState<string | null>(null);
   const [cardNo, setCardNo] = useState("");
@@ -401,6 +402,7 @@ function AccessCardTable({
           </Button>
         </DialogContent>
       </Dialog>
+      <DocumentViewDialog target={viewCard ? { kind: "card", id: viewCard.id } : null} title={viewCard ? `Access Card Form ${viewCard.n}` : ""} onClose={() => setViewCard(null)} />
     </Panel>
   );
 }
