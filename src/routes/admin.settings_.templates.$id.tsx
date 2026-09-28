@@ -11,16 +11,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { docxToHtml, fileToBase64 } from "@/lib/docx-client";
 import {
+  describeMapping,
   detectPlaceholders,
-  FIELD_BY_KEY,
+  FIELD_SOURCES,
+  formulaUnknownTokens,
+  mappingFor,
   renderTemplate,
   TEMPLATE_FIELDS,
+  unmapped,
+  type Mapping,
   type MappingResult,
+  type Mappings,
 } from "@/lib/template-fields";
 import {
   activateVersion,
   listTemplates,
   saveDraft,
+  saveMappings,
   searchResidents,
   testMapping,
   type DocTemplate,
@@ -38,7 +45,31 @@ export const Route = createFileRoute("/admin/settings_/templates/$id")({
 });
 
 const MARK_CSS =
-  "[&_mark]:rounded [&_mark]:px-0.5 [&_mark[data-ph=ph]]:bg-primary/15 [&_mark[data-ph=ph]]:text-primary [&_mark[data-ph=ok]]:bg-primary/10 [&_mark[data-ph=unmapped]]:bg-destructive/15 [&_mark[data-ph=unmapped]]:text-destructive [&_mark[data-ph=missing]]:bg-accent [&_h1]:text-lg [&_h1]:font-bold [&_h2]:text-center [&_h2]:text-base [&_h2]:font-bold [&_p]:my-2 [&_table]:w-full [&_td]:border [&_td]:border-border [&_td]:p-1";
+  "[&_mark]:rounded [&_mark]:px-0.5 [&_mark[data-ph=ph]]:bg-primary/15 [&_mark[data-ph=ph]]:text-primary [&_mark[data-ph=ok]]:bg-primary/10 [&_mark[data-ph=unmapped]]:bg-destructive/15 [&_mark[data-ph=unmapped]]:text-destructive [&_mark[data-ph=missing]]:bg-accent [&_h1]:text-[14pt] [&_h1]:font-bold [&_h2]:text-center [&_h2]:text-[12pt] [&_h2]:font-bold [&_p]:my-[6pt] [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:p-1 [&_td]:align-top [&_img]:max-w-full [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 break-words";
+
+/** A4 at 96dpi with 1-inch Word margins, scaled down to fit the column. */
+const PAGE_W = 794;
+function Paper({ children }: { children: React.ReactNode }) {
+  const wrap = useRef<HTMLDivElement>(null);
+  const [zoom, setZoom] = useState(1);
+  useEffect(() => {
+    const el = wrap.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setZoom(Math.min(1, el.clientWidth / PAGE_W)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div ref={wrap} className="overflow-hidden rounded-lg bg-muted p-0 sm:p-0">
+      <div
+        style={{ width: PAGE_W, minHeight: 1123, padding: 96, zoom, fontFamily: "Calibri, Carlito, Arial, sans-serif", fontSize: "11pt", lineHeight: 1.35 }}
+        className="mx-auto bg-background text-foreground shadow-md"
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
 
 type TestState = { resident: { id: string; name: string; code: string }; results: MappingResult[] } | null;
 
@@ -60,6 +91,9 @@ function TemplateWorkspace() {
   const [test, setTest] = useState<TestState>(null);
   const [picker, setPicker] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
+  const [maps, setMaps] = useState<Mappings>({});
+  const saveMaps = useServerFn(saveMappings);
+  const mapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selected = tpl?.versions.find((v) => v.id === selectedId) ?? tpl?.versions.find((v) => v.status === "draft") ?? tpl?.versions.find((v) => v.status === "active") ?? tpl?.versions[0];
   const active = tpl?.versions.find((v) => v.status === "active");
@@ -72,7 +106,24 @@ function TemplateWorkspace() {
 
   const html = editing ? draftHtml : (selected?.contentHtml ?? "");
   const placeholders = useMemo(() => detectPlaceholders(html), [html]);
-  const bad = placeholders.filter((k) => !FIELD_BY_KEY.has(k));
+  const bad = unmapped(placeholders, maps);
+  const selKey = selected?.id;
+  useEffect(() => { setMaps(selected?.mappings ?? {}); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [selKey]);
+  const canMap = selected?.status === "draft" || editing;
+
+  function setMap(ph: string, m: Mapping | null) {
+    const next = { ...maps };
+    if (m) next[ph] = m; else delete next[ph];
+    setMaps(next);
+    if (selected?.status === "draft" && !editing) {
+      if (mapTimer.current) clearTimeout(mapTimer.current);
+      mapTimer.current = setTimeout(() => {
+        saveMaps({ data: { versionId: selected.id, mappings: next } })
+          .then(() => qc.invalidateQueries({ queryKey: ["doc-templates"] }))
+          .catch((e) => toast.error(e instanceof Error ? e.message : "Could not save mapping"));
+      }, 600);
+    }
+  }
 
   if (!tpl) {
     return <p className="p-6 text-sm text-muted-foreground">{data ? "Template not found." : "Loading…"}</p>;
@@ -117,6 +168,7 @@ function TemplateWorkspace() {
           ...(pendingFile ? { file: { name: pendingFile.name, base64: await fileToBase64(pendingFile) } } : {}),
         },
       });
+      await saveMaps({ data: { versionId: res.versionId, mappings: maps } });
       await qc.invalidateQueries({ queryKey: ["doc-templates"] });
       setSelectedId(res.versionId);
       setEditing(false);
@@ -130,7 +182,7 @@ function TemplateWorkspace() {
   }
 
   async function doActivate() {
-    if (bad.length) { toast.error("Fix the unrecognised placeholders first"); return; }
+    if (bad.length) { toast.error("Map every placeholder first"); return; }
     setBusy(true);
     try {
       await activate({ data: { versionId: selected!.id } });
@@ -146,14 +198,14 @@ function TemplateWorkspace() {
   async function pickResident(rid: string) {
     setPicker(false);
     try {
-      setTest(await runTest({ data: { residentId: rid, placeholders } }));
+      setTest(await runTest({ data: { residentId: rid, placeholders, mappings: maps } }));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Test failed");
     }
   }
 
   const resultsByKey = test ? Object.fromEntries(test.results.map((r) => [r.key, r])) : undefined;
-  const previewHtml = renderTemplate(html, resultsByKey);
+  const previewHtml = renderTemplate(html, resultsByKey, maps);
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-4">
@@ -224,6 +276,19 @@ function TemplateWorkspace() {
                 </Button>
               ) : (
                 <>
+                  <select
+                    value=""
+                    onMouseDown={() => editorRef.current?.focus()}
+                    onChange={(e) => { if (e.target.value) insert(e.target.value); }}
+                    className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                  >
+                    <option value="">Insert field…</option>
+                    {FIELD_SOURCES.map((src) => (
+                      <optgroup key={src} label={src}>
+                        {TEMPLATE_FIELDS.filter((f) => f.source === src).map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
                   <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setPendingFile(null); }}>Cancel</Button>
                   <Button size="sm" disabled={busy} onClick={doSave}>Save as Draft</Button>
                 </>
@@ -241,21 +306,21 @@ function TemplateWorkspace() {
               {selected.status === "active" ? "The Active version can't be edited directly — changes become a new draft." : "Archived versions are kept for history and are read-only."}
             </p>
           )}
-          <div className="mx-auto max-w-[680px] rounded-lg border border-border bg-background p-8 shadow-sm">
+          <Paper>
             {editing ? (
               <div
                 ref={editorRef}
                 contentEditable
                 suppressContentEditableWarning
                 onInput={(e) => setDraftHtml((e.target as HTMLDivElement).innerHTML)}
-                className={`min-h-[500px] text-sm leading-relaxed outline-none ${MARK_CSS}`}
+                className={`min-h-[900px] outline-none ${MARK_CSS}`}
               />
             ) : html ? (
-              <div className={`min-h-[500px] text-sm leading-relaxed ${MARK_CSS}`} dangerouslySetInnerHTML={{ __html: previewHtml }} />
+              <div className={MARK_CSS} dangerouslySetInnerHTML={{ __html: previewHtml }} />
             ) : (
               <p className="py-24 text-center text-sm text-muted-foreground">No content yet — upload a Word file or start a draft.</p>
             )}
-          </div>
+          </Paper>
         </section>
 
         {/* RIGHT */}
@@ -281,43 +346,24 @@ function TemplateWorkspace() {
           ) : (
             <>
               <div>
-                <p className="mb-2 text-xs font-semibold text-brand-deep">Placeholders in this version</p>
+                <p className="mb-1 text-xs font-semibold text-brand-deep">Field mapping</p>
+                <p className="mb-3 text-[11px] text-muted-foreground">
+                  {canMap ? "Choose where each placeholder gets its value, or type a formula." : "Mappings of Active and Archived versions are read-only — start a new draft to change them."}
+                </p>
                 {bad.length > 0 && (
-                  <p className="mb-2 flex gap-1.5 rounded-lg border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">
-                    <AlertTriangle className="h-4 w-4 shrink-0" /> {bad.length} unrecognised — fix before activating.
+                  <p className="mb-3 flex gap-1.5 rounded-lg border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">
+                    <AlertTriangle className="h-4 w-4 shrink-0" /> {bad.length} not mapped yet — map them before activating.
                   </p>
                 )}
                 {placeholders.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">None found.</p>
+                  <p className="text-xs text-muted-foreground">No placeholders found. Placeholders look like {"{{Resident_full_name}}"}.</p>
                 ) : (
-                  <ul className="space-y-1">
-                    {placeholders.map((k) => {
-                      const f = FIELD_BY_KEY.get(k);
-                      return (
-                        <li key={k} className="flex items-center justify-between gap-2 text-xs">
-                          <code className={f ? "" : "text-destructive"}>{`{{${k}}}`}</code>
-                          {f ? <span className="flex items-center gap-1 text-muted-foreground"><CheckCircle2 className="h-3 w-3 text-primary" />{f.source}</span> : <span className="text-destructive">Unrecognised</span>}
-                        </li>
-                      );
-                    })}
+                  <ul className="space-y-2.5">
+                    {placeholders.map((k) => (
+                      <MappingRow key={k} ph={k} mapping={mappingFor(k, maps)} disabled={!canMap} onChange={(m) => setMap(k, m)} />
+                    ))}
                   </ul>
                 )}
-              </div>
-              <div>
-                <p className="mb-2 text-xs font-semibold text-brand-deep">Insert a placeholder</p>
-                <p className="mb-2 text-[11px] text-muted-foreground">{editing ? "Click in the document, then pick a field." : "Start a draft to insert fields."}</p>
-                {(["Resident", "Booking", "Homes / Room", "Tenancy"] as const).map((src) => (
-                  <div key={src} className="mb-2">
-                    <p className="text-[11px] text-muted-foreground">{src}</p>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {TEMPLATE_FIELDS.filter((f) => f.source === src && !f.label.includes("old name")).map((f) => (
-                        <button key={f.key} disabled={!editing} title={f.label} onMouseDown={(e) => e.preventDefault()} onClick={() => insert(f.key)} className="rounded border border-border bg-muted px-1.5 py-0.5 text-[11px] hover:border-primary disabled:opacity-50">
-                          {f.key}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
               </div>
             </>
           )}
@@ -326,6 +372,57 @@ function TemplateWorkspace() {
 
       <ResidentPicker open={picker} onOpenChange={setPicker} onPick={pickResident} />
     </div>
+  );
+}
+
+function MappingRow({ ph, mapping, disabled, onChange }: { ph: string; mapping: Mapping | null; disabled: boolean; onChange: (m: Mapping | null) => void }) {
+  const value = !mapping ? "" : mapping.kind === "field" ? `field:${mapping.key}` : mapping.kind;
+  const ok = mapping && (mapping.kind !== "formula" || mapping.expr.trim());
+  const unknown = mapping?.kind === "formula" ? formulaUnknownTokens(mapping.expr) : [];
+  return (
+    <li className={`rounded-lg border p-2 ${ok ? "border-border" : "border-destructive/40 bg-destructive/5"}`}>
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <code className="truncate text-[11px]" title={ph}>{ph}</code>
+        {ok ? <span className="flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground"><CheckCircle2 className="h-3 w-3 text-primary" />{describeMapping(mapping)}</span> : <span className="shrink-0 text-[10px] text-destructive">Not mapped</span>}
+      </div>
+      <select
+        disabled={disabled}
+        value={value}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (!v) onChange(null);
+          else if (v === "formula") onChange({ kind: "formula", expr: mapping?.kind === "field" ? `[${mapping.key}]` : "" });
+          else if (v === "blank") onChange({ kind: "blank" });
+          else onChange({ kind: "field", key: v.slice(6) });
+        }}
+        className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs disabled:opacity-70"
+      >
+        <option value="">Choose a value…</option>
+        {FIELD_SOURCES.map((src) => (
+          <optgroup key={src} label={src}>
+            {TEMPLATE_FIELDS.filter((f) => f.source === src).map((f) => <option key={f.key} value={`field:${f.key}`}>{f.label}</option>)}
+          </optgroup>
+        ))}
+        <optgroup label="Custom">
+          <option value="formula">Formula…</option>
+          <option value="blank">Leave blank (filled by hand)</option>
+        </optgroup>
+      </select>
+      {mapping?.kind === "formula" && (
+        <>
+          <Input
+            disabled={disabled}
+            className="mt-1.5 h-8 font-mono text-xs"
+            placeholder="e.g. [unit_no] - [room_no]"
+            value={mapping.expr}
+            onChange={(e) => onChange({ kind: "formula", expr: e.target.value })}
+          />
+          <p className={`mt-1 text-[10px] ${unknown.length ? "text-destructive" : "text-muted-foreground"}`}>
+            {unknown.length ? `Unknown field: ${unknown.join(", ")}` : "Type text and put field names in [brackets]."}
+          </p>
+        </>
+      )}
+    </li>
   );
 }
 
