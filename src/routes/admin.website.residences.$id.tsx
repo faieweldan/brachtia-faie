@@ -85,7 +85,69 @@ const EDITABLE_KEYS = [
   "fee_config",
   "addons",
   "unit_rates",
+  "rental_terms",
 ];
+
+/* Default inclusions/exclusions per rental type; admin can tick/untick. */
+const RENTAL_TERM_OPTIONS = [
+  "Wi-Fi",
+  "Basic Common Area Cleaning",
+  "Sewage Fee",
+  "Electricity",
+  "Water Charges",
+  "Sewerage Charges",
+];
+
+type RentalTerms = {
+  room: { included: string[]; excluded: string[] };
+  unit: { included: string[]; excluded: string[] };
+};
+
+const DEFAULT_RENTAL_TERMS: RentalTerms = {
+  room: {
+    included: ["Wi-Fi", "Basic Common Area Cleaning", "Sewage Fee"],
+    excluded: ["Electricity", "Water Charges"],
+  },
+  unit: {
+    included: ["Wi-Fi"],
+    excluded: ["Basic Common Area Cleaning", "Electricity", "Water", "Sewerage Charges"],
+  },
+};
+
+function rentalTermsOf(form: any): RentalTerms {
+  const t = form?.rental_terms;
+  if (t?.room && t?.unit) return t as RentalTerms;
+  return DEFAULT_RENTAL_TERMS;
+}
+
+function TermChecklist({
+  label,
+  values,
+  onChange,
+}: {
+  label: string;
+  values: string[];
+  onChange: (v: string[]) => void;
+}) {
+  const toggle = (opt: string, on: boolean) =>
+    onChange(on ? [...values, opt] : values.filter((v) => v !== opt));
+  return (
+    <div className="space-y-2">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <div className="space-y-1.5">
+        {RENTAL_TERM_OPTIONS.map((opt) => (
+          <label key={opt} className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={values.includes(opt)}
+              onCheckedChange={(c) => toggle(opt, c === true)}
+            />
+            {opt}
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 const NAV = [
   { id: "basics", label: "Basics" },
