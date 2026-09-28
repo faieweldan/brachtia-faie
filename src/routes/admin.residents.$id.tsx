@@ -1009,83 +1009,15 @@ function ResidentProfilePage() {
                   </div>
                 </Panel>
               </section>
+
+              <Panel title="Declaration" description="What this resident agreed to, and when.">
+                <DeclarationStatus residentId={form.id} />
+              </Panel>
             </div>
           </div>
         </TabsContent>
 
         <TabsContent value="tenancy" className="mt-4 space-y-4">
-          <Panel
-            title="Placement"
-            description="Which bed this resident occupies, and the term."
-            action={editAction("placement")}
-          >
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <ReadOnlyField
-                label="Resident ID"
-                value={residentIdOf(form) || "Given once gender and nationality are saved"}
-              />
-              <Select
-                readOnly={!isEditing("placement")}
-                label="Assigned bed"
-                // the placement is recorded on the bed, so the resident's own
-                // bedId is empty for anyone imported from the master list
-                value={form.bedId || placed?.bed.id || ""}
-                onChange={(v) => {
-                  const row = findBed(units, v);
-                  set({
-                    bedId: v,
-                    roomId: row?.room.id,
-                    unitId: row?.unit.id,
-                    occupancy: row?.room.occupancy ?? form.occupancy,
-                  });
-                }}
-                // the bed they are already in is not vacant, so it has to be
-                // added or the field shows nothing
-                options={[
-                  ...(placed
-                    ? [
-                        {
-                          value: placed.bed.id,
-                          label: `${placed.unit.unitNo} · Room ${placed.room.letter} · ${placed.bed.label}`,
-                        },
-                      ]
-                    : []),
-                  ...vacantBeds
-                    .filter(({ bed }) => bed.id !== placed?.bed.id)
-                    .map(({ unit, room, bed }) => ({
-                      value: bed.id,
-                      label: `${unit.unitNo} · Room ${room.letter} · ${bed.label}`,
-                    })),
-                ]}
-                placeholder={vacantBeds.length ? "Select bed" : "No beds set up yet"}
-              />
-              <Text
-                readOnly={!isEditing("placement")}
-                label="Occupancy"
-                value={form.occupancy || placed?.room.occupancy || ""}
-                onChange={(v) => set({ occupancy: v })}
-                placeholder="single / twin"
-              />
-              <Text
-                readOnly={!isEditing("placement")}
-                label="Move-in date"
-                type="date"
-                value={form.moveIn}
-                onChange={(v) => set({ moveIn: v })}
-              />
-              <Text
-                readOnly={!isEditing("placement")}
-                label="Lease length (months)"
-                value={form.leaseMonths}
-                onChange={(v) => set({ leaseMonths: v })}
-              />
-            </div>
-          </Panel>
-
-          <Panel title="Declaration" description="What this resident agreed to, and when.">
-            <DeclarationStatus residentId={form.id} />
-          </Panel>
-
           {tenancy ? (
             <TenancyDocs
               resident={form}
