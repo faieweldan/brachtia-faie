@@ -155,6 +155,20 @@ function PropertyPage() {
   const [selectedOccupancy, setSelectedOccupancy] = useState<Occupancy | undefined>(undefined);
   const [moveIn, setMoveIn] = useState("");
   const [moveOut, setMoveOut] = useState("");
+  // Rooms & pricing glows for a moment when a student is sent back to it
+  const [roomsGlow, setRoomsGlow] = useState(false);
+
+  /*
+   * Check Availability is the end of the room step, not a way round it. Until
+   * a room, a rate and both dates are chosen it takes the student to Rooms &
+   * pricing instead of opening the form - so everyone sees what their stay
+   * costs before they ask for it, and every enquiry arrives already priced.
+   */
+  function sendToRooms() {
+    document.getElementById("rooms")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setRoomsGlow(true);
+    window.setTimeout(() => setRoomsGlow(false), 1800);
+  }
 
   function changeMoveIn(value: string) {
     setMoveIn(value);
@@ -309,7 +323,12 @@ function PropertyPage() {
 
 
 
-            <div id="rooms" className="scroll-mt-24">
+            <div
+              id="rooms"
+              className={`scroll-mt-24 rounded-3xl ring-offset-8 ring-offset-background transition-shadow duration-500 ${
+                roomsGlow ? "ring-4 ring-brand/40" : ""
+              }`}
+            >
               <h2 className="text-2xl font-bold text-brand-deep">Rooms & pricing</h2>
               <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
                 Set your move-in date, filter by what you need, then click a room to see photos and
@@ -362,8 +381,24 @@ function PropertyPage() {
                 moveIn={moveIn}
                 moveOut={moveOut}
                 occupancy={selectedOccupancy}
-                actions={(state) => (
+                actions={(state) => {
+                  // what is still missing before there is a stay to ask about
+                  const missing = [
+                    !state.moveIn || !state.moveOut ? "your dates" : "",
+                    !state.room || !state.occupancy ? "a room and rate" : "",
+                  ].filter(Boolean);
+                  return (
                   <>
+                    {missing.length ? (
+                      <>
+                        <Button size="lg" className="w-full" onClick={sendToRooms}>
+                          Check Availability
+                        </Button>
+                        <p className="text-center text-xs text-muted-foreground">
+                          Pick {missing.join(" and ")} in Rooms &amp; pricing first.
+                        </p>
+                      </>
+                    ) : (
                     <EnquiryDialog
                       property={property}
                       rooms={rooms}
@@ -394,11 +429,13 @@ function PropertyPage() {
                         </Button>
                       }
                     />
+                    )}
                     <Button asChild size="lg" variant="outline" className="w-full">
-                      <Link to="/book-viewing">Book a Viewing</Link>
+                      <Link to="/book-viewing">Can&rsquo;t Decide? Book a viewing first</Link>
                     </Button>
                   </>
-                )}
+                  );
+                }}
               />
               </div>
             )}
