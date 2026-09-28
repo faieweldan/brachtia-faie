@@ -326,42 +326,6 @@ function ResidenceEditor() {
               </div>
             </Section>
 
-            {/* Inclusions & exclusions per rental type */}
-            <Section
-              id="inclusions"
-              title="Inclusions & exclusions"
-              description="Defaults for room rental and whole-unit rental. Tick to include, untick to exclude — change them whenever a residence differs."
-            >
-              {(() => {
-                const terms = rentalTermsOf(form);
-                const setTerms = (kind: "room" | "unit", part: "included" | "excluded", v: string[]) =>
-                  set("rental_terms", { ...terms, [kind]: { ...terms[kind], [part]: v } });
-                return (
-                  <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                    <TermChecklist
-                      label="Room rental — included"
-                      values={terms.room.included}
-                      onChange={(v) => setTerms("room", "included", v)}
-                    />
-                    <TermChecklist
-                      label="Room rental — excluded"
-                      values={terms.room.excluded}
-                      onChange={(v) => setTerms("room", "excluded", v)}
-                    />
-                    <TermChecklist
-                      label="Unit rental — included"
-                      values={terms.unit.included}
-                      onChange={(v) => setTerms("unit", "included", v)}
-                    />
-                    <TermChecklist
-                      label="Unit rental — excluded"
-                      values={terms.unit.excluded}
-                      onChange={(v) => setTerms("unit", "excluded", v)}
-                    />
-                  </div>
-                );
-              })()}
-            </Section>
 
             {/* Location */}
             <Section id="location" title="Where you'll be">
