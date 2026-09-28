@@ -23,6 +23,7 @@ import {
   saveDraft,
   searchResidents,
   testMapping,
+  type DocTemplate,
 } from "@/lib/templates.functions";
 
 export const Route = createFileRoute("/admin/settings_/templates/$id")({
@@ -73,8 +74,11 @@ function TemplateWorkspace() {
   const placeholders = useMemo(() => detectPlaceholders(html), [html]);
   const bad = placeholders.filter((k) => !FIELD_BY_KEY.has(k));
 
-  if (!tpl || !selected) {
+  if (!tpl) {
     return <p className="p-6 text-sm text-muted-foreground">{data ? "Template not found." : "Loading…"}</p>;
+  }
+  if (!selected) {
+    return <EmptyTemplate tpl={tpl} onDone={() => qc.invalidateQueries({ queryKey: ["doc-templates"] })} />;
   }
 
   function startEdit() {
@@ -321,6 +325,42 @@ function TemplateWorkspace() {
       </div>
 
       <ResidentPicker open={picker} onOpenChange={setPicker} onPick={pickResident} />
+    </div>
+  );
+}
+
+function EmptyTemplate({ tpl, onDone }: { tpl: DocTemplate; onDone: () => void }) {
+  const save = useServerFn(saveDraft);
+  const [busy, setBusy] = useState(false);
+
+  async function onFile(f: File) {
+    setBusy(true);
+    try {
+      const html = await docxToHtml(f);
+      await save({ data: { templateId: tpl.id, contentHtml: html, file: { name: f.name, base64: await fileToBase64(f) } } });
+      toast.success("v1 saved as Draft");
+      onDone();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not read that file. Upload a Word .docx file.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-[1400px] space-y-4">
+      <Link to="/admin/settings" search={{ tab: "templates" }} className="inline-flex items-center text-xs text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="mr-1 h-3.5 w-3.5" /> Templates
+      </Link>
+      <h1 className="text-xl font-bold text-brand-deep">{tpl.name}</h1>
+      <div className="rounded-xl border border-dashed border-border bg-card p-16 text-center">
+        <p className="text-sm font-medium">No versions yet</p>
+        <p className="mt-1 text-sm text-muted-foreground">Upload the Word file for this template to create v1 as a Draft.</p>
+        <label className="mt-4 inline-flex cursor-pointer items-center rounded-md border border-input px-4 py-2 text-sm font-medium hover:bg-muted">
+          <Upload className="mr-1.5 h-4 w-4" /> {busy ? "Uploading…" : "Upload .docx"}
+          <input type="file" accept=".docx" className="hidden" disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }} />
+        </label>
+      </div>
     </div>
   );
 }

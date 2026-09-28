@@ -97,11 +97,11 @@ function TemplateRow({ t }: { t: DocTemplate }) {
     <tr className="border-b border-border last:border-0">
       <td className="py-2.5 pr-3 font-medium text-brand-deep">{t.name}</td>
       <td className="py-2.5 pr-3 text-muted-foreground">{t.category}</td>
-      <td className="py-2.5 pr-3">v{shown?.version ?? "—"}</td>
+      <td className="py-2.5 pr-3">{shown ? `v${shown.version}` : "—"}</td>
       <td className="py-2.5 pr-3 text-muted-foreground">{fmtDay(shown?.updatedAt)}</td>
       <td className="py-2.5 pr-3">
         <div className="flex items-center gap-1.5">
-          {shown && <VersionStatus status={shown.status} />}
+          {shown ? <VersionStatus status={shown.status} /> : <span className="text-[11px] text-muted-foreground">No versions</span>}
           {active && hasDraft && <span className="text-[11px] text-muted-foreground">+ draft</span>}
         </div>
       </td>

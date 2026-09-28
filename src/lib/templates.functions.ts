@@ -101,17 +101,17 @@ export const createTemplate = createServerFn({ method: "POST" })
  */
 export const saveDraft = createServerFn({ method: "POST" })
   .inputValidator((d) =>
-    z.object({ templateId: z.string().uuid(), fromVersionId: z.string().uuid(), contentHtml: z.string().max(2_000_000), file: fileSchema }).parse(d),
+    z.object({ templateId: z.string().uuid(), fromVersionId: z.string().uuid().optional(), contentHtml: z.string().max(2_000_000), file: fileSchema }).parse(d),
   )
   .handler(async ({ data }) => {
     const db = await admin();
     const { data: rows } = await db.from("template_versions").select("*").eq("template_id", data.templateId);
     const all = (rows ?? []) as any[];
-    const from = all.find((r) => r.id === data.fromVersionId);
-    if (!from) throw new Error("Version not found");
+    const from = data.fromVersionId ? all.find((r) => r.id === data.fromVersionId) : undefined;
+    if (data.fromVersionId && !from) throw new Error("Version not found");
     const f = await storeFile(db, data.templateId, data.file);
     const patch = { content_html: data.contentHtml, placeholders: detectPlaceholders(data.contentHtml), updated_at: new Date().toISOString(), ...f };
-    const draft = from.status === "draft" ? from : all.find((r) => r.status === "draft");
+    const draft = from?.status === "draft" ? from : all.find((r) => r.status === "draft");
     if (draft) {
       const { error } = await db.from("template_versions").update(patch).eq("id", draft.id);
       if (error) throw new Error("Could not save draft");
@@ -120,7 +120,7 @@ export const saveDraft = createServerFn({ method: "POST" })
     const next = Math.max(0, ...all.map((r) => r.version)) + 1;
     const { data: ins, error } = await db
       .from("template_versions")
-      .insert({ template_id: data.templateId, version: next, status: "draft", file_path: from.file_path, file_name: from.file_name, ...patch })
+      .insert({ template_id: data.templateId, version: next, status: "draft", file_path: from?.file_path ?? "", file_name: from?.file_name ?? "", ...patch })
       .select("id")
       .single();
     if (error) throw new Error("Could not create draft");
