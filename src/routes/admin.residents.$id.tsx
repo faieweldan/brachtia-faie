@@ -36,7 +36,16 @@ import {
   StatusPill,
   Text,
 } from "@/components/admin/ops-ui";
-import { TenancyCard } from "@/components/admin/TenancyCard";
+import { TenancyDocs, currentMergeValues } from "@/components/admin/TenancyDocs";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog as ActionDialog,
+  DialogContent as ActionDialogContent,
+  DialogDescription as ActionDialogDescription,
+  DialogHeader as ActionDialogHeader,
+  DialogTitle as ActionDialogTitle,
+} from "@/components/ui/dialog";
+import { renewAgreement, reviseSchedule } from "@/lib/tenancy-docs.functions";
 import { ResidentPayments } from "@/components/admin/ResidentPayments";
 import { RESIDENT_DOCS, residentDocsFor, residentDocLabel } from "@/lib/resident-documents";
 import { compressImage } from "@/lib/compress";
@@ -57,6 +66,7 @@ import {
   refreshResidents,
   refreshUnits,
   saveResidentRecord,
+  saveTenancy,
   stayDates,
   updateBed,
   useOps,
