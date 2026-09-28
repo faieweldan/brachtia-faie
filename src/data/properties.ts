@@ -808,6 +808,35 @@ function formatMonths(m: number) {
   return m === 0.5 ? "½ month" : `${m} month${m > 1 ? "s" : ""}`;
 }
 
+/**
+ * Charges in the order Brachtia bills them (Dani, 28 Sep 2026): pro-rated
+ * rent, advance rent, security deposit, utilities deposit, admin + agreement,
+ * access card deposit, resident card, then anything else - the starter kit and
+ * other extras. stayQuote already adds them in this order; this puts a quote
+ * or invoice saved before that into the same order when it is shown.
+ * Read by label, since that is all a saved line has; the sort keeps lines that
+ * rank the same in the order they were.
+ */
+const BILLING_ORDER = [
+  /^first month rent/i,
+  /advance rental|rent for the rest/i,
+  /^security deposit/i,
+  /^utilit/i,
+  /^admin/i,
+  /^access card deposit/i,
+  /^resident card/i,
+];
+export function inBillingOrder<T extends { label?: unknown }>(lines: T[]): T[] {
+  const rank = (l: T) => {
+    const i = BILLING_ORDER.findIndex((re) => re.test(String(l.label ?? "")));
+    return i === -1 ? BILLING_ORDER.length : i;
+  };
+  return lines
+    .map((l, i) => ({ l, i, r: rank(l) }))
+    .sort((a, b) => a.r - b.r || a.i - b.i)
+    .map((x) => x.l);
+}
+
 /* ---------------- Stay calculator (daily pro-rata) ---------------- */
 
 export type StaySegment = {

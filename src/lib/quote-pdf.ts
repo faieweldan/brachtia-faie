@@ -1,4 +1,5 @@
 import {
+  inBillingOrder,
   company,
   formatDate,
   formatRM,
@@ -337,7 +338,7 @@ function build(
     },
     columnStyles: { 1: { halign: "right", cellWidth: g(105) } },
     head: [["Item", "Amount"]],
-    body: quote.firstPayment.map((l) => [
+    body: inBillingOrder(quote.firstPayment).map((l) => [
       l.kind === "refundable" ? `${l.label}  (refundable)` : l.label,
       formatRM(l.amount),
     ]),

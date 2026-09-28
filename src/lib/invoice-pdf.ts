@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { company, formatDate, formatRM } from "@/data/properties";
+import { company, formatDate, formatRM, inBillingOrder } from "@/data/properties";
 import { nextRentalPayment, cycleEnd } from "@/lib/rental-schedule";
 import { stayLength } from "@/lib/stay-length";
 import { lineQty } from "@/lib/invoices";
@@ -432,7 +432,7 @@ async function buildInvoice(inv: InvoiceDoc) {
         }
       : { 1: { halign: "right", cellWidth: 96 } },
     head: itemised ? [["Item", "Qty", "Unit price", "Amount"]] : [["Item", "Amount"]],
-    body: inv.items.map((l) => {
+    body: inBillingOrder(inv.items).map((l) => {
       const many = lineQty(l.quantity);
       const label = l.kind === "refundable" ? `${l.label}  (refundable)` : l.label;
       // the line is still worth quantity x amount whether or not it is shown

@@ -41,6 +41,7 @@ import {
   type Occupancy,
   type PaymentTerm,
   type Property,
+  inBillingOrder,
 } from "@/data/properties";
 import { DateInput } from "@/components/ui/date-input";
 
@@ -150,7 +151,7 @@ function InvoiceGenerator() {
     if (!editing || loadedEdit) return;
     const inv = editing.invoice;
     setLines(
-      ((editing.items ?? []) as any[]).map((l) => ({
+      inBillingOrder((editing.items ?? []) as any[]).map((l) => ({
         label: String(l.label ?? ""),
         kind: String(l.kind ?? "onetime"),
         // one amount per line: a line saved as 2 x RM1,050 comes back as
@@ -273,7 +274,7 @@ function InvoiceGenerator() {
 
   const snapshotLines = useMemo<Line[]>(
     () =>
-      ((snapshot?.quote?.firstPayment as any[] | undefined) ?? []).map((l) => ({
+      inBillingOrder((snapshot?.quote?.firstPayment as any[] | undefined) ?? []).map((l) => ({
         label: String(l.label ?? ""),
         kind: String(l.kind ?? "onetime"),
         // one amount per line: a line saved as 2 x RM1,050 comes back as
