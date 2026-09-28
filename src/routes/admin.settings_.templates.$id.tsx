@@ -73,8 +73,11 @@ function TemplateWorkspace() {
   const placeholders = useMemo(() => detectPlaceholders(html), [html]);
   const bad = placeholders.filter((k) => !FIELD_BY_KEY.has(k));
 
-  if (!tpl || !selected) {
+  if (!tpl) {
     return <p className="p-6 text-sm text-muted-foreground">{data ? "Template not found." : "Loading…"}</p>;
+  }
+  if (!selected) {
+    return <EmptyTemplate tpl={tpl} onDone={() => qc.invalidateQueries({ queryKey: ["doc-templates"] })} />;
   }
 
   function startEdit() {
