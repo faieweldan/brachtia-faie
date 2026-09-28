@@ -25,6 +25,10 @@ async function admin(): Promise<any> {
 
 const str = (v: unknown) => (v == null ? "" : String(v));
 
+/** tenancies made on the Homes screen use short local ids, not database ids; only keep real ones */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const tenancyRef = (v?: string) => (v && UUID.test(v) ? v : null);
+
 async function versions(db: any): Promise<Record<string, string>> {
   const { activeVersionIds } = await import("@/lib/template-versions.server");
   return activeVersionIds(db);
@@ -142,7 +146,7 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
       .from("tenancy_agreements")
       .insert({
         resident_id: data.residentId,
-        tenancy_id: data.tenancyId || null,
+        tenancy_id: tenancyRef(data.tenancyId),
         agreement_no: agreementNo,
         kind: "initial",
       })
@@ -245,7 +249,7 @@ export const renewAgreement = createServerFn({ method: "POST" })
       .from("tenancy_agreements")
       .insert({
         resident_id: data.residentId,
-        tenancy_id: data.tenancyId || null,
+        tenancy_id: tenancyRef(data.tenancyId),
         agreement_no: agreementNo,
         kind: "renewal",
       })
