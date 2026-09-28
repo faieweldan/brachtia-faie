@@ -2,9 +2,20 @@ import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 
 import { DocumentRow, Panel } from "@/components/admin/ops-ui";
+import { TemplatesTab } from "@/components/admin/TemplatesTab";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { setTaTemplate, useOps } from "@/lib/ops-store";
 
 export const Route = createFileRoute("/admin/settings")({
+  validateSearch: (s: Record<string, unknown>): { tab?: "general" | "templates" } =>
+    s["tab"] === "templates" ? { tab: "templates" } : {},
+  head: () => ({
+    meta: [
+      { title: "Settings — Brachtia Admin" },
+      { name: "description", content: "Portal settings and document templates." },
+      { name: "robots", content: "noindex" },
+    ],
+  }),
   component: SettingsPage,
 });
 
@@ -24,6 +35,8 @@ const MERGE_FIELDS = [
 
 function SettingsPage() {
   const { taTemplate } = useOps();
+  const { tab } = Route.useSearch();
+  const navigate = Route.useNavigate();
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -34,6 +47,15 @@ function SettingsPage() {
         </p>
       </div>
 
+      <Tabs value={tab ?? "general"} onValueChange={(v) => navigate({ search: v === "templates" ? { tab: "templates" } : {}, replace: true })}>
+        <TabsList>
+          <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="templates">Templates</TabsTrigger>
+        </TabsList>
+        <TabsContent value="templates" className="mt-4">
+          <TemplatesTab />
+        </TabsContent>
+        <TabsContent value="general" className="mt-4">
       <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
         <Panel
           title="Tenancy agreement template"
@@ -98,6 +120,8 @@ function SettingsPage() {
           </div>
         </Panel>
       </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

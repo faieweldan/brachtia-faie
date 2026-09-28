@@ -14,6 +14,121 @@ export type Database = {
   }
   public: {
     Tables: {
+      access_card_forms: {
+        Row: {
+          card_no: string
+          created_at: string
+          form_date: string
+          id: string
+          reason: string
+          resident_id: string
+          status: string
+          template_version_id: string | null
+        }
+        Insert: {
+          card_no?: string
+          created_at?: string
+          form_date?: string
+          id?: string
+          reason?: string
+          resident_id: string
+          status?: string
+          template_version_id?: string | null
+        }
+        Update: {
+          card_no?: string
+          created_at?: string
+          form_date?: string
+          id?: string
+          reason?: string
+          resident_id?: string
+          status?: string
+          template_version_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "access_card_forms_resident_id_fkey"
+            columns: ["resident_id"]
+            isOneToOne: false
+            referencedRelation: "residents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "access_card_forms_template_version_id_fkey"
+            columns: ["template_version_id"]
+            isOneToOne: false
+            referencedRelation: "template_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agreement_documents: {
+        Row: {
+          agreement_id: string
+          created_at: string
+          doc_type: string
+          effective_date: string | null
+          id: string
+          merge_values: Json
+          period_end: string | null
+          period_start: string | null
+          status: string
+          supersedes: string | null
+          template_version_id: string | null
+          version: number
+        }
+        Insert: {
+          agreement_id: string
+          created_at?: string
+          doc_type: string
+          effective_date?: string | null
+          id?: string
+          merge_values?: Json
+          period_end?: string | null
+          period_start?: string | null
+          status?: string
+          supersedes?: string | null
+          template_version_id?: string | null
+          version?: number
+        }
+        Update: {
+          agreement_id?: string
+          created_at?: string
+          doc_type?: string
+          effective_date?: string | null
+          id?: string
+          merge_values?: Json
+          period_end?: string | null
+          period_start?: string | null
+          status?: string
+          supersedes?: string | null
+          template_version_id?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agreement_documents_agreement_id_fkey"
+            columns: ["agreement_id"]
+            isOneToOne: false
+            referencedRelation: "tenancy_agreements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreement_documents_supersedes_fkey"
+            columns: ["supersedes"]
+            isOneToOne: false
+            referencedRelation: "agreement_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agreement_documents_template_version_id_fkey"
+            columns: ["template_version_id"]
+            isOneToOne: false
+            referencedRelation: "template_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointment_types: {
         Row: {
           active: boolean
@@ -54,6 +169,7 @@ export type Database = {
         Row: {
           admin_notes: string
           assigned_staff: string
+          checkin_tasks: Json
           company: string
           created_at: string
           current_status: string
@@ -92,6 +208,7 @@ export type Database = {
         Insert: {
           admin_notes?: string
           assigned_staff?: string
+          checkin_tasks?: Json
           company?: string
           created_at?: string
           current_status?: string
@@ -130,6 +247,7 @@ export type Database = {
         Update: {
           admin_notes?: string
           assigned_staff?: string
+          checkin_tasks?: Json
           company?: string
           created_at?: string
           current_status?: string
@@ -438,6 +556,33 @@ export type Database = {
         }
         Relationships: []
       }
+      document_templates: {
+        Row: {
+          category: string
+          created_at: string
+          doc_key: string
+          id: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          doc_key?: string
+          id?: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          doc_key?: string
+          id?: string
+          name?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       enquiries: {
         Row: {
           addons: Json
@@ -697,10 +842,65 @@ export type Database = {
           },
         ]
       }
+      invoice_versions: {
+        Row: {
+          created_at: string
+          created_by: string
+          document: Json
+          id: string
+          invoice_id: string
+          issued_as: string
+          number: string
+          root_invoice_id: string | null
+          total: number
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          document?: Json
+          id?: string
+          invoice_id: string
+          issued_as?: string
+          number?: string
+          root_invoice_id?: string | null
+          total?: number
+          version: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          document?: Json
+          id?: string
+          invoice_id?: string
+          issued_as?: string
+          number?: string
+          root_invoice_id?: string | null
+          total?: number
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_versions_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_versions_root_invoice_id_fkey"
+            columns: ["root_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoices: {
         Row: {
           auto_scheduled: boolean
           bill_on: string | null
+          company: string
           created_at: string
           deposits_total: number
           discount_note: string
@@ -721,6 +921,7 @@ export type Database = {
           notes: string
           number: string
           occupancy: string
+          occupation: string
           payment_frequency: string
           payment_terms: string
           period_end: string | null
@@ -742,6 +943,7 @@ export type Database = {
         Insert: {
           auto_scheduled?: boolean
           bill_on?: string | null
+          company?: string
           created_at?: string
           deposits_total?: number
           discount_note?: string
@@ -762,6 +964,7 @@ export type Database = {
           notes?: string
           number?: string
           occupancy?: string
+          occupation?: string
           payment_frequency?: string
           payment_terms?: string
           period_end?: string | null
@@ -783,6 +986,7 @@ export type Database = {
         Update: {
           auto_scheduled?: boolean
           bill_on?: string | null
+          company?: string
           created_at?: string
           deposits_total?: number
           discount_note?: string
@@ -803,6 +1007,7 @@ export type Database = {
           notes?: string
           number?: string
           occupancy?: string
+          occupation?: string
           payment_frequency?: string
           payment_terms?: string
           period_end?: string | null
@@ -939,6 +1144,53 @@ export type Database = {
             columns: ["resident_id"]
             isOneToOne: false
             referencedRelation: "residents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quote_versions: {
+        Row: {
+          created_at: string
+          created_by: string
+          enquiry_id: string
+          id: string
+          issued_as: string
+          monthly_rent: number
+          reference: string
+          snapshot: Json
+          total_upfront: number
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          enquiry_id: string
+          id?: string
+          issued_as?: string
+          monthly_rent?: number
+          reference?: string
+          snapshot?: Json
+          total_upfront?: number
+          version: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          enquiry_id?: string
+          id?: string
+          issued_as?: string
+          monthly_rent?: number
+          reference?: string
+          snapshot?: Json
+          total_upfront?: number
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quote_versions_enquiry_id_fkey"
+            columns: ["enquiry_id"]
+            isOneToOne: false
+            referencedRelation: "enquiries"
             referencedColumns: ["id"]
           },
         ]
@@ -1235,6 +1487,10 @@ export type Database = {
       residents: {
         Row: {
           address: string
+          checkin_asked_at: string | null
+          checkin_on: string | null
+          checkin_remind: boolean
+          checkin_slot: string
           company: string
           country: string
           course: string
@@ -1295,6 +1551,10 @@ export type Database = {
         }
         Insert: {
           address?: string
+          checkin_asked_at?: string | null
+          checkin_on?: string | null
+          checkin_remind?: boolean
+          checkin_slot?: string
           company?: string
           country?: string
           course?: string
@@ -1355,6 +1615,10 @@ export type Database = {
         }
         Update: {
           address?: string
+          checkin_asked_at?: string | null
+          checkin_on?: string | null
+          checkin_remind?: boolean
+          checkin_slot?: string
           company?: string
           country?: string
           course?: string
@@ -1568,6 +1832,56 @@ export type Database = {
           },
         ]
       }
+      template_versions: {
+        Row: {
+          activated_at: string | null
+          content_html: string
+          created_at: string
+          file_name: string
+          file_path: string
+          id: string
+          placeholders: string[]
+          status: string
+          template_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          activated_at?: string | null
+          content_html?: string
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          id?: string
+          placeholders?: string[]
+          status?: string
+          template_id: string
+          updated_at?: string
+          version: number
+        }
+        Update: {
+          activated_at?: string | null
+          content_html?: string
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          id?: string
+          placeholders?: string[]
+          status?: string
+          template_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_versions_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "document_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenancies: {
         Row: {
           bed_id: string | null
@@ -1612,6 +1926,48 @@ export type Database = {
             columns: ["resident_id"]
             isOneToOne: false
             referencedRelation: "residents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenancy_agreements: {
+        Row: {
+          agreement_no: string
+          created_at: string
+          id: string
+          kind: string
+          resident_id: string
+          tenancy_id: string | null
+        }
+        Insert: {
+          agreement_no: string
+          created_at?: string
+          id?: string
+          kind?: string
+          resident_id: string
+          tenancy_id?: string | null
+        }
+        Update: {
+          agreement_no?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          resident_id?: string
+          tenancy_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenancy_agreements_resident_id_fkey"
+            columns: ["resident_id"]
+            isOneToOne: false
+            referencedRelation: "residents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenancy_agreements_tenancy_id_fkey"
+            columns: ["tenancy_id"]
+            isOneToOne: false
+            referencedRelation: "tenancies"
             referencedColumns: ["id"]
           },
         ]
@@ -1707,6 +2063,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      activate_template_version: {
+        Args: { _version_id: string }
+        Returns: undefined
+      }
       bill_due_invoices: { Args: never; Returns: number }
       has_role: {
         Args: {
@@ -1716,6 +2076,7 @@ export type Database = {
         Returns: boolean
       }
       invoice_category_code: { Args: { invoice_type: string }; Returns: string }
+      next_agreement_no: { Args: never; Returns: number }
       next_enquiry_reference: { Args: never; Returns: string }
       next_invoice_number: { Args: { invoice_type: string }; Returns: string }
       next_invoice_reference: { Args: never; Returns: string }
