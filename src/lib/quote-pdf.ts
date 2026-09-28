@@ -221,55 +221,70 @@ function build(
   doc.text(property.location, M, y);
   y += g(12);
 
-  const rowPad = { top: g(1.8), bottom: g(1.8), left: 0, right: 0 };
+  /*
+   * The person, the room and the stay, as three short sections.
+   *
+   * It used to be one list of label and value, every line the same size and
+   * weight, so a student read all eleven lines to find the three that mattered
+   * - which room, which dates, how much. Grouped, each section is read at a
+   * glance, and the labels that only repeated the obvious ("Move in") are gone.
+   */
+  const INK: [number, number, number] = [30, 30, 30];
+  // label and value, for the next-payment lines further down
   const infoStyles = {
     fontSize: g(8.5),
-    cellPadding: rowPad,
+    cellPadding: { top: g(1.8), bottom: g(1.8), left: 0, right: 0 },
   };
   const infoCols = {
     0: { cellWidth: g(112), textColor: MUTED },
-    1: { fontStyle: "bold" as const, textColor: [30, 30, 30] as [number, number, number] },
+    1: { fontStyle: "bold" as const, textColor: INK },
   };
-
-  if (lead) {
+  const section = (title: string) => {
+    y += g(10);
+    doc.setTextColor(...GREEN);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(g(7.5));
+    doc.text(title.toUpperCase(), M, y);
+    const tw = doc.getTextWidth(title.toUpperCase());
+    doc.setDrawColor(230, 226, 220);
+    doc.setLineWidth(0.5);
+    doc.line(M + tw + g(8), y - g(2.5), W - M, y - g(2.5));
+    y += g(4);
+  };
+  // two columns, no labels: a bold first line and a muted second, each side
+  const pairs = (rows: [string, string][], boldFirstRow = true) => {
     autoTable(doc, {
       startY: y,
       margin: { left: M, right: M, bottom: FOOT },
       theme: "plain",
-      styles: infoStyles,
-      columnStyles: infoCols,
-      body: [
-        ["Prepared for", lead.name],
-        /*
-         * Somebody working has no university or intake, and the row printed
-         * " · Intake" over two blanks - a quote that looked like it had lost
-         * their details rather than one that never asked for them. Their
-         * employer takes that place, and a row with nothing to say is dropped.
-         */
-        ...employmentRow(lead),
-        ["Nationality", `${lead.nationality}  ·  ${lead.gender}`],
-        ["Contact", `${lead.email}  ·  ${lead.mobile}`],
-      ],
+      styles: { fontSize: g(9), cellPadding: { top: g(1.6), bottom: g(1.6), left: 0, right: g(8) } },
+      columnStyles: { 0: { cellWidth: (W - 2 * M) / 2 } },
+      body: rows,
+      didParseCell: (d: any) => {
+        const first = d.row.index === 0 && boldFirstRow;
+        d.cell.styles.fontStyle = first ? "bold" : "normal";
+        d.cell.styles.textColor = first ? INK : MUTED;
+      },
     });
-    y = doc.lastAutoTable.finalY + g(8);
-    doc.setDrawColor(230, 226, 220);
-    doc.setLineWidth(0.5);
-    doc.line(M, y, W - M, y);
-    y += g(8);
+    y = doc.lastAutoTable.finalY + g(4);
+  };
+
+  if (lead) {
+    section("Prepared for");
+    const work = employmentRow(lead)[0]?.[1] ?? "";
+    pairs([
+      [lead.name, work],
+      [`${lead.nationality}  ·  ${lead.gender}`, `${lead.email}  ·  ${lead.mobile}`],
+    ]);
   }
 
-  autoTable(doc, {
-    startY: y,
-    margin: { left: M, right: M, bottom: FOOT },
-    theme: "plain",
-    styles: infoStyles,
-    columnStyles: infoCols,
-    body: [
-      ["Room type", `${room.unitType} · ${room.name}`],
-      ["Occupancy", occupancy === "single" ? "Single" : "Twin sharing (per pax)"],
+  section("Your room");
+  pairs(
+    [
+      [`${room.unitType} · ${room.name}`, ""],
       [
-        "Room details",
         [
+          occupancy === "single" ? "Single" : "Twin sharing (per pax)",
           room.sizeLabel,
           room.bathroom === "ensuite" ? "Private ensuite" : "Shared bathroom",
           room.hasView
@@ -278,29 +293,27 @@ function build(
         ]
           .filter(Boolean)
           .join(" · "),
+        "",
       ],
-      ["Move in", formatDate(moveIn)],
-      ["Move out", formatDate(moveOut)],
-      // the term is what it is called everywhere else - Stay details, the
-      // rate tables - so the quote says the same words back to the student
-      ["Contract term", term === "long" ? "Long term" : "Short term"],
-      // "393 days total" is a number nobody can picture. The same length in
-      // months and days is the way Stay details already says it, so the quote
-      // and the admin page read alike
-      ["Monthly rate", `${formatRM(quote.monthlyAfter)} / month  (${stayLength(moveIn, moveOut)})`],
-      /*
-       * How often they pay after moving in. It was on the quote's own snapshot
-       * and used further down to work out the next payment, but never said -
-       * so the document that tells a student what their stay costs never told
-       * them how often they would be asked for it.
-       *
-       * Whatever admin last set in Stay details, because the quote is rebuilt
-       * from the booking each time it is saved; the student's own choice on the
-       * website is what it starts as.
-       */
-      ...(frequencyLabel ? [["Payment frequency", frequencyLabel] as [string, string]] : []),
+    ].map(([a, b]) => [a, b] as [string, string]),
+  );
+
+  section("Your stay");
+  pairs([
+    // the dates, then how long that is in months and days - "393 days" is a
+    // number nobody can picture - under the term it counts as
+    [
+      // a dash, not an arrow: the PDF's built-in font has no arrow and
+      // printed it as stray symbols with every letter spaced apart
+      `${formatDate(moveIn)}  —  ${formatDate(moveOut)}`,
+      `${formatRM(quote.monthlyAfter)} / month`,
     ],
-  });
+    [
+      `${term === "long" ? "Long term" : "Short term"}  ·  ${stayLength(moveIn, moveOut)}`,
+      // how often they pay after moving in, in the words Stay details uses
+      frequencyLabel ? `Paid ${frequencyLabel.charAt(0).toLowerCase()}${frequencyLabel.slice(1)}` : "",
+    ],
+  ]);
 
   y = doc.lastAutoTable.finalY + g(18);
 
