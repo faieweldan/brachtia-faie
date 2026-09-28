@@ -42,6 +42,7 @@ import { Route as AdminResidentsTenanciesRouteImport } from './routes/admin.resi
 import { Route as AdminWebsiteIndexRouteImport } from './routes/admin.website.index'
 import { Route as PropertiesSlugIndexRouteImport } from './routes/properties.$slug.index'
 import { Route as AdminBookingsIdInvoiceRouteImport } from './routes/admin.bookings.$id_.invoice'
+import { Route as AdminResidentsIdDocumentPackRouteImport } from './routes/admin.residents.$id.document-pack'
 import { Route as AdminWebsiteResidencesIndexRouteImport } from './routes/admin.website.residences.index'
 import { Route as AdminWebsiteResidencesIdRouteImport } from './routes/admin.website.residences.$id'
 import { Route as ApiPublicPhotoSplatRouteImport } from './routes/api/public/photo.$'
@@ -212,6 +213,12 @@ const AdminBookingsIdInvoiceRoute = AdminBookingsIdInvoiceRouteImport.update({
   path: '/$id/invoice',
   getParentRoute: () => AdminBookingsRoute,
 } as any)
+const AdminResidentsIdDocumentPackRoute =
+  AdminResidentsIdDocumentPackRouteImport.update({
+    id: '/document-pack',
+    path: '/document-pack',
+    getParentRoute: () => AdminResidentsIdRoute,
+  } as any)
 const AdminWebsiteResidencesIndexRoute =
   AdminWebsiteResidencesIndexRouteImport.update({
     id: '/residences/',
@@ -254,7 +261,7 @@ export interface FileRoutesByFullPath {
   '/admin/appointments/settings': typeof AdminAppointmentsSettingsRoute
   '/admin/bookings/$id': typeof AdminBookingsIdRoute
   '/admin/homes/units': typeof AdminHomesUnitsRoute
-  '/admin/residents/$id': typeof AdminResidentsIdRoute
+  '/admin/residents/$id': typeof AdminResidentsIdRouteWithChildren
   '/admin/residents/payments': typeof AdminResidentsPaymentsRoute
   '/admin/residents/tenancies': typeof AdminResidentsTenanciesRoute
   '/admin/appointments/': typeof AdminAppointmentsIndexRoute
@@ -264,6 +271,7 @@ export interface FileRoutesByFullPath {
   '/admin/website/': typeof AdminWebsiteIndexRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
   '/admin/bookings/$id/invoice': typeof AdminBookingsIdInvoiceRoute
+  '/admin/residents/$id/document-pack': typeof AdminResidentsIdDocumentPackRoute
   '/admin/website/residences/$id': typeof AdminWebsiteResidencesIdRoute
   '/api/public/photo/$': typeof ApiPublicPhotoSplatRoute
   '/admin/website/residences/': typeof AdminWebsiteResidencesIndexRoute
@@ -286,7 +294,7 @@ export interface FileRoutesByTo {
   '/admin/appointments/settings': typeof AdminAppointmentsSettingsRoute
   '/admin/bookings/$id': typeof AdminBookingsIdRoute
   '/admin/homes/units': typeof AdminHomesUnitsRoute
-  '/admin/residents/$id': typeof AdminResidentsIdRoute
+  '/admin/residents/$id': typeof AdminResidentsIdRouteWithChildren
   '/admin/residents/payments': typeof AdminResidentsPaymentsRoute
   '/admin/residents/tenancies': typeof AdminResidentsTenanciesRoute
   '/admin/appointments': typeof AdminAppointmentsIndexRoute
@@ -296,6 +304,7 @@ export interface FileRoutesByTo {
   '/admin/website': typeof AdminWebsiteIndexRoute
   '/properties/$slug': typeof PropertiesSlugIndexRoute
   '/admin/bookings/$id/invoice': typeof AdminBookingsIdInvoiceRoute
+  '/admin/residents/$id/document-pack': typeof AdminResidentsIdDocumentPackRoute
   '/admin/website/residences/$id': typeof AdminWebsiteResidencesIdRoute
   '/api/public/photo/$': typeof ApiPublicPhotoSplatRoute
   '/admin/website/residences': typeof AdminWebsiteResidencesIndexRoute
@@ -325,7 +334,7 @@ export interface FileRoutesById {
   '/admin/appointments/settings': typeof AdminAppointmentsSettingsRoute
   '/admin/bookings/$id': typeof AdminBookingsIdRoute
   '/admin/homes/units': typeof AdminHomesUnitsRoute
-  '/admin/residents/$id': typeof AdminResidentsIdRoute
+  '/admin/residents/$id': typeof AdminResidentsIdRouteWithChildren
   '/admin/residents/payments': typeof AdminResidentsPaymentsRoute
   '/admin/residents/tenancies': typeof AdminResidentsTenanciesRoute
   '/admin/appointments/': typeof AdminAppointmentsIndexRoute
@@ -335,6 +344,7 @@ export interface FileRoutesById {
   '/admin/website/': typeof AdminWebsiteIndexRoute
   '/properties/$slug/': typeof PropertiesSlugIndexRoute
   '/admin/bookings/$id_/invoice': typeof AdminBookingsIdInvoiceRoute
+  '/admin/residents/$id/document-pack': typeof AdminResidentsIdDocumentPackRoute
   '/admin/website/residences/$id': typeof AdminWebsiteResidencesIdRoute
   '/api/public/photo/$': typeof ApiPublicPhotoSplatRoute
   '/admin/website/residences/': typeof AdminWebsiteResidencesIndexRoute
@@ -375,6 +385,7 @@ export interface FileRouteTypes {
     | '/admin/website/'
     | '/properties/$slug/'
     | '/admin/bookings/$id/invoice'
+    | '/admin/residents/$id/document-pack'
     | '/admin/website/residences/$id'
     | '/api/public/photo/$'
     | '/admin/website/residences/'
@@ -407,6 +418,7 @@ export interface FileRouteTypes {
     | '/admin/website'
     | '/properties/$slug'
     | '/admin/bookings/$id/invoice'
+    | '/admin/residents/$id/document-pack'
     | '/admin/website/residences/$id'
     | '/api/public/photo/$'
     | '/admin/website/residences'
@@ -445,6 +457,7 @@ export interface FileRouteTypes {
     | '/admin/website/'
     | '/properties/$slug/'
     | '/admin/bookings/$id_/invoice'
+    | '/admin/residents/$id/document-pack'
     | '/admin/website/residences/$id'
     | '/api/public/photo/$'
     | '/admin/website/residences/'
@@ -700,6 +713,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminBookingsIdInvoiceRouteImport
       parentRoute: typeof AdminBookingsRoute
     }
+    '/admin/residents/$id/document-pack': {
+      id: '/admin/residents/$id/document-pack'
+      path: '/document-pack'
+      fullPath: '/admin/residents/$id/document-pack'
+      preLoaderRoute: typeof AdminResidentsIdDocumentPackRouteImport
+      parentRoute: typeof AdminResidentsIdRoute
+    }
     '/admin/website/residences/': {
       id: '/admin/website/residences/'
       path: '/residences'
@@ -767,15 +787,26 @@ const AdminHomesRouteWithChildren = AdminHomesRoute._addFileChildren(
   AdminHomesRouteChildren,
 )
 
+interface AdminResidentsIdRouteChildren {
+  AdminResidentsIdDocumentPackRoute: typeof AdminResidentsIdDocumentPackRoute
+}
+
+const AdminResidentsIdRouteChildren: AdminResidentsIdRouteChildren = {
+  AdminResidentsIdDocumentPackRoute: AdminResidentsIdDocumentPackRoute,
+}
+
+const AdminResidentsIdRouteWithChildren =
+  AdminResidentsIdRoute._addFileChildren(AdminResidentsIdRouteChildren)
+
 interface AdminResidentsRouteChildren {
-  AdminResidentsIdRoute: typeof AdminResidentsIdRoute
+  AdminResidentsIdRoute: typeof AdminResidentsIdRouteWithChildren
   AdminResidentsPaymentsRoute: typeof AdminResidentsPaymentsRoute
   AdminResidentsTenanciesRoute: typeof AdminResidentsTenanciesRoute
   AdminResidentsIndexRoute: typeof AdminResidentsIndexRoute
 }
 
 const AdminResidentsRouteChildren: AdminResidentsRouteChildren = {
-  AdminResidentsIdRoute: AdminResidentsIdRoute,
+  AdminResidentsIdRoute: AdminResidentsIdRouteWithChildren,
   AdminResidentsPaymentsRoute: AdminResidentsPaymentsRoute,
   AdminResidentsTenanciesRoute: AdminResidentsTenanciesRoute,
   AdminResidentsIndexRoute: AdminResidentsIndexRoute,
