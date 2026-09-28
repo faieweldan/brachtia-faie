@@ -8,11 +8,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/admin/ops-ui";
-import { findBed, fmtDate, money, useOps } from "@/lib/ops-store";
+import { findBed, useOps } from "@/lib/ops-store";
 import {
-  DOC_FIELDS,
   DOC_TYPE_LABELS,
-  MERGE_FIELDS,
   type AgreementDocType,
 } from "@/lib/tenancy-docs";
 import { generateDocumentPack } from "@/lib/tenancy-docs.functions";
@@ -114,10 +112,6 @@ function DocumentPackPage() {
     );
   }
 
-  const fields = DOC_FIELDS[selected]
-    .map((key) => MERGE_FIELDS.find((f) => f.key === key)!)
-    .filter(Boolean);
-
   async function generate() {
     if (!resident) return;
     setGenerating(true);
@@ -200,7 +194,7 @@ function DocumentPackPage() {
           ) : !tpl ? (
             <div className="py-24 text-center text-sm text-muted-foreground">
               <p>No active template for this document yet.</p>
-              <Link to="/admin/settings" search={{ tab: "templates" } as never} className="mt-2 inline-block text-primary underline">
+              <Link to="/admin/settings" search={{ tab: "templates" }} className="mt-2 inline-block text-primary underline">
                 Upload and activate one in Settings → Templates
               </Link>
             </div>
