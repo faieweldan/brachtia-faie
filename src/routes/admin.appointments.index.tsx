@@ -160,6 +160,10 @@ function emptyForm() {
     university: "",
     nationality: "",
     intake: "",
+    // studying or working, and where they work - asked on Book a Viewing
+    current_status: "",
+    company: "",
+    occupation: "",
     gender: "",
     heard_about: "",
     heard_about_other: "",
@@ -434,6 +438,9 @@ function AppointmentsPage() {
       university: a.university ?? "",
       nationality: a.nationality ?? "",
       intake: a.intake ?? "",
+      current_status: a.current_status ?? "",
+      company: a.company ?? "",
+      occupation: a.occupation ?? "",
       gender: a.gender ?? "",
       heard_about: a.heard_about ?? "",
       heard_about_other: a.heard_about_other ?? "",
@@ -506,6 +513,9 @@ function AppointmentsPage() {
         university: form.university,
         nationality: form.nationality,
         intake: form.intake,
+        current_status: form.current_status,
+        company: form.company,
+        occupation: form.occupation,
         gender: form.gender,
         heard_about: form.heard_about,
         heard_about_other: form.heard_about_other,
@@ -862,6 +872,13 @@ function AppointmentsPage() {
                 const stayMoveIn = form.move_in || linkedBooking?.move_in || "";
                 const stayMoveOut = form.move_out || linkedBooking?.move_out || "";
                 const staySharing = form.sharing_preference || linkedBooking?.occupancy || "";
+                // what they do, from the appointment or else its booking
+                const personStatus = String(
+                  form.current_status || (linkedBooking as any)?.current_status || "",
+                ).toLowerCase();
+                const personCompany = form.company || (linkedBooking as any)?.company || "";
+                const personOccupation =
+                  form.occupation || (linkedBooking as any)?.occupation || "";
                 const startIso = new Date(`${form.date}T${form.time}:00+08:00`).toISOString();
                 const initials = (form.full_name || "?")
                   .split(" ")
@@ -1257,26 +1274,93 @@ function AppointmentsPage() {
                               />
                             )}
                           </Field>
-                          <Field label="University">
+                          {/*
+                            Studying or working decides which pair shows: a
+                            student's university and intake, or where somebody
+                            works. A linked booking's appointment may not carry
+                            these itself, so the booking fills the gap.
+                          */}
+                          <Field label="Studying or working">
                             {readOnly ? (
-                              <ReadValue icon={<GraduationCap className="h-3.5 w-3.5" />}>
-                                {form.university}
+                              <ReadValue>
+                                {personStatus === "employed"
+                                  ? "Employed / Self-employed"
+                                  : personStatus === "student"
+                                    ? "Student"
+                                    : ""}
                               </ReadValue>
                             ) : (
                               <select
                                 className={`${selectClass} w-full`}
-                                value={form.university}
-                                onChange={(e) => setField("university", e.target.value)}
+                                value={form.current_status}
+                                onChange={(e) => setField("current_status", e.target.value)}
                               >
                                 <option value="">—</option>
-                                {UNIVERSITIES.map((u) => (
-                                  <option key={u.value} value={u.value}>
-                                    {u.label}
-                                  </option>
-                                ))}
+                                <option value="student">Student</option>
+                                <option value="employed">Employed / Self-employed</option>
                               </select>
                             )}
                           </Field>
+                          {personStatus === "employed" ? (
+                            <>
+                              <Field label="Occupation / Job title">
+                                {readOnly ? (
+                                  <ReadValue>{personOccupation}</ReadValue>
+                                ) : (
+                                  <Input
+                                    value={form.occupation}
+                                    onChange={(e) => setField("occupation", e.target.value)}
+                                  />
+                                )}
+                              </Field>
+                              <Field label="Company / Organisation">
+                                {readOnly ? (
+                                  // an employed person with no company ticked self-employed
+                                  <ReadValue>{personCompany || "Self-employed"}</ReadValue>
+                                ) : (
+                                  <Input
+                                    placeholder="Leave empty if self-employed"
+                                    value={form.company}
+                                    onChange={(e) => setField("company", e.target.value)}
+                                  />
+                                )}
+                              </Field>
+                            </>
+                          ) : (
+                            <>
+                            <Field label="University">
+                              {readOnly ? (
+                                <ReadValue icon={<GraduationCap className="h-3.5 w-3.5" />}>
+                                  {form.university}
+                                </ReadValue>
+                              ) : (
+                                <select
+                                  className={`${selectClass} w-full`}
+                                  value={form.university}
+                                  onChange={(e) => setField("university", e.target.value)}
+                                >
+                                  <option value="">—</option>
+                                  {UNIVERSITIES.map((u) => (
+                                    <option key={u.value} value={u.value}>
+                                      {u.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                            </Field>
+                            <Field label="Intake">
+                              {readOnly ? (
+                                <ReadValue>{form.intake}</ReadValue>
+                              ) : (
+                                <Input
+                                  placeholder="e.g. September 2026"
+                                  value={form.intake}
+                                  onChange={(e) => setField("intake", e.target.value)}
+                                />
+                              )}
+                            </Field>
+                            </>
+                          )}
                           <Field label="Nationality">
                             {readOnly ? (
                               <ReadValue>{form.nationality}</ReadValue>
@@ -1284,17 +1368,6 @@ function AppointmentsPage() {
                               <Input
                                 value={form.nationality}
                                 onChange={(e) => setField("nationality", e.target.value)}
-                              />
-                            )}
-                          </Field>
-                          <Field label="Intake">
-                            {readOnly ? (
-                              <ReadValue>{form.intake}</ReadValue>
-                            ) : (
-                              <Input
-                                placeholder="e.g. September 2026"
-                                value={form.intake}
-                                onChange={(e) => setField("intake", e.target.value)}
                               />
                             )}
                           </Field>
