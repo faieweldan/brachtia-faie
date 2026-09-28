@@ -324,7 +324,9 @@
 .admin-ui button {
   border-radius: 0.375rem;
 }
-.admin-ui input,
+/* not tick boxes or radios: stretched to 2.25rem they drew their small square
+   in the middle of a tall box, sitting well below the text beside them */
+.admin-ui input:not([type="checkbox"]):not([type="radio"]),
 .admin-ui select {
   height: 2.25rem;
 }
