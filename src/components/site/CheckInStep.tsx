@@ -1,12 +1,11 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MessageCircle } from "lucide-react";
 
 import { whatsappUrl } from "@/data/properties";
+import { fetchDaySlots } from "@/lib/public.functions";
 
 import {
   addDays,
-  CHECKIN_NOTICE_DAYS,
-  CHECKIN_SLOTS,
   CHECKIN_WINDOW_DAYS,
   todayISO,
   type CheckInChoice,
@@ -22,8 +21,8 @@ import {
  *
  * Eight days is a small enough choice to show. A date field would hide them
  * behind a calendar the student has to open, guess at, and be refused by - so
- * the days themselves are on the page, and the ones at short notice say so
- * rather than being closed: the request is confirmed by a person either way.
+ * the days themselves are on the page. Days already gone are left out, and
+ * the request is confirmed by a person either way.
  *
  * Not knowing yet is a real answer. A student whose flight is not booked says
  * so and submits; what would be lost is the rest of the form, and Brachtia
@@ -37,7 +36,16 @@ const prettyDay = (iso: string) =>
     year: "numeric",
   });
 
-type Day = { iso: string; label: string; tooSoon: boolean };
+type Day = { iso: string; label: string };
+
+/** A slot from the scheduler as the "10:00" the arrival is saved as - Malaysian time. */
+const slotTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Kuala_Lumpur",
+  });
 
 export function CheckInStep({
   moveIn,
@@ -56,10 +64,11 @@ export function CheckInStep({
 }) {
   const days = useMemo<Day[]>(() => {
     if (!moveIn) return [];
-    const earliest = addDays(todayISO(), CHECKIN_NOTICE_DAYS);
-    return Array.from({ length: CHECKIN_WINDOW_DAYS + 1 }, (_, i) => {
-      const iso = addDays(moveIn, i);
-      return {
+    const today = todayISO();
+    return Array.from({ length: CHECKIN_WINDOW_DAYS + 1 }, (_, i) => addDays(moveIn, i))
+      // a day already gone is not a choice, so it is not offered at all
+      .filter((iso) => iso >= today)
+      .map((iso) => ({
         iso,
         // the weekday is named, because somebody arriving is choosing around a
         // flight and a bare date makes them count
@@ -69,25 +78,41 @@ export function CheckInStep({
           month: "long",
           year: "numeric",
         }),
-        tooSoon: iso < earliest,
-      };
-    });
+      }));
   }, [moveIn]);
 
   /*
-   * Short notice is marked, not refused.
-   *
-   * Every day in the window used to be greyed out until it was five days off,
-   * so a student whose tenancy starts on Saturday could not say they were
-   * arriving on Saturday. Their tenancy starts that day either way - they turn
-   * up with their bags whether or not the form let them say so, and refusing
-   * the date does not move the arrival, only the telling of it.
-   *
-   * The form asks rather than books: the request is saved pending and staff
-   * confirm it and put a name to it. So the notice period is theirs to judge
-   * against a real date, and the day says so rather than refusing.
+   * The times come from the same opening hours, blocked days and bookings the
+   * appointment scheduler uses, so a student is never offered a slot staff
+   * cannot keep. A fixed list here used to drift from the real calendar.
    */
-  const short = days.filter((d) => d.tooSoon);
+  const [slots, setSlots] = useState<string[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  useEffect(() => {
+    if (!value.on) {
+      setSlots([]);
+      return;
+    }
+    let live = true;
+    setLoadingSlots(true);
+    fetchDaySlots({ data: { date: value.on, kind: "check-in" } })
+      .then((res) => {
+        if (live) setSlots((res.slots ?? []).map(slotTime));
+      })
+      .catch(() => {
+        if (live) setSlots([]);
+      })
+      .finally(() => {
+        if (live) setLoadingSlots(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [value.on]);
+  // a time already saved stays selectable even if the calendar has since filled
+  const timeChoices =
+    value.slot && !slots.includes(value.slot) ? [value.slot, ...slots] : slots;
+
   const off = value.remind;
   // the last day that needs no approval - past it the calendar marks, not blocks
   const lastInWindow = moveIn ? addDays(moveIn, CHECKIN_WINDOW_DAYS) : "";
@@ -115,7 +140,9 @@ export function CheckInStep({
           green behind body text made the part you read once the heaviest thing
           on the step */}
       <div className="bg-brand-deep px-5 py-4 text-primary-foreground sm:px-6">
-        <h2 className="text-xl font-bold tracking-tight sm:text-2xl">Schedule Your Arrival</h2>
+        <h2 className="text-xl font-bold tracking-tight sm:text-2xl">
+          Schedule Your Arrival Check-In
+        </h2>
       </div>
 
       <div className="p-5 sm:p-6">
@@ -145,8 +172,8 @@ export function CheckInStep({
                 label: "Book Early:",
                 rest: (
                   <>
-                    Reserve your slot at least <strong>5 days in advance</strong>. Spaces fill up
-                    quickly during peak periods, so early booking is recommended.
+                    Reserve your arrival check-in slot at least <strong>5 days in advance</strong>.
+                    Spaces fill up quickly during peak periods, so early booking is recommended.
                   </>
                 ),
               },
@@ -178,14 +205,14 @@ export function CheckInStep({
             We do not have your move-in date yet, so we cannot offer days to choose from. Pick the
             reminder below and we will sort this out with you.
           </p>
-        ) : short.length === days.length ? (
+        ) : days.length === 0 ? (
           <p className="mt-5 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Your tenancy starts soon, so every day below is less than {CHECKIN_NOTICE_DAYS} days
-            away. Choose the one you are coming and we will confirm it with you.
+            Every day in your arrival window has already passed. Message us on WhatsApp below and we
+            will arrange your check-in with you.
           </p>
         ) : null}
 
-        {moveIn ? (
+        {moveIn && days.length > 0 ? (
           <div className={`mt-6 transition-opacity ${off ? "pointer-events-none opacity-40" : ""}`}>
             <p className="text-sm font-semibold italic text-foreground">Date:</p>
             {/*
@@ -197,14 +224,14 @@ export function CheckInStep({
             <select
               value={value.on}
               disabled={off}
-              onChange={(e) => onChange({ ...value, on: e.target.value })}
+              // a new day has its own times, so the old one is cleared
+              onChange={(e) => onChange({ ...value, on: e.target.value, slot: "" })}
               className="mt-2 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm disabled:cursor-not-allowed sm:max-w-sm"
             >
               <option value="">Choose your arrival date</option>
               {days.map((d) => (
                 <option key={d.iso} value={d.iso}>
                   {d.label}
-                  {d.tooSoon ? "  (short notice)" : ""}
                 </option>
               ))}
             </select>
@@ -212,12 +239,20 @@ export function CheckInStep({
             <p className="mt-5 text-sm font-semibold italic text-foreground">Time:</p>
             <select
               value={value.slot}
-              disabled={off}
+              disabled={off || !value.on || loadingSlots}
               onChange={(e) => onChange({ ...value, slot: e.target.value })}
               className="mt-2 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm disabled:cursor-not-allowed sm:max-w-sm"
             >
-              <option value="">Choose your arrival time</option>
-              {CHECKIN_SLOTS.map((t) => (
+              <option value="">
+                {!value.on
+                  ? "Choose a date first"
+                  : loadingSlots
+                    ? "Loading times…"
+                    : timeChoices.length === 0
+                      ? "No times free that day - try another"
+                      : "Choose your arrival time"}
+              </option>
+              {timeChoices.map((t) => (
                 <option key={t} value={t}>
                   {t}
                 </option>

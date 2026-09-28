@@ -201,9 +201,12 @@ const slotsSchema = z.object({
   residenceSlug: z.string().max(120).default(""),
   mode: z.enum(["in_person", "virtual"]).default("in_person"),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  // an arrival check-in is booked against the same opening hours as a
+  // viewing, but runs for as long as a check-in does
+  kind: z.enum(["viewing", "check-in"]).default("viewing"),
 });
 
-export type SlotsInput = z.infer<typeof slotsSchema>;
+export type SlotsInput = z.input<typeof slotsSchema>;
 
 export const fetchDaySlots = createServerFn({ method: "GET" })
   .inputValidator((data: SlotsInput) => slotsSchema.parse(data))
@@ -229,7 +232,12 @@ export const fetchDaySlots = createServerFn({ method: "GET" })
     // A full-day block clears the date entirely.
     if (blockedWindows.some((b) => !b.start_time || !b.end_time)) return { slots: [] as string[] };
 
-    const typeSlug = data.mode === "virtual" ? "viewing-virtual" : "viewing-in-person";
+    const typeSlug =
+      data.kind === "check-in"
+        ? "check-in"
+        : data.mode === "virtual"
+          ? "viewing-virtual"
+          : "viewing-in-person";
 
     const { data: type } = await supabaseAdmin
       .from("appointment_types")
@@ -296,7 +304,12 @@ export const bookAppointment = createServerFn({ method: "POST" })
       .eq("slug", data.residenceSlug)
       .maybeSingle();
 
-    const typeSlug = data.mode === "virtual" ? "viewing-virtual" : "viewing-in-person";
+    const typeSlug =
+      data.kind === "check-in"
+        ? "check-in"
+        : data.mode === "virtual"
+          ? "viewing-virtual"
+          : "viewing-in-person";
     const { data: type } = await supabaseAdmin
       .from("appointment_types")
       .select("duration_minutes")
