@@ -17,6 +17,7 @@ import { refreshMoney } from "@/lib/billing-client";
 import { idLabelFor } from "@/lib/reference-data";
 import { getDeclarationForResident } from "@/lib/declaration.functions";
 import {
+  RESIDENT_GROUPS,
   RESIDENT_SECTIONS,
   completeness,
   residentFieldShown,
@@ -896,19 +897,13 @@ function ResidentProfilePage() {
                   className="scroll-mt-24"
                 >
                   <Panel title={s.title} action={editAction(s.key)}>
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      {s.fields
-                        .filter((f) => residentFieldShown(f, form))
-                        .map((f) => (
-                          <AdminField
-                            key={f.key}
-                            field={f}
-                            readOnly={!isEditing(s.key)}
-                            form={form}
-                            set={set}
-                          />
-                        ))}
-                    </div>
+                    <GroupedFields
+                      sectionKey={s.key}
+                      fields={s.fields.filter((f) => residentFieldShown(f, form))}
+                      readOnly={!isEditing(s.key)}
+                      form={form}
+                      set={set}
+                    />
                   </Panel>
                 </section>
               ))}
@@ -1105,6 +1100,87 @@ function ResidentProfilePage() {
  * A list that staff may type past (a university not yet listed) gets the
  * type-or-choose box; a closed list gets a plain dropdown.
  */
+/**
+ * A section's fields in its groups (RESIDENT_GROUPS), each under a small
+ * heading. A section with no groups is the plain grid it always was.
+ */
+function GroupedFields({
+  sectionKey,
+  fields,
+  readOnly,
+  form,
+  set,
+}: {
+  sectionKey: string;
+  fields: ResidentField[];
+  readOnly: boolean;
+  form: Resident;
+  set: (p: ResidentPatch) => void;
+}) {
+  const grid = "grid gap-4 sm:grid-cols-2 lg:grid-cols-3";
+  const field = (f: ResidentField) => (
+    <AdminField key={f.key} field={f} readOnly={readOnly} form={form} set={set} />
+  );
+  const groups = RESIDENT_GROUPS[sectionKey];
+  if (!groups) return <div className={grid}>{fields.map(field)}</div>;
+
+  const byKey = new Map(fields.map((f) => [String(f.key), f]));
+  const placed = new Set<string>();
+  const parts = groups
+    .map((g) => {
+      const mine = g.keys.map((k) => byKey.get(k)).filter(Boolean) as ResidentField[];
+      mine.forEach((f) => placed.add(String(f.key)));
+      return { g, mine };
+    })
+    .filter((p) => p.mine.length);
+  // anything no group names still shows, rather than vanishing
+  const rest = fields.filter((f) => !placed.has(String(f.key)));
+
+  return (
+    <div className="divide-y divide-border">
+      {parts.map(({ g, mine }) => (
+        <div key={g.title} className="py-4 first:pt-0 last:pb-0">
+          <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {g.title}
+          </p>
+          {g.address && readOnly ? (
+            // read as it is written on an envelope: one line, not four boxes
+            <p className="text-sm text-foreground">{addressLine(mine, form) || "—"}</p>
+          ) : (
+            <div className={grid}>{mine.map(field)}</div>
+          )}
+        </div>
+      ))}
+      {rest.length ? (
+        <div className="py-4 last:pb-0">
+          <div className={grid}>{rest.map(field)}</div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** "qwerty, 1234 perlis, Malaysia" - street, then postcode and state, then country. */
+function addressLine(fields: ResidentField[], form: Resident) {
+  const value = (f?: ResidentField) => (f ? String(form[f.camel] ?? "").trim() : "");
+  const shown = (f?: ResidentField) => {
+    const v = value(f);
+    // a country is stored as its code; show its name
+    return f?.kind === "choice" ? (f.options?.find((o) => o.value === v)?.label ?? v) : v;
+  };
+  // found by what they are, not where they sit, so a missing one shifts nothing
+  const part = (end: string) => fields.find((f) => String(f.key).endsWith(end));
+  const [street, postcode, state, country] = [
+    part("address"),
+    part("postcode"),
+    part("state"),
+    part("country"),
+  ];
+  return [shown(street), [shown(postcode), shown(state)].filter(Boolean).join(" "), shown(country)]
+    .filter(Boolean)
+    .join(", ");
+}
+
 function AdminField({
   field: f,
   readOnly,
