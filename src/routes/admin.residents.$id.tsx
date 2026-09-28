@@ -414,7 +414,7 @@ function ResidentProfilePage() {
       const url = `${window.location.origin}/my-profile/${token}`;
       await navigator.clipboard.writeText(url);
       toast.success("Profile link copied", {
-        description: "Send it to the student. It works for 30 days.",
+        description: "Send it to the resident. It works for 30 days.",
       });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not create the link");
@@ -911,7 +911,7 @@ function ResidentProfilePage() {
               <section id="sec-documents" ref={sectionRef("documents")} className="scroll-mt-24">
                 <Panel
                   title="Documents"
-                  description="Files the student sent, and any added here. Preview opens a private link."
+                  description="Files the resident sent, and any added here. Preview opens a private link."
                 >
                   {/*
                     The documents the form asks this resident for - one list, so

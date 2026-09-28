@@ -298,7 +298,7 @@ async function buildInvoice(inv: InvoiceDoc) {
   doc.setTextColor(...GREEN);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(13.5);
-  doc.text(inv.full_name || "Student", M, y);
+  doc.text(inv.full_name || "Resident", M, y);
   doc.setTextColor(...MUTED);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
@@ -746,7 +746,7 @@ async function buildProofPage(proof: ProofFile, rec: ReceiptDoc) {
   const h = props.height * scale;
   doc.addImage(url, W / 2 - w / 2, top, w, h, undefined, "FAST");
 
-  footer(doc, "The bank slip as the student sent it.");
+  footer(doc, "The bank slip as the resident sent it.");
   return doc;
 }
 

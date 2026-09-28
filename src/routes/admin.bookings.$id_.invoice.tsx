@@ -997,7 +997,7 @@ function InvoiceGenerator() {
             if (
               editing &&
               !window.confirm(
-                `Create a new version of ${editing.invoice.number}?\n\nThe invoice as it is now is kept in its history as the previous version. The student should be sent the new one.`,
+                `Create a new version of ${editing.invoice.number}?\n\nThe invoice as it is now is kept in its history as the previous version. The resident should be sent the new one.`,
               )
             )
               return;

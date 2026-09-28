@@ -370,7 +370,7 @@ export function StayDetailsCard({
       withQuote &&
       invoice &&
       !window.confirm(
-        `Update the quote and invoice ${invoice.number}?\n\nThe invoice will change to match the stay. It is kept in its history as the previous version, and the student should be sent the new one.`,
+        `Update the quote and invoice ${invoice.number}?\n\nThe invoice will change to match the stay. It is kept in its history as the previous version, and the resident should be sent the new one.`,
       )
     )
       return;

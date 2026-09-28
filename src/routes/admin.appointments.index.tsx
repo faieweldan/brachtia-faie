@@ -1557,7 +1557,7 @@ function AppointmentsPage() {
                       </header>
                       <div className="space-y-3 p-4">
                         <label className="block space-y-1 text-xs font-medium text-muted-foreground">
-                          Student notes
+                          Resident notes
                           <Textarea
                             rows={2}
                             value={form.notes}

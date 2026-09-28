@@ -17,7 +17,7 @@ import { DateInput } from "@/components/ui/date-input";
 export const TENANCY_STAGES: { key: TenancyStage; label: string }[] = [
   { key: "draft", label: "Draft generated" },
   { key: "admin_signed", label: "Admin review & sign" },
-  { key: "sent", label: "Sent to student" },
+  { key: "sent", label: "Sent to resident" },
   { key: "student_signed", label: "Student signed" },
   { key: "checkin_scheduled", label: "Check-in scheduled" },
   { key: "checked_in", label: "Checked in" },

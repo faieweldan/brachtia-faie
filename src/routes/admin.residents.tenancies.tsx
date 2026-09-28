@@ -27,7 +27,7 @@ export const Route = createFileRoute("/admin/residents/tenancies")({
 const STAGES: { key: TenancyStage; label: string }[] = [
   { key: "draft", label: "Draft generated" },
   { key: "admin_signed", label: "Admin review & sign" },
-  { key: "sent", label: "Sent to student" },
+  { key: "sent", label: "Sent to resident" },
   { key: "student_signed", label: "Student signed" },
   { key: "checkin_scheduled", label: "Check-in scheduled" },
   { key: "checked_in", label: "Checked in" },

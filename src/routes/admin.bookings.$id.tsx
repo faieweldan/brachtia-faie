@@ -953,7 +953,7 @@ function BookingDetail() {
   async function clearRoom() {
     if (
       await releaseRoom(
-        "This student has paid, so the bed is kept. Move them to another bed in Homes instead.",
+        "This resident has paid, so the bed is kept. Move them to another bed in Homes instead.",
       )
     )
       toast.success("Room released");
@@ -1283,7 +1283,7 @@ function BookingDetail() {
               // picked for the old one, so it is released first and a matching one reserved again
               if (assignedBed && roomFitChanged(row, patch)) {
                 const released = await releaseRoom(
-                  "This student has paid, so the room is kept. Move them to another bed in Homes before changing the room or occupancy.",
+                  "This resident has paid, so the room is kept. Move them to another bed in Homes before changing the room or occupancy.",
                 );
                 if (!released) throw new Error("Room kept");
                 toast.success("Room released", {
@@ -1309,7 +1309,7 @@ function BookingDetail() {
           />
 
           {row.message ? (
-            <Card title="Student message">
+            <Card title="Resident message">
               <p className="rounded-lg bg-muted p-3 text-sm">{row.message}</p>
             </Card>
           ) : null}
@@ -1356,7 +1356,7 @@ function BookingDetail() {
                 {/* what the student asked for, so each match can be checked against it */}
                 <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Student wants
+                    Resident wants
                   </p>
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
                     {[
@@ -1405,7 +1405,7 @@ function BookingDetail() {
                   </div>
                   {matches.length === 0 ? (
                     <p className="px-3 py-4 text-xs text-muted-foreground">
-                      No rooms match this student&apos;s residence, room type, stay dates, gender
+                      No rooms match this resident&apos;s residence, room type, stay dates, gender
                       and sharing preference. Use “Show all rooms” to override.
                     </p>
                   ) : (
@@ -1755,7 +1755,7 @@ function BookingDetail() {
                     <Check className="mt-0.5 size-5 shrink-0 text-brand" />
                     <div>
                       <p className="text-sm font-medium text-foreground">
-                        Student chose to go ahead without a viewing
+                        Resident chose to go ahead without a viewing
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {fullDateTime(viewingSkippedAt)}

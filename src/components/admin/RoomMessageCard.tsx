@@ -176,7 +176,7 @@ export function RoomMessageCard({
     <div className="mt-4 space-y-3 border-t border-border pt-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-brand-deep">Message to student</p>
+          <p className="text-sm font-semibold text-brand-deep">Message to resident</p>
           <p className="text-xs text-muted-foreground">
             {picked && picked !== auto
               ? "Changed by you"

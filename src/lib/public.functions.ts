@@ -476,7 +476,7 @@ export const skipViewingFromLink = createServerFn({ method: "POST" })
         enquiryId: String((enquiry as any).id),
         staff,
         kind: "stage_changed",
-        summary: "Student chose to proceed without a viewing",
+        summary: "Resident chose to proceed without a viewing",
       });
     }
     return { ok: true as const };

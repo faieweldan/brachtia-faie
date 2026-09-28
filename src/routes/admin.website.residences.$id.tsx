@@ -377,7 +377,7 @@ function ResidenceEditor() {
               <div className="grid gap-6 sm:grid-cols-2">
                 <Field
                   label="Contract lengths offered"
-                  hint="Which stay lengths students can price on the website."
+                  hint="Which stay lengths residents can price on the website."
                 >
                   <div className="flex gap-4 pt-1">
                     {(["long", "short"] as const).map((t) => {
@@ -406,7 +406,7 @@ function ResidenceEditor() {
                 </Field>
                 <Field
                   label="Payment frequencies offered"
-                  hint="Shown as choices in the student's move-in cost calculator. Short-term stays are always paid in full."
+                  hint="Shown as choices in the resident's move-in cost calculator. Short-term stays are always paid in full."
                 >
                   <div className="flex flex-wrap gap-4 pt-1">
                     {PAYMENT_TERMS.map((t) => {
@@ -495,7 +495,7 @@ function ResidenceEditor() {
             <Section
               id="addons"
               title="Add-ons"
-              description="Optional extras students can add in the cost calculator."
+              description="Optional extras residents can add in the cost calculator."
             >
               <AddonsEditor items={form.addons ?? []} onChange={(v) => set("addons", v)} />
             </Section>

@@ -223,7 +223,7 @@ function ResidentsListPage() {
 
       <Panel
         title="Residents"
-        description="Profiles built from the student housing application form."
+        description="Profiles built from the housing application form."
         action={
           <div className="flex flex-wrap items-center gap-2">
             <Button

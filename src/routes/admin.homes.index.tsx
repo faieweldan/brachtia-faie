@@ -105,7 +105,7 @@ function InventoryPage() {
       const released = await releaseBookingFor(
         queryClient,
         bed.enquiryId,
-        "This student has paid, so the bed is kept. To move them, Reserve another bed and pick them there.",
+        "This resident has paid, so the bed is kept. To move them, Reserve another bed and pick them there.",
       );
       if (!released) return;
     } else if (bed.residentId) {

@@ -18,7 +18,7 @@ function ResidentsLayout() {
       <div>
         <h1 className="text-2xl font-bold text-brand-deep">Residents</h1>
         <p className="text-sm text-muted-foreground">
-          Student profiles, tenancy agreements, documents and payments.
+          Resident profiles, tenancy agreements, documents and payments.
         </p>
       </div>
 
