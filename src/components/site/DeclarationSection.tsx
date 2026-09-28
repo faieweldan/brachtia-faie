@@ -143,7 +143,10 @@ export function DeclarationSection({
             >
               <input
                 type="checkbox"
-                className="mt-1 size-4 shrink-0 accent-brand"
+                // level with the first line of the term, not floating below it: the
+                // browser's own margin is taken off, and the box is centred on a
+                // 22.75px line (text-sm, leading-relaxed) - (22.75 - 16) / 2
+                className="m-0 mt-[3.5px] size-4 shrink-0 accent-brand"
                 checked={ticked[i]}
                 onChange={(e) =>
                   setTicked((prev) => prev.map((v, j) => (j === i ? e.target.checked : v)))
@@ -193,10 +196,12 @@ export function DeclarationSection({
             placeholder="As written on your ID"
             onChange={(e) => setTypedId(e.target.value)}
           />
-          <p className="text-[11px] text-muted-foreground">
-            Type it yourself - this is part of your signature.
-          </p>
         </div>
+        {/* under both boxes, since both are the signature - under one of them
+            it pushed that side down and the two no longer lined up */}
+        <p className="-mt-2 text-[11px] text-muted-foreground sm:col-span-2">
+          Type both yourself - together they are your signature.
+        </p>
       </div>
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
