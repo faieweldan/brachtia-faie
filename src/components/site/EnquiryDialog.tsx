@@ -166,6 +166,8 @@ export default function EnquiryDialog({
    * sent, or a tab that was refreshed mid-flight.
    */
   const submissionKey = useRef("");
+  // the quote exactly as it was saved with the enquiry, for the student's copy
+  const savedSnapshot = useRef<Record<string, unknown> | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [reference, setReference] = useState("");
   const [dialIso, setDialIso] = useState("MY");
@@ -259,31 +261,17 @@ export default function EnquiryDialog({
   }
 
   async function downloadQuote() {
-    if (!quote || !room || !occupancy || !lead) return;
+    const snapshot = savedSnapshot.current;
+    if (!snapshot) return;
     setDownloading(true);
     try {
       const { downloadStayQuote } = await import("@/lib/quote-pdf");
+      const { quoteSnapshotFor } = await import("@/lib/booking-quote");
+      // the same reader admin's copy is built with, from the snapshot that was
+      // saved - so the student's paper and staff's are one document
       await downloadStayQuote({
-        property,
-        room,
-        occupancy,
-        term: stay.term ?? "long",
-        moveIn: stay.moveIn,
-        moveOut: stay.moveOut,
-        quote,
+        ...(quoteSnapshotFor({ quote_snapshot: snapshot }) as any),
         ...(reference ? { reference } : {}),
-        lead: {
-          name: lead.name,
-          university: lead.university ?? "",
-          intake: lead.intake ?? "",
-          // somebody working has an employer where a student has a university
-          company: lead.company ?? "",
-          occupation: lead.occupation ?? "",
-          nationality: lead.nationality,
-          gender: lead.gender,
-          email: lead.email,
-          mobile: lead.mobile,
-        },
       });
     } finally {
       setDownloading(false);
@@ -429,6 +417,10 @@ export default function EnquiryDialog({
                     quote,
                     lead: {
                       name: leadData.name,
+                      // studying or working, so the quote can say which -
+                      // including self-employed, which a blank company alone
+                      // cannot tell from a missing answer
+                      currentStatus: status,
                       university: uni,
                       intake,
                       // and the employer, on the same terms as the university
@@ -444,6 +436,8 @@ export default function EnquiryDialog({
                     },
                   },
                 };
+
+                savedSnapshot.current = payload.quoteSnapshot as Record<string, unknown>;
 
                 /*
                  * Enquired already today? They are told once and it stops here.

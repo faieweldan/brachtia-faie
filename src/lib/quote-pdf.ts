@@ -73,12 +73,44 @@ export type QuoteInput = {
     /** where they work, when they are working rather than studying */
     company?: string;
     occupation?: string;
+    /** "student" or "employed"; older quotes do not say */
+    currentStatus?: string;
     nationality: string;
     gender: string;
     email: string;
     mobile: string;
   };
 };
+
+/**
+ * The line that says what the person does.
+ *
+ * Somebody working has no university or intake, and the row printed
+ * " · Intake" over two blanks - a quote that looked like it had lost their
+ * details rather than one that never asked for them. Their work takes that
+ * place, and a row with nothing to say is dropped.
+ *
+ * Working with no company named is self-employed: the form only lets an
+ * employed person leave the company empty by ticking that they are, so the
+ * quote says so instead of leaving a gap.
+ */
+export function employmentRow(lead: NonNullable<QuoteInput["lead"]>): [string, string][] {
+  const status = String(lead.currentStatus ?? "").toLowerCase();
+  const working = status === "employed" || Boolean(lead.company || lead.occupation);
+  if (status !== "student" && working) {
+    const where = lead.company || "Self-employed";
+    return [["Employment", [lead.occupation, where].filter(Boolean).join("  ·  ")]];
+  }
+  if (lead.university || lead.intake) {
+    return [
+      [
+        "University",
+        [lead.university, lead.intake ? `Intake ${lead.intake}` : ""].filter(Boolean).join("  ·  "),
+      ],
+    ];
+  }
+  return [];
+}
 
 async function buildQuote(input: QuoteInput) {
   const { jsPDF } = await import("jspdf");
@@ -214,23 +246,7 @@ function build(
          * their details rather than one that never asked for them. Their
          * employer takes that place, and a row with nothing to say is dropped.
          */
-        ...(lead.company || lead.occupation
-          ? [
-              ["Employment", [lead.occupation, lead.company].filter(Boolean).join("  ·  ")] as [
-                string,
-                string,
-              ],
-            ]
-          : lead.university || lead.intake
-            ? [
-                [
-                  "University",
-                  [lead.university, lead.intake ? `Intake ${lead.intake}` : ""]
-                    .filter(Boolean)
-                    .join("  ·  "),
-                ] as [string, string],
-              ]
-            : []),
+        ...employmentRow(lead),
         ["Nationality", `${lead.nationality}  ·  ${lead.gender}`],
         ["Contact", `${lead.email}  ·  ${lead.mobile}`],
       ],

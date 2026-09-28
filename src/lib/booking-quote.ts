@@ -3,6 +3,8 @@ import type { Addon, Property, StayQuote } from "@/data/properties";
 /** The booking's own answers about the person, used to fill gaps in a snapshot. */
 type BookingPerson = {
   full_name?: string | null;
+  /** "student" or "employed", as the enquiry answered it */
+  current_status?: string | null;
   university?: string | null;
   company?: string | null;
   occupation?: string | null;
@@ -86,6 +88,7 @@ export function quoteLeadFrom(
   return {
     ...lead,
     name: pick(lead["name"], row?.full_name),
+    currentStatus: pick(lead["currentStatus"], row?.current_status),
     university: pick(lead["university"], row?.university),
     company: pick(lead["company"], row?.company),
     occupation: pick(lead["occupation"], row?.occupation),
@@ -96,7 +99,15 @@ export function quoteLeadFrom(
   };
 }
 
-/** The saved quote as admin's PDF should print it: snapshot, lead completed. */
+/**
+ * The saved quote as its PDF is printed: snapshot, lead completed.
+ *
+ * The one way a quote becomes a document. Admin opens a booking's quote through
+ * it, and the student's own download on the website goes through it too, with
+ * the very snapshot that was saved - so the two copies cannot come out
+ * different. They did: the website built its own, and left the payment
+ * frequency off the student's copy.
+ */
 export function quoteSnapshotFor(row: BookingPerson | null | undefined) {
   const snapshot = (row?.quote_snapshot ?? {}) as { lead?: Record<string, unknown> };
   return { ...snapshot, lead: quoteLeadFrom(snapshot, row) };
