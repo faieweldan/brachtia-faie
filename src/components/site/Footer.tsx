@@ -1,9 +1,12 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { Mail, MapPin, Phone } from "lucide-react";
 import { company } from "@/data/properties";
 import Logo from "./Logo";
 
 export default function Footer() {
+  // on a residence's page, Book a viewing arrives with that residence picked
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const residenceSlug = /^\/properties\/([^/]+)\/?$/.exec(pathname)?.[1] ?? "";
   return (
     <footer className="mt-20 border-t border-border bg-brand-deep text-primary-foreground">
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-4">
@@ -26,7 +29,7 @@ export default function Footer() {
           <ul className="mt-4 space-y-2.5 text-sm text-primary-foreground/70">
             <li><Link to="/properties" className="hover:text-primary-foreground">Properties</Link></li>
             <li><Link to="/about" className="hover:text-primary-foreground">About us</Link></li>
-            <li><Link to="/book-viewing" className="hover:text-primary-foreground">Book a viewing</Link></li>
+            <li><Link to="/book-viewing" search={residenceSlug ? { property: residenceSlug } : {}} className="hover:text-primary-foreground">Book a viewing</Link></li>
             <li><Link to="/properties" className="hover:text-primary-foreground">Check availability</Link></li>
             <li><Link to="/contact" className="hover:text-primary-foreground">Contact</Link></li>
           </ul>

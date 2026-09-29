@@ -125,10 +125,11 @@ function BookViewingPage() {
   const { property } = Route.useSearch();
   const [mode, setMode] = useState<Mode>("in_person");
   const [showAvailabilityNudge, setShowAvailabilityNudge] = useState(true);
-  const [slugs, setSlugs] = useState<string[]>(() => {
-    const first = property ?? properties[0]?.slug ?? "";
-    return first ? [first] : [];
-  });
+  // arriving from a residence's page, that residence is picked; from anywhere
+  // else nothing is, so the student chooses rather than being steered to one
+  const [slugs, setSlugs] = useState<string[]>(() =>
+    property && properties.some((p) => p.slug === property) ? [property] : [],
+  );
   const slug = slugs[0] ?? "";
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [slot, setSlot] = useState<string | null>(null);
@@ -171,7 +172,7 @@ function BookViewingPage() {
 
   const slotsQuery = useQuery({
     queryKey: ["slots", slug, mode, isoDate],
-    enabled: Boolean(isoDate),
+    enabled: Boolean(isoDate && slug),
     queryFn: () => fetchDaySlots({ data: { residenceSlug: slug, mode, date: isoDate } }),
   });
 

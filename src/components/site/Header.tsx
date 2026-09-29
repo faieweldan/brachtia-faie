@@ -16,20 +16,17 @@ const linkClass =
 
 export default function Header() {
   /*
-   * Book a Viewing starts with choosing where. From anywhere else it goes to
-   * the residences; on a residence's own page it books that residence, and on
-   * a laptop it steps aside, because the price panel beside the rooms already
-   * offers the same thing. On a phone that panel is far down the page, so the
-   * button stays.
+   * Book a Viewing goes straight to the booking page from everywhere (Dani and
+   * Lav, 29 Sep 2026). On a residence's own page it arrives with that
+   * residence already picked; anywhere else the student picks there. It stays
+   * in the top bar on every page, a residence's included.
    */
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const residenceSlug = /^\/properties\/([^/]+)\/?$/.exec(pathname)?.[1] ?? "";
-  const viewingLink = residenceSlug ? (
-    <Link to="/book-viewing" search={{ property: residenceSlug }}>
+  const viewingLink = (
+    <Link to="/book-viewing" search={residenceSlug ? { property: residenceSlug } : {}}>
       Book a Viewing
     </Link>
-  ) : (
-    <Link to="/properties">Book a Viewing</Link>
   );
   const [open, setOpen] = useState(false);
 
@@ -77,7 +74,7 @@ export default function Header() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          <Button asChild variant="outline" size="sm" className={residenceSlug ? "lg:hidden" : ""}>
+          <Button asChild variant="outline" size="sm">
             {viewingLink}
           </Button>
           <Button asChild size="sm">
