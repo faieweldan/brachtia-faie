@@ -1233,6 +1233,8 @@ function BookingDetail() {
                 ? {
                     number: String((billing as any).invoice.number ?? ""),
                     paid: Number((billing as any).paid ?? 0),
+                    row: (billing as any).invoice,
+                    items: ((billing as any).items ?? []) as any[],
                   }
                 : null
             }

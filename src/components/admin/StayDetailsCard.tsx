@@ -23,7 +23,8 @@ import { roomFitChanged } from "@/lib/stay-fit";
 import { bookingAddonNames, selectedBookingAddons, quoteAmountsMatch } from "@/lib/booking-quote";
 import { stayLength } from "@/lib/stay-length";
 import { DateInput } from "@/components/ui/date-input";
-import { BOOKING_FEE } from "@/lib/invoices";
+import { BOOKING_FEE, discountPerMonth } from "@/lib/invoices";
+import { firstInvoiceLines } from "@/lib/invoice-lines";
 
 /**
  * A booking's stay, worked out the way the website works it out.
@@ -140,7 +141,16 @@ export function StayDetailsCard({
   onBlocked: () => void;
   onSave: (patch: Record<string, unknown>) => Promise<unknown>;
   /** the booking's first invoice, if one has been raised, and what is paid on it */
-  invoice?: { number: string; paid: number } | null | undefined;
+  invoice?:
+    | {
+        number: string;
+        paid: number;
+        /** the invoice row and its lines, to tell whether the stay has moved on from it */
+        row?: any;
+        items?: any[];
+      }
+    | null
+    | undefined;
   /** after Update quote: bring that invoice into line with the new quote */
   onQuoteUpdated?: (() => Promise<unknown>) | undefined;
 }) {
@@ -296,6 +306,8 @@ export function StayDetailsCard({
   const saved = work(fromRow(row));
   const live = work(draft);
   const shown = editing ? live : saved;
+  // the stay as it stands (or as being edited) would change the invoice
+  const invoiceBehind = invoiceStage && invoiceDiffers(editing ? draft : fromRow(row));
 
   // the quote the student has, against the stay as it now stands
   const snap = row.quote_snapshot as any;
@@ -362,6 +374,44 @@ export function StayDetailsCard({
           }
         : {}),
     };
+  }
+
+  /**
+   * Whether this stay would put anything different on the invoice - the same
+   * question Update invoice answers by rebuilding it, asked without saving.
+   * Dates, occupancy, residence and payment cycle are compared as written; the
+   * money is compared line by line, worked out the way the invoice would be,
+   * with the discount already on the invoice kept.
+   */
+  function invoiceDiffers(s: Stay) {
+    const inv = invoice?.row;
+    if (!inv) return false;
+    const w = work(s);
+    if (!w.quote || !w.property || !w.term) return false;
+    const listRent = w.quote.monthlyAfter;
+    const rent =
+      listRent - discountPerMonth(listRent, inv.discount_type, Number(inv.discount_value || 0));
+    const lines =
+      firstInvoiceLines({
+        property: w.property,
+        rent,
+        addons: selectedBookingAddons(w.property, s.addons),
+        term: w.term,
+        moveIn: s.moveIn,
+        moveOut: s.moveOut,
+        frequency: s.paymentTerm as PaymentTerm,
+      }) ?? [];
+    const key = (l: any) => `${String(l.label)}|${Number(l.amount || 0).toFixed(2)}`;
+    const want = lines.map(key).sort().join("\n");
+    const have = (invoice?.items ?? []).map(key).sort().join("\n");
+    return (
+      want !== have ||
+      String(inv.tenancy_start ?? "").slice(0, 10) !== s.moveIn ||
+      String(inv.tenancy_end ?? "").slice(0, 10) !== s.moveOut ||
+      String(inv.payment_frequency ?? "") !== s.paymentTerm ||
+      String(inv.occupancy ?? "") !== s.occupancy ||
+      String(inv.residence_name ?? "") !== String(w.resRow?.name ?? row.residence_name ?? "")
+    );
   }
 
   /** Update invoice: save the stay, then rebuild the invoice from it. The quote is not touched. */
@@ -549,6 +599,10 @@ export function StayDetailsCard({
           */}
           {!editing && priceProblem ? (
             <p className="text-[11px] font-medium text-amber-700">{priceProblem}</p>
+          ) : !editing && invoiceBehind ? (
+            <p className="text-[11px] font-medium text-amber-700">
+              Stay details differ from invoice {invoice?.number}
+            </p>
           ) : !editing && quoteStale && !invoiceStage ? (
             <p className="text-[11px] font-medium text-amber-700">Quote is out of date</p>
           ) : !editing && !hasQuote ? (
@@ -556,25 +610,26 @@ export function StayDetailsCard({
           ) : null}
         </div>
         <div className="flex items-center gap-2">
-          {/* at the invoice stage the button only appears while the stay is being
-              edited: outside editing there is nothing new to put on the invoice,
-              and pressing it rewrote the invoice with the same lines as a new
-              version (Dani, 29 Sep 2026) */}
-          {invoiceStage && editing ? (
+          {/* at the invoice stage the button only appears when the stay would
+              change the invoice - an edit that changes something, or a stay
+              saved without updating it. With nothing different, pressing it
+              only saved the same invoice again as a new version (Dani, 29 Sep
+              2026) */}
+          {invoiceBehind ? (
             <Button
               size="sm"
               variant="outline"
-              disabled={busy || invoiceLocked || !live.quote}
+              disabled={busy || invoiceLocked || !(editing ? live.quote : saved.quote)}
               title={
                 invoiceLocked
                   ? "More than the booking fee is paid on the invoice, so it can no longer change"
-                  : live.quote
+                  : (editing ? live.quote : saved.quote)
                     ? invoice
                       ? `Updates invoice ${invoice.number} from the stay; the quote stays as sent`
                       : "Saves the stay; the invoice is worked out from it when generated"
                     : priceProblem || "The invoice needs a room rate, move in and move out"
               }
-              onClick={() => (canEdit ? void persistInvoice(draft) : onBlocked())}
+              onClick={() => (canEdit ? void persistInvoice(editing ? draft : fromRow(row)) : onBlocked())}
             >
               <RefreshCw className="size-4" /> Update invoice
             </Button>
