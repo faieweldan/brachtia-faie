@@ -629,7 +629,9 @@ export function StayDetailsCard({
                       : "Saves the stay; the invoice is worked out from it when generated"
                     : priceProblem || "The invoice needs a room rate, move in and move out"
               }
-              onClick={() => (canEdit ? void persistInvoice(editing ? draft : fromRow(row)) : onBlocked())}
+              onClick={() =>
+                canEdit ? void persistInvoice(editing ? draft : fromRow(row)) : onBlocked()
+              }
             >
               <RefreshCw className="size-4" /> Update invoice
             </Button>
