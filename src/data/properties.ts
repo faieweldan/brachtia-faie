@@ -1121,10 +1121,14 @@ export function formatRate(amount: number) {
   return `RM ${amount.toLocaleString("en-MY", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
 
+/**
+ * "30 September 2026" - the month written in full, the way the invoice and
+ * quote PDFs date themselves, so the invoice page previews what the PDF prints.
+ */
 export function formatDate(iso: string) {
   return new Date(iso + "T00:00:00").toLocaleDateString("en-MY", {
     day: "numeric",
-    month: "short",
+    month: "long",
     year: "numeric",
   });
 }
