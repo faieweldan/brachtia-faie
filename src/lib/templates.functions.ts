@@ -91,7 +91,7 @@ export const saveMappings = createServerFn({ method: "POST" })
     const { data: v } = await db.from("template_versions").select("status").eq("id", data.versionId).single();
     if (!v || v.status !== "draft") throw new Error("Only a draft's mappings can be changed");
     const { error } = await db.from("template_versions").update({ mappings: data.mappings, updated_at: new Date().toISOString() }).eq("id", data.versionId);
-    if (error) throw new Error("Could not save mappings");
+    if (error) throw new Error(`Could not save mappings: ${error.message}`);
     return { ok: true };
   });
 
@@ -154,7 +154,9 @@ export const activateVersion = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ versionId: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
     const db = await admin();
-    const { data: v } = await db.from("template_versions").select("status, content_html, mappings").eq("id", data.versionId).single();
+    const { data: v, error: readError } = await db.from("template_versions").select("status, content_html, mappings").eq("id", data.versionId).single();
+    // a failed read is not "not a draft" - say what actually went wrong
+    if (readError) throw new Error(`Could not read this version: ${readError.message}`);
     if (!v || v.status !== "draft") throw new Error("Only a draft can be activated");
     const bad = unmapped(detectPlaceholders(v.content_html), v.mappings ?? {});
     if (bad.length) throw new Error(`Unmapped placeholders: ${bad.join(", ")}`);
