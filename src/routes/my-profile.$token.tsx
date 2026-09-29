@@ -27,7 +27,7 @@ import { CheckInStep } from "@/components/site/CheckInStep";
 import type { CheckInChoice } from "@/lib/checkin";
 import { DateInput } from "@/components/ui/date-input";
 import type { CalendarEvent } from "@/lib/calendar";
-import { AddToCalendar } from "@/components/site/AddToCalendar";
+import { AppointmentCard } from "@/components/site/AddToCalendar";
 import { RESIDENT_DOCUMENTS } from "@/lib/resident-reading";
 import { ChoicePicker, DialPicker } from "@/components/site/ChoicePicker";
 import { getDeclarationByToken, type SignedDeclaration } from "@/lib/declaration.functions";
@@ -500,24 +500,16 @@ function MyProfilePage() {
           </p>
 
           {arrival ? (
-            <div className="mt-3 w-full max-w-sm rounded-xl border border-border bg-card p-4 text-left">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Your arrival check-in request
-              </p>
-              <p className="mt-1 text-sm font-semibold text-brand-deep">{arrivalLabel}</p>
-              {placeName ? <p className="text-sm text-foreground">{placeName}</p> : null}
-              {residenceName ? (
-                <p className="text-sm text-muted-foreground">{residenceName}</p>
-              ) : null}
-              <p className="mt-2 text-xs text-muted-foreground">
-                We will confirm this slot with you before the day.
-              </p>
-              <AddToCalendar
-                className="mt-3"
-                event={arrival}
-                fileName="brachtia-arrival-check-in.ics"
-              />
-            </div>
+            <AppointmentCard
+              className="mt-3"
+              heading="Your arrival check-in request"
+              when={arrivalLabel}
+              place={placeName || undefined}
+              residence={residenceName || undefined}
+              note="We will confirm this slot with you before the day."
+              event={arrival}
+              fileName="brachtia-arrival-check-in.ics"
+            />
           ) : checkIn.remind ? (
             <p className="mt-3 max-w-sm rounded-xl bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
               You asked us to remind you about your arrival. We will be in touch about a week

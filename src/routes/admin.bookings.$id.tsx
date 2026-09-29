@@ -117,6 +117,7 @@ import {
 import { Calendar as DayPicker } from "@/components/ui/calendar";
 import { Textarea } from "@/components/ui/textarea";
 import { DateInput } from "@/components/ui/date-input";
+import { AddToCalendar } from "@/components/site/AddToCalendar";
 import { cleanPhone, waDigits } from "@/lib/reference-data";
 
 export const Route = createFileRoute("/admin/bookings/$id")({
@@ -809,31 +810,6 @@ function BookingDetail() {
     }. Booking ID: ${r.reference ?? ""}. See you then! — Brachtia Homes`;
     void navigator.clipboard.writeText(text);
     toast.success("Message copied");
-  }
-
-  function addToCalendar(v: any) {
-    const stamp = (iso: string) => iso.replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-    const ics = [
-      "BEGIN:VCALENDAR",
-      "VERSION:2.0",
-      "PRODID:-//Brachtia Homes//Viewing//EN",
-      "BEGIN:VEVENT",
-      `UID:${v.id}@brachtiahomes.com`,
-      `DTSTAMP:${stamp(new Date().toISOString())}`,
-      `DTSTART:${stamp(new Date(v.starts_at).toISOString())}`,
-      `DTEND:${stamp(viewingEndISO(v))}`,
-      `SUMMARY:Viewing — ${r.full_name ?? ""} (${r.reference ?? ""})`,
-      `LOCATION:${v.residence_name || r.residence_name || ""}`,
-      `DESCRIPTION:${v.mode === "virtual" ? "Virtual tour" : "In person"}`,
-      "END:VEVENT",
-      "END:VCALENDAR",
-    ].join("\r\n");
-    const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `viewing-${r.reference ?? v.id}.ics`;
-    a.click();
-    URL.revokeObjectURL(url);
   }
 
   /**
@@ -1619,9 +1595,18 @@ function BookingDetail() {
                   <Button size="sm" variant="outline" onClick={() => copyViewingMessage(viewing)}>
                     Copy message
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => addToCalendar(viewing)}>
-                    Add to calendar
-                  </Button>
+                  {/* the same Google / Apple-Outlook pair the student is given */}
+                  <AddToCalendar
+                    fileName={`viewing-${row.reference ?? viewing.id}.ics`}
+                    event={{
+                      uid: `${viewing.id}@brachtiahomes.com`,
+                      title: `Viewing — ${row.full_name ?? ""} (${row.reference ?? ""})`,
+                      startsAt: new Date(viewing.starts_at).toISOString(),
+                      endsAt: viewingEndISO(viewing),
+                      location: viewing.residence_name || row.residence_name || "",
+                      details: viewing.mode === "virtual" ? "Virtual tour" : "In person",
+                    }}
+                  />
                   <Button size="sm" variant="ghost" onClick={() => openViewingPanel(viewing)}>
                     Reschedule
                   </Button>

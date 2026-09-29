@@ -43,7 +43,7 @@ import {
 import { z } from "zod";
 import { DateInput } from "@/components/ui/date-input";
 import { todayISO } from "@/lib/checkin";
-import { AddToCalendar, viewingEvent } from "@/components/site/AddToCalendar";
+import { AppointmentCard, appointmentWhen, viewingEvent } from "@/components/site/AddToCalendar";
 
 const leadBase = z.object({
   name: z.string().trim().min(2, "Enter your full name").max(100),
@@ -192,19 +192,14 @@ function BookViewingPage() {
         </div>
         <h1 className="mt-5 text-3xl font-extrabold text-brand-deep">Viewing requested</h1>
         <p className="mt-3 text-muted-foreground">
-          {mode === "virtual" ? "Video tour" : "Viewing"} on{" "}
-          <strong className="text-foreground">
-            {new Date(done.slot).toLocaleDateString("en-MY", {
-              weekday: "long",
-              day: "numeric",
-              month: "long",
-            })}
-          </strong>{" "}
-          at <strong className="text-foreground">{formatSlot(done.slot)}</strong>. We'll confirm by
-          email and WhatsApp within 24 hours.
+          We&apos;ll confirm by email and WhatsApp within 24 hours.
         </p>
-        <AddToCalendar
-          className="mt-5 justify-center"
+        <AppointmentCard
+          className="mx-auto mt-6"
+          heading={mode === "virtual" ? "Your video tour request" : "Your viewing request"}
+          when={appointmentWhen(done.slot, formatSlot(done.slot))}
+          residence={mode === "virtual" ? "Video call - we will send the link" : done.where}
+          note="We will confirm this slot with you before the day."
           fileName="brachtia-viewing.ics"
           event={viewingEvent({
             uid: `viewing-${done.slot}`,

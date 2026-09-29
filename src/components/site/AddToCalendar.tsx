@@ -31,6 +31,57 @@ export function AddToCalendar({
   );
 }
 
+/**
+ * An appointment as a card: what it is, when, where, what happens next, and
+ * the two calendar buttons. The arrival check-in card set the look (Dani and
+ * Lav, 29 Sep 2026); every confirmation of a viewing or a check-in uses this
+ * one, so a student sees the same thing wherever they booked.
+ */
+export function AppointmentCard({
+  heading,
+  when,
+  place,
+  residence,
+  note,
+  event,
+  fileName,
+  className = "",
+}: {
+  heading: string;
+  when: string;
+  place?: string | undefined;
+  residence?: string | undefined;
+  note?: string | undefined;
+  event: CalendarEvent;
+  fileName: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`w-full max-w-sm rounded-xl border border-border bg-card p-4 text-left ${className}`}
+    >
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {heading}
+      </p>
+      <p className="mt-1 text-sm font-semibold text-brand-deep">{when}</p>
+      {place ? <p className="text-sm text-foreground">{place}</p> : null}
+      {residence ? <p className="text-sm text-muted-foreground">{residence}</p> : null}
+      {note ? <p className="mt-2 text-xs text-muted-foreground">{note}</p> : null}
+      <AddToCalendar className="mt-3" event={event} fileName={fileName} />
+    </div>
+  );
+}
+
+/** "Friday, 16 October 2026 at 10:00 am" - the way every card writes its time. */
+export function appointmentWhen(iso: string, time: string) {
+  return `${new Date(iso).toLocaleDateString("en-MY", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  })} at ${time}`;
+}
+
 /** A viewing as a calendar entry, from its start and length. */
 export function viewingEvent(opts: {
   uid: string;

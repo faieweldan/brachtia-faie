@@ -23,7 +23,7 @@ import { stayLength } from "@/lib/stay-length";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
-import { AddToCalendar, viewingEvent } from "@/components/site/AddToCalendar";
+import { AppointmentCard, appointmentWhen, viewingEvent } from "@/components/site/AddToCalendar";
 
 // the page opens on a choice, not on a calendar - it is not a booking form
 const title = "Your room is available | Brachtia Homes";
@@ -225,21 +225,16 @@ function ViewingLinkPage() {
             {"slot" in done ? "Viewing confirmed" : "We'll send your invoice"}
           </h1>
           {"slot" in done ? (
-            <p className="mt-3 text-muted-foreground">
-              {mode === "virtual" ? "Video tour" : "Viewing"} on{" "}
-              <strong className="text-foreground">
-                {new Date(done.slot).toLocaleDateString("en-MY", {
-                  weekday: "long",
-                  day: "numeric",
-                  month: "long",
-                })}
-              </strong>{" "}
-              at <strong className="text-foreground">{formatSlot(done.slot)}</strong>.
-            </p>
-          ) : null}
-          {"slot" in done ? (
-            <AddToCalendar
-              className="mt-5 justify-center"
+            <AppointmentCard
+              className="mx-auto mt-6"
+              heading={mode === "virtual" ? "Your video tour" : "Your viewing"}
+              when={appointmentWhen(done.slot, formatSlot(done.slot))}
+              residence={
+                mode === "virtual"
+                  ? "Video call - we will send the link"
+                  : String(booking["residence_name"] ?? "")
+              }
+              note="See you then. Message us on WhatsApp if you need to change it."
               fileName="brachtia-viewing.ics"
               event={viewingEvent({
                 uid: `viewing-${String(booking["reference"] ?? done.slot)}`,
