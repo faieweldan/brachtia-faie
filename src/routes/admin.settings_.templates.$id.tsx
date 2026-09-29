@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { fmtDay, VersionStatus } from "@/components/admin/TemplatesTab";
+import { DocxView } from "@/components/admin/DocxView";
 import { MARK_CSS, Paper } from "@/components/admin/TemplatePaper";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -31,6 +32,7 @@ import {
   saveMappings,
   searchResidents,
   testMapping,
+  getTemplateDocx,
   type DocTemplate,
 } from "@/lib/templates.functions";
 
@@ -79,7 +81,18 @@ function TemplateWorkspace() {
   }, [editing, pendingFile]);
 
   const html = editing ? draftHtml : (selected?.contentHtml ?? "");
-  const placeholders = useMemo(() => detectPlaceholders(html), [html]);
+  // the version's own Word file: shown as the document looks, and read for the
+  // placeholders its header and footer carry that the web copy never had
+  const docxFn = useServerFn(getTemplateDocx);
+  const docx = useQuery({
+    queryKey: ["template-docx", selected?.id],
+    queryFn: () => docxFn({ data: { versionId: selected!.id } }),
+    enabled: Boolean(selected?.id && selected?.fileName),
+  });
+  const placeholders = useMemo(
+    () => [...new Set([...(editing ? [] : (docx.data?.placeholders ?? [])), ...detectPlaceholders(html)])],
+    [html, editing, docx.data],
+  );
   const bad = unmapped(placeholders, maps);
   const selKey = selected?.id;
   useEffect(() => { setMaps(selected?.mappings ?? {}); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [selKey]);
@@ -284,6 +297,9 @@ function TemplateWorkspace() {
               {selected.status === "active" ? "The Active version can't be edited directly — changes become a new draft." : "Archived versions are kept for history and are read-only."}
             </p>
           )}
+          {!editing && docx.data ? (
+            <DocxView base64={docx.data.base64} className="max-h-[80vh]" />
+          ) : (
           <Paper>
             {editing ? (
               <div
@@ -299,6 +315,7 @@ function TemplateWorkspace() {
               <p className="py-24 text-center text-sm text-muted-foreground">No content yet — upload a Word file or start a draft.</p>
             )}
           </Paper>
+          )}
         </section>
 
         {/* RIGHT */}

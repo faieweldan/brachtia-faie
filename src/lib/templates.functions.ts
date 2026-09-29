@@ -74,6 +74,35 @@ async function storeFile(db: any, templateId: string, file?: { name: string; bas
   return { file_path: path, file_name: file.name };
 }
 
+/* ---------------- the Word file itself ---------------- */
+
+/** The uploaded .docx a version was made from, or null when it has none. */
+async function loadDocx(db: any, filePath: string | null | undefined): Promise<Uint8Array | null> {
+  if (!filePath) return null;
+  const { data, error } = await db.storage.from("document-templates").download(filePath);
+  if (error || !data) return null;
+  return new Uint8Array(await data.arrayBuffer());
+}
+
+/**
+ * Every placeholder a version has, read from its Word file - body, headers and
+ * footers - as well as from the web copy. The web copy never had the headers,
+ * so {{Agreement_id}} in the page header was never offered for mapping.
+ */
+async function placeholdersOf(db: any, row: { content_html?: string; file_path?: string }) {
+  const fromHtml = detectPlaceholders(row.content_html ?? "");
+  const bytes = await loadDocx(db, row.file_path);
+  if (!bytes) return fromHtml;
+  const { docxPlaceholders } = await import("@/lib/docx-fill");
+  return [...new Set([...(await docxPlaceholders(bytes)), ...fromHtml])];
+}
+
+const toBase64 = (bytes: Uint8Array) => {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+};
+
 const mappingSchema = z.record(
   z.string().max(80),
   z.union([
@@ -154,11 +183,11 @@ export const activateVersion = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ versionId: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
     const db = await admin();
-    const { data: v, error: readError } = await db.from("template_versions").select("status, content_html, mappings").eq("id", data.versionId).single();
+    const { data: v, error: readError } = await db.from("template_versions").select("status, content_html, file_path, mappings").eq("id", data.versionId).single();
     // a failed read is not "not a draft" - say what actually went wrong
     if (readError) throw new Error(`Could not read this version: ${readError.message}`);
     if (!v || v.status !== "draft") throw new Error("Only a draft can be activated");
-    const bad = unmapped(detectPlaceholders(v.content_html), v.mappings ?? {});
+    const bad = unmapped(await placeholdersOf(db, v), v.mappings ?? {});
     if (bad.length) throw new Error(`Unmapped placeholders: ${bad.join(", ")}`);
     const { error } = await db.rpc("activate_template_version", { _version_id: data.versionId });
     if (error) throw new Error("Could not activate");
@@ -216,14 +245,67 @@ export const getPackTemplates = createServerFn({ method: "GET" })
     const { ctx } = await buildContext(db, data.residentId);
     const { data: rows } = await db
       .from("template_versions")
-      .select("id, version, content_html, mappings, document_templates!inner(doc_key, name)")
+      .select("id, version, content_html, file_path, mappings, document_templates!inner(doc_key, name)")
       .eq("status", "active");
-    const out: Record<string, { name: string; version: number; html: string; placeholders: string[]; results: ReturnType<typeof testMappingFor> } | null> = {};
+    const out: Record<string, { name: string; version: number; html: string; hasFile: boolean; placeholders: string[]; results: ReturnType<typeof testMappingFor> } | null> = {};
     for (const k of PACK_KEYS) {
       const row = (rows ?? []).find((r: any) => r.document_templates.doc_key === k);
       if (!row) { out[k] = null; continue; }
-      const placeholders = detectPlaceholders(row.content_html ?? "");
-      out[k] = { name: row.document_templates.name, version: row.version, html: row.content_html ?? "", placeholders, results: testMappingFor(placeholders, ctx, row.mappings ?? {}) };
+      const placeholders = await placeholdersOf(db, row);
+      out[k] = { name: row.document_templates.name, version: row.version, html: row.content_html ?? "", hasFile: Boolean(row.file_path), placeholders, results: testMappingFor(placeholders, ctx, row.mappings ?? {}) };
     }
     return out;
+  });
+
+/**
+ * A version's own Word file, and the placeholders in it, for the template
+ * page to show as the document looks. Read-only.
+ */
+export const getTemplateDocx = createServerFn({ method: "GET" })
+  .inputValidator((d) => z.object({ versionId: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const db = await admin();
+    const { data: v } = await db.from("template_versions").select("content_html, file_path").eq("id", data.versionId).maybeSingle();
+    const bytes = v ? await loadDocx(db, v.file_path) : null;
+    if (!bytes) return null;
+    return { base64: toBase64(bytes), placeholders: await placeholdersOf(db, v) };
+  });
+
+/**
+ * One pack document, filled in inside its Word file for this resident - the
+ * corrections typed on the pack page included. Only the placeholders change;
+ * every table, border, header, footer and signature line stays as written.
+ * A placeholder with nothing to put in it is left showing, so the gap is seen.
+ * Read-only: nothing is saved.
+ */
+export const fillPackDocx = createServerFn({ method: "POST" })
+  .inputValidator((d) =>
+    z.object({
+      residentId: z.string().uuid(),
+      docKey: z.enum(PACK_KEYS),
+      overrides: z.record(z.string().max(80), z.string().max(2000)).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const db = await admin();
+    const { data: rows } = await db
+      .from("template_versions")
+      .select("content_html, file_path, mappings, document_templates!inner(doc_key)")
+      .eq("status", "active")
+      .eq("document_templates.doc_key", data.docKey)
+      .limit(1);
+    const row = (rows ?? [])[0];
+    const bytes = row ? await loadDocx(db, row.file_path) : null;
+    if (!row || !bytes) return null;
+    const { ctx } = await buildContext(db, data.residentId);
+    const placeholders = await placeholdersOf(db, row);
+    const values: Record<string, string | null> = {};
+    for (const r of testMappingFor(placeholders, ctx, row.mappings ?? {})) {
+      const typed = data.overrides?.[r.key];
+      if (typed !== undefined && typed.trim() !== "") values[r.key] = typed;
+      else if (r.result === "mapped") values[r.key] = r.value;
+      else values[r.key] = null;
+    }
+    const { fillDocx } = await import("@/lib/docx-fill");
+    return { base64: toBase64(await fillDocx(bytes, values)) };
   });

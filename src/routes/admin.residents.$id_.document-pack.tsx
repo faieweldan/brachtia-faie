@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -14,9 +14,10 @@ import {
   type AgreementDocType,
 } from "@/lib/tenancy-docs";
 import { generateDocumentPack } from "@/lib/tenancy-docs.functions";
-import { getPackTemplates } from "@/lib/templates.functions";
+import { fillPackDocx, getPackTemplates } from "@/lib/templates.functions";
 import { renderTemplate, type MappingResult } from "@/lib/template-fields";
 import { MARK_CSS, Paper } from "@/components/admin/TemplatePaper";
+import { DocxView } from "@/components/admin/DocxView";
 
 const TEMPLATE_KEY: Record<string, string> = {
   agreement: "tenancy_agreement",
@@ -89,6 +90,26 @@ function DocumentPackPage() {
   });
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const tpl = pack.data?.[TEMPLATE_KEY[selected]!] ?? null;
+
+  /*
+   * The document as it will read, filled inside its own Word file - so the
+   * tables, borders, header, footer and signature lines are the template's,
+   * not a web page's. A correction typed on the right redraws it, after a
+   * short pause so every keystroke is not a trip to the server.
+   */
+  const [typed, setTyped] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const t = setTimeout(() => setTyped(overrides), 500);
+    return () => clearTimeout(t);
+  }, [overrides]);
+  const fillDocx = useServerFn(fillPackDocx);
+  const docKey = TEMPLATE_KEY[selected] as "tenancy_agreement";
+  const filledDoc = useQuery({
+    queryKey: ["pack-docx", id, docKey, typed],
+    queryFn: () => fillDocx({ data: { residentId: id, docKey, overrides: typed } }),
+    enabled: Boolean(tpl?.hasFile),
+    placeholderData: (prev) => prev,
+  });
   const results = useMemo(() => {
     const out: Record<string, MappingResult> = {};
     for (const r of tpl?.results ?? []) {
@@ -198,7 +219,16 @@ function DocumentPackPage() {
                 Upload and activate one in Settings → Templates
               </Link>
             </div>
+          ) : tpl.hasFile ? (
+            filledDoc.data ? (
+              <DocxView base64={filledDoc.data.base64} className="max-h-[80vh]" />
+            ) : filledDoc.isError ? (
+              <p className="py-24 text-center text-sm text-destructive">Could not fill the document.</p>
+            ) : (
+              <p className="py-24 text-center text-sm text-muted-foreground">Filling in the document…</p>
+            )
           ) : (
+            // a template saved before files were kept: only its web copy exists
             <Paper>
               <div className={MARK_CSS} dangerouslySetInnerHTML={{ __html: renderTemplate(tpl.html, results) }} />
             </Paper>
