@@ -151,6 +151,14 @@ export function StayDetailsCard({
    * rewritten under it either - the two would no longer agree.
    */
   const invoiceLocked = Boolean(invoice && invoice.paid > BOOKING_FEE + 0.005);
+  /*
+   * Once a room is reserved or an invoice is raised, the booking is at the
+   * invoice stage and the quote stays as it was sent (Dani and Lav, 29 Sep
+   * 2026). The button then updates the invoice from the stay and leaves the
+   * quote alone, so the two can differ - and that difference is how a change
+   * after the quote is spotted, not a fault.
+   */
+  const invoiceStage = Boolean(invoice || assignedBed);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Stay>(() => fromRow(row));
   const [busy, setBusy] = useState(false);
@@ -356,6 +364,41 @@ export function StayDetailsCard({
     };
   }
 
+  /** Update invoice: save the stay, then rebuild the invoice from it. The quote is not touched. */
+  async function persistInvoice(s: Stay) {
+    const w = work(s);
+    if (!w.quote) {
+      toast.error("The invoice needs a room rate, move in and move out");
+      return;
+    }
+    if (invoiceLocked) {
+      toast.error("More than the booking fee is paid, so the invoice can no longer change");
+      return;
+    }
+    if (
+      invoice &&
+      !window.confirm(
+        `Update invoice ${invoice.number}?\n\nThe invoice will change to match the stay. The quote stays as it was sent. The invoice is kept in its history as the previous version, and the resident should be sent the new one.`,
+      )
+    )
+      return;
+    setBusy(true);
+    try {
+      await onSave(patchFor(s, w, false));
+      if (invoice && onQuoteUpdated) await onQuoteUpdated();
+      toast.success(invoice ? "Invoice updated" : "Stay details saved", {
+        description: invoice
+          ? "It now matches the stay details."
+          : "The invoice will be worked out from these when it is generated.",
+      });
+      setEditing(false);
+    } catch {
+      // the page already says what went wrong
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function persist(s: Stay, withQuote: boolean) {
     const w = work(s);
     if (withQuote && !w.quote) {
@@ -506,14 +549,34 @@ export function StayDetailsCard({
           */}
           {!editing && priceProblem ? (
             <p className="text-[11px] font-medium text-amber-700">{priceProblem}</p>
-          ) : !editing && quoteStale ? (
+          ) : !editing && quoteStale && !invoiceStage ? (
             <p className="text-[11px] font-medium text-amber-700">Quote is out of date</p>
           ) : !editing && !hasQuote ? (
             <p className="text-[11px] text-muted-foreground">No quote yet</p>
           ) : null}
         </div>
         <div className="flex items-center gap-2">
-          {editing || quoteStale || !hasQuote ? (
+          {invoiceStage ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy || invoiceLocked || !(editing ? live.quote : saved.quote)}
+              title={
+                invoiceLocked
+                  ? "More than the booking fee is paid on the invoice, so it can no longer change"
+                  : (editing ? live.quote : saved.quote)
+                    ? invoice
+                      ? `Updates invoice ${invoice.number} from the stay; the quote stays as sent`
+                      : "Saves the stay; the invoice is worked out from it when generated"
+                    : priceProblem || "The invoice needs a room rate, move in and move out"
+              }
+              onClick={() =>
+                canEdit ? void persistInvoice(editing ? draft : fromRow(row)) : onBlocked()
+              }
+            >
+              <RefreshCw className="size-4" /> Update invoice
+            </Button>
+          ) : editing || quoteStale || !hasQuote ? (
             <Button
               size="sm"
               variant="outline"
