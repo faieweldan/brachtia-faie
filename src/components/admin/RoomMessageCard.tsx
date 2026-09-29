@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Copy, Mail, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 
+import { MessageToggle } from "@/components/admin/MessageToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -125,6 +126,8 @@ export function RoomMessageCard({
 }) {
   const [link, setLink] = useState("");
   const [loading, setLoading] = useState(true);
+  // closed until it is wanted, like every message card on the booking
+  const [open, setOpen] = useState(false);
   // staff's own pick; until then it follows the room assignment
   const [picked, setPicked] = useState<Outcome | null>(null);
   const [channel, setChannel] = useState<Channel>("whatsapp");
@@ -185,6 +188,9 @@ export function RoomMessageCard({
                 ? "Picked for you · a room is reserved"
                 : "Picked for you · no room reserved yet"}
           </p>
+          <div className="-ml-2 mt-1">
+            <MessageToggle open={open} onToggle={() => setOpen((v) => !v)} />
+          </div>
         </div>
         <div
           role="radiogroup"
@@ -210,94 +216,98 @@ export function RoomMessageCard({
         </div>
       </div>
 
-      <div role="tablist" aria-label="Send by" className="flex gap-4 border-b border-border">
-        {CHANNELS.map(({ value, label, icon: Icon }) => (
-          <button
-            key={value}
-            type="button"
-            role="tab"
-            aria-selected={channel === value}
-            onClick={() => setChannel(value)}
-            className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-0.5 pb-2 text-xs font-medium transition-colors ${
-              channel === value
-                ? "border-brand-deep text-brand-deep"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Icon className="size-3.5" />
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {loading ? (
-        <p className="text-xs text-muted-foreground">Preparing the message…</p>
-      ) : (
-        <div role="tabpanel" className="space-y-3">
-          {channel === "email" ? (
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">Subject</p>
-              <Input
-                value={subject}
-                onChange={(e) => setDraft(subjectKey, e.target.value)}
-                aria-label="Email subject"
-                className="h-9"
-              />
-            </div>
-          ) : null}
-          {/* editable, so a staff member can add a line before sending */}
-          <Textarea
-            value={body}
-            onChange={(e) => setDraft(bodyKey, e.target.value)}
-            rows={channel === "email" ? 12 : 7}
-            aria-label={channel === "email" ? "Email message" : "WhatsApp message"}
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" onClick={() => void copy()}>
-              <Copy className="size-4" /> {channel === "email" ? "Copy email" : "Copy message"}
-            </Button>
-            {channel === "whatsapp" && digits ? (
-              <Button asChild size="sm" variant="outline">
-                <a
-                  href={`https://wa.me/${digits}?text=${encodeURIComponent(body)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <MessageCircle className="size-4" /> Open in WhatsApp
-                </a>
-              </Button>
-            ) : null}
-            {channel === "email" && email ? (
-              <Button asChild size="sm" variant="outline">
-                <a
-                  href={`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`}
-                >
-                  <Mail className="size-4" /> Open in email
-                </a>
-              </Button>
-            ) : null}
-            {drafts[bodyKey] !== undefined || drafts[subjectKey] !== undefined ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() =>
-                  setDrafts((d) => {
-                    const { [bodyKey]: _body, [subjectKey]: _subject, ...rest } = d;
-                    return rest;
-                  })
-                }
+      {open ? (
+        <>
+          <div role="tablist" aria-label="Send by" className="flex gap-4 border-b border-border">
+            {CHANNELS.map(({ value, label, icon: Icon }) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={channel === value}
+                onClick={() => setChannel(value)}
+                className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-0.5 pb-2 text-xs font-medium transition-colors ${
+                  channel === value
+                    ? "border-brand-deep text-brand-deep"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
               >
-                Reset wording
-              </Button>
-            ) : null}
-            {(channel === "whatsapp" && !digits) || (channel === "email" && !email) ? (
-              <span className="text-xs text-muted-foreground">
-                No {channel === "email" ? "email address" : "phone number"} on this booking
-              </span>
-            ) : null}
+                <Icon className="size-3.5" />
+                {label}
+              </button>
+            ))}
           </div>
-        </div>
-      )}
+
+          {loading ? (
+            <p className="text-xs text-muted-foreground">Preparing the message…</p>
+          ) : (
+            <div role="tabpanel" className="space-y-3">
+              {channel === "email" ? (
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Subject</p>
+                  <Input
+                    value={subject}
+                    onChange={(e) => setDraft(subjectKey, e.target.value)}
+                    aria-label="Email subject"
+                    className="h-9"
+                  />
+                </div>
+              ) : null}
+              {/* editable, so a staff member can add a line before sending */}
+              <Textarea
+                value={body}
+                onChange={(e) => setDraft(bodyKey, e.target.value)}
+                rows={channel === "email" ? 12 : 7}
+                aria-label={channel === "email" ? "Email message" : "WhatsApp message"}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" onClick={() => void copy()}>
+                  <Copy className="size-4" /> {channel === "email" ? "Copy email" : "Copy message"}
+                </Button>
+                {channel === "whatsapp" && digits ? (
+                  <Button asChild size="sm" variant="outline">
+                    <a
+                      href={`https://wa.me/${digits}?text=${encodeURIComponent(body)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <MessageCircle className="size-4" /> Open in WhatsApp
+                    </a>
+                  </Button>
+                ) : null}
+                {channel === "email" && email ? (
+                  <Button asChild size="sm" variant="outline">
+                    <a
+                      href={`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`}
+                    >
+                      <Mail className="size-4" /> Open in email
+                    </a>
+                  </Button>
+                ) : null}
+                {drafts[bodyKey] !== undefined || drafts[subjectKey] !== undefined ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      setDrafts((d) => {
+                        const { [bodyKey]: _body, [subjectKey]: _subject, ...rest } = d;
+                        return rest;
+                      })
+                    }
+                  >
+                    Reset wording
+                  </Button>
+                ) : null}
+                {(channel === "whatsapp" && !digits) || (channel === "email" && !email) ? (
+                  <span className="text-xs text-muted-foreground">
+                    No {channel === "email" ? "email address" : "phone number"} on this booking
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          )}
+        </>
+      ) : null}
     </div>
   );
 }

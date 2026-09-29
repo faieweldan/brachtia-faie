@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Check, Copy, FileText, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 
+import { MessageToggle } from "@/components/admin/MessageToggle";
+
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { PdfPreviewButton } from "@/components/admin/PdfPreview";
@@ -109,6 +111,7 @@ export function InvoiceMessageCard({
     paymentMessage({ name: studentName, reference, amount, paid, dueDate, isBalance }),
   );
   const [copied, setCopied] = useState(false);
+  const [open, setOpen] = useState(false);
 
   async function copy() {
     await navigator.clipboard.writeText(message);
@@ -129,51 +132,56 @@ export function InvoiceMessageCard({
             {reference} · {formatRM(amount)} due
           </p>
         </div>
-        {copied ? (
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
-            <Check className="size-3.5" /> Copied
-          </span>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {copied ? (
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+              <Check className="size-3.5" /> Copied
+            </span>
+          ) : null}
+          <MessageToggle open={open} onToggle={() => setOpen((v) => !v)} />
+        </div>
       </div>
 
-      <div className="space-y-3">
-        {/* editable, so a staff member can add a line before sending */}
-        <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={11} />
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => void copy()}>
-            <Copy className="size-4" /> Copy message
-          </Button>
-          {digits ? (
-            <Button asChild size="sm" variant="outline">
-              <a
-                href={`https://wa.me/${digits}?text=${encodeURIComponent(message)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <MessageCircle className="size-4" /> Open in WhatsApp
-              </a>
+      {open ? (
+        <div className="space-y-3">
+          {/* editable, so a staff member can add a line before sending */}
+          <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={11} />
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => void copy()}>
+              <Copy className="size-4" /> Copy message
             </Button>
+            {digits ? (
+              <Button asChild size="sm" variant="outline">
+                <a
+                  href={`https://wa.me/${digits}?text=${encodeURIComponent(message)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <MessageCircle className="size-4" /> Open in WhatsApp
+                </a>
+              </Button>
+            ) : null}
+          </div>
+          {attachments.length ? (
+            // WhatsApp cannot take files from a link: download these and attach them
+            <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+              <span className="text-xs text-muted-foreground">Attach</span>
+              {attachments.map((a) => (
+                <PdfPreviewButton
+                  key={a.fileName}
+                  size="sm"
+                  variant="ghost"
+                  title={a.label}
+                  fileName={a.fileName}
+                  build={a.build}
+                >
+                  <FileText className="size-4" /> {a.label}
+                </PdfPreviewButton>
+              ))}
+            </div>
           ) : null}
         </div>
-        {attachments.length ? (
-          // WhatsApp cannot take files from a link: download these and attach them
-          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
-            <span className="text-xs text-muted-foreground">Attach</span>
-            {attachments.map((a) => (
-              <PdfPreviewButton
-                key={a.fileName}
-                size="sm"
-                variant="ghost"
-                title={a.label}
-                fileName={a.fileName}
-                build={a.build}
-              >
-                <FileText className="size-4" /> {a.label}
-              </PdfPreviewButton>
-            ))}
-          </div>
-        ) : null}
-      </div>
+      ) : null}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Copy, FileText, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 
+import { MessageToggle } from "@/components/admin/MessageToggle";
 import { PdfPreviewButton } from "@/components/admin/PdfPreview";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -75,6 +76,11 @@ export function WelcomeMessageCard({
 }) {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  // closed until it is wanted; a card the page points at opens itself
+  const [open, setOpen] = useState(Boolean(highlight));
+  useEffect(() => {
+    if (highlight) setOpen(true);
+  }, [highlight]);
 
   async function prepare() {
     setLoading(true);
@@ -132,13 +138,16 @@ export function WelcomeMessageCard({
     >
       <div className="mb-3 flex items-center justify-between gap-2">
         <p className="text-sm font-semibold text-brand-deep">Welcome message</p>
-        {sent ? (
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
-            <Check className="size-3.5" /> Sent
-          </span>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {sent ? (
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+              <Check className="size-3.5" /> Sent
+            </span>
+          ) : null}
+          {message ? <MessageToggle open={open} onToggle={() => setOpen((v) => !v)} /> : null}
+        </div>
       </div>
-      {message ? (
+      {message && open ? (
         <div className="space-y-3">
           {/* editable, so a staff member can add a line before sending */}
           <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={9} />
@@ -178,8 +187,16 @@ export function WelcomeMessageCard({
             </div>
           ) : null}
         </div>
-      ) : (
-        <Button size="sm" variant="outline" disabled={loading} onClick={() => void prepare()}>
+      ) : message ? null : (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={loading}
+          onClick={() => {
+            setOpen(true);
+            void prepare();
+          }}
+        >
           <MessageCircle className="size-4" /> {loading ? "Preparing…" : "Prepare message"}
         </Button>
       )}
