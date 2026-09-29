@@ -24,7 +24,7 @@ export function PdfPageViewer({ url, className = "" }: { url: string; className?
     let live = true;
     void import("pdfjs-dist").then(async (pdfjs) => {
       pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
-      const loaded = await pdfjs.getDocument(url).promise;
+      const loaded = await pdfjs.getDocument({ url }).promise;
       if (live) { setPdf(loaded as LoadedPdf); setPage(1); setError(""); }
     }).catch(() => live && setError("Could not open this PDF preview."));
     return () => { live = false; };
