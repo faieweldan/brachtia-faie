@@ -556,27 +556,29 @@ export function StayDetailsCard({
           ) : null}
         </div>
         <div className="flex items-center gap-2">
-          {invoiceStage ? (
+          {/* at the invoice stage the button only appears while the stay is being
+              edited: outside editing there is nothing new to put on the invoice,
+              and pressing it rewrote the invoice with the same lines as a new
+              version (Dani, 29 Sep 2026) */}
+          {invoiceStage && editing ? (
             <Button
               size="sm"
               variant="outline"
-              disabled={busy || invoiceLocked || !(editing ? live.quote : saved.quote)}
+              disabled={busy || invoiceLocked || !live.quote}
               title={
                 invoiceLocked
                   ? "More than the booking fee is paid on the invoice, so it can no longer change"
-                  : (editing ? live.quote : saved.quote)
+                  : live.quote
                     ? invoice
                       ? `Updates invoice ${invoice.number} from the stay; the quote stays as sent`
                       : "Saves the stay; the invoice is worked out from it when generated"
                     : priceProblem || "The invoice needs a room rate, move in and move out"
               }
-              onClick={() =>
-                canEdit ? void persistInvoice(editing ? draft : fromRow(row)) : onBlocked()
-              }
+              onClick={() => (canEdit ? void persistInvoice(draft) : onBlocked())}
             >
               <RefreshCw className="size-4" /> Update invoice
             </Button>
-          ) : editing || quoteStale || !hasQuote ? (
+          ) : !invoiceStage && (editing || quoteStale || !hasQuote) ? (
             <Button
               size="sm"
               variant="outline"
