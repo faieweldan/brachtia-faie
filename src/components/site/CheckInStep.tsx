@@ -263,8 +263,11 @@ export function CheckInStep({
 
         {/* offered as a choice, not as a way out: a student who does not know
             yet should not feel they are failing the form by saying so */}
+        <p className="mt-6 text-sm font-semibold text-foreground">
+          Not sure when you&rsquo;re arriving yet?
+        </p>
         <label
-          className={`mt-6 flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${
+          className={`mt-2 flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${
             off ? "border-brand-deep bg-brand-tint/70" : "border-border hover:bg-muted/40"
           }`}
         >
@@ -276,11 +279,11 @@ export function CheckInStep({
           />
           <span>
             <span className="block text-sm font-semibold text-foreground">
-              Remind me 1 week before
+              Remind me closer to my move-in date
             </span>
             <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
-              We will get in touch about a week before you move in. You can come back to this link
-              any time to pick a slot yourself.
+              We&rsquo;ll remind you about a week before move-in to schedule your check-in. You can
+              also return to this link anytime to choose a time.
             </span>
           </span>
         </label>
