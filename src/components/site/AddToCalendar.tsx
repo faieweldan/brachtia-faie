@@ -39,7 +39,6 @@ export function AddToCalendar({
  */
 export function AppointmentCard({
   heading,
-  when,
   place,
   residence,
   note,
@@ -48,7 +47,6 @@ export function AppointmentCard({
   className = "",
 }: {
   heading: string;
-  when: string;
   place?: string | undefined;
   residence?: string | undefined;
   note?: string | undefined;
@@ -63,7 +61,9 @@ export function AppointmentCard({
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {heading}
       </p>
-      <p className="mt-1 text-sm font-semibold text-brand-deep">{when}</p>
+      <p className="mt-1 text-sm font-semibold text-brand-deep">
+        {appointmentWhen(event.startsAt, event.endsAt)}
+      </p>
       {place ? <p className="text-sm text-foreground">{place}</p> : null}
       {residence ? <p className="text-sm text-muted-foreground">{residence}</p> : null}
       {note ? <p className="mt-2 text-xs text-muted-foreground">{note}</p> : null}
@@ -72,14 +72,28 @@ export function AppointmentCard({
   );
 }
 
-/** "Friday, 16 October 2026 at 10:00 am" - the way every card writes its time. */
-export function appointmentWhen(iso: string, time: string) {
-  return `${new Date(iso).toLocaleDateString("en-MY", {
+/**
+ * "Saturday, 17 October 2026 · 10:00 am – 11:00 am" - the day, and when it
+ * starts and ends, so a student knows how long to set aside (Dani and Lav, 29
+ * Sep 2026). Always in Malaysian time, wherever the phone reading it is.
+ */
+export function appointmentWhen(startIso: string, endIso: string) {
+  const tz = "Asia/Kuala_Lumpur";
+  const day = new Date(startIso).toLocaleDateString("en-MY", {
     weekday: "long",
     day: "numeric",
     month: "long",
     year: "numeric",
-  })} at ${time}`;
+    timeZone: tz,
+  });
+  const time = (iso: string) =>
+    new Date(iso).toLocaleTimeString("en-MY", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: tz,
+    });
+  return `${day} · ${time(startIso)} – ${time(endIso)}`;
 }
 
 /** A viewing as a calendar entry, from its start and length. */

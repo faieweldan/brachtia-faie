@@ -480,14 +480,6 @@ function MyProfilePage() {
               "Your arrival check-in with Brachtia Homes: a tour, your keys and access card. Full initial payment must be cleared before keys are handed over. We will confirm this slot with you.",
           }
         : null;
-    const arrivalLabel = arrival
-      ? `${new Date(`${checkIn.on}T00:00:00`).toLocaleDateString("en-GB", {
-          weekday: "long",
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        })} at ${checkIn.slot}`
-      : "";
 
     return (
       <Shell>
@@ -503,7 +495,6 @@ function MyProfilePage() {
             <AppointmentCard
               className="mt-3"
               heading="Your arrival check-in request"
-              when={arrivalLabel}
               place={placeName || undefined}
               residence={residenceName || undefined}
               note="We will confirm this slot with you before the day."

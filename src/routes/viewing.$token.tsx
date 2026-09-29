@@ -23,7 +23,7 @@ import { stayLength } from "@/lib/stay-length";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
-import { AppointmentCard, appointmentWhen, viewingEvent } from "@/components/site/AddToCalendar";
+import { AppointmentCard, viewingEvent } from "@/components/site/AddToCalendar";
 
 // the page opens on a choice, not on a calendar - it is not a booking form
 const title = "Your room is available | Brachtia Homes";
@@ -228,7 +228,6 @@ function ViewingLinkPage() {
             <AppointmentCard
               className="mx-auto mt-6"
               heading={mode === "virtual" ? "Your video tour" : "Your viewing"}
-              when={appointmentWhen(done.slot, formatSlot(done.slot))}
               residence={
                 mode === "virtual"
                   ? "Video call - we will send the link"

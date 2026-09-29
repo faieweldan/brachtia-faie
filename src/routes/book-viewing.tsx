@@ -43,7 +43,7 @@ import {
 import { z } from "zod";
 import { DateInput } from "@/components/ui/date-input";
 import { todayISO } from "@/lib/checkin";
-import { AppointmentCard, appointmentWhen, viewingEvent } from "@/components/site/AddToCalendar";
+import { AppointmentCard, viewingEvent } from "@/components/site/AddToCalendar";
 
 const leadBase = z.object({
   name: z.string().trim().min(2, "Enter your full name").max(100),
@@ -197,7 +197,6 @@ function BookViewingPage() {
         <AppointmentCard
           className="mx-auto mt-6"
           heading={mode === "virtual" ? "Your video tour request" : "Your viewing request"}
-          when={appointmentWhen(done.slot, formatSlot(done.slot))}
           residence={mode === "virtual" ? "Video call - we will send the link" : done.where}
           note="We will confirm this slot with you before the day."
           fileName="brachtia-viewing.ics"
