@@ -1019,17 +1019,6 @@ export function stayQuote(
       kind: "advance",
     });
   }
-  const advanceSegments = schedule.slice(1, covered);
-  if (advanceSegments.length > 0) {
-    lines.push({
-      label:
-        paymentTerm === "full"
-          ? `Rent for the rest of the stay (${advanceSegments.length} months)`
-          : `Advance rental (${formatMonths(advanceSegments.length)})`,
-      amount: round2(advanceSegments.reduce((s, seg) => s + seg.amount, 0)),
-      kind: "advance",
-    });
-  }
   /*
    * A short first month holds too little rent in advance.
    *
@@ -1037,19 +1026,26 @@ export function stayQuote(
    * and it still counts as one of the months the first payment covers, so
    * Brachtia would be holding barely more than one month of rent up front.
    * When the pro-rated part is under PRORATE_MIN_DAYS days, one more month is
-   * added to the first payment, on its own line so everybody can see why.
+   * taken in advance.
+   *
+   * It is one "Advance rental" line, never two (Dani and Lav, 29 Sep 2026):
+   * bi-monthly shows "Advance rental (2 months)" rather than one month plus an
+   * "Additional advance rental" line.
    *
    * Counted in days, not by the date: 14 days is short whether the month has
    * 28 days or 31. Not for full-term payers, who pay the whole stay up front.
    * It is advance rent, so the rent schedule starts a month later on its own.
    */
-  const extra = schedule[covered];
-  if (first && !first.full && first.days < PRORATE_MIN_DAYS && paymentTerm !== "full" && extra) {
+  const shortFirst =
+    !!first && !first.full && first.days < PRORATE_MIN_DAYS && paymentTerm !== "full";
+  const advanceSegments = schedule.slice(1, covered + (shortFirst ? 1 : 0));
+  if (advanceSegments.length > 0) {
     lines.push({
-      label: extra.full
-        ? "Additional advance rental (1 month)"
-        : `Additional advance rental — pro-rated ${extra.days}/${extra.daysInMonth} days`,
-      amount: extra.amount,
+      label:
+        paymentTerm === "full"
+          ? `Rent for the rest of the stay (${advanceSegments.length} months)`
+          : `Advance rental (${formatMonths(advanceSegments.length)})`,
+      amount: round2(advanceSegments.reduce((s, seg) => s + seg.amount, 0)),
       kind: "advance",
     });
   }

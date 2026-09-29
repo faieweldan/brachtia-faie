@@ -6,39 +6,51 @@ const arc = properties[0]!;
 const RENT = 1050;
 const firstPayment = (moveIn: string, term: PaymentTerm = 'bimonthly', moveOut = '2027-12-30') =>
   stayQuote(arc, RENT, 'long', moveIn, moveOut, term, [])!.firstPayment;
-const extraLine = (lines: { label: string }[]) => lines.find((l) => l.label.startsWith('Additional advance rental'));
+const advance = (lines: { label: string; amount: number }[]) =>
+  lines.filter((l) => /advance rental/i.test(l.label));
+// how many months the one Advance rental line covers; 0 when there is none
+const advanceMonths = (lines: { label: string; amount: number }[]) => {
+  const m = /^Advance rental \((\d+) months?\)/.exec(advance(lines)[0]?.label ?? '');
+  return m ? Number(m[1]) : 0;
+};
 
 describe('the extra month for a short first month', () => {
   test('22 pro-rated days (moving in 10 Oct) changes nothing', () => {
-    expect(extraLine(firstPayment('2026-10-10'))).toBeUndefined();
+    expect(advanceMonths(firstPayment('2026-10-10'))).toBe(1);
   });
-  test('11 pro-rated days (moving in 20 Sep) adds one month, on its own line', () => {
-    const line = extraLine(firstPayment('2026-09-20'));
-    expect(line?.label).toBe('Additional advance rental (1 month)');
-    expect((line as any).amount).toBe(RENT);
-    expect((line as any).kind).toBe('advance');
+  test('11 pro-rated days (moving in 20 Sep) adds one month to the same line', () => {
+    const lines = firstPayment('2026-09-20');
+    expect(advance(lines)).toHaveLength(1);
+    expect(advance(lines)[0]!.label).toBe('Advance rental (2 months)');
+    expect(advance(lines)[0]!.amount).toBe(RENT * 2);
+  });
+  test('there is never an "Additional advance rental" line', () => {
+    for (const d of ['2026-09-20', '2026-09-28', '2027-02-15']) {
+      expect(firstPayment(d).some((l) => /additional/i.test(l.label))).toBe(false);
+    }
   });
   test('exactly 15 days changes nothing', () => {
     // 16 Sep to 30 Sep is 15 days
-    expect(extraLine(firstPayment('2026-09-16'))).toBeUndefined();
+    expect(advanceMonths(firstPayment('2026-09-16'))).toBe(1);
   });
   test('14 days adds the month', () => {
-    expect(extraLine(firstPayment('2026-09-17'))).toBeDefined();
+    expect(advanceMonths(firstPayment('2026-09-17'))).toBe(2);
   });
   test('it is the days that count, not the date: the 15th of February is only 14 days', () => {
-    expect(extraLine(firstPayment('2027-02-15'))).toBeDefined();
+    expect(advanceMonths(firstPayment('2027-02-15'))).toBe(2);
     // while the 15th of a 31-day month leaves 17 days
-    expect(extraLine(firstPayment('2026-10-15'))).toBeUndefined();
+    expect(advanceMonths(firstPayment('2026-10-15'))).toBe(1);
   });
   test('moving in on the 1st is a whole month, so nothing is added', () => {
-    expect(extraLine(firstPayment('2026-10-01'))).toBeUndefined();
+    expect(advanceMonths(firstPayment('2026-10-01'))).toBe(1);
   });
   test('monthly and quarterly payers get it too', () => {
-    expect(extraLine(firstPayment('2026-09-20', 'monthly'))).toBeDefined();
-    expect(extraLine(firstPayment('2026-09-20', 'quarterly'))).toBeDefined();
+    expect(advanceMonths(firstPayment('2026-09-20', 'monthly'))).toBe(1);
+    expect(advanceMonths(firstPayment('2026-10-10', 'quarterly'))).toBe(2);
+    expect(advanceMonths(firstPayment('2026-09-20', 'quarterly'))).toBe(3);
   });
   test('full-term payers never get it - they pay the whole stay up front', () => {
-    expect(extraLine(firstPayment('2026-09-20', 'full'))).toBeUndefined();
+    expect(advanceMonths(firstPayment('2026-09-20', 'full'))).toBe(0);
   });
 });
 

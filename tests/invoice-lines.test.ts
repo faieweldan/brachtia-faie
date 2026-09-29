@@ -22,7 +22,7 @@ describe("the booking's first invoice, worked out from the stay", () => {
   });
   test('a short first month brings the extra month onto the invoice too', () => {
     const lines = firstInvoiceLines({ ...stay, rent: 1050, moveIn: '2026-09-20' });
-    expect(lines!.some((l) => l.label === 'Additional advance rental (1 month)')).toBe(true);
+    expect(lines!.some((l) => l.label === 'Advance rental (2 months)')).toBe(true);
   });
   test('every line is one amount - no quantity to multiply', () => {
     expect(firstInvoiceLines({ ...stay, rent: 1050 })!.every((l) => l.quantity === 1)).toBe(true);
