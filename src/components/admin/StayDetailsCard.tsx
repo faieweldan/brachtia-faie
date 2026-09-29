@@ -152,13 +152,13 @@ export function StayDetailsCard({
    */
   const invoiceLocked = Boolean(invoice && invoice.paid > BOOKING_FEE + 0.005);
   /*
-   * Once a room is reserved or an invoice is raised, the booking is at the
-   * invoice stage and the quote stays as it was sent (Dani and Lav, 29 Sep
-   * 2026). The button then updates the invoice from the stay and leaves the
+   * Once an invoice is raised, the booking is at the invoice stage and the
+   * quote stays as it was sent (Dani and Lav, 29 Sep 2026). A reserved room
+   * alone does not count. The button then updates the invoice from the stay and leaves the
    * quote alone, so the two can differ - and that difference is how a change
    * after the quote is spotted, not a fault.
    */
-  const invoiceStage = Boolean(invoice || assignedBed);
+  const invoiceStage = Boolean(invoice);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Stay>(() => fromRow(row));
   const [busy, setBusy] = useState(false);
