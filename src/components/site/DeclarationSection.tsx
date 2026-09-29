@@ -51,7 +51,7 @@ export function DeclarationSection({
   const [typedName, setTypedName] = useState("");
   const [typedId, setTypedId] = useState("");
   const [busy, setBusy] = useState(false);
-  // the Tenancy Terms have to be opened before their term can be ticked
+  // the Tenancy Terms have to be read to the last page before their term can be ticked
   const [docOpened, setDocOpened] = useState(false);
   const [docShown, setDocShown] = useState(false);
 
@@ -94,7 +94,7 @@ export function DeclarationSection({
   // it always says what is still missing
   const blocker =
     !docOpened
-      ? "Open the Tenancy Terms and House Rules before you tick the last term."
+      ? "Read the Tenancy Terms and House Rules to the last page before you tick the last term."
       : left > 0
       ? `Tick each term to confirm you have read it - ${left} still to go.`
       : !typedName.trim()
@@ -137,7 +137,16 @@ export function DeclarationSection({
           <DialogHeader>
             <DialogTitle>Tenancy Terms and House Rules</DialogTitle>
           </DialogHeader>
-          {docShown ? <PdfPageViewer url={TERMS_DOC_URL} /> : null}
+          {docShown ? (
+            <PdfPageViewer url={TERMS_DOC_URL} onLastPage={() => setDocOpened(true)} />
+          ) : null}
+          <p
+            className={`text-xs font-medium ${docOpened ? "text-emerald-700" : "text-destructive"}`}
+          >
+            {docOpened
+              ? "You have reached the last page - you can now tick the term."
+              : "Go through to the last page to be able to tick the term."}
+          </p>
         </DialogContent>
       </Dialog>
 
@@ -184,7 +193,6 @@ export function DeclarationSection({
                       onClick={(e) => {
                         e.preventDefault();
                         setDocShown(true);
-                        setDocOpened(true);
                       }}
                       className="inline font-semibold text-brand underline underline-offset-2 hover:text-brand-deep"
                     >
@@ -204,7 +212,7 @@ export function DeclarationSection({
                 )}
                 {i === TERMS_DOC_TERM && !docOpened ? (
                   <span className="mt-1 block text-xs font-medium text-destructive">
-                    Open the document above to tick this.
+                    Open the document above and read to the last page to tick this.
                   </span>
                 ) : null}
               </span>

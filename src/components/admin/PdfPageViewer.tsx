@@ -11,7 +11,16 @@ type LoadedPdf = {
   }>;
 };
 
-export function PdfPageViewer({ url, className = "" }: { url: string; className?: string }) {
+export function PdfPageViewer({
+  url,
+  className = "",
+  onLastPage,
+}: {
+  url: string;
+  className?: string;
+  /** called once the last page has been shown - the declaration waits for it */
+  onLastPage?: () => void;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const [pdf, setPdf] = useState<LoadedPdf | null>(null);
@@ -51,6 +60,10 @@ export function PdfPageViewer({ url, className = "" }: { url: string; className?
     });
     return () => { cancelled = true; };
   }, [pdf, page, zoom, fit]);
+
+  useEffect(() => {
+    if (pdf && page === pdf.numPages) onLastPage?.();
+  }, [pdf, page, onLastPage]);
 
   const total = pdf?.numPages ?? 1;
   const changeZoom = (next: number) => { setFit(false); setZoom(Math.min(2, Math.max(0.5, next))); };
