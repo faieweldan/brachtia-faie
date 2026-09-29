@@ -766,9 +766,13 @@ function AppointmentsPage() {
                     /* a cancelled row is history sitting among live ones, so it
                        steps back rather than competing for the eye - readable
                        when looked at, quiet when scanned past */
-                    className={`grid cursor-pointer items-center gap-3 border-b border-border px-4 py-3 text-sm last:border-0 hover:bg-muted/40 ${
-                      a.status === "cancelled" ? "opacity-55" : ""
-                    }`}
+                    /* a new one is pinned to the top out of date order, so the
+                       whole row is tinted the blue of its New pill - the eye
+                       sees why it is there instead of reading it as a wrong
+                       date (Dani and Lav, 29 Sep 2026) */
+                    className={`grid cursor-pointer items-center gap-3 border-b border-border px-4 py-3 text-sm last:border-0 ${
+                      a.status === "new" ? "bg-sky-50 hover:bg-sky-100/70" : "hover:bg-muted/40"
+                    } ${a.status === "cancelled" ? "opacity-55" : ""}`}
                   >
                     <div>
                       <p className="font-medium text-foreground">
