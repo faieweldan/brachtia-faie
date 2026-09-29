@@ -7,10 +7,13 @@ export default function CtaBand({
   title = "Ready to find your room?",
   description = "Book a viewing or message us on WhatsApp — our student team replies fast.",
   message = "Hi Brachtia Homes, I'd like to enquire about student accommodation in Cyberjaya.",
+  residenceSlug,
 }: {
   title?: string;
   description?: string;
   message?: string;
+  /** on a residence's page, Book a Viewing arrives with that residence picked */
+  residenceSlug?: string;
 }) {
   return (
     <section className="bg-brand-tint px-4 py-14 sm:px-6 sm:py-20">
@@ -44,7 +47,9 @@ export default function CtaBand({
                 size="lg"
                 className="h-13 w-full rounded-full bg-primary-foreground text-base font-bold text-brand-deep hover:bg-primary-foreground/90"
               >
-                <Link to="/book-viewing">Book a Viewing</Link>
+                <Link to="/book-viewing" search={residenceSlug ? { property: residenceSlug } : {}}>
+                  Book a Viewing
+                </Link>
               </Button>
               <Button
                 asChild

@@ -451,6 +451,7 @@ function PropertyPage() {
       <div className="mt-16">
         <CtaBand
           title={`Interested in ${property.name}?`}
+          residenceSlug={property.slug}
           message={`Hi Brachtia Homes, I'd like to book a viewing at ${property.name}.`}
         />
       </div>
