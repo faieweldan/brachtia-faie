@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { fmtDay, VersionStatus } from "@/components/admin/TemplatesTab";
-import { DocxView } from "@/components/admin/DocxView";
+import { DocumentView } from "@/components/admin/DocumentView";
 import { ExactPreviewButton } from "@/components/admin/ExactPreviewButton";
 import { MARK_CSS, Paper } from "@/components/admin/TemplatePaper";
 import { Button } from "@/components/ui/button";
@@ -87,6 +87,19 @@ function TemplateWorkspace() {
   // placeholders its header and footer carry that the web copy never had
   const docxFn = useServerFn(getTemplateDocx);
   const pdfFn = useServerFn(previewTemplatePdf);
+  // the template as it prints - with the test resident filled in once picked
+  const pagePdf = useQuery({
+    queryKey: ["template-pdf", selected?.id, test?.resident.id ?? "", test ? maps : null],
+    queryFn: () =>
+      pdfFn({
+        data: {
+          versionId: selected!.id,
+          ...(test ? { residentId: test.resident.id, mappings: maps } : {}),
+        },
+      }),
+    enabled: Boolean(selected?.id && selected?.fileName) && !editing,
+    placeholderData: (prev) => prev,
+  });
   const docx = useQuery({
     queryKey: ["template-docx", selected?.id],
     queryFn: () => docxFn({ data: { versionId: selected!.id } }),
@@ -314,7 +327,11 @@ function TemplateWorkspace() {
             </p>
           )}
           {!editing && docx.data ? (
-            <DocxView base64={docx.data.base64} className="max-h-[80vh]" />
+            <DocumentView
+              pdf={pagePdf.data}
+              pdfLoading={pagePdf.isFetching}
+              docxBase64={pagePdf.data?.ok === false ? docx.data.base64 : undefined}
+            />
           ) : (
           <Paper>
             {editing ? (

@@ -17,7 +17,7 @@ import { generateDocumentPack } from "@/lib/tenancy-docs.functions";
 import { fillPackDocx, getPackTemplates, previewPackPdf } from "@/lib/templates.functions";
 import { renderTemplate, type MappingResult } from "@/lib/template-fields";
 import { MARK_CSS, Paper } from "@/components/admin/TemplatePaper";
-import { DocxView } from "@/components/admin/DocxView";
+import { DocumentView } from "@/components/admin/DocumentView";
 import { ExactPreviewButton } from "@/components/admin/ExactPreviewButton";
 
 const TEMPLATE_KEY: Record<string, string> = {
@@ -104,12 +104,20 @@ function DocumentPackPage() {
     return () => clearTimeout(t);
   }, [overrides]);
   const fillDocx = useServerFn(fillPackDocx);
-  const pdfFn = useServerFn(previewPackPdf);
   const docKey = TEMPLATE_KEY[selected] as "tenancy_agreement";
+  const pdfFn = useServerFn(previewPackPdf);
+  // the exact pages, from a real Word engine; redrawn after typing pauses
+  const pdfDoc = useQuery({
+    queryKey: ["pack-pdf", id, docKey, typed],
+    queryFn: () => pdfFn({ data: { residentId: id, docKey, overrides: typed } }),
+    enabled: Boolean(tpl?.hasFile),
+    placeholderData: (prev) => prev,
+  });
+  // the approximate view, only where no PDF can be made on this server
   const filledDoc = useQuery({
     queryKey: ["pack-docx", id, docKey, typed],
     queryFn: () => fillDocx({ data: { residentId: id, docKey, overrides: typed } }),
-    enabled: Boolean(tpl?.hasFile),
+    enabled: Boolean(tpl?.hasFile) && pdfDoc.data?.ok === false,
     placeholderData: (prev) => prev,
   });
   const results = useMemo(() => {
@@ -230,13 +238,11 @@ function DocumentPackPage() {
               </Link>
             </div>
           ) : tpl.hasFile ? (
-            filledDoc.data ? (
-              <DocxView base64={filledDoc.data.base64} className="max-h-[80vh]" />
-            ) : filledDoc.isError ? (
-              <p className="py-24 text-center text-sm text-destructive">Could not fill the document.</p>
-            ) : (
-              <p className="py-24 text-center text-sm text-muted-foreground">Filling in the document…</p>
-            )
+            <DocumentView
+              pdf={pdfDoc.data}
+              pdfLoading={pdfDoc.isFetching}
+              docxBase64={filledDoc.data?.base64}
+            />
           ) : (
             // a template saved before files were kept: only its web copy exists
             <Paper>
