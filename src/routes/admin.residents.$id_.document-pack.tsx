@@ -14,10 +14,11 @@ import {
   type AgreementDocType,
 } from "@/lib/tenancy-docs";
 import { generateDocumentPack } from "@/lib/tenancy-docs.functions";
-import { fillPackDocx, getPackTemplates } from "@/lib/templates.functions";
+import { fillPackDocx, getPackTemplates, previewPackPdf } from "@/lib/templates.functions";
 import { renderTemplate, type MappingResult } from "@/lib/template-fields";
 import { MARK_CSS, Paper } from "@/components/admin/TemplatePaper";
 import { DocxView } from "@/components/admin/DocxView";
+import { ExactPreviewButton } from "@/components/admin/ExactPreviewButton";
 
 const TEMPLATE_KEY: Record<string, string> = {
   agreement: "tenancy_agreement",
@@ -103,6 +104,7 @@ function DocumentPackPage() {
     return () => clearTimeout(t);
   }, [overrides]);
   const fillDocx = useServerFn(fillPackDocx);
+  const pdfFn = useServerFn(previewPackPdf);
   const docKey = TEMPLATE_KEY[selected] as "tenancy_agreement";
   const filledDoc = useQuery({
     queryKey: ["pack-docx", id, docKey, typed],
@@ -204,10 +206,18 @@ function DocumentPackPage() {
 
         {/* CENTRE — the Active template from Settings, filled in */}
         <div className="min-w-0 rounded-2xl border border-border bg-card p-4">
-          <p className="mb-3 text-sm font-semibold text-brand-deep">
-            {MENU.flatMap((g) => g.items).find((i) => i.key === selected)?.label}
-            {tpl && <span className="ml-2 text-xs font-normal text-muted-foreground">Template v{tpl.version}</span>}
-          </p>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-brand-deep">
+              {MENU.flatMap((g) => g.items).find((i) => i.key === selected)?.label}
+              {tpl && <span className="ml-2 text-xs font-normal text-muted-foreground">Template v{tpl.version}</span>}
+            </p>
+            {tpl?.hasFile ? (
+              <ExactPreviewButton
+                title={`${MENU.flatMap((g) => g.items).find((i) => i.key === selected)?.label ?? "Document"} · ${resident.fullName}`}
+                load={() => pdfFn({ data: { residentId: id, docKey, overrides } })}
+              />
+            ) : null}
+          </div>
           {pack.isLoading ? (
             <p className="py-24 text-center text-sm text-muted-foreground">Loading template…</p>
           ) : pack.isError ? (

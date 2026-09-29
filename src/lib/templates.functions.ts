@@ -276,36 +276,101 @@ export const getTemplateDocx = createServerFn({ method: "GET" })
  * corrections typed on the pack page included. Only the placeholders change;
  * every table, border, header, footer and signature line stays as written.
  * A placeholder with nothing to put in it is left showing, so the gap is seen.
- * Read-only: nothing is saved.
  */
+async function filledPackBytes(
+  db: any,
+  residentId: string,
+  docKey: (typeof PACK_KEYS)[number],
+  overrides?: Record<string, string>,
+): Promise<Uint8Array | null> {
+  const { data: rows } = await db
+    .from("template_versions")
+    .select("content_html, file_path, mappings, document_templates!inner(doc_key)")
+    .eq("status", "active")
+    .eq("document_templates.doc_key", docKey)
+    .limit(1);
+  const row = (rows ?? [])[0];
+  const bytes = row ? await loadDocx(db, row.file_path) : null;
+  if (!row || !bytes) return null;
+  const { ctx } = await buildContext(db, residentId);
+  return fillFor(bytes, await placeholdersOf(db, row), ctx, row.mappings ?? {}, overrides);
+}
+
+/** Fill a Word file from a resident's records, typed corrections winning. */
+async function fillFor(
+  bytes: Uint8Array,
+  placeholders: string[],
+  ctx: MappingContext,
+  mappings: Mappings,
+  overrides?: Record<string, string>,
+) {
+  const values: Record<string, string | null> = {};
+  for (const r of testMappingFor(placeholders, ctx, mappings)) {
+    const typed = overrides?.[r.key];
+    if (typed !== undefined && typed.trim() !== "") values[r.key] = typed;
+    else if (r.result === "mapped") values[r.key] = r.value;
+    else values[r.key] = null;
+  }
+  const { fillDocx } = await import("@/lib/docx-fill");
+  return fillDocx(bytes, values);
+}
+
+const packInput = z.object({
+  residentId: z.string().uuid(),
+  docKey: z.enum(PACK_KEYS),
+  overrides: z.record(z.string().max(80), z.string().max(2000)).optional(),
+});
+
+/** The filled Word file, for the quick on-page view. Read-only. */
 export const fillPackDocx = createServerFn({ method: "POST" })
+  .inputValidator((d) => packInput.parse(d))
+  .handler(async ({ data }) => {
+    const db = await admin();
+    const bytes = await filledPackBytes(db, data.residentId, data.docKey, data.overrides);
+    return bytes ? { base64: toBase64(bytes) } : null;
+  });
+
+/**
+ * The same filled file as the PDF it prints as - the exact preview behind the
+ * eye icon. Read-only: made on request, never saved.
+ */
+export const previewPackPdf = createServerFn({ method: "POST" })
+  .inputValidator((d) => packInput.parse(d))
+  .handler(async ({ data }) => {
+    const db = await admin();
+    const bytes = await filledPackBytes(db, data.residentId, data.docKey, data.overrides);
+    if (!bytes) return { ok: false as const, error: "This document has no Word file to preview." };
+    return pdfResult(bytes);
+  });
+
+/**
+ * A template version as the PDF it prints as: filled with the test resident
+ * and the mappings on screen when a resident is picked, otherwise as uploaded
+ * with its placeholders showing. Read-only.
+ */
+export const previewTemplatePdf = createServerFn({ method: "POST" })
   .inputValidator((d) =>
-    z.object({
-      residentId: z.string().uuid(),
-      docKey: z.enum(PACK_KEYS),
-      overrides: z.record(z.string().max(80), z.string().max(2000)).optional(),
-    }).parse(d),
+    z.object({ versionId: z.string().uuid(), residentId: z.string().uuid().optional(), mappings: mappingSchema.optional() }).parse(d),
   )
   .handler(async ({ data }) => {
     const db = await admin();
-    const { data: rows } = await db
-      .from("template_versions")
-      .select("content_html, file_path, mappings, document_templates!inner(doc_key)")
-      .eq("status", "active")
-      .eq("document_templates.doc_key", data.docKey)
-      .limit(1);
-    const row = (rows ?? [])[0];
-    const bytes = row ? await loadDocx(db, row.file_path) : null;
-    if (!row || !bytes) return null;
-    const { ctx } = await buildContext(db, data.residentId);
-    const placeholders = await placeholdersOf(db, row);
-    const values: Record<string, string | null> = {};
-    for (const r of testMappingFor(placeholders, ctx, row.mappings ?? {})) {
-      const typed = data.overrides?.[r.key];
-      if (typed !== undefined && typed.trim() !== "") values[r.key] = typed;
-      else if (r.result === "mapped") values[r.key] = r.value;
-      else values[r.key] = null;
+    const { data: v } = await db.from("template_versions").select("content_html, file_path, mappings").eq("id", data.versionId).maybeSingle();
+    let bytes = v ? await loadDocx(db, v.file_path) : null;
+    if (!v || !bytes) return { ok: false as const, error: "This version has no Word file to preview." };
+    if (data.residentId) {
+      const { ctx } = await buildContext(db, data.residentId);
+      bytes = await fillFor(bytes, await placeholdersOf(db, v), ctx, data.mappings ?? v.mappings ?? {});
     }
-    const { fillDocx } = await import("@/lib/docx-fill");
-    return { base64: toBase64(await fillDocx(bytes, values)) };
+    return pdfResult(bytes);
   });
+
+async function pdfResult(docx: Uint8Array) {
+  const { docxToPdf, PdfPreviewUnavailable } = await import("@/lib/docx-to-pdf.server");
+  try {
+    return { ok: true as const, base64: toBase64(await docxToPdf(docx)) };
+  } catch (e) {
+    // not set up here is an answer, not a crash - the page says so
+    if (e instanceof PdfPreviewUnavailable || e instanceof Error) return { ok: false as const, error: e.message };
+    throw e;
+  }
+}

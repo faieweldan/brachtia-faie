@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
  * panel's width - a page is a page.
  */
 export function DocxView({ base64, className = "" }: { base64: string; className?: string }) {
+  const frame = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
 
@@ -32,14 +33,37 @@ export function DocxView({ base64, className = "" }: { base64: string; className
           useBase64URL: true,
         }),
       )
+      .then(() => live && fit())
       .catch(() => live && setError("Could not show this document."));
     return () => {
       live = false;
     };
   }, [base64]);
 
+  /*
+   * A Word page is wider than the panel it sits in. Centred and too wide, its
+   * left edge was cut off where nothing could scroll to it - so the pages are
+   * shrunk to the panel's width instead, like a PDF viewer's Fit.
+   */
+  function fit() {
+    const wrap = body.current?.querySelector<HTMLElement>(".docx-wrapper");
+    const page = wrap?.querySelector<HTMLElement>("section.docx");
+    if (!wrap || !page || !frame.current) return;
+    wrap.style.zoom = "1";
+    const room = frame.current.clientWidth - 24;
+    // the wrapper's own grey margin counts too, or the right edge is clipped instead
+    const scale = Math.min(1, room / Math.max(page.offsetWidth, wrap.scrollWidth));
+    wrap.style.zoom = String(scale);
+  }
+  useEffect(() => {
+    if (!frame.current) return;
+    const watch = new ResizeObserver(() => fit());
+    watch.observe(frame.current);
+    return () => watch.disconnect();
+  }, []);
+
   return (
-    <div className={`overflow-auto rounded-md border border-border bg-muted ${className}`}>
+    <div ref={frame} className={`overflow-auto rounded-md border border-border bg-muted ${className}`}>
       {error ? <p className="py-20 text-center text-sm text-destructive">{error}</p> : null}
       {/* docx-preview writes the pages in here, grey behind white sheets */}
       <div ref={body} className="docx-host" />

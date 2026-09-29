@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { fmtDay, VersionStatus } from "@/components/admin/TemplatesTab";
 import { DocxView } from "@/components/admin/DocxView";
+import { ExactPreviewButton } from "@/components/admin/ExactPreviewButton";
 import { MARK_CSS, Paper } from "@/components/admin/TemplatePaper";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -33,6 +34,7 @@ import {
   searchResidents,
   testMapping,
   getTemplateDocx,
+  previewTemplatePdf,
   type DocTemplate,
 } from "@/lib/templates.functions";
 
@@ -84,6 +86,7 @@ function TemplateWorkspace() {
   // the version's own Word file: shown as the document looks, and read for the
   // placeholders its header and footer carry that the web copy never had
   const docxFn = useServerFn(getTemplateDocx);
+  const pdfFn = useServerFn(previewTemplatePdf);
   const docx = useQuery({
     queryKey: ["template-docx", selected?.id],
     queryFn: () => docxFn({ data: { versionId: selected!.id } }),
@@ -287,6 +290,19 @@ function TemplateWorkspace() {
               <Button size="sm" variant="outline" disabled={editing} onClick={() => setPicker(true)}>
                 <FlaskConical className="mr-1 h-3.5 w-3.5" /> Test Mapping
               </Button>
+              {/* exact: filled with the test resident when one is picked */}
+              <ExactPreviewButton
+                title={test ? `${tpl.name} · ${test.resident.name}` : tpl.name}
+                disabled={editing || !selected.fileName}
+                load={() =>
+                  pdfFn({
+                    data: {
+                      versionId: selected.id,
+                      ...(test ? { residentId: test.resident.id, mappings: maps } : {}),
+                    },
+                  })
+                }
+              />
               {selected.status === "draft" && !editing && (
                 <Button size="sm" disabled={busy || bad.length > 0} onClick={doActivate}>Activate Version</Button>
               )}
