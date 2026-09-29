@@ -59,7 +59,7 @@ import {
   type InvoiceCategory,
 } from "@/lib/invoice-category";
 import { fmtDate, money } from "@/lib/ops-store";
-import { paymentStateOf, type PaymentStatus } from "@/lib/payment-status";
+import { paymentStateOf, partPaidUrgency, type PaymentStatus } from "@/lib/payment-status";
 import { getInvoiceBilling, type BillingInvoice } from "@/lib/resident-billing.functions";
 import { DateInput } from "@/components/ui/date-input";
 
@@ -103,7 +103,16 @@ const TABS: {
   { key: "invoiced", label: "Invoiced", test: (r, today) => is(r, today, "Invoiced") },
   { key: "coming", label: "Coming Due", test: (r, today) => is(r, today, "Coming Due") },
   { key: "overdue", label: "Past Due", test: (r, today) => is(r, today, "Past Due") },
-  { key: "partial", label: "Partially paid", test: (r, today) => is(r, today, "Partially paid") },
+  /*
+   * Everything part-paid and still owing, including the ones Past Due has
+   * claimed for its pill - the row's colour says how urgent it is.
+   */
+  {
+    key: "partial",
+    label: "Partially paid",
+    test: (r, today) =>
+      is(r, today, "Partially paid") || (is(r, today, "Past Due") && r.paid > 0),
+  },
   { key: "paid", label: "Paid", test: (r, today) => is(r, today, "Paid") },
   // kept as a record, never deleted - an initial, a rental or a charge that was
   // voided still has to be findable when somebody asks what happened to it
@@ -576,10 +585,18 @@ function CollectionsPage() {
                   const opened = openInvoice === r.invoiceId;
                   const ref = r.scheduled ? "Not billed yet" : invoiceRef(r.number, r.type);
                   const unpaid = r.paid === 0;
+                  // part-paid and also due soon or late: the whole row is tinted
+                  const urgency = partPaidUrgency(r, today);
+                  const tint =
+                    urgency === "late"
+                      ? "bg-red-50 hover:bg-red-100/70"
+                      : urgency === "soon"
+                        ? "bg-amber-50 hover:bg-amber-100/70"
+                        : `hover:bg-muted/40 ${opened ? "bg-muted/40" : ""}`;
                   return (
                     <Fragment key={r.invoiceId}>
                       <tr
-                        className={`transition-colors hover:bg-muted/40 ${opened ? "bg-muted/40" : ""}`}
+                        className={`transition-colors ${tint}`}
                       >
                         <td className="whitespace-nowrap px-5 py-3">
                           <span

@@ -96,3 +96,23 @@ export function paymentStateOf(
   if (daysToDue <= COMING_DUE_DAYS) return { status: "Coming Due", tone: "due", ...none };
   return { status: "Invoiced", tone: "open", ...none };
 }
+
+/**
+ * How near its due date a part-paid invoice is. Partially paid wins the status
+ * pill over Coming Due, and Past Due wins over Partially paid - so the other
+ * half of the story is shown as the row's colour instead (Dani and Lav, 29 Sep
+ * 2026): light red when late, light yellow within COMING_DUE_DAYS.
+ */
+export function partPaidUrgency(
+  invoice: { cancelled?: boolean; scheduled?: boolean; outstanding: number; dueDate?: string; paid?: number },
+  today: string,
+): "late" | "soon" | null {
+  if (invoice.cancelled || invoice.scheduled) return null;
+  if (!((invoice.paid ?? 0) > 0) || invoice.outstanding <= 0) return null;
+  const due = (invoice.dueDate ?? "").slice(0, 10);
+  if (!due) return null;
+  const days = daysBetween(today, due);
+  if (days < 0) return "late";
+  if (days <= COMING_DUE_DAYS) return "soon";
+  return null;
+}
