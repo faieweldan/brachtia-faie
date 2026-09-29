@@ -7,6 +7,8 @@ import { toast } from "sonner";
 
 import { fmtDay, VersionStatus } from "@/components/admin/TemplatesTab";
 import { DocumentView } from "@/components/admin/DocumentView";
+import { DocxView } from "@/components/admin/DocxView";
+import { docxPlaceholders } from "@/lib/docx-fill";
 import { ExactPreviewButton } from "@/components/admin/ExactPreviewButton";
 import { MARK_CSS, Paper } from "@/components/admin/TemplatePaper";
 import { Button } from "@/components/ui/button";
@@ -65,6 +67,28 @@ function TemplateWorkspace() {
   const [editing, setEditing] = useState(false);
   const [draftHtml, setDraftHtml] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  /*
+   * A file just picked with Replace file, read in the browser so it shows as
+   * the document looks straight away - not as the web copy - and its header
+   * and footer placeholders are offered for mapping before it is saved.
+   */
+  const [pending, setPending] = useState<{ base64: string; placeholders: string[] } | null>(null);
+  useEffect(() => {
+    let live = true;
+    if (!pendingFile) {
+      setPending(null);
+      return;
+    }
+    void (async () => {
+      const bytes = new Uint8Array(await pendingFile.arrayBuffer());
+      const placeholders = await docxPlaceholders(bytes).catch(() => [] as string[]);
+      const base64 = await fileToBase64(pendingFile);
+      if (live) setPending({ base64, placeholders });
+    })();
+    return () => {
+      live = false;
+    };
+  }, [pendingFile]);
   const [busy, setBusy] = useState(false);
   const [test, setTest] = useState<TestState>(null);
   const [picker, setPicker] = useState(false);
@@ -106,8 +130,13 @@ function TemplateWorkspace() {
     enabled: Boolean(selected?.id && selected?.fileName),
   });
   const placeholders = useMemo(
-    () => [...new Set([...(editing ? [] : (docx.data?.placeholders ?? [])), ...detectPlaceholders(html)])],
-    [html, editing, docx.data],
+    () => [
+      ...new Set([
+        ...(editing ? (pending?.placeholders ?? []) : (docx.data?.placeholders ?? [])),
+        ...detectPlaceholders(html),
+      ]),
+    ],
+    [html, editing, docx.data, pending],
   );
   const bad = unmapped(placeholders, maps);
   const selKey = selected?.id;
@@ -326,7 +355,14 @@ function TemplateWorkspace() {
               {selected.status === "active" ? "The Active version can't be edited directly — changes become a new draft." : "Archived versions are kept for history and are read-only."}
             </p>
           )}
-          {!editing && docx.data ? (
+          {editing && pending ? (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                New file: {pendingFile?.name}. Save as Draft to see the exact printed pages.
+              </p>
+              <DocxView base64={pending.base64} className="max-h-[80vh]" />
+            </div>
+          ) : !editing && docx.data ? (
             <DocumentView
               pdf={pagePdf.data}
               pdfLoading={pagePdf.isFetching}
