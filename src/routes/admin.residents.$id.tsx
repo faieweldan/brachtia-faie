@@ -982,6 +982,12 @@ function ResidentProfilePage() {
                 </Panel>
               </section>
 
+              {/* the signed declaration sits with the documents it belongs to,
+                  above the portal, as it did before */}
+              <Panel title="Declaration" description="What this resident agreed to, and when.">
+                <DeclarationStatus residentId={form.id} />
+              </Panel>
+
               <section id="sec-portal" ref={sectionRef("portal")} className="scroll-mt-24">
                 <Panel
                   title="Resident portal"
@@ -1005,9 +1011,6 @@ function ResidentProfilePage() {
                 </Panel>
               </section>
 
-              <Panel title="Declaration" description="What this resident agreed to, and when.">
-                <DeclarationStatus residentId={form.id} />
-              </Panel>
             </div>
           </div>
         </TabsContent>
