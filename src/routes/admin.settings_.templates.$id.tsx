@@ -355,7 +355,10 @@ function TemplateWorkspace() {
               {selected.status === "active" ? "The Active version can't be edited directly — changes become a new draft." : "Archived versions are kept for history and are read-only."}
             </p>
           )}
-          {editing && pending ? (
+          {editing && pendingFile && !pending ? (
+            // the moment between picking a file and reading it: never the web copy
+            <p className="py-24 text-center text-sm text-muted-foreground">Reading the file…</p>
+          ) : editing && pending ? (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground">
                 New file: {pendingFile?.name}. Save as Draft to see the exact printed pages.
