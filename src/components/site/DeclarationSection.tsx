@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { PdfPageViewer } from "@/components/admin/PdfPageViewer";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -12,6 +14,8 @@ import {
   DECLARATION_TERMS,
   DECLARATION_TITLE,
   shownBody,
+  TERMS_DOC_TERM,
+  TERMS_DOC_URL,
   idMatches,
   nameMatches,
 } from "@/lib/declaration";
@@ -47,6 +51,9 @@ export function DeclarationSection({
   const [typedName, setTypedName] = useState("");
   const [typedId, setTypedId] = useState("");
   const [busy, setBusy] = useState(false);
+  // the Tenancy Terms have to be opened before their term can be ticked
+  const [docOpened, setDocOpened] = useState(false);
+  const [docShown, setDocShown] = useState(false);
 
   // once signed the section stops being a form and becomes a receipt - a
   // student coming back in eight months needs to see what they agreed to
@@ -86,7 +93,9 @@ export function DeclarationSection({
   // a disabled button with no reason is the commonest failure in the world -
   // it always says what is still missing
   const blocker =
-    left > 0
+    !docOpened
+      ? "Open the Tenancy Terms and House Rules before you tick the last term."
+      : left > 0
       ? `Tick each term to confirm you have read it - ${left} still to go.`
       : !typedName.trim()
         ? "Type your full name to sign."
@@ -123,6 +132,15 @@ export function DeclarationSection({
 
   return (
     <section className="rounded-2xl border border-border bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-16px_rgba(16,24,40,0.18)] sm:p-6">
+      <Dialog open={docShown} onOpenChange={setDocShown}>
+        <DialogContent className="max-h-[92vh] w-[calc(100vw-2rem)] max-w-3xl overflow-y-auto p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle>Tenancy Terms and House Rules</DialogTitle>
+          </DialogHeader>
+          {docShown ? <PdfPageViewer url={TERMS_DOC_URL} /> : null}
+        </DialogContent>
+      </Dialog>
+
       <h2 className="border-b border-border pb-3 text-base font-semibold tracking-tight text-brand-deep">
         {DECLARATION_TITLE}
       </h2>
@@ -148,6 +166,7 @@ export function DeclarationSection({
                 // 22.75px line (text-sm, leading-relaxed) - (22.75 - 16) / 2
                 className="m-0 mt-[3.5px] size-4 shrink-0 accent-brand"
                 checked={ticked[i]}
+                disabled={i === TERMS_DOC_TERM && !docOpened}
                 onChange={(e) =>
                   setTicked((prev) => prev.map((v, j) => (j === i ? e.target.checked : v)))
                 }
@@ -155,7 +174,24 @@ export function DeclarationSection({
               {/* the tick box is what marks a term off, so a number beside it
                   only repeats the count the boxes already give */}
               <span className="text-sm leading-relaxed text-muted-foreground">
-                {termRuns(t).map((r, j) => (
+                {termRuns(t).map((r, j) =>
+                  i === TERMS_DOC_TERM && r.bold ? (
+                    <button
+                      key={j}
+                      type="button"
+                      // inside the label: a click here opens the document and
+                      // must not tick the box it is meant to unlock
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setDocShown(true);
+                        setDocOpened(true);
+                      }}
+                      className="inline font-semibold text-brand underline underline-offset-2 hover:text-brand-deep"
+                    >
+                      {r.text}
+                      <FileText className="ml-1 inline size-3.5 align-[-2px]" />
+                    </button>
+                  ) : (
                   <span
                     key={j}
                     className={`${r.bold ? "font-semibold text-foreground" : ""} ${
@@ -164,7 +200,13 @@ export function DeclarationSection({
                   >
                     {r.text}
                   </span>
-                ))}
+                  ),
+                )}
+                {i === TERMS_DOC_TERM && !docOpened ? (
+                  <span className="mt-1 block text-xs font-medium text-destructive">
+                    Open the document above to tick this.
+                  </span>
+                ) : null}
               </span>
             </label>
           </li>

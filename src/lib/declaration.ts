@@ -10,7 +10,7 @@
  * stay answerable. `DECLARATION_VERSION` is the only thing to bump.
  */
 
-export const DECLARATION_VERSION = "v2";
+export const DECLARATION_VERSION = "v3";
 
 /**
  * The declaration, word for word from Brachtia's form, with its emphasis kept.
@@ -28,8 +28,17 @@ export const DECLARATION_TERMS: string[] = [
   "Brachtia Homes may collect and use my personal information to manage my accommodation, prepare my **Tenancy Agreement**, maintain my resident profile and provide related resident services.",
   "My information and supporting documents may be shared with the relevant **building management and security management** where required for resident registration, access card application and building access.",
   "I will inform Brachtia Homes if any information provided changes or is incorrect.",
-  "I agree to review and comply with the applicable **Tenancy Agreement and Brachtia Homes House Rules** and agree to any and all penalties as deemed appropriate by the management.",
+  "I agree to review and comply with the applicable **Tenancy Terms and Brachtia Homes House Rules** and agree to any and all penalties as deemed appropriate by the management.",
 ];
+
+/**
+ * The term that points at a document, and the document itself (v3, 29 Sep
+ * 2026). Its bold words open the Tenancy Terms and House Rules, and the term
+ * cannot be ticked until they have been opened - agreeing to rules nobody has
+ * looked at is not agreeing to them.
+ */
+export const TERMS_DOC_TERM = 3;
+export const TERMS_DOC_URL = "/documents/tenancy-terms-and-house-rules.pdf";
 
 /** The marked-up text as the plain words, for anything that cannot show
  *  emphasis - the stored copy a signature is taken against, for instance. */
