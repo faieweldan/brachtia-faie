@@ -159,6 +159,10 @@ function TemplateWorkspace() {
     if (bad.length) { toast.error("Map every placeholder first"); return; }
     setBusy(true);
     try {
+      // activate what is on screen: a pending or failed auto-save would
+      // otherwise leave the server checking an older set of mappings
+      if (mapTimer.current) clearTimeout(mapTimer.current);
+      await saveMaps({ data: { versionId: selected!.id, mappings: maps } });
       await activate({ data: { versionId: selected!.id } });
       await qc.invalidateQueries({ queryKey: ["doc-templates"] });
       toast.success(`v${selected!.version} is now Active`);

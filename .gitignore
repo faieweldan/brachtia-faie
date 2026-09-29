@@ -41,3 +41,7 @@ docs/
 .env.backup-*
 
 .env.*
+
+# prepared migration workbooks hold real resident data
+migration/residents/output/
+migration/**/__pycache__/
