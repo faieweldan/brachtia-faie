@@ -4,6 +4,9 @@
  * left blank). Shared by the Templates workspace and the server.
  */
 
+import { COUNTRIES, SCHEDULES } from "@/lib/reference-data";
+import { stayLength } from "@/lib/stay-length";
+
 export type FieldSource = "Resident Record" | "Booking Record" | "Initial Payment" | "Room Record" | "Tenancy Record" | "Other";
 export const FIELD_SOURCES: FieldSource[] = ["Resident Record", "Booking Record", "Initial Payment", "Room Record", "Tenancy Record", "Other"];
 
@@ -37,10 +40,28 @@ const end = (c: MappingContext) => c.tenancy?.["end_date"] ?? c.bed?.["tenancy_e
 const r = (k: string) => (c: MappingContext) => c.resident?.[k];
 const e = (k: string) => (c: MappingContext) => c.enquiry?.[k];
 
+/*
+ * An amount as the agreement prints it: 800.00, with no "RM". The templates
+ * write "RM" themselves, right before the placeholder - "RM{{Security_deposit}}"
+ * - so a value that brought its own printed "RM RM 800.00" (29 Sep 2026).
+ */
 const money = (v: unknown) => {
+  if (v === null || v === undefined || v === "") return "";
   const n = Number(v);
   if (!Number.isFinite(n)) return "";
-  return `RM ${n.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return n.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+/** A country as a person reads it - "Belgium", not the "BEL" the record keeps. */
+const countryName = (v: unknown) => {
+  const code = String(v ?? "").trim();
+  return COUNTRIES.find((c) => c.code === code.toUpperCase())?.name ?? code;
+};
+
+/** A payment cycle in words - "Bi-monthly (every 2 months)", not "bimonthly". */
+const scheduleName = (v: unknown) => {
+  const value = String(v ?? "").trim();
+  return SCHEDULES.find((s) => s.value === value)?.label ?? value;
 };
 
 /** The saved quote's first-payment lines, e.g. "Security deposit (2 months)". */
@@ -72,7 +93,7 @@ export const TEMPLATE_FIELDS: TemplateField[] = [
   { key: "resident_id", label: "Resident ID", source: "Resident Record", get: r("resident_code") },
   { key: "email", label: "Email", source: "Resident Record", get: r("email") },
   { key: "mobile", label: "Mobile", source: "Resident Record", get: r("mobile") },
-  { key: "nationality", label: "Nationality", source: "Resident Record", get: r("nationality") },
+  { key: "nationality", label: "Nationality", source: "Resident Record", get: (c) => countryName(c.resident?.["nationality"]) },
   { key: "gender", label: "Gender", source: "Resident Record", get: r("gender") },
   { key: "dob", label: "Date of birth", source: "Resident Record", get: (c) => fmtDate(c.resident?.["dob"]) },
   { key: "marital_status", label: "Marital status", source: "Resident Record", get: r("marital_status") },
@@ -81,7 +102,7 @@ export const TEMPLATE_FIELDS: TemplateField[] = [
   { key: "address", label: "Address", source: "Resident Record", get: r("address") },
   { key: "postcode", label: "Postcode", source: "Resident Record", get: r("postcode") },
   { key: "state", label: "State", source: "Resident Record", get: r("state") },
-  { key: "country", label: "Country", source: "Resident Record", get: r("country") },
+  { key: "country", label: "Country", source: "Resident Record", get: (c) => countryName(c.resident?.["country"]) },
   { key: "university", label: "University", source: "Resident Record", get: r("university") },
   { key: "level_of_study", label: "Level of study", source: "Resident Record", get: r("level_of_study") },
   { key: "course", label: "Course", source: "Resident Record", get: r("course") },
@@ -104,7 +125,7 @@ export const TEMPLATE_FIELDS: TemplateField[] = [
   { key: "payer_address", label: "Payer address", source: "Resident Record", get: r("payer_address") },
   // — Booking Record —
   { key: "booking_ref", label: "Booking reference", source: "Booking Record", get: e("reference") },
-  { key: "payment_schedule", label: "Payment frequency", source: "Booking Record", get: (c) => c.enquiry?.["payment_term"] || c.resident?.["pay_schedule"] },
+  { key: "payment_schedule", label: "Payment frequency", source: "Booking Record", get: (c) => scheduleName(c.enquiry?.["payment_term"] || c.resident?.["pay_schedule"]) },
   { key: "booking_move_in", label: "Move-in date", source: "Booking Record", get: (c) => fmtDate(c.enquiry?.["move_in"] ?? c.resident?.["move_in"]) },
   { key: "booking_move_out", label: "Move-out date", source: "Booking Record", get: (c) => fmtDate(c.enquiry?.["move_out"]) },
   { key: "lease_months", label: "Lease length (months)", source: "Booking Record", get: r("lease_months") },
@@ -129,7 +150,9 @@ export const TEMPLATE_FIELDS: TemplateField[] = [
   { key: "agreement_date", label: "Agreement date", source: "Tenancy Record", get: (c) => fmtDate(c.agreement?.["created_at"] ?? c.tenancy?.["created_at"]) },
   { key: "tenancy_start", label: "Tenancy start", source: "Tenancy Record", get: (c) => fmtDate(start(c)) },
   { key: "tenancy_end", label: "Tenancy end", source: "Tenancy Record", get: (c) => fmtDate(end(c)) },
-  { key: "monthly_rent", label: "Monthly rent", source: "Tenancy Record", get: (c) => { const v = rent(c); return v === "" || v == null ? "" : Number(v).toLocaleString("en-MY"); } },
+  { key: "monthly_rent", label: "Monthly rent", source: "Tenancy Record", get: (c) => money(rent(c)) },
+  // "12 months 4 days", worked out from the tenancy dates the agreement prints
+  { key: "duration", label: "Duration (months and days)", source: "Tenancy Record", get: (c) => stayLength(start(c), end(c)) },
   { key: "today", label: "Today's date", source: "Other", get: () => fmtDate(new Date().toISOString()) },
 ];
 
@@ -158,6 +181,17 @@ const ALIASES: Record<string, string> = {
   total_initial_payment: "first_payment_total",
   move_in_date: "booking_move_in",
   move_out_date: "booking_move_out",
+  // the names the Schedule A template uses (vSept26)
+  residence_name: "residence",
+  resident_address: "address",
+  resident_postcode: "postcode",
+  resident_state: "state",
+  resident_country: "country",
+  resident_mobile_number: "mobile",
+  tenancy_start_date: "tenancy_start",
+  tenancy_end_date: "tenancy_end",
+  rental_rate: "monthly_rent",
+  duration_mmdd: "duration",
 };
 
 export type Mapping =
