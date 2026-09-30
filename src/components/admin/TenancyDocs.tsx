@@ -217,21 +217,21 @@ function AgreementBlock({
         {parent ? <StatusPill status={parent.status} label={docLabel(parent.status)} /> : null}
       </button>
       {untouched ? (
-        <Button type="button" size="sm" variant="ghost" className="shrink-0 text-muted-foreground" onClick={() => setUndoing(true)}>
+        <Button type="button" size="sm" variant="ghost" className="h-7 shrink-0 px-2 text-xs text-muted-foreground" onClick={() => setUndoing(true)}>
           <Undo2 className="mr-1 size-3.5" /> Reset
         </Button>
       ) : null}
       </div>
       <Dialog open={undoing} onOpenChange={(o) => !busy && setUndoing(o)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-xs">
           <DialogHeader>
             <DialogTitle>Reset {agreement.agreementNo}?</DialogTitle>
           </DialogHeader>
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setUndoing(false)}>
+            <Button type="button" variant="ghost" size="sm" className="h-7 px-3 text-xs" disabled={busy} onClick={() => setUndoing(false)}>
               Keep it
             </Button>
-            <Button type="button" variant="destructive" size="sm" disabled={busy} onClick={() => void undo()}>
+            <Button type="button" variant="destructive" size="sm" className="h-7 px-3 text-xs" disabled={busy} onClick={() => void undo()}>
               {busy ? "Resetting…" : "Reset"}
             </Button>
           </div>
