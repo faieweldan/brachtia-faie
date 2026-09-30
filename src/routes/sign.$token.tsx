@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, ChevronDown, ChevronRight, Lock, PenLine } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, FileSignature, Loader2, Lock, PenLine, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -22,64 +22,128 @@ export const Route = createFileRoute("/sign/$token")({
  * you agree, type your name, sign, and the section closes as signed. They can
  * sign some now and come back for the rest with the same link.
  */
+// the same lifted card as the profile form's
+const CARD = "rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-16px_rgba(16,24,40,0.18)]";
+
 function SigningPage() {
   const { token } = Route.useParams();
   const pack = useQuery({ queryKey: ["signing", token], queryFn: () => getSigningPack({ data: { token } }) });
   const [open, setOpen] = useState<string | null>(null);
 
-  if (pack.isLoading) return <Shell><p className="py-24 text-center text-sm text-muted-foreground">Loading your documents…</p></Shell>;
+  if (pack.isLoading) {
+    return (
+      <Shell>
+        <div className={`${CARD} flex items-center justify-center gap-2 py-20 text-sm text-muted-foreground`}>
+          <Loader2 className="size-4 animate-spin" /> Loading your documents…
+        </div>
+      </Shell>
+    );
+  }
   if (!pack.data?.ok) {
     return (
       <Shell>
-        <div className="rounded-2xl border border-border bg-card p-6 text-center text-sm text-destructive">
-          {pack.data && !pack.data.ok ? pack.data.error : "This page could not be opened."}
+        <div className={`${CARD} p-8 text-center`}>
+          <p className="text-sm font-semibold text-brand-deep">This link cannot be opened</p>
+          <p className="mt-1 text-sm text-muted-foreground">{pack.data && !pack.data.ok ? pack.data.error : "Please ask Brachtia for a new link."}</p>
         </div>
       </Shell>
     );
   }
 
   const docs = pack.data.documents;
-  const toSign = docs.filter((d) => !d.signed && !d.locked).length;
+  const signed = docs.filter((d) => d.signed).length;
+  const pct = docs.length ? Math.round((signed / docs.length) * 100) : 0;
+  const allDone = docs.length > 0 && docs.every((d) => d.signed || d.locked);
+  // after signing one, the next one still to sign opens by itself
+  const nextAfter = (id: string) => {
+    const i = docs.findIndex((d) => d.id === id);
+    return docs.slice(i + 1).find((d) => !d.signed && !d.locked)?.id ?? null;
+  };
 
   return (
     <Shell>
-      <div className="space-y-2">
-        <h1 className="text-2xl font-bold text-brand-deep">Your tenancy documents</h1>
-        <p className="text-sm text-muted-foreground">
-          Hi {pack.data.name || "there"}. Open each document, read it through, then sign it. You can sign some now and come back to
-          this link for the rest. If anything needs clarifying, contact us before signing.
-        </p>
-        <p className="text-xs font-medium text-brand-deep">
-          {docs.length === 0
-            ? "Nothing to sign yet."
-            : toSign === 0
-              ? "All done — thank you."
-              : `${docs.filter((d) => d.signed).length} of ${docs.length} signed`}
-        </p>
+      <section className={`${CARD} p-5 sm:p-6`}>
+        <div className="flex items-start gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-tint text-brand-deep">
+            <FileSignature className="size-5" />
+          </span>
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold text-brand-deep sm:text-2xl">Your tenancy documents</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Hi {pack.data.name || "there"}. Open each document, read it through, then sign it. You can sign some now and come
+              back to this link for the rest. If anything needs clarifying, contact us before signing.
+            </p>
+          </div>
+        </div>
+        {docs.length ? (
+          <div className="mt-5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium text-brand-deep">{signed} of {docs.length} signed</span>
+              <span className="text-muted-foreground">{pct}%</span>
+            </div>
+            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-brand-deep transition-all" style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+        ) : null}
+      </section>
+
+      {allDone ? (
+        <section className={`${CARD} mt-4 flex items-start gap-3 border-emerald-200 bg-emerald-50/60 p-5`}>
+          <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-700" />
+          <div>
+            <p className="text-sm font-semibold text-emerald-900">All done — thank you!</p>
+            <p className="mt-0.5 text-sm text-emerald-900/80">
+              {docs.some((d) => d.locked)
+                ? "The rest opens after you check in. We will let you know."
+                : "Everything is signed. We will be in touch about the next steps."}
+            </p>
+          </div>
+        </section>
+      ) : null}
+
+      <div className="mt-4 space-y-3">
+        {docs.length === 0 ? (
+          <div className={`${CARD} p-8 text-center text-sm text-muted-foreground`}>Nothing to sign yet. We will send you a message when your documents are ready.</div>
+        ) : (
+          docs.map((d, i) => (
+            <Section
+              key={d.id}
+              n={i + 1}
+              token={token}
+              doc={d}
+              open={open === d.id}
+              onToggle={() => setOpen(open === d.id ? null : d.id)}
+              onSigned={() => setOpen(nextAfter(d.id))}
+            />
+          ))
+        )}
       </div>
 
-      <div className="mt-6 space-y-3">
-        {docs.map((d) => (
-          <Section
-            key={d.id}
-            token={token}
-            doc={d}
-            open={open === d.id}
-            onToggle={() => setOpen(open === d.id ? null : d.id)}
-            onSigned={() => setOpen(null)}
-          />
-        ))}
-      </div>
-
-      <p className="mt-8 text-[11px] leading-relaxed text-muted-foreground">
-        Signing here is your electronic signature. For each document we keep the exact file you signed, with the time, your
-        device and a fingerprint of the file, so it cannot be changed afterwards.
+      <p className="mt-6 flex items-start gap-2 px-1 text-[11px] leading-relaxed text-muted-foreground">
+        <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
+        Signing here is your electronic signature. For each document we keep the exact file you signed, with the time, your device
+        and a fingerprint of the file, so it cannot be changed afterwards.
       </p>
     </Shell>
   );
 }
 
-function Section({ token, doc, open, onToggle, onSigned }: { token: string; doc: SigningDoc; open: boolean; onToggle: () => void; onSigned: () => void }) {
+function Section({
+  n,
+  token,
+  doc,
+  open,
+  onToggle,
+  onSigned,
+}: {
+  n: number;
+  token: string;
+  doc: SigningDoc;
+  open: boolean;
+  onToggle: () => void;
+  onSigned: () => void;
+}) {
   const qc = useQueryClient();
   const pdf = useQuery({
     queryKey: ["signing-pdf", token, doc.id, doc.signed],
@@ -114,56 +178,71 @@ function Section({ token, doc, open, onToggle, onSigned }: { token: string; doc:
   const incomplete = pdf.data?.ok === true && pdf.data.gaps.length > 0;
 
   return (
-    <div className="rounded-2xl border border-border bg-card">
-      <button type="button" onClick={onToggle} className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left">
-        <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-brand-deep">
-          {open ? <ChevronDown className="size-4 shrink-0" /> : <ChevronRight className="size-4 shrink-0" />}
-          <span className="truncate">{doc.label}</span>
+    <section className={`${CARD} overflow-hidden ${open ? "ring-2 ring-brand/15" : ""}`}>
+      <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-3 px-4 py-4 text-left sm:px-5">
+        {/* the same marks as the profile form's steps */}
+        <span
+          className={`flex size-9 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold ${
+            doc.signed
+              ? "border-brand bg-brand text-primary-foreground"
+              : doc.locked
+                ? "border-border bg-muted text-muted-foreground"
+                : "border-brand-deep text-brand-deep"
+          }`}
+        >
+          {doc.signed ? <Check className="size-4" /> : doc.locked ? <Lock className="size-3.5" /> : n}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-brand-deep">{doc.label}</span>
+          <span className="block text-xs text-muted-foreground">
+            {doc.signed ? "Signed" : doc.locked ? "Opens after you check in" : "Read and sign"}
+          </span>
         </span>
         {doc.signed ? (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-900">
-            <CheckCircle2 className="size-3" /> Signed
-          </span>
+          <span className="hidden shrink-0 rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-900 sm:inline">Signed</span>
         ) : doc.locked ? (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
-            <Lock className="size-3" /> Later
-          </span>
+          <span className="hidden shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground sm:inline">Later</span>
         ) : (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
-            <PenLine className="size-3" /> To sign
-          </span>
+          <span className="hidden shrink-0 rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900 sm:inline">To sign</span>
         )}
+        <ChevronDown className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open ? (
-        <div className="space-y-4 border-t border-border p-4">
+        <div className="space-y-4 border-t border-border bg-muted/20 p-4 sm:p-5">
           {doc.locked ? (
             <p className="text-sm text-muted-foreground">{doc.locked}</p>
           ) : (
             <>
-              <DocumentView pdf={pdf.data} pdfLoading={pdf.isLoading} />
+              <div className="overflow-hidden rounded-xl border border-border bg-background">
+                <DocumentView pdf={pdf.data} pdfLoading={pdf.isLoading} />
+              </div>
               {doc.signed ? (
-                <p className="text-sm text-emerald-800">You have signed this document. The pages above are the signed copy.</p>
+                <p className="flex items-center gap-2 text-sm text-emerald-800">
+                  <CheckCircle2 className="size-4" /> You have signed this document. The pages above are your signed copy.
+                </p>
               ) : incomplete ? (
                 <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                   This document is not complete yet, so it cannot be signed. Please contact Brachtia.
                 </p>
               ) : ready ? (
-                <div className="space-y-4 rounded-xl border border-border bg-muted/30 p-4">
-                  <label className="flex cursor-pointer items-start gap-2.5 text-sm">
-                    <input type="checkbox" className="mt-0.5 size-4 accent-brand" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
-                    <span>I have read this document and I agree to it.</span>
-                  </label>
-                  <div className="space-y-1.5">
-                    <p className="text-xs text-muted-foreground">Type your full name, as it appears on the document</p>
-                    <Input value={name} onChange={(e) => setName(e.target.value)} disabled={!agreed} autoComplete="name" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <p className="text-xs text-muted-foreground">Your signature</p>
+                <div className="space-y-5 rounded-xl border border-border bg-card p-4 sm:p-5">
+                  <p className="text-sm font-semibold text-brand-deep">Sign {doc.label.split(" – ")[0]}</p>
+                  <Step n={1} done={agreed} title="Agree">
+                    <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+                      <input type="checkbox" className="mt-0.5 size-4 accent-brand" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+                      <span>I have read this document and I agree to it.</span>
+                    </label>
+                  </Step>
+                  <Step n={2} done={!!name.trim()} title="Your full name" hint="As it appears on the document">
+                    <Input value={name} onChange={(e) => setName(e.target.value)} disabled={!agreed} autoComplete="name" className="sm:max-w-sm" />
+                  </Step>
+                  <Step n={3} done={!!png} title="Your signature" last>
                     <SignaturePad onChange={setPng} disabled={!agreed} />
-                  </div>
+                  </Step>
                   <Button type="button" className="w-full sm:w-auto" disabled={!agreed || !name.trim() || !png || busy} onClick={() => void sign()}>
-                    {busy ? "Signing…" : `Sign ${doc.label.split(" – ")[0]}`}
+                    {busy ? <Loader2 className="size-4 animate-spin" /> : <PenLine className="size-4" />}
+                    {busy ? "Signing…" : "Sign document"}
                   </Button>
                 </div>
               ) : null}
@@ -171,6 +250,31 @@ function Section({ token, doc, open, onToggle, onSigned }: { token: string; doc:
           )}
         </div>
       ) : null}
+    </section>
+  );
+}
+
+/** One of the three things a signature takes, numbered like the form's steps. */
+function Step({ n, done, title, hint, last = false, children }: { n: number; done: boolean; title: string; hint?: string; last?: boolean; children: React.ReactNode }) {
+  return (
+    <div className="flex gap-3">
+      <div className="flex flex-col items-center">
+        <span
+          className={`flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
+            done ? "bg-brand text-primary-foreground" : "border border-border bg-background text-muted-foreground"
+          }`}
+        >
+          {done ? <Check className="size-3.5" /> : n}
+        </span>
+        {!last ? <span className="mt-1 w-px flex-1 bg-border" /> : null}
+      </div>
+      <div className="min-w-0 flex-1 space-y-1.5 pb-1">
+        <p className="text-xs font-medium text-foreground">
+          {title}
+          {hint ? <span className="font-normal text-muted-foreground"> · {hint}</span> : null}
+        </p>
+        {children}
+      </div>
     </div>
   );
 }
