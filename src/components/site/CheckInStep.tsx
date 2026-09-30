@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { MessageCircle } from "lucide-react";
 
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { whatsappUrl } from "@/data/properties";
 import { fetchDaySlots } from "@/lib/public.functions";
 
@@ -221,43 +222,56 @@ export function CheckInStep({
               a pair of arrows that led nowhere - work to do before the one
               decision could be made.
             */}
-            <select
+            {/*
+              Drawn by the page, not the browser: a plain <select> opens the
+              operating system's own list - a grey Mac sheet, a Windows box, a
+              wheel on a phone - so each student saw something different (30 Sep 2026).
+            */}
+            <Select
               value={value.on}
               disabled={off}
               // a new day has its own times, so the old one is cleared
-              onChange={(e) => onChange({ ...value, on: e.target.value, slot: "" })}
-              className="mt-2 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm disabled:cursor-not-allowed sm:max-w-sm"
+              onValueChange={(on) => onChange({ ...value, on, slot: "" })}
             >
-              <option value="">Choose your arrival date</option>
-              {days.map((d) => (
-                <option key={d.iso} value={d.iso}>
-                  {d.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="mt-2 h-10 w-full rounded-lg sm:max-w-sm">
+                <SelectValue placeholder="Choose your arrival date" />
+              </SelectTrigger>
+              <SelectContent>
+                {days.map((d) => (
+                  <SelectItem key={d.iso} value={d.iso}>
+                    {d.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
             <p className="mt-5 text-sm font-semibold italic text-foreground">Time:</p>
-            <select
+            <Select
               value={value.slot}
-              disabled={off || !value.on || loadingSlots}
-              onChange={(e) => onChange({ ...value, slot: e.target.value })}
-              className="mt-2 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm disabled:cursor-not-allowed sm:max-w-sm"
+              disabled={off || !value.on || loadingSlots || timeChoices.length === 0}
+              onValueChange={(slot) => onChange({ ...value, slot })}
             >
-              <option value="">
-                {!value.on
-                  ? "Choose a date first"
-                  : loadingSlots
-                    ? "Loading times…"
-                    : timeChoices.length === 0
-                      ? "No times free that day - try another"
-                      : "Choose your arrival time"}
-              </option>
-              {timeChoices.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="mt-2 h-10 w-full rounded-lg sm:max-w-sm">
+                <SelectValue
+                  placeholder={
+                    !value.on
+                      ? "Choose a date first"
+                      : loadingSlots
+                        ? "Loading times…"
+                        : timeChoices.length === 0
+                          ? "No times free that day - try another"
+                          : "Choose your arrival time"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {timeChoices.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {t}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         ) : null}
 
