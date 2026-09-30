@@ -48,6 +48,9 @@ export function PdfBoxEditor({
   onRetry?: () => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
+  // the editor's own width - what "fit width" fits to. Not the scrolling frame,
+  // which a zoomed page could widen (30 Sep 2026).
+  const root = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLDivElement>(null);
   const [pdf, setPdf] = useState<LoadedPdf | null>(null);
   const [page, setPage] = useState(0);
@@ -86,7 +89,7 @@ export function PdfBoxEditor({
     let cancelled = false;
     void pdf.getPage(page + 1).then(async (p) => {
       const base = p.getViewport({ scale: 1 });
-      const scale = Math.max(0.5, ((frame.current?.clientWidth ?? base.width) - 2) / base.width) * zoom;
+      const scale = Math.max(0.5, ((root.current?.clientWidth ?? base.width) - 4) / base.width) * zoom;
       const vp = p.getViewport({ scale });
       const c = canvas.current;
       if (!c || cancelled) return;
@@ -129,7 +132,7 @@ export function PdfBoxEditor({
   const total = pdf?.numPages ?? 1;
 
   return (
-    <div className="space-y-3">
+    <div ref={root} className="min-w-0 space-y-3">
       <p className="text-xs text-muted-foreground">
         Drag across the page where a value should go - over the line after a label, or over a tick box. Then name
         the box and map it on the right.
@@ -231,7 +234,7 @@ export function PdfBoxEditor({
       </div>
 
       {/* zoomed in, the page scrolls inside this frame both ways */}
-      <div ref={frame} className="max-h-[75vh] overflow-auto rounded-md border border-border bg-muted">
+      <div ref={frame} className="max-h-[75vh] w-full max-w-full overflow-auto rounded-md border border-border bg-muted">
         {error ? <p className="py-20 text-center text-sm text-destructive">{error}</p> : null}
         <div className="relative select-none" style={{ width: size.w || undefined, height: size.h || undefined, margin: zoom === 1 ? "0 auto" : undefined }}>
           <canvas ref={canvas} className="block bg-background" />

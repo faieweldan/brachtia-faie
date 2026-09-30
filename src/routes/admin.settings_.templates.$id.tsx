@@ -416,7 +416,8 @@ function TemplateWorkspace() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[240px_1fr_340px]">
+      {/* minmax(0,1fr): the middle column never grows to fit a zoomed page */}
+      <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)_340px]">
         {/* LEFT */}
         <aside className="space-y-4 self-start rounded-xl border border-border bg-card p-4 text-sm">
           <dl className="space-y-2">
@@ -496,7 +497,7 @@ function TemplateWorkspace() {
         </aside>
 
         {/* CENTRE */}
-        <section className="rounded-xl border border-border bg-card p-4">
+        <section className="min-w-0 rounded-xl border border-border bg-card p-4">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold">v{selected.version}</span>
             <VersionStatus status={editing && selected.status !== "draft" ? "draft" : selected.status} />

@@ -222,7 +222,7 @@ function DocumentPackPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[220px_1fr_300px]">
+      <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_300px]">
         {/* LEFT — documents menu */}
         <nav className="space-y-4 rounded-2xl border border-border bg-card p-4">
           {menu.map((g) => (
