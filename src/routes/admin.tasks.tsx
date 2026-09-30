@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CheckSquare, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState, Panel, Select, StatusPill } from "@/components/admin/ops-ui";
+import { adminOverview } from "@/lib/admin.functions";
 import { deleteTask, fmtDate, toggleTask, useOps } from "@/lib/ops-store";
 
 export const Route = createFileRoute("/admin/tasks")({
@@ -26,6 +28,14 @@ function TasksPage() {
   const [overdueOnly, setOverdueOnly] = useState(false);
 
   const today = new Date().toISOString().slice(0, 10);
+  /*
+   * Arrivals still to arrange. Worked out from the residents each time rather
+   * than stored as tasks, so a row goes away by itself the moment the student
+   * picks a time (30 Sep 2026).
+   */
+  const { data: overview } = useQuery({ queryKey: ["admin", "overview"], queryFn: () => adminOverview() });
+  const toBook = ((overview as any)?.checkinsToBook ?? []) as { id: string; full_name: string; remind: boolean }[];
+  const showToBook = (!type || type === "checkin") && status !== "done" && !overdueOnly;
 
   const rows = useMemo(
     () =>
@@ -73,13 +83,35 @@ function TasksPage() {
         </div>
       </Panel>
 
-      {tasks.length === 0 ? (
+      {showToBook && toBook.length ? (
+        <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+          {toBook.map((r) => (
+            <div key={r.id} className="flex flex-wrap items-center gap-3 p-4">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-brand-deep">Arrange check-in time</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  Check-in · {r.full_name || "Resident"} ·{" "}
+                  {r.remind ? "asked to be reminded - message them" : "has not chosen a time"}
+                </p>
+              </div>
+              <StatusPill status="due" label={r.remind ? "Reminder" : "Not chosen"} />
+              <Button asChild size="sm" variant="outline">
+                <Link to="/admin/residents/$id" params={{ id: r.id }}>
+                  Open
+                </Link>
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {tasks.length === 0 && !(showToBook && toBook.length) ? (
         <EmptyState
           icon={CheckSquare}
           title="No tasks yet"
           hint="Tasks appear automatically as you hold beds, generate agreements, schedule check-ins and raise invoices."
         />
-      ) : rows.length === 0 ? (
+      ) : tasks.length === 0 ? null : rows.length === 0 ? (
         <EmptyState title="No tasks match these filters" />
       ) : (
         <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">

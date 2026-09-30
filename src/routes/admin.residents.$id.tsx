@@ -810,6 +810,9 @@ function ResidentProfilePage() {
             </div>
           ))}
         </div>
+        {/* on the card every tab shares: a resident without a tenancy yet
+            still has an arrival to arrange (Dani, 30 Sep 2026) */}
+        {!isNew && form.id ? <CheckInLine residentId={form.id} /> : null}
       </Panel>
 
       <Panel>
@@ -1024,7 +1027,6 @@ function ResidentProfilePage() {
               checklist={
                 <Panel title="Pre-check-in checklist" description="Prepare for move-in day.">
                   <div className="space-y-2">
-                    <CheckInLine residentId={form.id} />
                     {tenancy.checklist.map((c) => (
                       <label key={c.key} className="flex items-center gap-2 text-sm">
                         <Checkbox
@@ -1271,7 +1273,7 @@ function CheckInLine({ residentId }: { residentId: string }) {
   });
   if (!data) return null;
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-border pb-2 text-sm">
+    <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3 text-sm">
       <span className="text-muted-foreground">Check-in:</span>
       {/* StatusPill's look, without its capitalising every word */}
       <span
