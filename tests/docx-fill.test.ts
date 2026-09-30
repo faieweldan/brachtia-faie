@@ -53,3 +53,31 @@ describe('a whole .docx', () => {
     expect(await out.file('word/styles.xml')!.async('string')).toBe('<w:styles/>');
   });
 });
+
+describe('a signature picture in place of a placeholder', () => {
+  // a 1x1 PNG, enough to have a header with a size
+  const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAAEUlEQVR4nGNgYGD4z8DAwMAAAA0AAf/2+TwAAAAASUVORK5CYII='), (c) => c.charCodeAt(0));
+  const token = '@signature:0123456789abcdef';
+  const docx = async () => {
+    const zip = new JSZip();
+    zip.file('[Content_Types].xml', '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>');
+    zip.file('word/document.xml', `<w:document xmlns:w="w"><w:body>${para(run('Signed: {{Admin_signature}} ok'))}${para(run('{{Resident_signature}}'))}</w:body></w:document>`);
+    zip.file('word/_rels/document.xml.rels', '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>');
+    return zip.generateAsync({ type: 'uint8array' });
+  };
+  test('the picture goes where the placeholder was, with its file and link', async () => {
+    const out = await JSZip.loadAsync(await fillDocx(await docx(), { Admin_signature: token, Resident_signature: '' }, { [token]: png }));
+    const xml = await out.file('word/document.xml')!.async('string');
+    expect(xml).toContain('<w:drawing>');
+    expect(xml).not.toContain('{{Admin_signature}}');
+    expect(text(xml)).toBe('Signed:  ok');
+    expect(xml).toContain('xmlns:wp=');
+    expect(await out.file('word/_rels/document.xml.rels')!.async('string')).toContain('media/signature_');
+    expect(Object.keys(out.files).some((f) => /^word\/media\/signature_\d+\.png$/.test(f))).toBe(true);
+    expect(await out.file('[Content_Types].xml')!.async('string')).toContain('Extension="png"');
+  });
+  test('without the picture the token is never printed as text', async () => {
+    const out = await JSZip.loadAsync(await fillDocx(await docx(), { Admin_signature: '' }));
+    expect(await out.file('word/document.xml')!.async('string')).not.toContain('<w:drawing>');
+  });
+});

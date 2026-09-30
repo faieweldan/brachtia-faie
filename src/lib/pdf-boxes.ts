@@ -42,7 +42,7 @@ export async function fillPdf(
   bytes: Uint8Array,
   boxes: PdfBox[],
   values: Record<string, string | null>,
-  opts: { outline?: boolean } = {},
+  opts: { outline?: boolean; images?: Record<string, Uint8Array> } = {},
 ): Promise<Uint8Array> {
   const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
   const font = await pdf.embedFont(StandardFonts.Helvetica);
@@ -65,7 +65,17 @@ export async function fillPdf(
     }
 
     const value = values[box.key];
-    if (box.kind === "signature") continue; // signed with a pen, for now
+    if (box.kind === "signature") {
+      // the signatory's saved signature, fitted inside the box; otherwise left for a pen
+      const png = value ? opts.images?.[value.trim()] : undefined;
+      if (!png) continue;
+      const img = await pdf.embedPng(png);
+      const k = Math.min(bw / img.width, bh / img.height);
+      const w = img.width * k;
+      const h = img.height * k;
+      page.drawImage(img, { x: left + (bw - w) / 2, y: bottom + (bh - h) / 2, width: w, height: h });
+      continue;
+    }
     if (box.kind === "tick") {
       if (!ticked(value)) continue;
       // a drawn tick, sized to the box
