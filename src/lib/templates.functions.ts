@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { PdfBox } from "@/lib/pdf-boxes";
 import { z } from "zod";
 
 import { detectPlaceholders, isDocumentOwn, testMappingFor, unmapped, type MappingContext, type Mappings } from "@/lib/template-fields";
@@ -20,6 +21,8 @@ export type TemplateVersion = {
   fileName: string;
   placeholders: string[];
   mappings: Mappings;
+  /** where values go on a PDF template */
+  boxes: PdfBox[];
   createdAt: string;
   updatedAt: string;
   activatedAt: string | null;
@@ -43,6 +46,7 @@ const toVersion = (r: any): TemplateVersion => ({
   fileName: r.file_name ?? "",
   placeholders: r.placeholders ?? [],
   mappings: r.mappings ?? {},
+  boxes: Array.isArray(r.boxes) ? r.boxes : [],
   createdAt: r.created_at,
   updatedAt: r.updated_at,
   activatedAt: r.activated_at,
@@ -101,9 +105,24 @@ async function loadDocx(db: any, filePath: string | null | undefined): Promise<U
  * footers - as well as from the web copy. The web copy never had the headers,
  * so {{Agreement_id}} in the page header was never offered for mapping.
  */
-async function placeholdersOf(db: any, row: { content_html?: string; file_path?: string }) {
+const boxesOf = (row: { boxes?: unknown }): PdfBox[] => (Array.isArray(row.boxes) ? (row.boxes as PdfBox[]) : []);
+
+/** Values for each box, from the resident, as a Word file's placeholders get them. */
+async function valuesFor(placeholders: string[], ctx: MappingContext, mappings: Mappings, overrides?: Record<string, string>) {
+  const values: Record<string, string | null> = {};
+  for (const r of testMappingFor(placeholders, ctx, mappings)) {
+    const typed = isDocumentOwn(r.key) ? overrides?.[r.key] : undefined;
+    if (typed !== undefined && typed.trim() !== "") values[r.key] = typed;
+    else if (r.result === "mapped") values[r.key] = r.value;
+    else values[r.key] = null;
+  }
+  return values;
+}
+
+async function placeholdersOf(db: any, row: { content_html?: string; file_path?: string; boxes?: unknown }) {
   const fromHtml = detectPlaceholders(row.content_html ?? "");
-  if (isPdfPath(row.file_path)) return fromHtml;
+  // a PDF's "placeholders" are the names of the boxes drawn on it
+  if (isPdfPath(row.file_path)) return [...new Set([...boxesOf(row).map((b) => b.key), ...fromHtml])];
   const bytes = await loadDocx(db, row.file_path);
   if (!bytes) return fromHtml;
   const { docxPlaceholders } = await import("@/lib/docx-fill");
@@ -115,6 +134,17 @@ const toBase64 = (bytes: Uint8Array) => {
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return btoa(bin);
 };
+
+const boxSchema = z.object({
+  id: z.string().max(40),
+  key: z.string().trim().min(1).max(80),
+  kind: z.enum(["text", "tick", "signature"]),
+  page: z.number().int().min(0).max(200),
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  w: z.number().min(0).max(1),
+  h: z.number().min(0).max(1),
+});
 
 const mappingSchema = z.record(
   z.string().max(80),
@@ -198,7 +228,7 @@ export const saveDraft = createServerFn({ method: "POST" })
     const next = Math.max(0, ...all.map((r) => r.version)) + 1;
     const { data: ins, error } = await db
       .from("template_versions")
-      .insert({ template_id: data.templateId, version: next, status: "draft", file_path: from?.file_path ?? "", file_name: from?.file_name ?? "", mappings: from?.mappings ?? {}, ...patch })
+      .insert({ template_id: data.templateId, version: next, status: "draft", file_path: from?.file_path ?? "", file_name: from?.file_name ?? "", mappings: from?.mappings ?? {}, boxes: from?.boxes ?? [], ...patch })
       .select("id")
       .single();
     if (error) throw new Error("Could not create draft");
@@ -209,7 +239,7 @@ export const activateVersion = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ versionId: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
     const db = await admin();
-    const { data: v, error: readError } = await db.from("template_versions").select("status, content_html, file_path, mappings").eq("id", data.versionId).single();
+    const { data: v, error: readError } = await db.from("template_versions").select("status, content_html, file_path, mappings, boxes").eq("id", data.versionId).single();
     // a failed read is not "not a draft" - say what actually went wrong
     if (readError) throw new Error(`Could not read this version: ${readError.message}`);
     if (!v || v.status !== "draft") throw new Error("Only a draft can be activated");
@@ -288,7 +318,7 @@ export const getPackTemplates = createServerFn({ method: "GET" })
     const { ctx } = await buildContext(db, data.residentId);
     const { data: rows } = await db
       .from("template_versions")
-      .select("id, version, content_html, file_path, mappings, document_templates!inner(doc_key, name, residence_id)")
+      .select("id, version, content_html, file_path, mappings, boxes, document_templates!inner(doc_key, name, residence_id)")
       .eq("status", "active");
     const out: Record<string, { name: string; version: number; html: string; hasFile: boolean; placeholders: string[]; results: ReturnType<typeof testMappingFor> } | null> = {};
     for (const k of PACK_KEYS) {
@@ -308,7 +338,7 @@ export const getTemplateDocx = createServerFn({ method: "GET" })
   .inputValidator((d) => z.object({ versionId: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
     const db = await admin();
-    const { data: v } = await db.from("template_versions").select("content_html, file_path").eq("id", data.versionId).maybeSingle();
+    const { data: v } = await db.from("template_versions").select("content_html, file_path, boxes").eq("id", data.versionId).maybeSingle();
     const bytes = v ? await loadDocx(db, v.file_path) : null;
     if (!bytes) return null;
     return {
@@ -333,13 +363,17 @@ async function filledPackBytes(
   const { ctx } = await buildContext(db, residentId);
   const { data: rows } = await db
     .from("template_versions")
-    .select("content_html, file_path, mappings, document_templates!inner(doc_key, residence_id)")
+    .select("content_html, file_path, mappings, boxes, document_templates!inner(doc_key, residence_id)")
     .eq("status", "active")
     .eq("document_templates.doc_key", docKey);
   const row = pickForResidence((rows ?? []) as any[], docKey, ctx.residence?.["id"]);
   const bytes = row ? await loadDocx(db, row.file_path) : null;
   if (!row || !bytes) return null;
-  if (isPdfPath(row.file_path)) return { kind: "pdf" as const, bytes };
+  if (isPdfPath(row.file_path)) {
+    const { fillPdf } = await import("@/lib/pdf-boxes");
+    const values = await valuesFor(await placeholdersOf(db, row), ctx, row.mappings ?? {}, overrides);
+    return { kind: "pdf" as const, bytes: await fillPdf(bytes, boxesOf(row), values) };
+  }
   return { kind: "docx" as const, bytes: await fillFor(bytes, await placeholdersOf(db, row), ctx, row.mappings ?? {}, overrides) };
 }
 
@@ -351,14 +385,7 @@ async function fillFor(
   mappings: Mappings,
   overrides?: Record<string, string>,
 ) {
-  const values: Record<string, string | null> = {};
-  for (const r of testMappingFor(placeholders, ctx, mappings)) {
-    // only the document's own values can be set on the pack page
-    const typed = isDocumentOwn(r.key) ? overrides?.[r.key] : undefined;
-    if (typed !== undefined && typed.trim() !== "") values[r.key] = typed;
-    else if (r.result === "mapped") values[r.key] = r.value;
-    else values[r.key] = null;
-  }
+  const values = await valuesFor(placeholders, ctx, mappings, overrides);
   const { fillDocx } = await import("@/lib/docx-fill");
   return fillDocx(bytes, values);
 }
@@ -400,14 +427,27 @@ export const previewPackPdf = createServerFn({ method: "POST" })
  */
 export const previewTemplatePdf = createServerFn({ method: "POST" })
   .inputValidator((d) =>
-    z.object({ versionId: z.string().uuid(), residentId: z.string().uuid().optional(), mappings: mappingSchema.optional() }).parse(d),
+    z.object({
+      versionId: z.string().uuid(),
+      residentId: z.string().uuid().optional(),
+      mappings: mappingSchema.optional(),
+      // boxes being drawn and not yet saved
+      boxes: z.array(boxSchema).max(200).optional(),
+    }).parse(d),
   )
   .handler(async ({ data }) => {
     const db = await admin();
-    const { data: v } = await db.from("template_versions").select("content_html, file_path, mappings").eq("id", data.versionId).maybeSingle();
+    const { data: v } = await db.from("template_versions").select("content_html, file_path, mappings, boxes").eq("id", data.versionId).maybeSingle();
     let bytes = v ? await loadDocx(db, v.file_path) : null;
     if (!v || !bytes) return { ok: false as const, error: "This version has no file to preview." };
-    if (isPdfPath(v.file_path)) return { ok: true as const, base64: toBase64(bytes) };
+    if (isPdfPath(v.file_path)) {
+      // with a test resident: filled in, as it will be given out; without: each box outlined and named
+      const { fillPdf } = await import("@/lib/pdf-boxes");
+      const boxes = data.boxes ?? boxesOf(v);
+      const ctx = data.residentId ? (await buildContext(db, data.residentId)).ctx : null;
+      const values = ctx ? await valuesFor([...new Set(boxes.map((b) => b.key))], ctx, data.mappings ?? v.mappings ?? {}) : {};
+      return { ok: true as const, base64: toBase64(await fillPdf(bytes, boxes, values, { outline: !ctx })) };
+    }
     if (data.residentId) {
       const { ctx } = await buildContext(db, data.residentId);
       bytes = await fillFor(bytes, await placeholdersOf(db, v), ctx, data.mappings ?? v.mappings ?? {});
@@ -517,5 +557,17 @@ export const updateTemplateDetails = createServerFn({ method: "POST" })
     if (!Object.keys(patch).length) return { ok: true };
     const { error } = await db.from("document_templates").update(patch).eq("id", data.templateId);
     if (error) throw new Error(`Could not save: ${error.message}`);
+    return { ok: true };
+  });
+
+/** Save the boxes drawn on a PDF template - drafts only, like its mappings. */
+export const saveBoxes = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ versionId: z.string().uuid(), boxes: z.array(boxSchema).max(200) }).parse(d))
+  .handler(async ({ data }) => {
+    const db = await admin();
+    const { data: v } = await db.from("template_versions").select("status").eq("id", data.versionId).single();
+    if (!v || v.status !== "draft") throw new Error("Only a draft's boxes can be changed");
+    const { error } = await db.from("template_versions").update({ boxes: data.boxes, updated_at: new Date().toISOString() }).eq("id", data.versionId);
+    if (error) throw new Error(`Could not save boxes: ${error.message}`);
     return { ok: true };
   });

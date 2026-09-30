@@ -38,6 +38,9 @@ const rent = (c: MappingContext) => c.bed?.["rent"] ?? c.room?.["rent"] ?? c.enq
 const start = (c: MappingContext) => c.tenancy?.["start_date"] ?? c.bed?.["tenancy_start"] ?? c.resident?.["move_in"];
 const end = (c: MappingContext) => c.tenancy?.["end_date"] ?? c.bed?.["tenancy_end"] ?? c.enquiry?.["move_out"];
 const r = (k: string) => (c: MappingContext) => c.resident?.[k];
+/** The resident has uploaded this document (a key from resident-documents). */
+const hasDoc = (c: MappingContext, key: string) =>
+  Array.isArray(c.resident?.["docs"]) && (c.resident!["docs"] as any[]).some((d) => d?.key === key && d?.path);
 const e = (k: string) => (c: MappingContext) => c.enquiry?.[k];
 
 /*
@@ -154,6 +157,10 @@ export const TEMPLATE_FIELDS: TemplateField[] = [
   // "12 months 4 days", worked out from the tenancy dates the agreement prints
   { key: "duration", label: "Duration (months and days)", source: "Tenancy Record", get: (c) => stayLength(start(c), end(c)) },
   { key: "today", label: "Today's date", source: "Other", get: () => fmtDate(new Date().toISOString()) },
+  // for tick boxes on a PDF form: "yes" ticks it, empty leaves it (30 Sep 2026)
+  { key: "has_id_copy", label: "Tick: IC / passport copy uploaded", source: "Resident Record", get: (c) => (hasDoc(c, "id") ? "yes" : "") },
+  { key: "has_photo", label: "Tick: passport photo uploaded", source: "Resident Record", get: (c) => (hasDoc(c, "photo") ? "yes" : "") },
+  { key: "has_agreement", label: "Tick: tenancy agreement generated", source: "Tenancy Record", get: (c) => (c.agreement ? "yes" : "") },
 ];
 
 export const FIELD_BY_KEY = new Map(TEMPLATE_FIELDS.map((f) => [f.key, f]));

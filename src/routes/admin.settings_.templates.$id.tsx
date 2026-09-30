@@ -8,6 +8,8 @@ import { toast } from "sonner";
 import { fmtDay, TEMPLATE_CATEGORIES, VersionStatus } from "@/components/admin/TemplatesTab";
 import { DocumentView } from "@/components/admin/DocumentView";
 import { DocxView } from "@/components/admin/DocxView";
+import { PdfBoxEditor } from "@/components/admin/PdfBoxEditor";
+import type { PdfBox } from "@/lib/pdf-boxes";
 import { docxPlaceholders } from "@/lib/docx-fill";
 import { ExactPreviewButton } from "@/components/admin/ExactPreviewButton";
 import { MARK_CSS, Paper } from "@/components/admin/TemplatePaper";
@@ -41,6 +43,7 @@ import {
   deleteTemplate,
   listTemplateResidences,
   updateTemplateDetails,
+  saveBoxes,
   type DocTemplate,
 } from "@/lib/templates.functions";
 
@@ -102,6 +105,25 @@ function TemplateWorkspace() {
   const mapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selected = tpl?.versions.find((v) => v.id === selectedId) ?? tpl?.versions.find((v) => v.status === "draft") ?? tpl?.versions.find((v) => v.status === "active") ?? tpl?.versions[0];
+
+  /*
+   * The boxes drawn on a PDF template. Changed on a draft, they save after a
+   * short pause, the way mappings do.
+   */
+  const [boxes, setBoxesState] = useState<PdfBox[]>([]);
+  useEffect(() => { setBoxesState(selected?.boxes ?? []); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [selected?.id]);
+  const saveBoxesFn = useServerFn(saveBoxes);
+  const boxTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function setBoxes(next: PdfBox[]) {
+    setBoxesState(next);
+    if (selected?.status !== "draft") return;
+    if (boxTimer.current) clearTimeout(boxTimer.current);
+    boxTimer.current = setTimeout(() => {
+      saveBoxesFn({ data: { versionId: selected.id, boxes: next } })
+        .then(() => qc.invalidateQueries({ queryKey: ["doc-templates"] }))
+        .catch((e) => toast.error(e instanceof Error ? e.message : "Could not save boxes"));
+    }, 600);
+  }
   const active = tpl?.versions.find((v) => v.status === "active");
 
   useEffect(() => {
@@ -158,12 +180,13 @@ function TemplateWorkspace() {
   }
   // the template as it prints - with the test resident filled in once picked
   const pagePdf = useQuery({
-    queryKey: ["template-pdf", selected?.id, test?.resident.id ?? "", test ? maps : null],
+    queryKey: ["template-pdf", selected?.id, test?.resident.id ?? "", test ? maps : null, boxes],
     queryFn: () =>
       pdfFn({
         data: {
           versionId: selected!.id,
           ...(test ? { residentId: test.resident.id, mappings: maps } : {}),
+          ...(docx.data?.kind === "pdf" ? { boxes } : {}),
         },
       }),
     enabled: Boolean(selected?.id && selected?.fileName) && !editing,
@@ -174,18 +197,36 @@ function TemplateWorkspace() {
     queryFn: () => docxFn({ data: { versionId: selected!.id } }),
     enabled: Boolean(selected?.id && selected?.fileName),
   });
+  const [formUrl, setFormUrl] = useState("");
+  const formBase64 = docx.data?.kind === "pdf" ? docx.data.base64 : "";
+  // the PDF form as a link the box editor can open, made and thrown away together
+  useEffect(() => {
+    if (!formBase64) {
+      setFormUrl("");
+      return;
+    }
+    const made = URL.createObjectURL(
+      new Blob([Uint8Array.from(atob(formBase64), (c) => c.charCodeAt(0))], { type: "application/pdf" }),
+    );
+    setFormUrl(made);
+    return () => URL.revokeObjectURL(made);
+  }, [formBase64]);
+  const selKey = selected?.id;
+  useEffect(() => { setMaps(selected?.mappings ?? {}); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [selKey]);
+
+
   const placeholders = useMemo(
     () => [
       ...new Set([
         ...(editing ? (pending?.placeholders ?? []) : (docx.data?.placeholders ?? [])),
+        // on a PDF, the boxes as drawn right now, saved or not
+        ...(docx.data?.kind === "pdf" && !editing ? boxes.map((b) => b.key) : []),
         ...detectPlaceholders(html),
       ]),
     ],
-    [html, editing, docx.data, pending],
+    [html, editing, docx.data, pending, boxes],
   );
   const bad = unmapped(placeholders, maps);
-  const selKey = selected?.id;
-  useEffect(() => { setMaps(selected?.mappings ?? {}); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [selKey]);
   const canMap = selected?.status === "draft" || editing;
 
   function setMap(ph: string, m: Mapping | null) {
@@ -266,6 +307,10 @@ function TemplateWorkspace() {
       // otherwise leave the server checking an older set of mappings
       if (mapTimer.current) clearTimeout(mapTimer.current);
       await saveMaps({ data: { versionId: selected!.id, mappings: maps } });
+      if (docx.data?.kind === "pdf") {
+        if (boxTimer.current) clearTimeout(boxTimer.current);
+        await saveBoxesFn({ data: { versionId: selected!.id, boxes } });
+      }
       await activate({ data: { versionId: selected!.id } });
       await qc.invalidateQueries({ queryKey: ["doc-templates"] });
       toast.success(`v${selected!.version} is now Active`);
@@ -479,6 +524,13 @@ function TemplateWorkspace() {
                 <DocxView base64={pending.base64} className="max-h-[80vh]" />
               )}
             </div>
+          ) : !editing && docx.data?.kind === "pdf" && selected.status === "draft" && formUrl ? (
+            <PdfBoxEditor
+              url={formUrl}
+              boxes={boxes}
+              onChange={setBoxes}
+              names={[...new Set([...Object.keys(maps), ...boxes.map((b) => b.key)])]}
+            />
           ) : !editing && docx.data ? (
             <DocumentView
               pdf={pagePdf.data}
