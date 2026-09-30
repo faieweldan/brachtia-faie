@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, Maximize2, Minus, Plus } from "lucide-react"
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { PDFJS_OPTIONS } from "@/lib/pdfjs-options";
 
 type LoadedPdf = {
   numPages: number;
@@ -39,7 +40,7 @@ export function PdfPageViewer({
     let live = true;
     void import("pdfjs-dist").then(async (pdfjs) => {
       pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
-      const loaded = await pdfjs.getDocument({ url }).promise;
+      const loaded = await pdfjs.getDocument({ url, ...PDFJS_OPTIONS }).promise;
       // a redrawn document keeps the page being read, not back to page 1
       if (live) { setPdf(loaded as LoadedPdf); setPage((p) => Math.min(Math.max(1, p), loaded.numPages)); setError(""); }
     }).catch(() => live && setError("Could not open this PDF preview."));

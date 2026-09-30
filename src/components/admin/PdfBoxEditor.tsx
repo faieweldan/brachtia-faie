@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 
 import { Choice } from "@/components/admin/Choice";
 import { Button } from "@/components/ui/button";
+import { PDFJS_OPTIONS } from "@/lib/pdfjs-options";
 import { Input } from "@/components/ui/input";
 import type { BoxKind, PdfBox } from "@/lib/pdf-boxes";
 
@@ -55,7 +56,7 @@ export function PdfBoxEditor({
     void import("pdfjs-dist")
       .then(async (pdfjs) => {
         pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
-        const loaded = await pdfjs.getDocument({ url }).promise;
+        const loaded = await pdfjs.getDocument({ url, ...PDFJS_OPTIONS }).promise;
         if (live) {
           setPdf(loaded as unknown as LoadedPdf);
           setError("");
