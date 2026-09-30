@@ -42,6 +42,28 @@ async function versions(db: any): Promise<Record<string, string>> {
   };
 }
 
+/**
+ * The pack documents still in use. A document whose templates are all
+ * deactivated in Settings is no longer made - not on generating, not on
+ * renewing (30 Sep 2026).
+ */
+async function retiredDocKeys(db: any): Promise<Set<string>> {
+  const { data } = await db.from("document_templates").select("doc_key, deactivated_at");
+  const rows = (data ?? []) as { doc_key: string; deactivated_at: string | null }[];
+  const keys = new Set(rows.map((r) => r.doc_key).filter(Boolean));
+  return new Set([...keys].filter((k) => rows.filter((r) => r.doc_key === k).every((r) => r.deactivated_at)));
+}
+const DOC_KEY_OF: Record<AgreementDocType, string> = {
+  agreement: "tenancy_agreement",
+  sched_a: "schedule_a",
+  sched_b: "schedule_b",
+  sched_c: "schedule_c",
+};
+async function docTypesInUse(db: any): Promise<AgreementDocType[]> {
+  const retired = await retiredDocKeys(db);
+  return (["agreement", "sched_a", "sched_b", "sched_c"] as AgreementDocType[]).filter((t) => !retired.has(DOC_KEY_OF[t]));
+}
+
 function toDoc(row: any): AgreementDoc {
   return {
     id: row.id,
@@ -162,10 +184,10 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
       .single();
     if (aErr) throw new Error(aErr.message);
 
-    const docTypes: AgreementDocType[] = ["agreement", "sched_a", "sched_b", "sched_c"];
+    const docTypes = await docTypesInUse(db);
     const today = new Date().toISOString().slice(0, 10);
     const tv = await versions(db);
-    const { error: dErr } = await db.from("agreement_documents").insert(
+    const { error: dErr } = !docTypes.length ? { error: null } : await db.from("agreement_documents").insert(
       docTypes.map((t) => ({
         agreement_id: agreement.id,
         doc_type: t,
@@ -180,13 +202,15 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
     );
     if (dErr) throw new Error(dErr.message);
 
-    const { error: cErr } = await db.from("access_card_forms").insert({
-      resident_id: data.residentId,
-      reason: "Initial Tenancy",
-      status: "generated",
-      template_version_id: tv["access_card"] || null,
-    });
-    if (cErr) throw new Error(cErr.message);
+    if (!(await retiredDocKeys(db)).has("access_card_form")) {
+      const { error: cErr } = await db.from("access_card_forms").insert({
+        resident_id: data.residentId,
+        reason: "Initial Tenancy",
+        status: "generated",
+        template_version_id: tv["access_card"] || null,
+      });
+      if (cErr) throw new Error(cErr.message);
+    }
 
     return { ok: true as const, agreementId: agreement.id, agreementNo };
   });
@@ -265,10 +289,10 @@ export const renewAgreement = createServerFn({ method: "POST" })
       .single();
     if (aErr) throw new Error(aErr.message);
 
-    const docTypes: AgreementDocType[] = ["agreement", "sched_a", "sched_b", "sched_c"];
+    const docTypes = await docTypesInUse(db);
     const today = new Date().toISOString().slice(0, 10);
     const tv = await versions(db);
-    const { error: dErr } = await db.from("agreement_documents").insert(
+    const { error: dErr } = !docTypes.length ? { error: null } : await db.from("agreement_documents").insert(
       docTypes.map((t) => ({
         agreement_id: agreement.id,
         doc_type: t,

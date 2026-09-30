@@ -13,7 +13,7 @@ import {
   type AgreementDocType,
 } from "@/lib/tenancy-docs";
 import { generateDocumentPack } from "@/lib/tenancy-docs.functions";
-import { fillPackDocx, getPackTemplates, previewPackPdf } from "@/lib/templates.functions";
+import { fillPackDocx, getPackTemplates, listRetiredPackDocs, previewPackPdf } from "@/lib/templates.functions";
 import { isDocumentOwn, renderTemplate, type MappingResult } from "@/lib/template-fields";
 import { MARK_CSS, Paper } from "@/components/admin/TemplatePaper";
 import { DocumentView } from "@/components/admin/DocumentView";
@@ -98,8 +98,11 @@ function DocumentPackPage() {
    * document with no active template yet sits under the category it belongs
    * to by default. Categories follow the order Settings lists them in.
    */
+  // documents whose templates are all deactivated in Settings have no tab
+  const retiredFn = useServerFn(listRetiredPackDocs);
+  const retired = useQuery({ queryKey: ["retired-pack-docs"], queryFn: () => retiredFn() });
   const menu = useMemo(() => {
-    const items = MENU.flatMap((g) => g.items);
+    const items = MENU.flatMap((g) => g.items).filter((i) => !(retired.data ?? []).includes(TEMPLATE_KEY[i.key]!));
     const categoryOf = (key: DocKey) =>
       pack.data?.[TEMPLATE_KEY[key]!]?.category || (key === "access_card" ? "Access Card" : "Agreement");
     const order = [...TEMPLATE_CATEGORIES, ...items.map((i) => categoryOf(i.key))];
@@ -107,7 +110,12 @@ function DocumentPackPage() {
       .map((group) => ({ group, items: items.filter((i) => categoryOf(i.key) === group) }))
       .filter((g) => g.items.length);
     return groups;
-  }, [pack.data]);
+  }, [pack.data, retired.data]);
+  // the open document was taken out of use: open the first one still in use
+  useEffect(() => {
+    const shown = menu.flatMap((g) => g.items);
+    if (shown.length && !shown.some((i) => i.key === selected)) setSelected(shown[0]!.key);
+  }, [menu, selected]);
 
   /*
    * The document as it will read, filled inside its own Word file - so the

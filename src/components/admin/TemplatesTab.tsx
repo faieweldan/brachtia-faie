@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { Plus } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -60,7 +60,11 @@ export function VersionStatus({ status }: { status: string }) {
 export function TemplatesTab() {
   const list = useServerFn(listTemplates);
   const { data: all, isLoading } = useQuery({ queryKey: ["doc-templates"], queryFn: () => list() });
-  const data = all?.filter((t) => !HIDDEN_DOC_KEYS.has(t.docKey));
+  const listed = all?.filter((t) => !HIDDEN_DOC_KEYS.has(t.docKey));
+  // in use first; deactivated ones are kept, in their own group at the bottom
+  const data = listed?.filter((t) => !t.deactivatedAt);
+  const retired = listed?.filter((t) => t.deactivatedAt) ?? [];
+  const [showRetired, setShowRetired] = useState(false);
   const [adding, setAdding] = useState(false);
   const residences = useResidenceNames();
 
@@ -131,6 +135,25 @@ export function TemplatesTab() {
                   ))}
               </tbody>
             ) : null}
+            {retired.length ? (
+              <tbody>
+                <tr>
+                  <td colSpan={6} className="bg-muted/60 px-2 py-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowRetired((v) => !v)}
+                      className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                    >
+                      Deactivated ({retired.length})
+                      <ChevronDown className={`size-3.5 transition-transform ${showRetired ? "rotate-180" : ""}`} />
+                    </button>
+                  </td>
+                </tr>
+                {showRetired
+                  ? retired.map((t) => <TemplateRow key={t.id} t={t} residence={residences.nameOf(t.residenceId)} />)
+                  : null}
+              </tbody>
+            ) : null}
           </table>
         </div>
       )}
@@ -151,7 +174,15 @@ function TemplateRow({ t, residence }: { t: DocTemplate; residence: string }) {
       <td className="py-2.5 pr-3 text-muted-foreground">{fmtDay(shown?.updatedAt)}</td>
       <td className="py-2.5 pr-3">
         <div className="flex items-center gap-1.5">
-          {shown ? <VersionStatus status={shown.status} /> : <span className="text-[11px] text-muted-foreground">No versions</span>}
+          {t.deactivatedAt ? (
+            <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900">
+              Deactivated
+            </span>
+          ) : shown ? (
+            <VersionStatus status={shown.status} />
+          ) : (
+            <span className="text-[11px] text-muted-foreground">No versions</span>
+          )}
           {active && hasDraft && <span className="text-[11px] text-muted-foreground">+ draft</span>}
         </div>
       </td>

@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { AlertTriangle, ArrowLeft, CheckCircle2, FlaskConical, Trash2, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, FlaskConical, Power, Trash2, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -23,7 +23,7 @@ import { docxPlaceholders } from "@/lib/docx-fill";
 import { ExactPreviewButton } from "@/components/admin/ExactPreviewButton";
 import { MARK_CSS, Paper } from "@/components/admin/TemplatePaper";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { docxToHtml, fileToBase64, isPdfFile } from "@/lib/docx-client";
 import {
@@ -52,6 +52,7 @@ import {
   deleteTemplate,
   listTemplateResidences,
   updateTemplateDetails,
+  setTemplateActive,
   saveBoxes,
   previewUploadedFile,
   type DocTemplate,
@@ -201,6 +202,21 @@ function TemplateWorkspace() {
   const residencesFn = useServerFn(listTemplateResidences);
   const { data: residences } = useQuery({ queryKey: ["template-residences"], queryFn: () => residencesFn() });
   const saveDetails = useServerFn(updateTemplateDetails);
+  const setActiveFn = useServerFn(setTemplateActive);
+  const [deactivating, setDeactivating] = useState(false);
+  const [deactivateReason, setDeactivateReason] = useState("");
+  async function setInUse(active: boolean, reason?: string) {
+    if (!tpl) return;
+    try {
+      await setActiveFn({ data: { templateId: tpl.id, active, ...(reason?.trim() ? { reason: reason.trim() } : {}) } });
+      await qc.invalidateQueries({ queryKey: ["doc-templates"] });
+      toast.success(active ? "Template reactivated" : "Template deactivated");
+      setDeactivating(false);
+      setDeactivateReason("");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save");
+    }
+  }
 
   async function setDetail(patch: { category?: string; residenceId?: string | null }) {
     if (!tpl) return;
@@ -493,6 +509,53 @@ function TemplateWorkspace() {
                 <Trash2 className="mr-1 size-3.5" /> Delete template
               </Button>
             ) : null}
+            {/* take the whole template out of use - kept, and reversible */}
+            {tpl.deactivatedAt ? (
+              <div className="mt-3 space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900">
+                <p>
+                  Deactivated {fmtDay(tpl.deactivatedAt)}
+                  {tpl.deactivationReason ? ` — ${tpl.deactivationReason}` : ""}. Not in any document pack.
+                </p>
+                <Button size="sm" variant="outline" className="w-full" onClick={() => void setInUse(true)}>
+                  Reactivate
+                </Button>
+              </div>
+            ) : (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="mt-1 w-full text-muted-foreground"
+                disabled={editing}
+                onClick={() => setDeactivating(true)}
+              >
+                <Power className="mr-1 size-3.5" /> Deactivate template
+              </Button>
+            )}
+            <Dialog open={deactivating} onOpenChange={setDeactivating}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Deactivate {tpl.name}?</DialogTitle>
+                </DialogHeader>
+                <p className="text-sm text-muted-foreground">
+                  It stops appearing in residents&apos; document packs and is no longer made. Its versions, and the
+                  documents already made from it, are kept. You can reactivate it at any time.
+                </p>
+                <label className="space-y-1.5">
+                  <span className="text-xs text-muted-foreground">Reason (optional)</span>
+                  <Input
+                    value={deactivateReason}
+                    placeholder="e.g. The building no longer asks for this form"
+                    onChange={(e) => setDeactivateReason(e.target.value)}
+                  />
+                </label>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setDeactivating(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={() => void setInUse(false, deactivateReason)}>Deactivate</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </aside>
 

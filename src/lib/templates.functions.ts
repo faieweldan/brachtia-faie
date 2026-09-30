@@ -35,6 +35,9 @@ export type DocTemplate = {
   docKey: string;
   /** null: for every residence */
   residenceId: string | null;
+  /** when it was taken out of use; null while in use */
+  deactivatedAt: string | null;
+  deactivationReason: string;
   versions: TemplateVersion[];
 };
 
@@ -65,6 +68,8 @@ export const listTemplates = createServerFn({ method: "GET" }).handler(async ():
     category: row.category,
     docKey: row.doc_key,
     residenceId: row.residence_id ?? null,
+    deactivatedAt: row.deactivated_at ?? null,
+    deactivationReason: row.deactivation_reason ?? "",
     versions: (v ?? []).filter((x: any) => x.template_id === row.id).map(toVersion),
   }));
 });
@@ -318,8 +323,9 @@ export const getPackTemplates = createServerFn({ method: "GET" })
     const { ctx } = await buildContext(db, data.residentId);
     const { data: rows } = await db
       .from("template_versions")
-      .select("id, version, content_html, file_path, mappings, boxes, document_templates!inner(doc_key, name, residence_id, category)")
-      .eq("status", "active");
+      .select("id, version, content_html, file_path, mappings, boxes, document_templates!inner(doc_key, name, residence_id, category, deactivated_at)")
+      .eq("status", "active")
+      .is("document_templates.deactivated_at", null);
     const out: Record<string, { name: string; category: string; version: number; html: string; hasFile: boolean; placeholders: string[]; results: ReturnType<typeof testMappingFor> } | null> = {};
     for (const k of PACK_KEYS) {
       const row = pickForResidence((rows ?? []) as any[], k, ctx.residence?.["id"]);
@@ -363,8 +369,9 @@ async function filledPackBytes(
   const { ctx } = await buildContext(db, residentId);
   const { data: rows } = await db
     .from("template_versions")
-    .select("content_html, file_path, mappings, boxes, document_templates!inner(doc_key, residence_id)")
+    .select("content_html, file_path, mappings, boxes, document_templates!inner(doc_key, residence_id, deactivated_at)")
     .eq("status", "active")
+    .is("document_templates.deactivated_at", null)
     .eq("document_templates.doc_key", docKey);
   const row = pickForResidence((rows ?? []) as any[], docKey, ctx.residence?.["id"]);
   const bytes = row ? await loadDocx(db, row.file_path) : null;
@@ -587,3 +594,32 @@ export const previewUploadedFile = createServerFn({ method: "POST" })
     if (isPdfPath(data.name)) return { ok: true as const, base64: data.base64 };
     return pdfResult(bytes);
   });
+
+/**
+ * Take a whole template out of use, or bring it back (30 Sep 2026). Not a
+ * delete: its versions and every resident document made from it stay. While
+ * deactivated it is left out of the document pack and out of generating.
+ */
+export const setTemplateActive = createServerFn({ method: "POST" })
+  .inputValidator((d) =>
+    z.object({ templateId: z.string().uuid(), active: z.boolean(), reason: z.string().trim().max(300).optional() }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const db = await admin();
+    const patch = data.active
+      ? { deactivated_at: null, deactivation_reason: "" }
+      : { deactivated_at: new Date().toISOString(), deactivation_reason: data.reason ?? "" };
+    const { error } = await db.from("document_templates").update(patch).eq("id", data.templateId);
+    if (error) throw new Error(`Could not save: ${error.message}`);
+    return { ok: true };
+  });
+
+/** The pack documents with no template in use - their tabs are not shown. */
+export const listRetiredPackDocs = createServerFn({ method: "GET" }).handler(async () => {
+  const db = await admin();
+  const { data } = await db.from("document_templates").select("doc_key, deactivated_at");
+  const rows = (data ?? []) as { doc_key: string; deactivated_at: string | null }[];
+  const keys = [...new Set(rows.map((r) => r.doc_key).filter(Boolean))];
+  // retired only when every template for that document is deactivated
+  return keys.filter((k) => rows.filter((r) => r.doc_key === k).every((r) => r.deactivated_at));
+});
