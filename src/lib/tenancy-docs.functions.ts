@@ -29,18 +29,42 @@ const str = (v: unknown) => (v == null ? "" : String(v));
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const tenancyRef = (v?: string) => (v && UUID.test(v) ? v : null);
 
-async function versions(db: any): Promise<Record<string, string>> {
-  const { activeVersionIds } = await import("@/lib/template-versions.server");
-  const byKey = await activeVersionIds(db);
+const TEMPLATE_KEY: Record<string, string> = {
+  agreement: "tenancy_agreement",
+  sched_a: "schedule_a",
+  sched_b: "schedule_b",
+  sched_c: "schedule_c",
+  access_card: "access_card_form",
+};
+
+async function versions(db: any, residentId: string): Promise<Record<string, string>> {
+  const { activeVersions, residenceIdOf } = await import("@/lib/template-versions.server");
+  const byKey = await activeVersions(db, await residenceIdOf(db, residentId));
   // Settings names the templates differently from the document types
-  return {
-    agreement: byKey["tenancy_agreement"] ?? "",
-    sched_a: byKey["schedule_a"] ?? "",
-    sched_b: byKey["schedule_b"] ?? "",
-    sched_c: byKey["schedule_c"] ?? "",
-    access_card: byKey["access_card_form"] ?? "",
-  };
+  const out: Record<string, string> = {};
+  for (const [type, key] of Object.entries(TEMPLATE_KEY)) out[type] = byKey[key]?.id ?? "";
+  return out;
 }
+
+/**
+ * Every document about to be made has an Active template with a file. A
+ * document made from nothing - Schedule C before its file was uploaded - is a
+ * blank page in the resident's record (Dani, 30 Sep 2026).
+ */
+async function requireFiles(db: any, residentId: string, types: string[]) {
+  const { activeVersions, residenceIdOf } = await import("@/lib/template-versions.server");
+  const byKey = await activeVersions(db, await residenceIdOf(db, residentId));
+  const missing = types.filter((t) => !byKey[TEMPLATE_KEY[t] ?? t]?.hasFile).map((t) => DOC_LABEL[t] ?? t);
+  if (missing.length) throw new Error(`No file uploaded yet for: ${missing.join(", ")}. Upload and activate it in Settings → Templates first.`);
+}
+
+const DOC_LABEL: Record<string, string> = {
+  agreement: "Tenancy Agreement",
+  sched_a: "Schedule A",
+  sched_b: "Schedule B",
+  sched_c: "Schedule C",
+  access_card: "Access Card Form",
+};
 
 /**
  * The pack documents still in use. A document whose templates are all
@@ -167,6 +191,11 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
       .eq("resident_id", data.residentId)
       .limit(1);
     if (existing?.length) throw new Error("This resident already has a document pack");
+    {
+      const types: string[] = [...(await docTypesInUse(db))];
+      if (!(await retiredDocKeys(db)).has("access_card_form")) types.push("access_card");
+      await requireFiles(db, data.residentId, types);
+    }
 
     const { data: seqRow, error: seqErr } = await db.rpc("next_agreement_no" as never);
     if (seqErr) throw new Error((seqErr as any).message ?? "Could not number the agreement");
@@ -186,7 +215,7 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
 
     const docTypes = await docTypesInUse(db);
     const today = new Date().toISOString().slice(0, 10);
-    const tv = await versions(db);
+    const tv = await versions(db, data.residentId);
     const { error: dErr } = !docTypes.length ? { error: null } : await db.from("agreement_documents").insert(
       docTypes.map((t) => ({
         agreement_id: agreement.id,
@@ -243,7 +272,8 @@ export const reviseSchedule = createServerFn({ method: "POST" })
     if (!current) throw new Error("No existing schedule to revise");
 
     const today = new Date().toISOString().slice(0, 10);
-    const tv = await versions(db);
+    const { data: ag } = await db.from("tenancy_agreements").select("resident_id").eq("id", data.agreementId).maybeSingle();
+    const tv = await versions(db, ag?.resident_id ?? "");
     const { error: iErr } = await db.from("agreement_documents").insert({
       agreement_id: data.agreementId,
       doc_type: data.docType,
@@ -273,6 +303,7 @@ export const renewAgreement = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const db = await admin();
+    await requireFiles(db, data.residentId, [...(await docTypesInUse(db))]);
     const { data: seqRow, error: seqErr } = await db.rpc("next_agreement_no" as never);
     if (seqErr) throw new Error((seqErr as any).message ?? "Could not number the agreement");
     const agreementNo = `TA-${String(seqRow).padStart(4, "0")}`;
@@ -291,7 +322,7 @@ export const renewAgreement = createServerFn({ method: "POST" })
 
     const docTypes = await docTypesInUse(db);
     const today = new Date().toISOString().slice(0, 10);
-    const tv = await versions(db);
+    const tv = await versions(db, data.residentId);
     const { error: dErr } = !docTypes.length ? { error: null } : await db.from("agreement_documents").insert(
       docTypes.map((t) => ({
         agreement_id: agreement.id,
@@ -325,7 +356,7 @@ export const createAccessCardForm = createServerFn({ method: "POST" })
   .inputValidator((data: { residentId: string; reason: string }) => data)
   .handler(async ({ data }) => {
     const db = await admin();
-    const tv = await versions(db);
+    const tv = await versions(db, data.residentId);
     const { error } = await db
       .from("access_card_forms")
       .insert({ resident_id: data.residentId, reason: data.reason, status: "generated", template_version_id: tv["access_card"] || null });

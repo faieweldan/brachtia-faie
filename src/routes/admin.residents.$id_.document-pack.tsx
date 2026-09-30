@@ -111,6 +111,14 @@ function DocumentPackPage() {
       .filter((g) => g.items.length);
     return groups;
   }, [pack.data, retired.data]);
+  /*
+   * Every document in the pack needs its file before the pack is made - a
+   * Schedule C with only a template name would be a blank page on the
+   * resident's record (Dani, 30 Sep 2026). The server refuses it too.
+   */
+  const noFile = pack.data
+    ? menu.flatMap((g) => g.items).filter((i) => !pack.data?.[TEMPLATE_KEY[i.key]!]?.hasFile)
+    : [];
   // the open document was taken out of use: open the first one still in use
   useEffect(() => {
     const shown = menu.flatMap((g) => g.items);
@@ -316,9 +324,24 @@ function DocumentPackPage() {
           overrides={overrides}
           onOverride={(key, value) => setOverrides({ ...overrides, [key]: value })}
           footer={
-            <Button className="w-full" disabled={generating} onClick={() => void generate()}>
-              {generating ? "Generating…" : "Generate Document Pack"}
-            </Button>
+            <div className="space-y-2">
+              {noFile.length ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-[11px] text-amber-900">
+                  <p className="font-semibold">Not ready to generate</p>
+                  <ul className="mt-1 list-disc pl-4">
+                    {noFile.map((i) => (
+                      <li key={i.key}>{i.label} – no file uploaded</li>
+                    ))}
+                  </ul>
+                  <Link to="/admin/settings" className="mt-1 inline-block font-medium underline">
+                    Upload in Settings → Templates
+                  </Link>
+                </div>
+              ) : null}
+              <Button className="w-full" disabled={generating || !pack.data || noFile.length > 0} onClick={() => void generate()}>
+                {generating ? "Generating…" : "Generate Document Pack"}
+              </Button>
+            </div>
           }
         />
       </div>
