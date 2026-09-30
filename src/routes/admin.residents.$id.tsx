@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Link2, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Input } from "@/components/ui/input";
 import {
@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { getResidentCheckIn } from "@/lib/admin.functions";
 import { refreshMoney } from "@/lib/billing-client";
 
 import { idLabelFor } from "@/lib/reference-data";
@@ -1023,6 +1024,7 @@ function ResidentProfilePage() {
               checklist={
                 <Panel title="Pre-check-in checklist" description="Prepare for move-in day.">
                   <div className="space-y-2">
+                    <CheckInLine residentId={form.id} />
                     {tenancy.checklist.map((c) => (
                       <label key={c.key} className="flex items-center gap-2 text-sm">
                         <Checkbox
@@ -1253,6 +1255,40 @@ function AdminField({
         value={value}
         onChange={onChange}
       />
+    </div>
+  );
+}
+
+/**
+ * The arrival the student chose on their link, above the checklist. "Asked
+ * for a reminder" means the admin sends it - the website does not yet
+ * (30 Sep 2026).
+ */
+function CheckInLine({ residentId }: { residentId: string }) {
+  const { data } = useQuery({
+    queryKey: ["admin", "resident-checkin", residentId],
+    queryFn: () => getResidentCheckIn({ data: { id: residentId } }),
+  });
+  if (!data) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-b border-border pb-2 text-sm">
+      <span className="text-muted-foreground">Check-in:</span>
+      {/* StatusPill's look, without its capitalising every word */}
+      <span
+        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+          data.status === "booked"
+            ? "border-emerald-200 bg-emerald-100 text-emerald-900"
+            : data.status === "remind"
+              ? "border-amber-200 bg-amber-100 text-amber-900"
+              : "border-border bg-muted text-muted-foreground"
+        }`}
+      >
+        {data.status === "booked"
+          ? `Booked · ${new Date(`${data.on}T00:00:00`).toLocaleDateString("en-MY", { weekday: "short", day: "numeric", month: "short" })}, ${data.slot}`
+          : data.status === "remind"
+            ? "Asked for a reminder"
+            : "Not chosen"}
+      </span>
     </div>
   );
 }

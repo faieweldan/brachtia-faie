@@ -25,6 +25,7 @@ function Dashboard() {
   });
   const ops = useOps();
   const openTasks = ops.tasks.filter((t) => t.status === "open");
+  const toBook = ((data as any)?.checkinsToBook ?? []) as { id: string; full_name: string; remind: boolean }[];
   const byType = openTasks.reduce<Record<string, number>>((acc, t) => {
     acc[t.type] = (acc[t.type] ?? 0) + 1;
     return acc;
@@ -69,10 +70,23 @@ function Dashboard() {
             View all tasks
           </Link>
         </div>
-        {openTasks.length === 0 ? (
+        {openTasks.length === 0 && toBook.length === 0 ? (
           <p className="mt-3 text-sm text-muted-foreground">Nothing outstanding.</p>
         ) : (
           <div className="mt-3 flex flex-wrap gap-2">
+            {/* moving in within the week with no arrival time - the website
+                does not remind them itself yet, so the admin does */}
+            {toBook.map((r) => (
+              <Link
+                key={r.id}
+                to="/admin/residents/$id"
+                params={{ id: r.id }}
+                title={r.remind ? "Asked to be reminded" : "Has not chosen a time"}
+                className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-900 hover:border-amber-400"
+              >
+                Check-in to book · {r.full_name || "Resident"}
+              </Link>
+            ))}
             {Object.entries(byType).map(([type, count]) => (
               <Link
                 key={type}

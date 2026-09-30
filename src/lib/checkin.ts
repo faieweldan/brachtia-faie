@@ -48,3 +48,24 @@ export const toISO = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 export const todayISO = () => toISO(new Date());
+
+/**
+ * Where a resident's arrival stands, for the admin (30 Sep 2026).
+ *
+ * "Asked for a reminder" is a promise the website does not keep by itself yet:
+ * the admin sends it. So it is shown, never left in a column nobody reads.
+ */
+export type CheckInStatus = "booked" | "remind" | "none";
+export const checkInStatus = (r: { on?: string | null; slot?: string | null; remind?: boolean | null }): CheckInStatus =>
+  r.on && r.slot ? "booked" : r.remind ? "remind" : "none";
+
+/**
+ * Whether the admin should chase this arrival now: the move-in is within the
+ * next week, or it has started and the arrival window is still open, and no
+ * day and time has been chosen.
+ */
+export const needsCheckInBooking = (moveIn: string, status: CheckInStatus, today: string) =>
+  status !== "booked" &&
+  !!moveIn &&
+  moveIn <= addDays(today, CHECKIN_WINDOW_DAYS) &&
+  addDays(moveIn, CHECKIN_WINDOW_DAYS) >= today;

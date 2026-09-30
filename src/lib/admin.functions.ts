@@ -5,6 +5,7 @@ import { NEED_STAFF, logBookingEvent, rm, staffFor, when, words } from "@/lib/bo
 import { BOOKING_FEE, discountPerMonth, lineQty, liveInvoices } from "@/lib/invoices";
 import { residentCodeFor } from "@/lib/resident-billing.functions";
 import { cleanPhone } from "@/lib/reference-data";
+import { addDays, CHECKIN_WINDOW_DAYS, checkInStatus, needsCheckInBooking, todayISO } from "@/lib/checkin";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -37,7 +38,48 @@ export const adminOverview = createServerFn({ method: "GET" })
       newEnquiries: enq.count ?? 0,
       pendingAppointments: appt.count ?? 0,
       upcoming: upcoming.data ?? [],
+      checkinsToBook: await checkInsToBook(supabase),
     };
+  });
+
+/**
+ * Residents moving in within the week, or inside their arrival window, with no
+ * day and time chosen - including those who ticked "Remind me". The website
+ * does not send that reminder yet, so the dashboard asks the admin to
+ * (30 Sep 2026).
+ */
+async function checkInsToBook(supabase: any): Promise<{ id: string; full_name: string; remind: boolean }[]> {
+  const today = todayISO();
+  const { data: tenancies } = await supabase
+    .from("tenancies")
+    .select("resident_id, start_date")
+    .gte("start_date", addDays(today, -CHECKIN_WINDOW_DAYS))
+    .lte("start_date", addDays(today, CHECKIN_WINDOW_DAYS));
+  const moveIn = new Map<string, string>();
+  for (const t of (tenancies ?? []) as any[]) if (t.start_date) moveIn.set(t.resident_id, t.start_date);
+  if (!moveIn.size) return [];
+  const { data: residents } = await supabase
+    .from("residents")
+    .select("id, full_name, checkin_on, checkin_slot, checkin_remind")
+    .in("id", [...moveIn.keys()]);
+  return ((residents ?? []) as any[])
+    .map((r) => ({ r, status: checkInStatus({ on: r.checkin_on, slot: r.checkin_slot, remind: r.checkin_remind }) }))
+    .filter(({ r, status }) => needsCheckInBooking(moveIn.get(r.id) ?? "", status, today))
+    .map(({ r, status }) => ({ id: r.id, full_name: r.full_name ?? "", remind: status === "remind" }));
+}
+
+/** One resident's arrival, for the Pre-check-in checklist. */
+export const getResidentCheckIn = createServerFn({ method: "GET" })
+  .inputValidator((data: { id: string }) => data)
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    const { data: row } = await supabase
+      .from("residents")
+      .select("checkin_on, checkin_slot, checkin_remind")
+      .eq("id", data.id)
+      .maybeSingle();
+    const r = (row ?? {}) as any;
+    return { status: checkInStatus({ on: r.checkin_on, slot: r.checkin_slot, remind: r.checkin_remind }), on: r.checkin_on ?? "", slot: r.checkin_slot ?? "" };
   });
 
 export const listEnquiries = createServerFn({ method: "GET" })
