@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { AlertTriangle, ArrowLeft, CheckCircle2, FlaskConical, Power, Trash2, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, CheckCircle2, FlaskConical, Pencil, Power, Trash2, Upload, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -204,6 +204,13 @@ function TemplateWorkspace() {
   const saveDetails = useServerFn(updateTemplateDetails);
   const setActiveFn = useServerFn(setTemplateActive);
   const [deactivating, setDeactivating] = useState(false);
+  // the name reads as text; the pencil turns it into a field (Dani, 30 Sep 2026)
+  const [renaming, setRenaming] = useState<string | null>(null);
+  async function saveName() {
+    const v = (renaming ?? "").trim();
+    if (tpl && v && v !== tpl.name) await setDetail({ name: v });
+    setRenaming(null);
+  }
   const [deactivateReason, setDeactivateReason] = useState("");
   async function setInUse(active: boolean, reason?: string) {
     if (!tpl) return;
@@ -440,21 +447,39 @@ function TemplateWorkspace() {
             {/* name, category and residence can all be changed after the template is made (30 Sep 2026) */}
             <div>
               <dt className="text-xs text-muted-foreground">Template</dt>
-              <dd>
-                <Input
-                  key={tpl.name}
-                  className="mt-1 h-8 text-sm font-medium"
-                  defaultValue={tpl.name}
-                  aria-label="Template name"
-                  // saved when the field is left, or on Enter
-                  onBlur={(e) => {
-                    const v = e.target.value.trim();
-                    if (!v) e.target.value = tpl.name;
-                    else if (v !== tpl.name) void setDetail({ name: v });
-                  }}
-                  onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-                />
-              </dd>
+              {renaming === null ? (
+                <dd className="flex items-start justify-between gap-2">
+                  <span className="font-medium">{tpl.name}</span>
+                  <button
+                    type="button"
+                    title="Rename"
+                    onClick={() => setRenaming(tpl.name)}
+                    className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <Pencil className="size-3.5" />
+                  </button>
+                </dd>
+              ) : (
+                <dd className="mt-1 flex items-center gap-1">
+                  <Input
+                    autoFocus
+                    className="h-8 text-sm font-medium"
+                    value={renaming}
+                    aria-label="Template name"
+                    onChange={(e) => setRenaming(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void saveName();
+                      if (e.key === "Escape") setRenaming(null);
+                    }}
+                  />
+                  <Button type="button" size="icon" variant="ghost" className="size-8 shrink-0" title="Save" disabled={!renaming.trim()} onClick={() => void saveName()}>
+                    <Check className="size-4" />
+                  </Button>
+                  <Button type="button" size="icon" variant="ghost" className="size-8 shrink-0" title="Cancel" onClick={() => setRenaming(null)}>
+                    <X className="size-4" />
+                  </Button>
+                </dd>
+              )}
             </div>
             <div>
               <dt className="text-xs text-muted-foreground">Category</dt>
