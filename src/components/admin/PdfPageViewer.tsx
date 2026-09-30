@@ -34,7 +34,8 @@ export function PdfPageViewer({
     void import("pdfjs-dist").then(async (pdfjs) => {
       pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
       const loaded = await pdfjs.getDocument({ url }).promise;
-      if (live) { setPdf(loaded as LoadedPdf); setPage(1); setError(""); }
+      // a redrawn document keeps the page being read, not back to page 1
+      if (live) { setPdf(loaded as LoadedPdf); setPage((p) => Math.min(Math.max(1, p), loaded.numPages)); setError(""); }
     }).catch(() => live && setError("Could not open this PDF preview."));
     return () => { live = false; };
   }, [url]);

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -99,7 +99,7 @@ function DocumentPackPage() {
    */
   const [typed, setTyped] = useState<Record<string, string>>({});
   useEffect(() => {
-    const t = setTimeout(() => setTyped(overrides), 500);
+    const t = setTimeout(() => setTyped(overrides), 300);
     return () => clearTimeout(t);
   }, [overrides]);
   const fillDocx = useServerFn(fillPackDocx);
@@ -110,8 +110,30 @@ function DocumentPackPage() {
     queryKey: ["pack-pdf", id, docKey, typed],
     queryFn: () => pdfFn({ data: { residentId: id, docKey, overrides: typed } }),
     enabled: Boolean(tpl?.hasFile),
-    placeholderData: (prev) => prev,
+    // keep the pages on screen while a changed value redraws them - but only
+    // the same document's pages, never the last document's while switching
+    placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[2] === docKey ? prev : undefined),
   });
+
+  /*
+   * Every other document in the pack is laid out in the background once this
+   * one is showing, so switching tabs is instant instead of a ~2s wait (30 Sep
+   * 2026). The server keeps them, so this costs nothing when they are opened.
+   */
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!pdfDoc.data || !pack.data) return;
+    for (const [key, t] of Object.entries(pack.data)) {
+      if (!t?.hasFile || key === docKey) continue;
+      void qc.prefetchQuery({
+        queryKey: ["pack-pdf", id, key, typed],
+        queryFn: () => pdfFn({ data: { residentId: id, docKey: key as typeof docKey, overrides: typed } }),
+        staleTime: 60_000,
+      });
+    }
+    // once per document shown and per set of corrections
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Boolean(pdfDoc.data), pack.data, typed]);
   // the approximate view, only where no PDF can be made on this server
   const filledDoc = useQuery({
     queryKey: ["pack-docx", id, docKey, typed],
@@ -217,6 +239,12 @@ function DocumentPackPage() {
             <p className="text-sm font-semibold text-brand-deep">
               {MENU.flatMap((g) => g.items).find((i) => i.key === selected)?.label}
               {tpl && <span className="ml-2 text-xs font-normal text-muted-foreground">Template v{tpl.version}</span>}
+              {/* a soft hint while the pages redraw - the old ones stay, faded */}
+              {tpl?.hasFile && (pdfDoc.isFetching || overrides !== typed) && pdfDoc.data ? (
+                <span className="ml-2 inline-flex items-center gap-1 text-[11px] font-normal text-muted-foreground">
+                  <Loader2 className="size-3 animate-spin" /> Updating…
+                </span>
+              ) : null}
             </p>
             {tpl?.hasFile ? (
               <ExactPreviewButton
@@ -237,11 +265,15 @@ function DocumentPackPage() {
               </Link>
             </div>
           ) : tpl.hasFile ? (
-            <DocumentView
-              pdf={pdfDoc.data}
-              pdfLoading={pdfDoc.isFetching}
-              docxBase64={filledDoc.data?.base64}
-            />
+            <div className={`transition-opacity duration-200 ${pdfDoc.isPlaceholderData ? "opacity-60" : ""}`}>
+              <DocumentView
+                // a different document starts on its page 1; the same one keeps its place
+                key={docKey}
+                pdf={pdfDoc.data}
+                pdfLoading={pdfDoc.isFetching}
+                docxBase64={filledDoc.data?.base64}
+              />
+            </div>
           ) : (
             // a template saved before files were kept: only its web copy exists
             <Paper>
