@@ -66,6 +66,8 @@ export const ACCESS_CARD_REASONS = [
 
 export const ACCESS_CARD_STATUSES = [
   { key: "generated", label: "Form Generated" },
+  // the resident signed it on their signing page (30 Sep 2026)
+  { key: "signed", label: "Signed" },
   { key: "submitted", label: "Submitted" },
   { key: "received", label: "Card Received" },
   { key: "issued", label: "Issued" },

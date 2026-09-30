@@ -126,7 +126,7 @@ export const revokeProfileLink = createServerFn({ method: "POST" })
 
 /* ---------------- student side ---------------- */
 
-async function residentForToken(supabase: any, token: string) {
+export async function residentForToken(supabase: any, token: string) {
   const { data: link } = await supabase
     .from("profile_links")
     .select("id, resident_id, expires_at, revoked_at")

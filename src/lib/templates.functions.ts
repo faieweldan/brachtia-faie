@@ -516,40 +516,73 @@ export const previewGeneratedPdf = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ kind: z.enum(["agreement", "card"]), id: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
     const db = await admin();
-    let versionId: string | null = null;
-    let saved: Record<string, string> = {};
-    if (data.kind === "agreement") {
-      const { data: doc } = await db.from("agreement_documents").select("template_version_id, merge_values").eq("id", data.id).maybeSingle();
-      versionId = doc?.template_version_id ?? null;
-      saved = doc?.merge_values ?? {};
-    } else {
-      const { data: card } = await db.from("access_card_forms").select("resident_id, template_version_id").eq("id", data.id).maybeSingle();
-      versionId = card?.template_version_id ?? null;
-      // access card forms share the pack's reviewed values
-      const { data: ag } = card
-        ? await db.from("tenancy_agreements").select("id").eq("resident_id", card.resident_id).order("created_at", { ascending: false }).limit(1)
-        : { data: null };
-      if (ag?.length) {
-        const { data: d } = await db.from("agreement_documents").select("merge_values").eq("agreement_id", ag[0].id).limit(1);
-        saved = d?.[0]?.merge_values ?? {};
-      }
-    }
-    if (!versionId) return { ok: false as const, error: "No template was active for this document when it was generated." };
-    const { data: v } = await db.from("template_versions").select("content_html, file_path, boxes, version").eq("id", versionId).maybeSingle();
-    const bytes = v ? await loadDocx(db, v.file_path) : null;
-    if (!v || !bytes) return { ok: false as const, error: "This document's template has no file - it was generated from the web copy only." };
-    const values: Record<string, string | null> = {};
-    // a placeholder with no saved value stays showing, so the gap is seen
-    for (const k of await placeholdersOf(db, v)) values[k] = saved[k] ?? null;
-    const { signatureImages } = await import("@/lib/signatory.server");
-    const images = await signatureImages(db, values);
-    if (isPdfPath(v.file_path)) {
-      const { fillPdf } = await import("@/lib/pdf-boxes");
-      return { ok: true as const, base64: toBase64(await fillPdf(bytes, boxesOf(v), values, { images })) };
-    }
-    const { fillDocx } = await import("@/lib/docx-fill");
-    return pdfResult(await fillDocx(bytes, values, images));
+    const r = await renderGeneratedPdf(db, data.kind, data.id);
+    return r.ok ? { ok: true as const, base64: toBase64(r.bytes) } : r;
   });
+
+/**
+ * A generated document's PDF. Once signed, the signed file itself - never
+ * made again. Before that, made from its template version and saved values,
+ * with `extra` values on top (the resident's signature, when signing), and
+ * `extraImages` for pictures not kept in storage.
+ */
+export async function renderGeneratedPdf(
+  db: any,
+  kind: "agreement" | "card",
+  id: string,
+  extra: Record<string, string> = {},
+  extraImages: Record<string, Uint8Array> = {},
+): Promise<{ ok: true; bytes: Uint8Array; gaps: string[] } | { ok: false; error: string }> {
+  let versionId: string | null = null;
+  let saved: Record<string, string> = {};
+  let signedPath: string | null = null;
+  if (kind === "agreement") {
+    const { data: doc } = await db.from("agreement_documents").select("template_version_id, merge_values, status, generated_pdf_path").eq("id", id).maybeSingle();
+    versionId = doc?.template_version_id ?? null;
+    saved = doc?.merge_values ?? {};
+    if (doc?.status !== "generated" && doc?.status !== "pending_signature") signedPath = doc?.generated_pdf_path ?? null;
+  } else {
+    const { data: card } = await db.from("access_card_forms").select("resident_id, template_version_id, status, generated_pdf_path").eq("id", id).maybeSingle();
+    versionId = card?.template_version_id ?? null;
+    if (card?.generated_pdf_path) signedPath = card.generated_pdf_path;
+    // access card forms share the pack's reviewed values
+    const { data: ag } = card
+      ? await db.from("tenancy_agreements").select("id").eq("resident_id", card.resident_id).order("created_at", { ascending: false }).limit(1)
+      : { data: null };
+    if (ag?.length) {
+      const { data: d } = await db.from("agreement_documents").select("merge_values").eq("agreement_id", ag[0].id).limit(1);
+      saved = d?.[0]?.merge_values ?? {};
+    }
+  }
+  // signed: the file the resident signed is the record
+  if (signedPath && !Object.keys(extra).length) {
+    const { data: file } = await db.storage.from("resident-documents").download(signedPath);
+    if (file) return { ok: true, bytes: new Uint8Array(await file.arrayBuffer()), gaps: [] };
+  }
+  if (!versionId) return { ok: false, error: "No template was active for this document when it was generated." };
+  const { data: v } = await db.from("template_versions").select("content_html, file_path, boxes, version").eq("id", versionId).maybeSingle();
+  const bytes = v ? await loadDocx(db, v.file_path) : null;
+  if (!v || !bytes) return { ok: false, error: "This document's template has no file - it was generated from the web copy only." };
+  const values: Record<string, string | null> = {};
+  // a placeholder with no saved value stays showing, so the gap is seen
+  for (const k of await placeholdersOf(db, v)) values[k] = extra[k] ?? saved[k] ?? null;
+  const { signatureImages } = await import("@/lib/signatory.server");
+  const known: Record<string, string | null> = {};
+  for (const [k, val] of Object.entries(values)) if (!(val && extraImages[val.trim()])) known[k] = val;
+  const images = { ...(await signatureImages(db, known)), ...extraImages };
+  for (const [k, val] of Object.entries(known)) values[k] = val;
+  // what is still showing as {{...}} - the resident's own signing fields aside
+  const gaps = Object.entries(values)
+    .filter(([k, val]) => val === null && !/^resident_signature/i.test(k))
+    .map(([k]) => k);
+  if (isPdfPath(v.file_path)) {
+    const { fillPdf } = await import("@/lib/pdf-boxes");
+    return { ok: true, bytes: await fillPdf(bytes, boxesOf(v), values, { images }), gaps };
+  }
+  const { fillDocx } = await import("@/lib/docx-fill");
+  const r = await pdfResult(await fillDocx(bytes, values, images));
+  return r.ok ? { ok: true, bytes: Uint8Array.from(atob(r.base64), (c) => c.charCodeAt(0)), gaps } : r;
+}
 
 async function pdfResult(docx: Uint8Array) {
   const { docxToPdf, PdfPreviewUnavailable } = await import("@/lib/docx-to-pdf.server");
