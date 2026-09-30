@@ -123,10 +123,16 @@ export function PdfBoxEditor({
         the box and map it on the right.
       </p>
 
+      {/*
+        The panel always holds its place. It used to vanish the moment a new
+        drag began (the old box was unselected), which pulled the page up by
+        its height mid-drag, so the new box landed somewhere else (30 Sep 2026).
+      */}
       {current ? (
-        <div className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-muted/40 p-3">
-          <label className="min-w-40 flex-1 space-y-1">
-            <span className="text-[11px] text-muted-foreground">Box name</span>
+        <div className="flex h-[84px] items-end gap-2 rounded-lg border border-border bg-muted/40 p-3">
+          <label className="min-w-0 flex-1 space-y-1.5">
+            {/* the same size and gap as the Kind label beside it, so the two line up */}
+            <span className="block text-xs text-muted-foreground">Box name</span>
             <Input
               list="pdf-box-names"
               className="h-8 text-sm"
@@ -139,7 +145,7 @@ export function PdfBoxEditor({
               ))}
             </datalist>
           </label>
-          <div className="w-52">
+          <div className="w-44 shrink-0">
             <Choice
               label="Kind"
               className="h-8 text-sm"
@@ -152,16 +158,21 @@ export function PdfBoxEditor({
             type="button"
             size="sm"
             variant="ghost"
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            title="Remove box"
+            className="shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
             onClick={() => {
               onChange(boxes.filter((b) => b.id !== current.id));
               setSelected(null);
             }}
           >
-            <Trash2 className="mr-1 size-3.5" /> Remove box
+            <Trash2 className="size-4" />
           </Button>
         </div>
-      ) : null}
+      ) : (
+        <div className="flex h-[84px] items-center rounded-lg border border-dashed border-border px-3 text-xs text-muted-foreground">
+          Click a box to name it, or drag across the page to add one.
+        </div>
+      )}
 
       <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
         <Button type="button" size="icon" variant="ghost" disabled={page <= 0} onClick={() => setPage(page - 1)}>
