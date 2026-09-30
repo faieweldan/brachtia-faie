@@ -36,7 +36,6 @@ const PACK_DOCUMENTS: { key: string; label: string }[] = [
   { key: "schedule_b", label: "Schedule B – House Rules" },
   { key: "schedule_c", label: "Schedule C – Inventory" },
   { key: "access_card_form", label: "Access Card Form" },
-  { key: "checkout_statement", label: "Checkout Statement" },
 ];
 
 /** The residences, by id, for showing which one a template is for. */
@@ -241,7 +240,7 @@ function AddTemplateDialog({ open, onOpenChange }: { open: boolean; onOpenChange
                 label="Used in the document pack as"
                 value={docKey}
                 onChange={setDocKey}
-                options={PACK_DOCUMENTS.map((d) => ({ value: d.key, label: d.label }))}
+                options={PACK_DOCUMENTS.filter((d) => !HIDDEN_DOC_KEYS.has(d.key)).map((d) => ({ value: d.key, label: d.label }))}
               />
               <p className="text-[11px] text-muted-foreground">
                 Residents of this residence get this one instead of the one for all residences.
