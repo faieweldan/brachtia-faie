@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { docxToHtml, fileToBase64 } from "@/lib/docx-client";
 import { createTemplate, listTemplateResidences, listTemplates, type DocTemplate } from "@/lib/templates.functions";
 
@@ -89,7 +88,6 @@ export function TemplatesTab() {
             <thead className="text-left text-xs text-muted-foreground">
               <tr className="border-b border-border">
                 <th className="py-2 pr-3 font-medium">Template</th>
-                <th className="py-2 pr-3 font-medium">Category</th>
                 <th className="py-2 pr-3 font-medium">Residence</th>
                 <th className="py-2 pr-3 font-medium">Version</th>
                 <th className="py-2 pr-3 font-medium">Last Updated</th>
@@ -104,7 +102,7 @@ export function TemplatesTab() {
               return (
                 <tbody key={cat}>
                   <tr>
-                    <td colSpan={7} className="bg-muted/60 px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-brand-deep">
+                    <td colSpan={6} className="bg-muted/60 px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-brand-deep">
                       {cat}
                     </td>
                   </tr>
@@ -122,7 +120,7 @@ export function TemplatesTab() {
             {(data ?? []).some((t) => !t.versions.length) ? (
               <tbody>
                 <tr>
-                  <td colSpan={7} className="bg-muted/60 px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <td colSpan={6} className="bg-muted/60 px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Not set up yet
                   </td>
                 </tr>
@@ -148,7 +146,6 @@ function TemplateRow({ t, residence }: { t: DocTemplate; residence: string }) {
   return (
     <tr className="border-b border-border last:border-0">
       <td className="py-2.5 pr-3 font-medium text-brand-deep">{t.name}</td>
-      <td className="py-2.5 pr-3 text-muted-foreground">{t.versions.length ? t.category : "—"}</td>
       <td className="py-2.5 pr-3 text-muted-foreground">{t.versions.length ? residence : "—"}</td>
       <td className="py-2.5 pr-3">{shown ? `v${shown.version}` : "—"}</td>
       <td className="py-2.5 pr-3 text-muted-foreground">{fmtDay(shown?.updatedAt)}</td>
@@ -176,7 +173,6 @@ function AddTemplateDialog({ open, onOpenChange }: { open: boolean; onOpenChange
   const [name, setName] = useState("");
   const [category, setCategory] = useState("Agreement");
   const [file, setFile] = useState<File | null>(null);
-  const [initial, setInitial] = useState("");
   const [residenceId, setResidenceId] = useState(ALL);
   const [docKey, setDocKey] = useState(NONE);
   const residences = useResidenceNames();
@@ -186,12 +182,8 @@ function AddTemplateDialog({ open, onOpenChange }: { open: boolean; onOpenChange
     if (!name.trim()) { toast.error("Enter a template name"); return; }
     setBusy(true);
     try {
-      let html = file ? await docxToHtml(file) : "";
-      const extra = initial
-        .split(/[\s,]+/)
-        .map((s) => s.replace(/[{}]/g, "").trim())
-        .filter(Boolean);
-      if (extra.length) html += `<p>${extra.map((k) => `{{${k}}}`).join(" ")}</p>`;
+      // the placeholders come from the file itself
+      const html = file ? await docxToHtml(file) : "";
       const res = await create({
         data: {
           name: name.trim(),
@@ -250,14 +242,6 @@ function AddTemplateDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           <div>
             <Label>Template file (Word .docx, or a PDF form)</Label>
             <Input type="file" accept=".docx,.pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          </div>
-          <div>
-            <Label>Initial placeholders (optional)</Label>
-            <Textarea
-              placeholder="resident_full_name, passport_no, unit_no"
-              value={initial}
-              onChange={(e) => setInitial(e.target.value)}
-            />
           </div>
         </div>
         <DialogFooter>
