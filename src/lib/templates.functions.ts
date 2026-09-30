@@ -595,6 +595,7 @@ export const updateTemplateDetails = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z.object({
       templateId: z.string().uuid(),
+      name: z.string().trim().min(1).max(120).optional(),
       category: z.string().trim().min(1).max(40).optional(),
       residenceId: z.string().uuid().nullable().optional(),
     }).parse(d),
@@ -602,6 +603,8 @@ export const updateTemplateDetails = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const db = await admin();
     const patch: Record<string, unknown> = {};
+    // the pack finds a template by its doc_key, never its name, so renaming is safe
+    if (data.name !== undefined) patch["name"] = data.name;
     if (data.category !== undefined) patch["category"] = data.category;
     if (data.residenceId !== undefined) patch["residence_id"] = data.residenceId;
     if (!Object.keys(patch).length) return { ok: true };

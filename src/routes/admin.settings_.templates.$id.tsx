@@ -218,7 +218,7 @@ function TemplateWorkspace() {
     }
   }
 
-  async function setDetail(patch: { category?: string; residenceId?: string | null }) {
+  async function setDetail(patch: { name?: string; category?: string; residenceId?: string | null }) {
     if (!tpl) return;
     try {
       await saveDetails({ data: { templateId: tpl.id, ...patch } });
@@ -437,8 +437,25 @@ function TemplateWorkspace() {
         {/* LEFT */}
         <aside className="space-y-4 self-start rounded-xl border border-border bg-card p-4 text-sm">
           <dl className="space-y-2">
-            <div><dt className="text-xs text-muted-foreground">Template</dt><dd className="font-medium">{tpl.name}</dd></div>
-            {/* both can be changed after the template is made (30 Sep 2026) */}
+            {/* name, category and residence can all be changed after the template is made (30 Sep 2026) */}
+            <div>
+              <dt className="text-xs text-muted-foreground">Template</dt>
+              <dd>
+                <Input
+                  key={tpl.name}
+                  className="mt-1 h-8 text-sm font-medium"
+                  defaultValue={tpl.name}
+                  aria-label="Template name"
+                  // saved when the field is left, or on Enter
+                  onBlur={(e) => {
+                    const v = e.target.value.trim();
+                    if (!v) e.target.value = tpl.name;
+                    else if (v !== tpl.name) void setDetail({ name: v });
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+                />
+              </dd>
+            </div>
             <div>
               <dt className="text-xs text-muted-foreground">Category</dt>
               <dd>
