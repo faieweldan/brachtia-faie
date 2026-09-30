@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { ChevronDown, ExternalLink, PencilLine } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { isDocumentOwn, type MappingResult } from "@/lib/template-fields";
@@ -14,18 +14,6 @@ import { isDocumentOwn, type MappingResult } from "@/lib/template-fields";
  * still wrong on the application, the invoice and the next agreement. So those
  * are shown, and the way to change them is the resident's profile.
  */
-
-/** Where a value comes from, as a heading, in the order the documents read. */
-const GROUPS: { title: string; sources: string[] }[] = [
-  { title: "This document", sources: [] },
-  { title: "Resident", sources: ["Resident Record"] },
-  { title: "Premises", sources: ["Room Record"] },
-  { title: "Tenancy", sources: ["Tenancy Record", "Booking Record"] },
-  { title: "Payments", sources: ["Initial Payment"] },
-  { title: "Signatures and other", sources: [] },
-];
-
-const pretty = (k: string) => k.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 
 export function DataReview({
   residentId,
@@ -44,7 +32,6 @@ export function DataReview({
   footer: ReactNode;
 }) {
   const [onlyIssues, setOnlyIssues] = useState(false);
-  const [closed, setClosed] = useState<Record<string, boolean>>({});
 
   const rows = useMemo(
     () =>
@@ -59,16 +46,6 @@ export function DataReview({
     [placeholders, results, overrides],
   );
 
-  const grouped = GROUPS.map((g, i) => ({
-    ...g,
-    rows: rows.filter((row) => {
-      if (row.own) return i === 0;
-      if (i === 0) return false;
-      const src = row.r?.source ?? "";
-      const home = GROUPS.findIndex((x) => x.sources.includes(src));
-      return home === -1 ? i === GROUPS.length - 1 : home === i;
-    }),
-  })).filter((g) => g.rows.length);
 
   const missingCount = rows.filter((r) => r.missing).length;
   const editedCount = rows.filter((r) => r.edited).length;
@@ -108,64 +85,62 @@ export function DataReview({
         ) : null}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      {/*
+        The same table as Settings' Mapping Test - each placeholder, where its
+        value comes from, and the value - without the Result column: this is
+        the last look before generating, a "confirm this is right" (Dani and
+        Lav, 30 Sep 2026). The document's own values are edited in place.
+      */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
         {!placeholders ? (
-          <p className="text-xs text-muted-foreground">Nothing to review until a template is active.</p>
+          <p className="pt-4 text-xs text-muted-foreground">Nothing to review until a template is active.</p>
         ) : !rows.length ? (
-          <p className="text-xs text-muted-foreground">This template has no placeholders.</p>
+          <p className="pt-4 text-xs text-muted-foreground">This template has no placeholders.</p>
         ) : (
-          <div className="space-y-4">
-            {grouped.map((g) => {
-              const shown = onlyIssues ? g.rows.filter((r) => r.missing) : g.rows;
-              if (!shown.length) return null;
-              const isClosed = closed[g.title];
-              return (
-                <section key={g.title}>
-                  <button
-                    type="button"
-                    onClick={() => setClosed({ ...closed, [g.title]: !isClosed })}
-                    className="mb-1.5 flex w-full items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
-                  >
-                    {g.title}
-                    <ChevronDown className={`size-3.5 transition-transform ${isClosed ? "-rotate-90" : ""}`} />
-                  </button>
-                  {isClosed ? null : (
-                    <dl className="divide-y divide-border/70 rounded-lg border border-border/70">
-                      {shown.map((row) => (
-                        <div key={row.key} className="px-3 py-2">
-                          <dt className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                            {pretty(row.key)}
-                            {row.own ? <PencilLine className="size-3 text-brand" aria-label="Can be set here" /> : null}
-                          </dt>
-                          {row.own ? (
-                            <Input
-                              className="mt-1 h-8 text-sm"
-                              value={row.r?.value ?? ""}
-                              onChange={(e) => onOverride(row.key, e.target.value)}
-                            />
-                          ) : (
-                            <dd
-                              className={`mt-0.5 break-words text-sm ${
-                                row.missing ? "text-amber-700" : row.blankByHand || row.issuedLater ? "text-muted-foreground" : "text-foreground"
-                              }`}
-                            >
-                              {row.blankByHand
-                                ? "Left blank — filled by hand"
-                                : row.issuedLater
-                                  ? "Issued when generated"
-                                  : row.r?.result === "unmapped"
-                                    ? "Not mapped in the template"
-                                    : row.r?.value?.trim() || "Missing — add it in the resident's profile"}
-                            </dd>
-                          )}
-                        </div>
-                      ))}
-                    </dl>
-                  )}
-                </section>
-              );
-            })}
-          </div>
+          <table className="w-full text-xs">
+            <thead className="sticky top-0 bg-card text-left text-muted-foreground">
+              <tr>
+                <th className="py-2 pr-2 font-medium">Placeholder</th>
+                <th className="py-2 font-medium">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(onlyIssues ? rows.filter((r) => r.missing) : rows).map((row) => (
+                <tr key={row.key} className="border-t border-border align-top">
+                  <td className="py-2 pr-2">
+                    <code className="break-all text-[11px]">{row.key}</code>
+                    <div className="text-[10px] text-muted-foreground">
+                      {row.own ? "Set here" : (row.r?.source ?? "—")}
+                    </div>
+                  </td>
+                  <td className="py-2">
+                    {row.own ? (
+                      <Input
+                        className="h-7 text-xs"
+                        aria-label={row.key}
+                        value={row.r?.value ?? ""}
+                        onChange={(e) => onOverride(row.key, e.target.value)}
+                      />
+                    ) : (
+                      <span
+                        className={`break-words ${
+                          row.missing ? "text-amber-700" : row.blankByHand || row.issuedLater ? "text-muted-foreground" : "text-foreground"
+                        }`}
+                      >
+                        {row.blankByHand
+                          ? "Left blank"
+                          : row.issuedLater
+                            ? "On generate"
+                            : row.r?.result === "unmapped"
+                              ? "Not mapped"
+                              : row.r?.value?.trim() || "Missing"}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
 
