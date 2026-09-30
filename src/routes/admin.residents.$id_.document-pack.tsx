@@ -6,7 +6,6 @@ import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/admin/ops-ui";
 import { findBed, useOps } from "@/lib/ops-store";
 import {
@@ -15,9 +14,10 @@ import {
 } from "@/lib/tenancy-docs";
 import { generateDocumentPack } from "@/lib/tenancy-docs.functions";
 import { fillPackDocx, getPackTemplates, previewPackPdf } from "@/lib/templates.functions";
-import { renderTemplate, type MappingResult } from "@/lib/template-fields";
+import { isDocumentOwn, renderTemplate, type MappingResult } from "@/lib/template-fields";
 import { MARK_CSS, Paper } from "@/components/admin/TemplatePaper";
 import { DocumentView } from "@/components/admin/DocumentView";
+import { DataReview } from "@/components/admin/DataReview";
 import { ExactPreviewButton } from "@/components/admin/ExactPreviewButton";
 
 const TEMPLATE_KEY: Record<string, string> = {
@@ -27,7 +27,6 @@ const TEMPLATE_KEY: Record<string, string> = {
   sched_c: "schedule_c",
   access_card: "access_card_form",
 };
-const pretty = (k: string) => k.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 
 export const Route = createFileRoute("/admin/residents/$id_/document-pack")({
   component: DocumentPackPage,
@@ -148,7 +147,7 @@ function DocumentPackPage() {
     setGenerating(true);
     try {
       const filled: Record<string, string> = {};
-      for (const t of Object.values(pack.data ?? {})) for (const r of t?.results ?? []) filled[r.key] = overrides[r.key] ?? r.value;
+      for (const t of Object.values(pack.data ?? {})) for (const r of t?.results ?? []) filled[r.key] = (isDocumentOwn(r.key) ? overrides[r.key] : undefined) ?? r.value;
       const res = await generateDocumentPack({
         data: {
           residentId: resident.id,
@@ -252,37 +251,18 @@ function DocumentPackPage() {
         </div>
 
         {/* RIGHT — data review: every placeholder in this template */}
-        <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
-          <p className="text-xs font-semibold text-brand-deep">Data review</p>
-          {tpl ? (
-            tpl.placeholders.length ? (
-              tpl.placeholders.map((key) => {
-                const r = results[key];
-                return (
-                  <div key={key} className="space-y-1">
-                    <p className="text-xs text-muted-foreground">
-                      {pretty(key)}
-                      {r?.result === "unmapped" && <span className="ml-1 text-destructive">· not mapped</span>}
-                      {key.toLowerCase().startsWith("agreement_id") && !r?.value && <span className="ml-1">· issued on generate</span>}
-                    </p>
-                    <Input
-                      value={r?.value ?? ""}
-                      placeholder={r?.source === "Left blank" ? "Left blank (filled by hand)" : ""}
-                      onChange={(e) => setOverrides({ ...overrides, [key]: e.target.value })}
-                    />
-                  </div>
-                );
-              })
-            ) : (
-              <p className="text-xs text-muted-foreground">This template has no placeholders.</p>
-            )
-          ) : (
-            <p className="text-xs text-muted-foreground">Nothing to review until a template is active.</p>
-          )}
-          <Button className="w-full" disabled={generating} onClick={() => void generate()}>
-            {generating ? "Generating…" : "Generate Document Pack"}
-          </Button>
-        </div>
+        <DataReview
+          residentId={resident.id}
+          placeholders={tpl?.placeholders ?? null}
+          results={results}
+          overrides={overrides}
+          onOverride={(key, value) => setOverrides({ ...overrides, [key]: value })}
+          footer={
+            <Button className="w-full" disabled={generating} onClick={() => void generate()}>
+              {generating ? "Generating…" : "Generate Document Pack"}
+            </Button>
+          }
+        />
       </div>
     </div>
   );

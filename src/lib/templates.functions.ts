@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { detectPlaceholders, testMappingFor, unmapped, type MappingContext, type Mappings } from "@/lib/template-fields";
+import { detectPlaceholders, isDocumentOwn, testMappingFor, unmapped, type MappingContext, type Mappings } from "@/lib/template-fields";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -306,7 +306,8 @@ async function fillFor(
 ) {
   const values: Record<string, string | null> = {};
   for (const r of testMappingFor(placeholders, ctx, mappings)) {
-    const typed = overrides?.[r.key];
+    // only the document's own values can be set on the pack page
+    const typed = isDocumentOwn(r.key) ? overrides?.[r.key] : undefined;
     if (typed !== undefined && typed.trim() !== "") values[r.key] = typed;
     else if (r.result === "mapped") values[r.key] = r.value;
     else values[r.key] = null;

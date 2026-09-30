@@ -268,3 +268,12 @@ export function renderTemplate(html: string, values?: Record<string, MappingResu
     return `<mark data-ph="${isComplete(mappingFor(key, m)) ? "ph" : "unmapped"}">{{${key}}}</mark>`;
   });
 }
+
+/**
+ * The values that belong to the document itself, and so may be set on the
+ * pack page: its dates and what the rent includes. Everything else belongs to
+ * the resident's record and is corrected there, so it is right everywhere
+ * (Dani and Lav, 30 Sep 2026).
+ */
+const DOCUMENT_OWN = /^(agreement_date|schedule_a_effective_date|effective_date|inclusions|exclusions)$/i;
+export const isDocumentOwn = (key: string) => DOCUMENT_OWN.test(key.trim());
