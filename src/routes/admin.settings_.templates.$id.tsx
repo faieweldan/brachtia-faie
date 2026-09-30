@@ -124,16 +124,57 @@ function TemplateWorkspace() {
   useEffect(() => { setBoxesState(selected?.boxes ?? []); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [selected?.id]);
   const saveBoxesFn = useServerFn(saveBoxes);
   const boxTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /*
+   * Boxes can take a long time to draw, so saving them is never silent
+   * (30 Sep 2026). Boxes drawn before the database had a place for them
+   * failed to save with only a passing message, and a change made just
+   * before leaving the page was never sent - so a whole form's worth vanished.
+   * Now the state is always on screen, a pending save is sent at once when
+   * the page is left, and closing the tab with unsaved boxes asks first.
+   */
+  const [boxSave, setBoxSave] = useState<"saved" | "pending" | "saving" | "failed">("saved");
+  const pendingBoxes = useRef<{ versionId: string; boxes: PdfBox[] } | null>(null);
+  function sendBoxes() {
+    const job = pendingBoxes.current;
+    if (!job) return;
+    pendingBoxes.current = null;
+    if (boxTimer.current) clearTimeout(boxTimer.current);
+    setBoxSave("saving");
+    saveBoxesFn({ data: job })
+      .then(() => {
+        if (!pendingBoxes.current) setBoxSave("saved");
+        void qc.invalidateQueries({ queryKey: ["doc-templates"] });
+      })
+      .catch((e) => {
+        // keep the boxes waiting, so Retry sends them again
+        pendingBoxes.current ??= job;
+        setBoxSave("failed");
+        toast.error(e instanceof Error ? e.message : "Could not save boxes");
+      });
+  }
   function setBoxes(next: PdfBox[]) {
     setBoxesState(next);
     if (selected?.status !== "draft") return;
+    pendingBoxes.current = { versionId: selected.id, boxes: next };
+    setBoxSave("pending");
     if (boxTimer.current) clearTimeout(boxTimer.current);
-    boxTimer.current = setTimeout(() => {
-      saveBoxesFn({ data: { versionId: selected.id, boxes: next } })
-        .then(() => qc.invalidateQueries({ queryKey: ["doc-templates"] }))
-        .catch((e) => toast.error(e instanceof Error ? e.message : "Could not save boxes"));
-    }, 600);
+    boxTimer.current = setTimeout(sendBoxes, 600);
   }
+  // leaving the page sends what is waiting; closing the tab with it asks first
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => {
+      if (pendingBoxes.current) {
+        sendBoxes();
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => {
+      window.removeEventListener("beforeunload", warn);
+      sendBoxes();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const active = tpl?.versions.find((v) => v.status === "active");
 
   useEffect(() => {
@@ -539,6 +580,8 @@ function TemplateWorkspace() {
               url={formUrl}
               boxes={boxes}
               onChange={setBoxes}
+              saveState={boxSave}
+              onRetry={sendBoxes}
               names={[...new Set([...Object.keys(maps), ...boxes.map((b) => b.key)])]}
             />
           ) : !editing && docx.data ? (

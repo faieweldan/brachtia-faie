@@ -35,12 +35,17 @@ export function PdfBoxEditor({
   boxes,
   onChange,
   names,
+  saveState = "saved",
+  onRetry,
 }: {
   url: string;
   boxes: PdfBox[];
   onChange: (next: PdfBox[]) => void;
   /** names already used, offered while naming a box */
   names: string[];
+  /** whether the boxes on screen are saved - always shown, never guessed */
+  saveState?: "saved" | "pending" | "saving" | "failed";
+  onRetry?: () => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const frame = useRef<HTMLDivElement>(null);
@@ -178,7 +183,16 @@ export function PdfBoxEditor({
         <Button type="button" size="icon" variant="ghost" disabled={page <= 0} onClick={() => setPage(page - 1)}>
           <ChevronLeft className="size-4" />
         </Button>
-        Page {page + 1} of {total} · {boxes.length} box{boxes.length === 1 ? "" : "es"}
+        Page {page + 1} of {total} · {boxes.length} box{boxes.length === 1 ? "" : "es"} ·{" "}
+        {saveState === "failed" ? (
+          <button type="button" onClick={onRetry} className="font-medium text-destructive underline">
+            Not saved — retry
+          </button>
+        ) : saveState === "saved" ? (
+          <span className="text-emerald-700">Saved ✓</span>
+        ) : (
+          <span>Saving…</span>
+        )}
         <Button type="button" size="icon" variant="ghost" disabled={page >= total - 1} onClick={() => setPage(page + 1)}>
           <ChevronRight className="size-4" />
         </Button>
