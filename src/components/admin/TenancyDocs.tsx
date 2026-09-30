@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ import {
   createAccessCardForm,
   getTenancyDocs,
   setDocumentStatus,
+  undoDocumentPack,
   updateAccessCard,
 } from "@/lib/tenancy-docs.functions";
 
@@ -175,12 +176,34 @@ function AgreementBlock({
   const parent = docs.find((d) => d.docType === "agreement");
   const schedules = docs.filter((d) => d.docType !== "agreement");
 
+  /*
+   * A pack nothing has happened to yet can be taken back and made again - a
+   * pack generated before a template changed, say (Dani, 30 Sep 2026).
+   */
+  const untouched = docs.length > 0 && agreement.documents.every((d) => d.status === "generated");
+  const [undoing, setUndoing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  async function undo() {
+    setBusy(true);
+    try {
+      await undoDocumentPack({ data: { agreementId: agreement.id } });
+      toast.success(`${agreement.agreementNo} undone - generate the pack again when ready`);
+      setUndoing(false);
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not undo the pack");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="rounded-xl border border-border">
+      <div className="flex items-center gap-2 pr-4">
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+        className="flex min-w-0 flex-1 items-center justify-between gap-3 px-4 py-3 text-left"
       >
         <span className="flex items-center gap-2 text-sm font-semibold text-brand-deep">
           {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
@@ -193,6 +216,32 @@ function AgreementBlock({
         </span>
         {parent ? <StatusPill status={parent.status} label={docLabel(parent.status)} /> : null}
       </button>
+      {untouched ? (
+        <Button type="button" size="sm" variant="ghost" className="shrink-0 text-muted-foreground" onClick={() => setUndoing(true)}>
+          <Undo2 className="mr-1 size-3.5" /> Undo pack
+        </Button>
+      ) : null}
+      </div>
+      <Dialog open={undoing} onOpenChange={(o) => !busy && setUndoing(o)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Undo {agreement.agreementNo}?</DialogTitle>
+            <DialogDescription>
+              Its documents{agreement.kind === "initial" ? " and the first access card form" : ""} are removed, as if the pack was
+              never generated, so it can be generated again from the current templates. Nothing has been sent or signed yet.
+              The number {agreement.agreementNo} is not reused.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setUndoing(false)}>
+              Keep it
+            </Button>
+            <Button type="button" variant="destructive" size="sm" disabled={busy} onClick={() => void undo()}>
+              {busy ? "Undoing…" : "Undo pack"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       {expanded ? (
         <div className="overflow-x-auto px-4 pb-3">
           <table className="w-full min-w-[640px] border-collapse">

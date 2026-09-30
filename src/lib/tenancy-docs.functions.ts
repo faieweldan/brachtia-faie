@@ -407,3 +407,39 @@ export const getDocumentView = createServerFn({ method: "GET" })
     if (tErr) throw new Error(tErr.message);
     return { html: tv.content_html as string, version: tv.version as number, values };
   });
+
+/**
+ * Take back a pack that nothing has happened to yet (Dani, 30 Sep 2026): every
+ * document still "generated" - none sent, signed or submitted. It is removed
+ * as if never made, so it can be generated again from the current templates.
+ * Once anything has moved on, the pack is a record and cannot be undone.
+ */
+export const undoDocumentPack = createServerFn({ method: "POST" })
+  .inputValidator((data: { agreementId: string }) => data)
+  .handler(async ({ data }) => {
+    const db = await admin();
+    const { data: agreement } = await db.from("tenancy_agreements").select("id, resident_id, kind").eq("id", data.agreementId).maybeSingle();
+    if (!agreement) throw new Error("This pack no longer exists.");
+    const { data: docs } = await db.from("agreement_documents").select("status").eq("agreement_id", agreement.id);
+    if ((docs ?? []).some((d: any) => d.status !== "generated")) {
+      throw new Error("A document in this pack has moved on (sent, signed or submitted), so it can no longer be undone.");
+    }
+    // the first pack brought the first access card form with it; it goes too
+    let cardIds: string[] = [];
+    if (agreement.kind === "initial") {
+      const { data: cards } = await db.from("access_card_forms").select("id, status").eq("resident_id", agreement.resident_id);
+      if ((cards ?? []).some((c: any) => c.status !== "generated")) {
+        throw new Error("The access card form has moved on, so this pack can no longer be undone.");
+      }
+      cardIds = (cards ?? []).map((c: any) => c.id);
+    }
+    const { error: dErr } = await db.from("agreement_documents").delete().eq("agreement_id", agreement.id);
+    if (dErr) throw new Error(dErr.message);
+    if (cardIds.length) {
+      const { error: cErr } = await db.from("access_card_forms").delete().in("id", cardIds);
+      if (cErr) throw new Error(cErr.message);
+    }
+    const { error: aErr } = await db.from("tenancy_agreements").delete().eq("id", agreement.id);
+    if (aErr) throw new Error(aErr.message);
+    return { ok: true as const };
+  });
