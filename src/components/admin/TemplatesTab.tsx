@@ -17,6 +17,13 @@ import { createTemplate, listTemplateResidences, listTemplates, type DocTemplate
 
 export const TEMPLATE_CATEGORIES = ["Agreement", "Access Card", "Checkout"];
 
+/*
+ * Templates kept in the database but not listed yet, because the feature that
+ * uses them is not built (Dani, 30 Sep 2026). Checkout Statement waits for the
+ * checkout flow. Nothing is deleted: take a key out of here to list it again.
+ */
+const HIDDEN_DOC_KEYS = new Set(["checkout_statement"]);
+
 /** What the app's own dropdown uses for "none" / "all residences" - it cannot hold an empty value. */
 export const ALL = "all";
 const NONE = "none";
@@ -54,7 +61,8 @@ export function VersionStatus({ status }: { status: string }) {
 
 export function TemplatesTab() {
   const list = useServerFn(listTemplates);
-  const { data, isLoading } = useQuery({ queryKey: ["doc-templates"], queryFn: () => list() });
+  const { data: all, isLoading } = useQuery({ queryKey: ["doc-templates"], queryFn: () => list() });
+  const data = all?.filter((t) => !HIDDEN_DOC_KEYS.has(t.docKey));
   const [adding, setAdding] = useState(false);
   const residences = useResidenceNames();
 
