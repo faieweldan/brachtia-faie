@@ -17,6 +17,7 @@ import { fillPackDocx, getPackTemplates, previewPackPdf } from "@/lib/templates.
 import { isDocumentOwn, renderTemplate, type MappingResult } from "@/lib/template-fields";
 import { MARK_CSS, Paper } from "@/components/admin/TemplatePaper";
 import { DocumentView } from "@/components/admin/DocumentView";
+import { TEMPLATE_CATEGORIES } from "@/components/admin/TemplatesTab";
 import { DataReview } from "@/components/admin/DataReview";
 import { ExactPreviewButton } from "@/components/admin/ExactPreviewButton";
 
@@ -90,6 +91,23 @@ function DocumentPackPage() {
   });
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const tpl = pack.data?.[TEMPLATE_KEY[selected]!] ?? null;
+
+  /*
+   * The left menu is grouped by each template's own category, as set in
+   * Settings -> Templates, rather than by fixed headings (30 Sep 2026). A
+   * document with no active template yet sits under the category it belongs
+   * to by default. Categories follow the order Settings lists them in.
+   */
+  const menu = useMemo(() => {
+    const items = MENU.flatMap((g) => g.items);
+    const categoryOf = (key: DocKey) =>
+      pack.data?.[TEMPLATE_KEY[key]!]?.category || (key === "access_card" ? "Access Card" : "Agreement");
+    const order = [...TEMPLATE_CATEGORIES, ...items.map((i) => categoryOf(i.key))];
+    const groups = [...new Set(order)]
+      .map((group) => ({ group, items: items.filter((i) => categoryOf(i.key) === group) }))
+      .filter((g) => g.items.length);
+    return groups;
+  }, [pack.data]);
 
   /*
    * The document as it will read, filled inside its own Word file - so the
@@ -207,7 +225,7 @@ function DocumentPackPage() {
       <div className="grid gap-4 lg:grid-cols-[220px_1fr_300px]">
         {/* LEFT — documents menu */}
         <nav className="space-y-4 rounded-2xl border border-border bg-card p-4">
-          {MENU.map((g) => (
+          {menu.map((g) => (
             <div key={g.group}>
               <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {g.group}

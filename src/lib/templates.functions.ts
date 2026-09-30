@@ -318,14 +318,14 @@ export const getPackTemplates = createServerFn({ method: "GET" })
     const { ctx } = await buildContext(db, data.residentId);
     const { data: rows } = await db
       .from("template_versions")
-      .select("id, version, content_html, file_path, mappings, boxes, document_templates!inner(doc_key, name, residence_id)")
+      .select("id, version, content_html, file_path, mappings, boxes, document_templates!inner(doc_key, name, residence_id, category)")
       .eq("status", "active");
-    const out: Record<string, { name: string; version: number; html: string; hasFile: boolean; placeholders: string[]; results: ReturnType<typeof testMappingFor> } | null> = {};
+    const out: Record<string, { name: string; category: string; version: number; html: string; hasFile: boolean; placeholders: string[]; results: ReturnType<typeof testMappingFor> } | null> = {};
     for (const k of PACK_KEYS) {
       const row = pickForResidence((rows ?? []) as any[], k, ctx.residence?.["id"]);
       if (!row) { out[k] = null; continue; }
       const placeholders = await placeholdersOf(db, row);
-      out[k] = { name: row.document_templates.name, version: row.version, html: row.content_html ?? "", hasFile: Boolean(row.file_path), placeholders, results: testMappingFor(placeholders, ctx, row.mappings ?? {}) };
+      out[k] = { name: row.document_templates.name, category: row.document_templates.category ?? "", version: row.version, html: row.content_html ?? "", hasFile: Boolean(row.file_path), placeholders, results: testMappingFor(placeholders, ctx, row.mappings ?? {}) };
     }
     return out;
   });
