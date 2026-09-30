@@ -7,7 +7,6 @@ import { toast } from "sonner";
 
 import { fmtDay, TEMPLATE_CATEGORIES, VersionStatus } from "@/components/admin/TemplatesTab";
 import { DocumentView } from "@/components/admin/DocumentView";
-import { DocxView } from "@/components/admin/DocxView";
 import { PdfBoxEditor } from "@/components/admin/PdfBoxEditor";
 import type { PdfBox } from "@/lib/pdf-boxes";
 import { docxPlaceholders } from "@/lib/docx-fill";
@@ -44,6 +43,7 @@ import {
   listTemplateResidences,
   updateTemplateDetails,
   saveBoxes,
+  previewUploadedFile,
   type DocTemplate,
 } from "@/lib/templates.functions";
 
@@ -136,6 +136,13 @@ function TemplateWorkspace() {
   // the version's own Word file: shown as the document looks, and read for the
   // placeholders its header and footer carry that the web copy never had
   const docxFn = useServerFn(getTemplateDocx);
+  // an unsaved file, laid out by the same engine as a saved one
+  const uploadPdfFn = useServerFn(previewUploadedFile);
+  const pendingPdf = useQuery({
+    queryKey: ["pending-pdf", pendingFile?.name ?? "", pending?.base64.length ?? 0],
+    queryFn: () => uploadPdfFn({ data: { name: pendingFile!.name, base64: pending!.base64 } }),
+    enabled: Boolean(editing && pendingFile && pending),
+  });
   const pdfFn = useServerFn(previewTemplatePdf);
   const removeVersion = useServerFn(deleteTemplateVersion);
   const removeTemplate = useServerFn(deleteTemplate);
@@ -360,7 +367,7 @@ function TemplateWorkspace() {
 
       <div className="grid gap-4 lg:grid-cols-[240px_1fr_340px]">
         {/* LEFT */}
-        <aside className="space-y-4 rounded-xl border border-border bg-card p-4 text-sm">
+        <aside className="space-y-4 self-start rounded-xl border border-border bg-card p-4 text-sm">
           <dl className="space-y-2">
             <div><dt className="text-xs text-muted-foreground">Template</dt><dd className="font-medium">{tpl.name}</dd></div>
             {/* both can be changed after the template is made (30 Sep 2026) */}
@@ -515,14 +522,16 @@ function TemplateWorkspace() {
                 New file: {pendingFile?.name}.{" "}
                 {pendingFile && isPdfFile(pendingFile.name)
                   ? "A PDF form is shown as it is."
-                  : "Save as Draft to see the exact printed pages."}
+                  : "Shown as it will print. Save as Draft to keep it."}
               </p>
-              {pendingFile && isPdfFile(pendingFile.name) ? (
-                // a PDF form is shown exactly as it is
-                <DocumentView pdf={{ ok: true, base64: pending.base64 }} pdfLoading={false} />
-              ) : (
-                <DocxView base64={pending.base64} className="max-h-[80vh]" />
-              )}
+              {/* the same engine as after saving, so the pages do not change on save */}
+              <DocumentView
+                pdf={pendingPdf.data}
+                pdfLoading={pendingPdf.isFetching}
+                docxBase64={
+                  pendingPdf.data?.ok === false && pendingFile && !isPdfFile(pendingFile.name) ? pending.base64 : undefined
+                }
+              />
             </div>
           ) : !editing && docx.data?.kind === "pdf" && selected.status === "draft" && formUrl ? (
             <PdfBoxEditor
@@ -556,8 +565,10 @@ function TemplateWorkspace() {
           )}
         </section>
 
-        {/* RIGHT */}
-        <aside className="space-y-4 rounded-xl border border-border bg-card p-4 text-sm">
+        {/* RIGHT - scrolls on its own and stays in view, like the pack's Data
+            review, so a long list of fields no longer stretches the page into
+            empty space beside the document (30 Sep 2026) */}
+        <aside className="space-y-4 self-start rounded-xl border border-border bg-card p-4 text-sm lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
           {test ? (
             <>
               <p className="text-xs font-semibold text-brand-deep">Mapping Test</p>

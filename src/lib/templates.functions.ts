@@ -571,3 +571,19 @@ export const saveBoxes = createServerFn({ method: "POST" })
     if (error) throw new Error(`Could not save boxes: ${error.message}`);
     return { ok: true };
   });
+
+/**
+ * A file just picked with Replace file, before it is saved, laid out by the
+ * same Word engine as a saved version. Before this, an unsaved file was drawn
+ * by the web imitation and a saved one by the engine, so the same file broke
+ * onto a different number of pages before and after Save as Draft (30 Sep
+ * 2026). Read-only: nothing is stored.
+ */
+export const previewUploadedFile = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ name: z.string().max(200), base64: z.string().max(28_000_000) }).parse(d))
+  .handler(async ({ data }) => {
+    await admin();
+    const bytes = Uint8Array.from(atob(data.base64), (c) => c.charCodeAt(0));
+    if (isPdfPath(data.name)) return { ok: true as const, base64: data.base64 };
+    return pdfResult(bytes);
+  });
