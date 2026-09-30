@@ -5,7 +5,7 @@ import { AlertTriangle, ArrowLeft, CheckCircle2, FlaskConical, Trash2, Upload } 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { fmtDay, VersionStatus } from "@/components/admin/TemplatesTab";
+import { fmtDay, TEMPLATE_CATEGORIES, VersionStatus } from "@/components/admin/TemplatesTab";
 import { DocumentView } from "@/components/admin/DocumentView";
 import { DocxView } from "@/components/admin/DocxView";
 import { docxPlaceholders } from "@/lib/docx-fill";
@@ -39,6 +39,8 @@ import {
   previewTemplatePdf,
   deleteTemplateVersion,
   deleteTemplate,
+  listTemplateResidences,
+  updateTemplateDetails,
   type DocTemplate,
 } from "@/lib/templates.functions";
 
@@ -116,6 +118,20 @@ function TemplateWorkspace() {
   const removeVersion = useServerFn(deleteTemplateVersion);
   const removeTemplate = useServerFn(deleteTemplate);
   const navigateAway = useNavigate();
+  const residencesFn = useServerFn(listTemplateResidences);
+  const { data: residences } = useQuery({ queryKey: ["template-residences"], queryFn: () => residencesFn() });
+  const saveDetails = useServerFn(updateTemplateDetails);
+
+  async function setDetail(patch: { category?: string; residenceId?: string | null }) {
+    if (!tpl) return;
+    try {
+      await saveDetails({ data: { templateId: tpl.id, ...patch } });
+      await qc.invalidateQueries({ queryKey: ["doc-templates"] });
+      toast.success("Saved");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save");
+    }
+  }
 
   async function doDeleteVersion(versionId: string, version: number) {
     if (!confirm(`Delete v${version}? This cannot be undone.`)) return;
@@ -302,7 +318,38 @@ function TemplateWorkspace() {
         <aside className="space-y-4 rounded-xl border border-border bg-card p-4 text-sm">
           <dl className="space-y-2">
             <div><dt className="text-xs text-muted-foreground">Template</dt><dd className="font-medium">{tpl.name}</dd></div>
-            <div><dt className="text-xs text-muted-foreground">Category</dt><dd>{tpl.category}</dd></div>
+            {/* both can be changed after the template is made (30 Sep 2026) */}
+            <div>
+              <dt className="text-xs text-muted-foreground">Category</dt>
+              <dd>
+                <select
+                  className="mt-1 h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  value={tpl.category}
+                  onChange={(e) => void setDetail({ category: e.target.value })}
+                >
+                  {[...new Set([...TEMPLATE_CATEGORIES, tpl.category])].map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </select>
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Residence</dt>
+              <dd>
+                <select
+                  className="mt-1 h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  value={tpl.residenceId ?? ""}
+                  onChange={(e) => void setDetail({ residenceId: e.target.value || null })}
+                >
+                  <option value="">All residences</option>
+                  {(residences ?? []).map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </dd>
+            </div>
             <div><dt className="text-xs text-muted-foreground">Current version</dt><dd>{active ? `v${active.version}` : "None active"}</dd></div>
           </dl>
           <div>
@@ -340,7 +387,7 @@ function TemplateWorkspace() {
                 </li>
               ))}
             </ul>
-            {!tpl.docKey ? (
+            {!tpl.docKey || tpl.residenceId ? (
               <Button
                 size="sm"
                 variant="ghost"

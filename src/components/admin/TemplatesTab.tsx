@@ -12,9 +12,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { docxToHtml, fileToBase64 } from "@/lib/docx-client";
-import { createTemplate, listTemplates, type DocTemplate } from "@/lib/templates.functions";
+import { createTemplate, listTemplateResidences, listTemplates, type DocTemplate } from "@/lib/templates.functions";
 
 export const TEMPLATE_CATEGORIES = ["Agreement", "Access Card", "Checkout"];
+
+/** The documents a pack looks templates up by, for a template made for one residence. */
+const PACK_DOCUMENTS: { key: string; label: string }[] = [
+  { key: "", label: "Not part of the document pack" },
+  { key: "tenancy_agreement", label: "Tenancy Agreement" },
+  { key: "schedule_a", label: "Schedule A – Particulars" },
+  { key: "schedule_b", label: "Schedule B – House Rules" },
+  { key: "schedule_c", label: "Schedule C – Inventory" },
+  { key: "access_card_form", label: "Access Card Form" },
+  { key: "checkout_statement", label: "Checkout Statement" },
+];
+
+/** The residences, by id, for showing which one a template is for. */
+function useResidenceNames() {
+  const fn = useServerFn(listTemplateResidences);
+  const { data } = useQuery({ queryKey: ["template-residences"], queryFn: () => fn() });
+  return { list: data ?? [], nameOf: (id: string | null) => (id ? (data ?? []).find((r) => r.id === id)?.name ?? "—" : "All residences") };
+}
 
 export const fmtDay = (v?: string | null) =>
   v ? new Date(v).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—";
@@ -33,6 +51,7 @@ export function TemplatesTab() {
   const list = useServerFn(listTemplates);
   const { data, isLoading } = useQuery({ queryKey: ["doc-templates"], queryFn: () => list() });
   const [adding, setAdding] = useState(false);
+  const residences = useResidenceNames();
 
   const cats = [...new Set([...TEMPLATE_CATEGORIES, ...(data ?? []).map((t) => t.category)])];
 
@@ -59,6 +78,7 @@ export function TemplatesTab() {
               <tr className="border-b border-border">
                 <th className="py-2 pr-3 font-medium">Template</th>
                 <th className="py-2 pr-3 font-medium">Category</th>
+                <th className="py-2 pr-3 font-medium">Residence</th>
                 <th className="py-2 pr-3 font-medium">Version</th>
                 <th className="py-2 pr-3 font-medium">Last Updated</th>
                 <th className="py-2 pr-3 font-medium">Status</th>
@@ -71,12 +91,12 @@ export function TemplatesTab() {
               return (
                 <tbody key={cat}>
                   <tr>
-                    <td colSpan={6} className="bg-muted/60 px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-brand-deep">
+                    <td colSpan={7} className="bg-muted/60 px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-brand-deep">
                       {cat}
                     </td>
                   </tr>
                   {rows.map((t) => (
-                    <TemplateRow key={t.id} t={t} />
+                    <TemplateRow key={t.id} t={t} residence={residences.nameOf(t.residenceId)} />
                   ))}
                 </tbody>
               );
@@ -89,7 +109,7 @@ export function TemplatesTab() {
   );
 }
 
-function TemplateRow({ t }: { t: DocTemplate }) {
+function TemplateRow({ t, residence }: { t: DocTemplate; residence: string }) {
   const active = t.versions.find((v) => v.status === "active");
   const shown = active ?? t.versions[0];
   const hasDraft = t.versions.some((v) => v.status === "draft");
@@ -97,6 +117,7 @@ function TemplateRow({ t }: { t: DocTemplate }) {
     <tr className="border-b border-border last:border-0">
       <td className="py-2.5 pr-3 font-medium text-brand-deep">{t.name}</td>
       <td className="py-2.5 pr-3 text-muted-foreground">{t.category}</td>
+      <td className="py-2.5 pr-3 text-muted-foreground">{residence}</td>
       <td className="py-2.5 pr-3">{shown ? `v${shown.version}` : "—"}</td>
       <td className="py-2.5 pr-3 text-muted-foreground">{fmtDay(shown?.updatedAt)}</td>
       <td className="py-2.5 pr-3">
@@ -124,6 +145,9 @@ function AddTemplateDialog({ open, onOpenChange }: { open: boolean; onOpenChange
   const [category, setCategory] = useState("Agreement");
   const [file, setFile] = useState<File | null>(null);
   const [initial, setInitial] = useState("");
+  const [residenceId, setResidenceId] = useState("");
+  const [docKey, setDocKey] = useState("");
+  const residences = useResidenceNames();
   const [busy, setBusy] = useState(false);
 
   async function submit() {
@@ -141,6 +165,8 @@ function AddTemplateDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           name: name.trim(),
           category,
           contentHtml: html,
+          residenceId: residenceId || null,
+          docKey,
           ...(file ? { file: { name: file.name, base64: await fileToBase64(file) } } : {}),
         },
       });
@@ -181,6 +207,40 @@ function AddTemplateDialog({ open, onOpenChange }: { open: boolean; onOpenChange
               ))}
             </select>
           </div>
+          <div>
+            <Label>Residence</Label>
+            <select
+              className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+              value={residenceId}
+              onChange={(e) => setResidenceId(e.target.value)}
+            >
+              <option value="">All residences</option>
+              {residences.list.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {residenceId ? (
+            <div>
+              <Label>Used in the document pack as</Label>
+              <select
+                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                value={docKey}
+                onChange={(e) => setDocKey(e.target.value)}
+              >
+                {PACK_DOCUMENTS.map((d) => (
+                  <option key={d.key} value={d.key}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Residents of this residence get this one instead of the one for all residences.
+              </p>
+            </div>
+          ) : null}
           <div>
             <Label>Template file (Word .docx)</Label>
             <Input type="file" accept=".docx" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />

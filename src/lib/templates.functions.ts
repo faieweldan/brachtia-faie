@@ -30,6 +30,8 @@ export type DocTemplate = {
   name: string;
   category: string;
   docKey: string;
+  /** null: for every residence */
+  residenceId: string | null;
   versions: TemplateVersion[];
 };
 
@@ -58,6 +60,7 @@ export const listTemplates = createServerFn({ method: "GET" }).handler(async ():
     name: row.name,
     category: row.category,
     docKey: row.doc_key,
+    residenceId: row.residence_id ?? null,
     versions: (v ?? []).filter((x: any) => x.template_id === row.id).map(toVersion),
   }));
 });
@@ -128,13 +131,26 @@ const fileSchema = z.object({ name: z.string().max(200), base64: z.string().max(
 
 export const createTemplate = createServerFn({ method: "POST" })
   .inputValidator((d) =>
-    z.object({ name: z.string().trim().min(1).max(120), category: z.string().min(1).max(40), contentHtml: z.string().max(2_000_000), file: fileSchema }).parse(d),
+    z.object({
+      name: z.string().trim().min(1).max(120),
+      category: z.string().min(1).max(40),
+      contentHtml: z.string().max(2_000_000),
+      file: fileSchema,
+      residenceId: z.string().uuid().nullable().optional(),
+      docKey: z.string().max(40).optional(),
+    }).parse(d),
   )
   .handler(async ({ data }) => {
     const db = await admin();
     const { data: t, error } = await db
       .from("document_templates")
-      .insert({ name: data.name, category: data.category, sort_order: 100 })
+      .insert({
+        name: data.name,
+        category: data.category,
+        sort_order: 100,
+        doc_key: data.docKey ?? "",
+        ...(data.residenceId ? { residence_id: data.residenceId } : {}),
+      })
       .select("id")
       .single();
     if (error) throw new Error("Could not create template");
@@ -237,6 +253,23 @@ export const testMapping = createServerFn({ method: "POST" })
 
 const PACK_KEYS = ["tenancy_agreement", "schedule_a", "schedule_b", "schedule_c", "access_card_form"] as const;
 
+/**
+ * The Active version a resident's pack uses for one document: the one made
+ * for their residence when there is one, otherwise the one for every
+ * residence (30 Sep 2026).
+ */
+export function pickForResidence<T extends { document_templates: { doc_key: string; residence_id?: string | null } }>(
+  rows: T[],
+  docKey: string,
+  residenceId: string | null | undefined,
+): T | undefined {
+  const forKey = rows.filter((r) => r.document_templates.doc_key === docKey);
+  return (
+    (residenceId ? forKey.find((r) => r.document_templates.residence_id === residenceId) : undefined) ??
+    forKey.find((r) => !r.document_templates.residence_id)
+  );
+}
+
 /** The Active template per document in the pack, filled with this resident's details. Read-only. */
 export const getPackTemplates = createServerFn({ method: "GET" })
   .inputValidator((d) => z.object({ residentId: z.string().uuid() }).parse(d))
@@ -245,11 +278,11 @@ export const getPackTemplates = createServerFn({ method: "GET" })
     const { ctx } = await buildContext(db, data.residentId);
     const { data: rows } = await db
       .from("template_versions")
-      .select("id, version, content_html, file_path, mappings, document_templates!inner(doc_key, name)")
+      .select("id, version, content_html, file_path, mappings, document_templates!inner(doc_key, name, residence_id)")
       .eq("status", "active");
     const out: Record<string, { name: string; version: number; html: string; hasFile: boolean; placeholders: string[]; results: ReturnType<typeof testMappingFor> } | null> = {};
     for (const k of PACK_KEYS) {
-      const row = (rows ?? []).find((r: any) => r.document_templates.doc_key === k);
+      const row = pickForResidence((rows ?? []) as any[], k, ctx.residence?.["id"]);
       if (!row) { out[k] = null; continue; }
       const placeholders = await placeholdersOf(db, row);
       out[k] = { name: row.document_templates.name, version: row.version, html: row.content_html ?? "", hasFile: Boolean(row.file_path), placeholders, results: testMappingFor(placeholders, ctx, row.mappings ?? {}) };
@@ -283,16 +316,15 @@ async function filledPackBytes(
   docKey: (typeof PACK_KEYS)[number],
   overrides?: Record<string, string>,
 ): Promise<Uint8Array | null> {
+  const { ctx } = await buildContext(db, residentId);
   const { data: rows } = await db
     .from("template_versions")
-    .select("content_html, file_path, mappings, document_templates!inner(doc_key)")
+    .select("content_html, file_path, mappings, document_templates!inner(doc_key, residence_id)")
     .eq("status", "active")
-    .eq("document_templates.doc_key", docKey)
-    .limit(1);
-  const row = (rows ?? [])[0];
+    .eq("document_templates.doc_key", docKey);
+  const row = pickForResidence((rows ?? []) as any[], docKey, ctx.residence?.["id"]);
   const bytes = row ? await loadDocx(db, row.file_path) : null;
   if (!row || !bytes) return null;
-  const { ctx } = await buildContext(db, residentId);
   return fillFor(bytes, await placeholdersOf(db, row), ctx, row.mappings ?? {}, overrides);
 }
 
@@ -414,17 +446,18 @@ export const deleteTemplateVersion = createServerFn({ method: "POST" })
   });
 
 /**
- * Delete a whole template. Only one that was added by hand: the six the
- * document pack looks for by name (doc_key) always stay, or the pack would
- * lose a tab. And not while any of its versions made a resident's document.
+ * Delete a whole template. The six all-residences templates the document
+ * pack looks up (doc_key) always stay, or the pack would lose a tab; a
+ * residence's own copy of one can go, and the all-residences one takes over. And not while any of its versions made a resident's document.
  */
 export const deleteTemplate = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ templateId: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
     const db = await admin();
-    const { data: t } = await db.from("document_templates").select("id, doc_key").eq("id", data.templateId).maybeSingle();
+    const { data: t } = await db.from("document_templates").select("id, doc_key, residence_id").eq("id", data.templateId).maybeSingle();
     if (!t) throw new Error("Template not found");
-    if (t.doc_key) throw new Error("This template is part of the document pack and cannot be deleted. Its versions can be.");
+    // a residence's own copy can go - the all-residences one then takes over
+    if (t.doc_key && !t.residence_id) throw new Error("This template is part of the document pack and cannot be deleted. Its versions can be.");
     const { data: versions } = await db.from("template_versions").select("id, file_path").eq("template_id", t.id);
     for (const v of (versions ?? []) as any[]) {
       if (await timesUsed(db, v.id)) throw new Error("Kept: resident documents were made from this template.");
@@ -433,5 +466,38 @@ export const deleteTemplate = createServerFn({ method: "POST" })
     if (error) throw new Error(`Could not delete: ${error.message}`);
     const files = ((versions ?? []) as any[]).map((v) => v.file_path).filter(Boolean);
     if (files.length) await db.storage.from("document-templates").remove(files);
+    return { ok: true };
+  });
+
+/* ---------------- a template's details ---------------- */
+
+/** The residences a template can be made for. */
+export const listTemplateResidences = createServerFn({ method: "GET" }).handler(async () => {
+  const db = await admin();
+  const { data } = await db.from("residences").select("id, name").order("sort_order");
+  return ((data ?? []) as any[]).map((r) => ({ id: r.id as string, name: r.name as string }));
+});
+
+/**
+ * Change a template's category and residence after it is made (30 Sep 2026).
+ * Before this, both were fixed at Add Template and could only be put right by
+ * starting again.
+ */
+export const updateTemplateDetails = createServerFn({ method: "POST" })
+  .inputValidator((d) =>
+    z.object({
+      templateId: z.string().uuid(),
+      category: z.string().trim().min(1).max(40).optional(),
+      residenceId: z.string().uuid().nullable().optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const db = await admin();
+    const patch: Record<string, unknown> = {};
+    if (data.category !== undefined) patch["category"] = data.category;
+    if (data.residenceId !== undefined) patch["residence_id"] = data.residenceId;
+    if (!Object.keys(patch).length) return { ok: true };
+    const { error } = await db.from("document_templates").update(patch).eq("id", data.templateId);
+    if (error) throw new Error(`Could not save: ${error.message}`);
     return { ok: true };
   });
