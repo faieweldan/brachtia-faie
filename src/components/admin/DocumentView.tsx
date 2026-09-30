@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useState } from "react";
 
 import { DocxView } from "@/components/admin/DocxView";
 import { PdfPageViewer } from "@/components/admin/PdfPageViewer";
@@ -23,14 +23,24 @@ export function DocumentView({
   pdfLoading: boolean;
   docxBase64?: string | undefined;
 }) {
-  const url = useMemo(() => {
-    if (!pdf || !pdf.ok) return "";
-    const bytes = Uint8Array.from(atob(pdf.base64), (c) => c.charCodeAt(0));
-    return URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-  }, [pdf]);
-  useEffect(() => () => {
-    if (url) URL.revokeObjectURL(url);
-  }, [url]);
+  /*
+   * The link is made and thrown away by the same effect. Made in useMemo and
+   * revoked in an effect's cleanup, it could be revoked while the viewer was
+   * still opening it - React runs effects twice in development - and the
+   * master agreement showed "Could not open this PDF preview" (30 Sep 2026).
+   */
+  const base64 = pdf && pdf.ok ? pdf.base64 : "";
+  const [url, setUrl] = useState("");
+  useEffect(() => {
+    if (!base64) {
+      setUrl("");
+      return;
+    }
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    const made = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+    setUrl(made);
+    return () => URL.revokeObjectURL(made);
+  }, [base64]);
 
   if (url) return <PdfPageViewer url={url} />;
   if (pdfLoading && !pdf) {
