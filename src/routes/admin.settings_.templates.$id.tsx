@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { AlertTriangle, ArrowLeft, CheckCircle2, FlaskConical, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, FlaskConical, Trash2, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -37,6 +37,8 @@ import {
   testMapping,
   getTemplateDocx,
   previewTemplatePdf,
+  deleteTemplateVersion,
+  deleteTemplate,
   type DocTemplate,
 } from "@/lib/templates.functions";
 
@@ -111,6 +113,33 @@ function TemplateWorkspace() {
   // placeholders its header and footer carry that the web copy never had
   const docxFn = useServerFn(getTemplateDocx);
   const pdfFn = useServerFn(previewTemplatePdf);
+  const removeVersion = useServerFn(deleteTemplateVersion);
+  const removeTemplate = useServerFn(deleteTemplate);
+  const navigateAway = useNavigate();
+
+  async function doDeleteVersion(versionId: string, version: number) {
+    if (!confirm(`Delete v${version}? This cannot be undone.`)) return;
+    try {
+      await removeVersion({ data: { versionId } });
+      if (selectedId === versionId) setSelectedId(null);
+      await qc.invalidateQueries({ queryKey: ["doc-templates"] });
+      toast.success(`v${version} deleted`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not delete");
+    }
+  }
+
+  async function doDeleteTemplate() {
+    if (!tpl || !confirm(`Delete the template "${tpl.name}" and all its versions? This cannot be undone.`)) return;
+    try {
+      await removeTemplate({ data: { templateId: tpl.id } });
+      await qc.invalidateQueries({ queryKey: ["doc-templates"] });
+      toast.success("Template deleted");
+      void navigateAway({ to: "/admin/settings", search: { tab: "templates" } });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not delete");
+    }
+  }
   // the template as it prints - with the test resident filled in once picked
   const pagePdf = useQuery({
     queryKey: ["template-pdf", selected?.id, test?.resident.id ?? "", test ? maps : null],
@@ -287,11 +316,41 @@ function TemplateWorkspace() {
                     className={`flex w-full items-center justify-between rounded-lg border px-2 py-1.5 text-left ${v.id === selected.id ? "border-primary bg-primary/5" : "border-border hover:bg-muted"}`}
                   >
                     <span>v{v.version}<span className="ml-1 text-[11px] text-muted-foreground">{fmtDay(v.updatedAt)}</span></span>
-                    <VersionStatus status={v.status} />
+                    <span className="flex items-center gap-1">
+                      <VersionStatus status={v.status} />
+                      {/* the Active version is what documents are made from, so it
+                          has no bin; a used one is refused by the server with why */}
+                      {v.status !== "active" && !editing ? (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          title={`Delete v${v.version}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void doDeleteVersion(v.id, v.version);
+                          }}
+                          onKeyDown={(e) => e.key === "Enter" && void doDeleteVersion(v.id, v.version)}
+                          className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </span>
+                      ) : null}
+                    </span>
                   </button>
                 </li>
               ))}
             </ul>
+            {!tpl.docKey ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="mt-3 w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
+                disabled={editing}
+                onClick={() => void doDeleteTemplate()}
+              >
+                <Trash2 className="mr-1 size-3.5" /> Delete template
+              </Button>
+            ) : null}
           </div>
         </aside>
 

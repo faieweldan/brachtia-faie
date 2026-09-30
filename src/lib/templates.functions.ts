@@ -375,3 +375,63 @@ async function pdfResult(docx: Uint8Array) {
     throw e;
   }
 }
+
+/* ---------------- deleting ---------------- */
+
+/** How many residents' documents were made from this version. */
+async function timesUsed(db: any, versionId: string) {
+  const [a, b] = await Promise.all([
+    db.from("agreement_documents").select("id", { count: "exact", head: true }).eq("template_version_id", versionId),
+    db.from("access_card_forms").select("id", { count: "exact", head: true }).eq("template_version_id", versionId),
+  ]);
+  return (a.count ?? 0) + (b.count ?? 0);
+}
+
+/**
+ * Delete one version (Dani and Lav, 30 Sep 2026). A draft or an unused
+ * archived version can go. The Active version cannot - it is what documents
+ * are made from; activate another first. And a version any resident's
+ * document was made from is never deleted: it is the record of what they
+ * were given to sign.
+ */
+export const deleteTemplateVersion = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ versionId: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const db = await admin();
+    const { data: v } = await db.from("template_versions").select("id, status, file_path").eq("id", data.versionId).maybeSingle();
+    if (!v) throw new Error("Version not found");
+    if (v.status === "active") throw new Error("The Active version cannot be deleted. Activate another version first.");
+    const used = await timesUsed(db, v.id);
+    if (used) throw new Error(`Kept: ${used} resident document${used === 1 ? " was" : "s were"} made from this version.`);
+    const { error } = await db.from("template_versions").delete().eq("id", v.id);
+    if (error) throw new Error(`Could not delete: ${error.message}`);
+    // the Word file goes too, unless another version still points at it
+    if (v.file_path) {
+      const { count } = await db.from("template_versions").select("id", { count: "exact", head: true }).eq("file_path", v.file_path);
+      if (!count) await db.storage.from("document-templates").remove([v.file_path]);
+    }
+    return { ok: true };
+  });
+
+/**
+ * Delete a whole template. Only one that was added by hand: the six the
+ * document pack looks for by name (doc_key) always stay, or the pack would
+ * lose a tab. And not while any of its versions made a resident's document.
+ */
+export const deleteTemplate = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ templateId: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const db = await admin();
+    const { data: t } = await db.from("document_templates").select("id, doc_key").eq("id", data.templateId).maybeSingle();
+    if (!t) throw new Error("Template not found");
+    if (t.doc_key) throw new Error("This template is part of the document pack and cannot be deleted. Its versions can be.");
+    const { data: versions } = await db.from("template_versions").select("id, file_path").eq("template_id", t.id);
+    for (const v of (versions ?? []) as any[]) {
+      if (await timesUsed(db, v.id)) throw new Error("Kept: resident documents were made from this template.");
+    }
+    const { error } = await db.from("document_templates").delete().eq("id", t.id);
+    if (error) throw new Error(`Could not delete: ${error.message}`);
+    const files = ((versions ?? []) as any[]).map((v) => v.file_path).filter(Boolean);
+    if (files.length) await db.storage.from("document-templates").remove(files);
+    return { ok: true };
+  });
