@@ -25,6 +25,7 @@ import { MARK_CSS, Paper } from "@/components/admin/TemplatePaper";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { readableValue } from "@/lib/signatory";
 import { docxToHtml, fileToBase64, isPdfFile } from "@/lib/docx-client";
 import {
   describeMapping,
@@ -728,7 +729,7 @@ function TemplateWorkspace() {
                   {test.results.map((r) => (
                     <tr key={r.key} className="border-t border-border align-top">
                       <td className="py-1.5 pr-1"><code>{r.key}</code><div className="text-[10px] text-muted-foreground">{r.source}</div></td>
-                      <td className="py-1.5 pr-1">{r.value || "—"}</td>
+                      <td className="py-1.5 pr-1">{readableValue(r.value) || "—"}</td>
                       <td className="py-1.5 whitespace-nowrap">
                         {r.result === "mapped" ? <span className="text-primary">✓ Mapped</span> : r.result === "missing" ? <span className="text-muted-foreground">⚠ Missing Value</span> : <span className="text-destructive">✕ Unmapped</span>}
                       </td>

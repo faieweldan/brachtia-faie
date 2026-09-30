@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
+import { readableValue } from "@/lib/signatory";
 import { isDocumentOwn, type MappingResult } from "@/lib/template-fields";
 
 /**
@@ -133,7 +134,7 @@ export function DataReview({
                             ? "On generate"
                             : row.r?.result === "unmapped"
                               ? "Not mapped"
-                              : row.r?.value?.trim() || "Missing"}
+                              : readableValue(row.r?.value).trim() || "Missing"}
                       </span>
                     )}
                   </td>

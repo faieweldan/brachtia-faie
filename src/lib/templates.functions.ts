@@ -279,7 +279,9 @@ async function buildContext(db: any, residentId: string) {
     const { data: unit } = room ? await db.from("units").select("*").eq("id", room.unit_id).maybeSingle() : { data: null };
     const { data: residence } = unit ? await db.from("residences").select("id, name, slug").eq("id", unit.residence_id).maybeSingle() : { data: null };
     const { data: agreement } = await db.from("tenancy_agreements").select("agreement_no, created_at").eq("resident_id", data.residentId).order("created_at", { ascending: false }).limit(1).maybeSingle();
-    const ctx: MappingContext = { resident, enquiry, bed, room, unit, residence, tenancy, agreement };
+    const { loadSignatory } = await import("@/lib/signatory.server");
+    const signatory = await loadSignatory(db);
+    const ctx: MappingContext = { resident, enquiry, bed, room, unit, residence, tenancy, agreement, signatory };
   return { resident, ctx };
 }
 
@@ -295,6 +297,44 @@ export const testMapping = createServerFn({ method: "POST" })
     };
   });
 
+
+/* ---------------- signatory (Settings → Signatory) ---------------- */
+
+/** Who signs for Brachtia, and their signature as a picture, for the Settings page. */
+export const getSignatory = createServerFn({ method: "GET" }).handler(async () => {
+  const db = await admin();
+  const { loadSignatory, loadSignatureImage } = await import("@/lib/signatory.server");
+  const s = await loadSignatory(db);
+  const png = s?.token ? await loadSignatureImage(db, s.token) : null;
+  return { name: s?.name ?? "", title: s?.title ?? "", image: png ? `data:image/png;base64,${toBase64(png)}` : "" };
+});
+
+/**
+ * Save the signatory. A new signature is kept beside the old ones, never over
+ * them: documents already generated keep the signature they were made with.
+ */
+export const saveSignatory = createServerFn({ method: "POST" })
+  .inputValidator((d) =>
+    z.object({
+      name: z.string().trim().max(120),
+      title: z.string().trim().max(120),
+      // a PNG, base64, under ~700 KB
+      png: z.string().max(1_000_000).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const db = await admin();
+    const { loadSignatory, saveSignatoryFile, saveSignatureImage } = await import("@/lib/signatory.server");
+    const current = await loadSignatory(db);
+    let token = current?.token ?? "";
+    if (data.png) {
+      const bytes = Uint8Array.from(atob(data.png), (c) => c.charCodeAt(0));
+      if (bytes[0] !== 0x89 || bytes[1] !== 0x50) throw new Error("The signature must be a PNG picture.");
+      token = await saveSignatureImage(db, bytes);
+    }
+    await saveSignatoryFile(db, { name: data.name, title: data.title, token });
+    return { ok: true as const };
+  });
 
 const PACK_KEYS = ["tenancy_agreement", "schedule_a", "schedule_b", "schedule_c", "access_card_form"] as const;
 
@@ -379,13 +419,15 @@ async function filledPackBytes(
   if (isPdfPath(row.file_path)) {
     const { fillPdf } = await import("@/lib/pdf-boxes");
     const values = await valuesFor(await placeholdersOf(db, row), ctx, row.mappings ?? {}, overrides);
-    return { kind: "pdf" as const, bytes: await fillPdf(bytes, boxesOf(row), values) };
+    const { signatureImages } = await import("@/lib/signatory.server");
+    return { kind: "pdf" as const, bytes: await fillPdf(bytes, boxesOf(row), values, { images: await signatureImages(db, values) }) };
   }
-  return { kind: "docx" as const, bytes: await fillFor(bytes, await placeholdersOf(db, row), ctx, row.mappings ?? {}, overrides) };
+  return { kind: "docx" as const, bytes: await fillFor(db, bytes, await placeholdersOf(db, row), ctx, row.mappings ?? {}, overrides) };
 }
 
 /** Fill a Word file from a resident's records, typed corrections winning. */
 async function fillFor(
+  db: any,
   bytes: Uint8Array,
   placeholders: string[],
   ctx: MappingContext,
@@ -394,7 +436,8 @@ async function fillFor(
 ) {
   const values = await valuesFor(placeholders, ctx, mappings, overrides);
   const { fillDocx } = await import("@/lib/docx-fill");
-  return fillDocx(bytes, values);
+  const { signatureImages } = await import("@/lib/signatory.server");
+  return fillDocx(bytes, values, await signatureImages(db, values));
 }
 
 const packInput = z.object({
@@ -453,11 +496,12 @@ export const previewTemplatePdf = createServerFn({ method: "POST" })
       const boxes = data.boxes ?? boxesOf(v);
       const ctx = data.residentId ? (await buildContext(db, data.residentId)).ctx : null;
       const values = ctx ? await valuesFor([...new Set(boxes.map((b) => b.key))], ctx, data.mappings ?? v.mappings ?? {}) : {};
-      return { ok: true as const, base64: toBase64(await fillPdf(bytes, boxes, values, { outline: !ctx })) };
+      const { signatureImages } = await import("@/lib/signatory.server");
+      return { ok: true as const, base64: toBase64(await fillPdf(bytes, boxes, values, { outline: !ctx, images: await signatureImages(db, values) })) };
     }
     if (data.residentId) {
       const { ctx } = await buildContext(db, data.residentId);
-      bytes = await fillFor(bytes, await placeholdersOf(db, v), ctx, data.mappings ?? v.mappings ?? {});
+      bytes = await fillFor(db, bytes, await placeholdersOf(db, v), ctx, data.mappings ?? v.mappings ?? {});
     }
     return pdfResult(bytes);
   });
@@ -497,12 +541,14 @@ export const previewGeneratedPdf = createServerFn({ method: "POST" })
     const values: Record<string, string | null> = {};
     // a placeholder with no saved value stays showing, so the gap is seen
     for (const k of await placeholdersOf(db, v)) values[k] = saved[k] ?? null;
+    const { signatureImages } = await import("@/lib/signatory.server");
+    const images = await signatureImages(db, values);
     if (isPdfPath(v.file_path)) {
       const { fillPdf } = await import("@/lib/pdf-boxes");
-      return { ok: true as const, base64: toBase64(await fillPdf(bytes, boxesOf(v), values)) };
+      return { ok: true as const, base64: toBase64(await fillPdf(bytes, boxesOf(v), values, { images })) };
     }
     const { fillDocx } = await import("@/lib/docx-fill");
-    return pdfResult(await fillDocx(bytes, values));
+    return pdfResult(await fillDocx(bytes, values, images));
   });
 
 async function pdfResult(docx: Uint8Array) {

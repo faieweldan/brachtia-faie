@@ -7,8 +7,8 @@
 import { COUNTRIES, SCHEDULES } from "@/lib/reference-data";
 import { stayLength } from "@/lib/stay-length";
 
-export type FieldSource = "Resident Record" | "Booking Record" | "Initial Payment" | "Room Record" | "Tenancy Record" | "Other";
-export const FIELD_SOURCES: FieldSource[] = ["Resident Record", "Booking Record", "Initial Payment", "Room Record", "Tenancy Record", "Other"];
+export type FieldSource = "Resident Record" | "Booking Record" | "Initial Payment" | "Room Record" | "Tenancy Record" | "Signatory" | "Other";
+export const FIELD_SOURCES: FieldSource[] = ["Resident Record", "Booking Record", "Initial Payment", "Room Record", "Tenancy Record", "Signatory", "Other"];
 
 export type MappingContext = {
   resident: Record<string, any> | null;
@@ -19,6 +19,8 @@ export type MappingContext = {
   residence: Record<string, any> | null;
   tenancy: Record<string, any> | null;
   agreement?: Record<string, any> | null;
+  /** who signs for Brachtia - Settings → Signatory */
+  signatory?: { name: string; title: string; token: string } | null;
 };
 
 export type TemplateField = {
@@ -156,6 +158,10 @@ export const TEMPLATE_FIELDS: TemplateField[] = [
   { key: "monthly_rent", label: "Monthly rent", source: "Tenancy Record", get: (c) => money(rent(c)) },
   // "12 months 4 days", worked out from the tenancy dates the agreement prints
   { key: "duration", label: "Duration (months and days)", source: "Tenancy Record", get: (c) => stayLength(start(c), end(c)) },
+  // — Signatory: Settings → Signatory, the same on every document (30 Sep 2026) —
+  { key: "signatory_signature", label: "Signatory's signature", source: "Signatory", get: (c) => c.signatory?.token ?? "" },
+  { key: "signatory_name", label: "Signatory's name", source: "Signatory", get: (c) => c.signatory?.name ?? "" },
+  { key: "signatory_title", label: "Signatory's title", source: "Signatory", get: (c) => c.signatory?.title ?? "" },
   { key: "today", label: "Today's date", source: "Other", get: () => fmtDate(new Date().toISOString()) },
   // for tick boxes on a PDF form: "yes" ticks it, empty leaves it (30 Sep 2026)
   { key: "has_id_copy", label: "Tick: IC / passport copy uploaded", source: "Resident Record", get: (c) => (hasDoc(c, "id") ? "yes" : "") },
@@ -199,6 +205,11 @@ const ALIASES: Record<string, string> = {
   tenancy_end_date: "tenancy_end",
   rental_rate: "monthly_rent",
   duration_mmdd: "duration",
+  // the signature block (30 Sep 2026): Brachtia signs when the pack is made
+  admin_signature: "signatory_signature",
+  admin_name: "signatory_name",
+  admin_title: "signatory_title",
+  admin_signature_date: "today",
 };
 
 export type Mapping =
@@ -212,7 +223,8 @@ export function suggestMapping(ph: string): Mapping | null {
   const k = ph.trim().toLowerCase().replace(/[\s-]+/g, "_");
   const key = FIELD_BY_KEY.has(k) ? k : ALIASES[k];
   if (key) return { kind: "field", key };
-  if (k.includes("signature_date")) return { kind: "blank" };
+  // the resident's signature and its date come when they sign, not from a record
+  if (k.includes("signature")) return { kind: "blank" };
   return null;
 }
 
