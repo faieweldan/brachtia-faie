@@ -71,7 +71,9 @@ async function storeFile(db: any, templateId: string, file?: { name: string; bas
   const safe = file.name.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 80);
   const path = `${templateId}/${Date.now().toString(36)}-${safe}`;
   const { error } = await db.storage.from("document-templates").upload(path, bytes, {
-    contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    contentType: isPdfPath(file.name)
+      ? "application/pdf"
+      : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   });
   if (error) throw new Error("File upload failed");
   return { file_path: path, file_name: file.name };
@@ -79,7 +81,14 @@ async function storeFile(db: any, templateId: string, file?: { name: string; bas
 
 /* ---------------- the Word file itself ---------------- */
 
-/** The uploaded .docx a version was made from, or null when it has none. */
+/**
+ * A template can be a Word file - filled in place and laid out by a Word
+ * engine - or a PDF, such as a building's scanned form, which is shown exactly
+ * as it is (30 Sep 2026). Writing values onto a PDF comes with its boxes.
+ */
+const isPdfPath = (path: string | null | undefined) => /\.pdf$/i.test(String(path ?? "").trim());
+
+/** The uploaded file a version was made from, or null when it has none. */
 async function loadDocx(db: any, filePath: string | null | undefined): Promise<Uint8Array | null> {
   if (!filePath) return null;
   const { data, error } = await db.storage.from("document-templates").download(filePath);
@@ -94,6 +103,7 @@ async function loadDocx(db: any, filePath: string | null | undefined): Promise<U
  */
 async function placeholdersOf(db: any, row: { content_html?: string; file_path?: string }) {
   const fromHtml = detectPlaceholders(row.content_html ?? "");
+  if (isPdfPath(row.file_path)) return fromHtml;
   const bytes = await loadDocx(db, row.file_path);
   if (!bytes) return fromHtml;
   const { docxPlaceholders } = await import("@/lib/docx-fill");
@@ -301,7 +311,11 @@ export const getTemplateDocx = createServerFn({ method: "GET" })
     const { data: v } = await db.from("template_versions").select("content_html, file_path").eq("id", data.versionId).maybeSingle();
     const bytes = v ? await loadDocx(db, v.file_path) : null;
     if (!bytes) return null;
-    return { base64: toBase64(bytes), placeholders: await placeholdersOf(db, v) };
+    return {
+      kind: isPdfPath(v.file_path) ? ("pdf" as const) : ("docx" as const),
+      base64: toBase64(bytes),
+      placeholders: await placeholdersOf(db, v),
+    };
   });
 
 /**
@@ -315,7 +329,7 @@ async function filledPackBytes(
   residentId: string,
   docKey: (typeof PACK_KEYS)[number],
   overrides?: Record<string, string>,
-): Promise<Uint8Array | null> {
+): Promise<{ kind: "pdf" | "docx"; bytes: Uint8Array } | null> {
   const { ctx } = await buildContext(db, residentId);
   const { data: rows } = await db
     .from("template_versions")
@@ -325,7 +339,8 @@ async function filledPackBytes(
   const row = pickForResidence((rows ?? []) as any[], docKey, ctx.residence?.["id"]);
   const bytes = row ? await loadDocx(db, row.file_path) : null;
   if (!row || !bytes) return null;
-  return fillFor(bytes, await placeholdersOf(db, row), ctx, row.mappings ?? {}, overrides);
+  if (isPdfPath(row.file_path)) return { kind: "pdf" as const, bytes };
+  return { kind: "docx" as const, bytes: await fillFor(bytes, await placeholdersOf(db, row), ctx, row.mappings ?? {}, overrides) };
 }
 
 /** Fill a Word file from a resident's records, typed corrections winning. */
@@ -359,8 +374,9 @@ export const fillPackDocx = createServerFn({ method: "POST" })
   .inputValidator((d) => packInput.parse(d))
   .handler(async ({ data }) => {
     const db = await admin();
-    const bytes = await filledPackBytes(db, data.residentId, data.docKey, data.overrides);
-    return bytes ? { base64: toBase64(bytes) } : null;
+    const doc = await filledPackBytes(db, data.residentId, data.docKey, data.overrides);
+    // a PDF form has no Word file to show; its exact pages come from the preview
+    return doc?.kind === "docx" ? { base64: toBase64(doc.bytes) } : null;
   });
 
 /**
@@ -371,9 +387,10 @@ export const previewPackPdf = createServerFn({ method: "POST" })
   .inputValidator((d) => packInput.parse(d))
   .handler(async ({ data }) => {
     const db = await admin();
-    const bytes = await filledPackBytes(db, data.residentId, data.docKey, data.overrides);
-    if (!bytes) return { ok: false as const, error: "This document has no Word file to preview." };
-    return pdfResult(bytes);
+    const doc = await filledPackBytes(db, data.residentId, data.docKey, data.overrides);
+    if (!doc) return { ok: false as const, error: "This document has no file to preview." };
+    if (doc.kind === "pdf") return { ok: true as const, base64: toBase64(doc.bytes) };
+    return pdfResult(doc.bytes);
   });
 
 /**
@@ -389,7 +406,8 @@ export const previewTemplatePdf = createServerFn({ method: "POST" })
     const db = await admin();
     const { data: v } = await db.from("template_versions").select("content_html, file_path, mappings").eq("id", data.versionId).maybeSingle();
     let bytes = v ? await loadDocx(db, v.file_path) : null;
-    if (!v || !bytes) return { ok: false as const, error: "This version has no Word file to preview." };
+    if (!v || !bytes) return { ok: false as const, error: "This version has no file to preview." };
+    if (isPdfPath(v.file_path)) return { ok: true as const, base64: toBase64(bytes) };
     if (data.residentId) {
       const { ctx } = await buildContext(db, data.residentId);
       bytes = await fillFor(bytes, await placeholdersOf(db, v), ctx, data.mappings ?? v.mappings ?? {});

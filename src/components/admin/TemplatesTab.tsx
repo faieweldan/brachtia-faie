@@ -242,8 +242,8 @@ function AddTemplateDialog({ open, onOpenChange }: { open: boolean; onOpenChange
             </div>
           ) : null}
           <div>
-            <Label>Template file (Word .docx)</Label>
-            <Input type="file" accept=".docx" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            <Label>Template file (Word .docx, or a PDF form)</Label>
+            <Input type="file" accept=".docx,.pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           </div>
           <div>
             <Label>Initial placeholders (optional)</Label>

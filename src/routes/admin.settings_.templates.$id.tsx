@@ -14,7 +14,7 @@ import { MARK_CSS, Paper } from "@/components/admin/TemplatePaper";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { docxToHtml, fileToBase64 } from "@/lib/docx-client";
+import { docxToHtml, fileToBase64, isPdfFile } from "@/lib/docx-client";
 import {
   describeMapping,
   detectPlaceholders,
@@ -410,7 +410,7 @@ function TemplateWorkspace() {
             <div className="ml-auto flex flex-wrap gap-2">
               <label className="inline-flex cursor-pointer items-center rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-muted">
                 <Upload className="mr-1 h-3.5 w-3.5" /> {selected.fileName || pendingFile ? "Replace file" : "Upload file"}
-                <input type="file" accept=".docx" className="hidden" disabled={!!test} onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }} />
+                <input type="file" accept=".docx,.pdf" className="hidden" disabled={!!test} onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }} />
               </label>
               {!editing ? (
                 <Button size="sm" variant="outline" disabled={!!test} onClick={startEdit}>
@@ -467,15 +467,23 @@ function TemplateWorkspace() {
           ) : editing && pending ? (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground">
-                New file: {pendingFile?.name}. Save as Draft to see the exact printed pages.
+                New file: {pendingFile?.name}.{" "}
+                {pendingFile && isPdfFile(pendingFile.name)
+                  ? "A PDF form is shown as it is."
+                  : "Save as Draft to see the exact printed pages."}
               </p>
-              <DocxView base64={pending.base64} className="max-h-[80vh]" />
+              {pendingFile && isPdfFile(pendingFile.name) ? (
+                // a PDF form is shown exactly as it is
+                <DocumentView pdf={{ ok: true, base64: pending.base64 }} pdfLoading={false} />
+              ) : (
+                <DocxView base64={pending.base64} className="max-h-[80vh]" />
+              )}
             </div>
           ) : !editing && docx.data ? (
             <DocumentView
               pdf={pagePdf.data}
               pdfLoading={pagePdf.isFetching}
-              docxBase64={pagePdf.data?.ok === false ? docx.data.base64 : undefined}
+              docxBase64={pagePdf.data?.ok === false && docx.data.kind === "docx" ? docx.data.base64 : undefined}
             />
           ) : (
           <Paper>
@@ -628,7 +636,7 @@ function EmptyTemplate({ tpl, onDone }: { tpl: DocTemplate; onDone: () => void }
         <p className="mt-1 text-sm text-muted-foreground">Upload the Word file for this template to create v1 as a Draft.</p>
         <label className="mt-4 inline-flex cursor-pointer items-center rounded-md border border-input px-4 py-2 text-sm font-medium hover:bg-muted">
           <Upload className="mr-1.5 h-4 w-4" /> {busy ? "Uploading…" : "Upload .docx"}
-          <input type="file" accept=".docx" className="hidden" disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }} />
+          <input type="file" accept=".docx,.pdf" className="hidden" disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }} />
         </label>
       </div>
     </div>
