@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { Choice } from "@/components/admin/Choice";
 import { Panel } from "@/components/admin/ops-ui";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -16,9 +17,13 @@ import { createTemplate, listTemplateResidences, listTemplates, type DocTemplate
 
 export const TEMPLATE_CATEGORIES = ["Agreement", "Access Card", "Checkout"];
 
+/** What the app's own dropdown uses for "none" / "all residences" - it cannot hold an empty value. */
+export const ALL = "all";
+const NONE = "none";
+
 /** The documents a pack looks templates up by, for a template made for one residence. */
 const PACK_DOCUMENTS: { key: string; label: string }[] = [
-  { key: "", label: "Not part of the document pack" },
+  { key: NONE, label: "Not part of the document pack" },
   { key: "tenancy_agreement", label: "Tenancy Agreement" },
   { key: "schedule_a", label: "Schedule A – Particulars" },
   { key: "schedule_b", label: "Schedule B – House Rules" },
@@ -86,7 +91,8 @@ export function TemplatesTab() {
               </tr>
             </thead>
             {cats.map((cat) => {
-              const rows = (data ?? []).filter((t) => t.category === cat);
+              // set up = has a file uploaded; the rest are listed apart below
+              const rows = (data ?? []).filter((t) => t.category === cat && t.versions.length > 0);
               if (!rows.length) return null;
               return (
                 <tbody key={cat}>
@@ -101,6 +107,25 @@ export function TemplatesTab() {
                 </tbody>
               );
             })}
+            {/*
+              A template with nothing uploaded has not been set up, so it shows
+              no category or residence rather than defaults that read as chosen
+              (30 Sep 2026). They are set in Manage when its file is added.
+            */}
+            {(data ?? []).some((t) => !t.versions.length) ? (
+              <tbody>
+                <tr>
+                  <td colSpan={7} className="bg-muted/60 px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Not set up yet
+                  </td>
+                </tr>
+                {(data ?? [])
+                  .filter((t) => !t.versions.length)
+                  .map((t) => (
+                    <TemplateRow key={t.id} t={t} residence="" />
+                  ))}
+              </tbody>
+            ) : null}
           </table>
         </div>
       )}
@@ -116,8 +141,8 @@ function TemplateRow({ t, residence }: { t: DocTemplate; residence: string }) {
   return (
     <tr className="border-b border-border last:border-0">
       <td className="py-2.5 pr-3 font-medium text-brand-deep">{t.name}</td>
-      <td className="py-2.5 pr-3 text-muted-foreground">{t.category}</td>
-      <td className="py-2.5 pr-3 text-muted-foreground">{residence}</td>
+      <td className="py-2.5 pr-3 text-muted-foreground">{t.versions.length ? t.category : "—"}</td>
+      <td className="py-2.5 pr-3 text-muted-foreground">{t.versions.length ? residence : "—"}</td>
       <td className="py-2.5 pr-3">{shown ? `v${shown.version}` : "—"}</td>
       <td className="py-2.5 pr-3 text-muted-foreground">{fmtDay(shown?.updatedAt)}</td>
       <td className="py-2.5 pr-3">
@@ -145,8 +170,8 @@ function AddTemplateDialog({ open, onOpenChange }: { open: boolean; onOpenChange
   const [category, setCategory] = useState("Agreement");
   const [file, setFile] = useState<File | null>(null);
   const [initial, setInitial] = useState("");
-  const [residenceId, setResidenceId] = useState("");
-  const [docKey, setDocKey] = useState("");
+  const [residenceId, setResidenceId] = useState(ALL);
+  const [docKey, setDocKey] = useState(NONE);
   const residences = useResidenceNames();
   const [busy, setBusy] = useState(false);
 
@@ -165,8 +190,8 @@ function AddTemplateDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           name: name.trim(),
           category,
           contentHtml: html,
-          residenceId: residenceId || null,
-          docKey,
+          residenceId: residenceId === ALL ? null : residenceId,
+          docKey: docKey === NONE ? "" : docKey,
           ...(file ? { file: { name: file.name, base64: await fileToBase64(file) } } : {}),
         },
       });
@@ -195,48 +220,22 @@ function AddTemplateDialog({ open, onOpenChange }: { open: boolean; onOpenChange
             <Label>Template name</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
-          <div>
-            <Label>Category</Label>
-            <select
-              className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-            >
-              {TEMPLATE_CATEGORIES.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <Label>Residence</Label>
-            <select
-              className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-              value={residenceId}
-              onChange={(e) => setResidenceId(e.target.value)}
-            >
-              <option value="">All residences</option>
-              {residences.list.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          {residenceId ? (
-            <div>
-              <Label>Used in the document pack as</Label>
-              <select
-                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+          <Choice label="Category" value={category} onChange={setCategory} options={TEMPLATE_CATEGORIES} />
+          <Choice
+            label="Residence"
+            value={residenceId}
+            onChange={setResidenceId}
+            options={[{ value: ALL, label: "All residences" }, ...residences.list.map((r) => ({ value: r.id, label: r.name }))]}
+          />
+          {residenceId !== ALL ? (
+            <div className="space-y-1">
+              <Choice
+                label="Used in the document pack as"
                 value={docKey}
-                onChange={(e) => setDocKey(e.target.value)}
-              >
-                {PACK_DOCUMENTS.map((d) => (
-                  <option key={d.key} value={d.key}>
-                    {d.label}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-[11px] text-muted-foreground">
+                onChange={setDocKey}
+                options={PACK_DOCUMENTS.map((d) => ({ value: d.key, label: d.label }))}
+              />
+              <p className="text-[11px] text-muted-foreground">
                 Residents of this residence get this one instead of the one for all residences.
               </p>
             </div>

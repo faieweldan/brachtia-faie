@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 
+import { Choice } from "@/components/admin/Choice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { BoxKind, PdfBox } from "@/lib/pdf-boxes";
@@ -137,20 +138,15 @@ export function PdfBoxEditor({
               ))}
             </datalist>
           </label>
-          <label className="space-y-1">
-            <span className="text-[11px] text-muted-foreground">Kind</span>
-            <select
-              className="block h-8 rounded-md border border-input bg-background px-2 text-sm"
+          <div className="w-52">
+            <Choice
+              label="Kind"
+              className="h-8 text-sm"
               value={current.kind}
-              onChange={(e) => update(current.id, { kind: e.target.value as BoxKind })}
-            >
-              {KINDS.map((k) => (
-                <option key={k.value} value={k.value}>
-                  {k.label}
-                </option>
-              ))}
-            </select>
-          </label>
+              onChange={(v) => update(current.id, { kind: v as BoxKind })}
+              options={KINDS}
+            />
+          </div>
           <Button
             type="button"
             size="sm"

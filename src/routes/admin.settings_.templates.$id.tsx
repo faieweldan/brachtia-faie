@@ -5,7 +5,17 @@ import { AlertTriangle, ArrowLeft, CheckCircle2, FlaskConical, Trash2, Upload } 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { fmtDay, TEMPLATE_CATEGORIES, VersionStatus } from "@/components/admin/TemplatesTab";
+import { ALL, fmtDay, TEMPLATE_CATEGORIES, VersionStatus } from "@/components/admin/TemplatesTab";
+import { Choice } from "@/components/admin/Choice";
+import {
+  Select as SelectRoot,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { DocumentView } from "@/components/admin/DocumentView";
 import { PdfBoxEditor } from "@/components/admin/PdfBoxEditor";
 import type { PdfBox } from "@/lib/pdf-boxes";
@@ -374,32 +384,23 @@ function TemplateWorkspace() {
             <div>
               <dt className="text-xs text-muted-foreground">Category</dt>
               <dd>
-                <select
-                  className="mt-1 h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
+                <Choice
+                  className="mt-1 h-8 text-sm"
                   value={tpl.category}
-                  onChange={(e) => void setDetail({ category: e.target.value })}
-                >
-                  {[...new Set([...TEMPLATE_CATEGORIES, tpl.category])].map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
-                </select>
+                  onChange={(v) => void setDetail({ category: v })}
+                  options={[...new Set([...TEMPLATE_CATEGORIES, tpl.category])]}
+                />
               </dd>
             </div>
             <div>
               <dt className="text-xs text-muted-foreground">Residence</dt>
               <dd>
-                <select
-                  className="mt-1 h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
-                  value={tpl.residenceId ?? ""}
-                  onChange={(e) => void setDetail({ residenceId: e.target.value || null })}
-                >
-                  <option value="">All residences</option>
-                  {(residences ?? []).map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
+                <Choice
+                  className="mt-1 h-8 text-sm"
+                  value={tpl.residenceId ?? ALL}
+                  onChange={(v) => void setDetail({ residenceId: v === ALL ? null : v })}
+                  options={[{ value: ALL, label: "All residences" }, ...(residences ?? []).map((r) => ({ value: r.id, label: r.name }))]}
+                />
               </dd>
             </div>
             <div><dt className="text-xs text-muted-foreground">Current version</dt><dd>{active ? `v${active.version}` : "None active"}</dd></div>
@@ -629,29 +630,38 @@ function MappingRow({ ph, mapping, disabled, onChange }: { ph: string; mapping: 
         <code className="truncate text-[11px]" title={ph}>{ph}</code>
         {ok ? <span className="flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground"><CheckCircle2 className="h-3 w-3 text-primary" />{describeMapping(mapping)}</span> : <span className="shrink-0 text-[10px] text-destructive">Not mapped</span>}
       </div>
-      <select
+      {/* the app's own dropdown, the same on every computer and phone */}
+      <SelectRoot
         disabled={disabled}
+        // "" shows the placeholder - an unmapped placeholder
         value={value}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (!v) onChange(null);
-          else if (v === "formula") onChange({ kind: "formula", expr: mapping?.kind === "field" ? `[${mapping.key}]` : "" });
+        onValueChange={(v) => {
+          if (v === "formula") onChange({ kind: "formula", expr: mapping?.kind === "field" ? `[${mapping.key}]` : "" });
           else if (v === "blank") onChange({ kind: "blank" });
           else onChange({ kind: "field", key: v.slice(6) });
         }}
-        className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs disabled:opacity-70"
       >
-        <option value="">Choose a value…</option>
-        {FIELD_SOURCES.map((src) => (
-          <optgroup key={src} label={src}>
-            {TEMPLATE_FIELDS.filter((f) => f.source === src).map((f) => <option key={f.key} value={`field:${f.key}`}>{f.label}</option>)}
-          </optgroup>
-        ))}
-        <optgroup label="Custom">
-          <option value="formula">Formula…</option>
-          <option value="blank">Leave blank (filled by hand)</option>
-        </optgroup>
-      </select>
+        <SelectTrigger className="h-8 text-xs">
+          <SelectValue placeholder="Choose a value…" />
+        </SelectTrigger>
+        <SelectContent className="max-h-80">
+          {FIELD_SOURCES.map((src) => (
+            <SelectGroup key={src}>
+              <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">{src}</SelectLabel>
+              {TEMPLATE_FIELDS.filter((f) => f.source === src).map((f) => (
+                <SelectItem key={f.key} value={`field:${f.key}`} className="text-xs">
+                  {f.label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          ))}
+          <SelectGroup>
+            <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">Custom</SelectLabel>
+            <SelectItem value="formula" className="text-xs">Formula…</SelectItem>
+            <SelectItem value="blank" className="text-xs">Leave blank (filled by hand)</SelectItem>
+          </SelectGroup>
+        </SelectContent>
+      </SelectRoot>
       {mapping?.kind === "formula" && (
         <>
           <Input
