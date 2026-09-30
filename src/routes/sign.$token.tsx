@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CheckCircle2, ChevronDown, FileSignature, Loader2, Lock, PenLine, ShieldCheck } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, ChevronRight, FileSignature, Loader2, Lock, PenLine, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -151,6 +151,11 @@ function Section({
     enabled: open && !doc.locked,
     staleTime: Infinity,
   });
+  /*
+   * The signing steps appear only once the last page has been reached - the
+   * page where it is signed. Reading is the point of signing (Dani, 30 Sep 2026).
+   */
+  const [readToEnd, setReadToEnd] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [name, setName] = useState("");
   const [png, setPng] = useState("");
@@ -215,7 +220,7 @@ function Section({
           ) : (
             <>
               <div className="overflow-hidden rounded-xl border border-border bg-background">
-                <DocumentView pdf={pdf.data} pdfLoading={pdf.isLoading} />
+                <DocumentView pdf={pdf.data} pdfLoading={pdf.isLoading} onLastPage={() => setReadToEnd(true)} />
               </div>
               {doc.signed ? (
                 <p className="flex items-center gap-2 text-sm text-emerald-800">
@@ -224,6 +229,10 @@ function Section({
               ) : incomplete ? (
                 <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                   This document is not complete yet, so it cannot be signed. Please contact Brachtia.
+                </p>
+              ) : ready && !readToEnd ? (
+                <p className="flex items-center gap-2 rounded-xl border border-dashed border-border bg-card p-3 text-sm text-muted-foreground">
+                  <ChevronRight className="size-4 shrink-0" /> Read to the last page with the arrow above. You sign there.
                 </p>
               ) : ready ? (
                 <div className="space-y-5 rounded-xl border border-border bg-card p-4 sm:p-5">

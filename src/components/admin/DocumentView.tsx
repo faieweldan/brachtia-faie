@@ -18,10 +18,13 @@ export function DocumentView({
   pdf,
   pdfLoading,
   docxBase64,
+  onLastPage,
 }: {
   pdf: PdfResult;
   pdfLoading: boolean;
   docxBase64?: string | undefined;
+  /** once the reader has reached the last page */
+  onLastPage?: () => void;
 }) {
   /*
    * The link is made and thrown away by the same effect. Made in useMemo and
@@ -42,7 +45,7 @@ export function DocumentView({
     return () => URL.revokeObjectURL(made);
   }, [base64]);
 
-  if (url) return <PdfPageViewer url={url} />;
+  if (url) return <PdfPageViewer url={url} {...(onLastPage ? { onLastPage } : {})} />;
   if (pdfLoading && !pdf) {
     return <p className="py-24 text-center text-sm text-muted-foreground">Laying out the pages…</p>;
   }
