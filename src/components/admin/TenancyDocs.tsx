@@ -226,11 +226,6 @@ function AgreementBlock({
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Reset {agreement.agreementNo}?</DialogTitle>
-            <DialogDescription>
-              Its documents{agreement.kind === "initial" ? " and the first access card form" : ""} are removed, as if the pack was
-              never generated, so it can be generated again from the current templates. Nothing has been sent or signed yet.
-              The number {agreement.agreementNo} is not reused.
-            </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setUndoing(false)}>
