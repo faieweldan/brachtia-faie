@@ -187,11 +187,11 @@ function AgreementBlock({
     setBusy(true);
     try {
       await undoDocumentPack({ data: { agreementId: agreement.id } });
-      toast.success(`${agreement.agreementNo} undone - generate the pack again when ready`);
+      toast.success(`${agreement.agreementNo} reset - generate the pack again when ready`);
       setUndoing(false);
       onChanged();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not undo the pack");
+      toast.error(e instanceof Error ? e.message : "Could not reset the pack");
     } finally {
       setBusy(false);
     }
@@ -218,14 +218,14 @@ function AgreementBlock({
       </button>
       {untouched ? (
         <Button type="button" size="sm" variant="ghost" className="shrink-0 text-muted-foreground" onClick={() => setUndoing(true)}>
-          <Undo2 className="mr-1 size-3.5" /> Undo pack
+          <Undo2 className="mr-1 size-3.5" /> Reset
         </Button>
       ) : null}
       </div>
       <Dialog open={undoing} onOpenChange={(o) => !busy && setUndoing(o)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Undo {agreement.agreementNo}?</DialogTitle>
+            <DialogTitle>Reset {agreement.agreementNo}?</DialogTitle>
             <DialogDescription>
               Its documents{agreement.kind === "initial" ? " and the first access card form" : ""} are removed, as if the pack was
               never generated, so it can be generated again from the current templates. Nothing has been sent or signed yet.
@@ -237,7 +237,7 @@ function AgreementBlock({
               Keep it
             </Button>
             <Button type="button" variant="destructive" size="sm" disabled={busy} onClick={() => void undo()}>
-              {busy ? "Undoing…" : "Undo pack"}
+              {busy ? "Resetting…" : "Reset"}
             </Button>
           </div>
         </DialogContent>

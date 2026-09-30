@@ -422,14 +422,14 @@ export const undoDocumentPack = createServerFn({ method: "POST" })
     if (!agreement) throw new Error("This pack no longer exists.");
     const { data: docs } = await db.from("agreement_documents").select("status").eq("agreement_id", agreement.id);
     if ((docs ?? []).some((d: any) => d.status !== "generated")) {
-      throw new Error("A document in this pack has moved on (sent, signed or submitted), so it can no longer be undone.");
+      throw new Error("A document in this pack has moved on (sent, signed or submitted), so it can no longer be reset.");
     }
     // the first pack brought the first access card form with it; it goes too
     let cardIds: string[] = [];
     if (agreement.kind === "initial") {
       const { data: cards } = await db.from("access_card_forms").select("id, status").eq("resident_id", agreement.resident_id);
       if ((cards ?? []).some((c: any) => c.status !== "generated")) {
-        throw new Error("The access card form has moved on, so this pack can no longer be undone.");
+        throw new Error("The access card form has moved on, so this pack can no longer be reset.");
       }
       cardIds = (cards ?? []).map((c: any) => c.id);
     }
