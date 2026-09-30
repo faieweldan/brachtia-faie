@@ -462,6 +462,49 @@ export const previewTemplatePdf = createServerFn({ method: "POST" })
     return pdfResult(bytes);
   });
 
+/**
+ * A generated document as the PDF it prints as: the exact template version it
+ * was generated with, filled with the values saved at that moment. Later
+ * template changes and later edits to the resident never alter it - the same
+ * rule the old web view kept, now in the document's real layout (30 Sep 2026).
+ */
+export const previewGeneratedPdf = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ kind: z.enum(["agreement", "card"]), id: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const db = await admin();
+    let versionId: string | null = null;
+    let saved: Record<string, string> = {};
+    if (data.kind === "agreement") {
+      const { data: doc } = await db.from("agreement_documents").select("template_version_id, merge_values").eq("id", data.id).maybeSingle();
+      versionId = doc?.template_version_id ?? null;
+      saved = doc?.merge_values ?? {};
+    } else {
+      const { data: card } = await db.from("access_card_forms").select("resident_id, template_version_id").eq("id", data.id).maybeSingle();
+      versionId = card?.template_version_id ?? null;
+      // access card forms share the pack's reviewed values
+      const { data: ag } = card
+        ? await db.from("tenancy_agreements").select("id").eq("resident_id", card.resident_id).order("created_at", { ascending: false }).limit(1)
+        : { data: null };
+      if (ag?.length) {
+        const { data: d } = await db.from("agreement_documents").select("merge_values").eq("agreement_id", ag[0].id).limit(1);
+        saved = d?.[0]?.merge_values ?? {};
+      }
+    }
+    if (!versionId) return { ok: false as const, error: "No template was active for this document when it was generated." };
+    const { data: v } = await db.from("template_versions").select("content_html, file_path, boxes, version").eq("id", versionId).maybeSingle();
+    const bytes = v ? await loadDocx(db, v.file_path) : null;
+    if (!v || !bytes) return { ok: false as const, error: "This document's template has no file - it was generated from the web copy only." };
+    const values: Record<string, string | null> = {};
+    // a placeholder with no saved value stays showing, so the gap is seen
+    for (const k of await placeholdersOf(db, v)) values[k] = saved[k] ?? null;
+    if (isPdfPath(v.file_path)) {
+      const { fillPdf } = await import("@/lib/pdf-boxes");
+      return { ok: true as const, base64: toBase64(await fillPdf(bytes, boxesOf(v), values)) };
+    }
+    const { fillDocx } = await import("@/lib/docx-fill");
+    return pdfResult(await fillDocx(bytes, values));
+  });
+
 async function pdfResult(docx: Uint8Array) {
   const { docxToPdf, PdfPreviewUnavailable } = await import("@/lib/docx-to-pdf.server");
   try {

@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { MARK_CSS, Paper } from "@/components/admin/TemplatePaper";
 import { getDocumentView } from "@/lib/tenancy-docs.functions";
+import { previewGeneratedPdf } from "@/lib/templates.functions";
+import { DocumentView } from "@/components/admin/DocumentView";
 import { renderTemplate, type MappingResult } from "@/lib/template-fields";
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
@@ -24,6 +26,27 @@ export function DocumentViewDialog({
     queryFn: () => getDocumentView({ data: target! }),
     enabled: !!target,
   });
+  /*
+   * The document in its real layout - the Word file it was generated from,
+   * filled with the values saved then - the same pages as the pack's preview.
+   * The rebuilt web copy stays only where no PDF can be made (30 Sep 2026).
+   */
+  const pdf = useQuery({
+    queryKey: ["doc-pdf", target?.kind, target?.id],
+    queryFn: () => previewGeneratedPdf({ data: target! }),
+    enabled: !!target,
+    staleTime: Infinity,
+  });
+  const exact = pdf.data?.ok ? pdf.data.base64 : "";
+  function download() {
+    const bytes = Uint8Array.from(atob(exact), (c) => c.charCodeAt(0));
+    const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${title}.pdf`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  }
   const html = q.data?.html
     ? renderTemplate(
         q.data.html,
@@ -56,14 +79,20 @@ export function DocumentViewDialog({
               {title}
               {q.data?.version ? <span className="ml-2 text-xs font-normal text-muted-foreground">Template v{q.data.version}</span> : null}
             </span>
-            {html ? (
+            {exact ? (
+              <Button size="sm" variant="outline" onClick={download}>
+                <Printer className="mr-1 size-4" /> Download PDF
+              </Button>
+            ) : html && pdf.data ? (
               <Button size="sm" variant="outline" onClick={print}>
                 <Printer className="mr-1 size-4" /> Print / Save PDF
               </Button>
             ) : null}
           </DialogTitle>
         </DialogHeader>
-        {q.isLoading ? (
+        {exact || (pdf.isLoading && !pdf.data) ? (
+          <DocumentView pdf={pdf.data} pdfLoading={pdf.isLoading} />
+        ) : q.isLoading ? (
           <p className="py-16 text-center text-sm text-muted-foreground">Loading document…</p>
         ) : q.isError ? (
           <p className="py-16 text-center text-sm text-destructive">Could not load the document.</p>
@@ -72,9 +101,14 @@ export function DocumentViewDialog({
             No template was active for this document when it was generated, so there is nothing to show. Activate one in Settings → Templates, then generate a new version.
           </p>
         ) : (
+          <>
+          {pdf.data && !pdf.data.ok ? (
+            <p className="text-xs text-amber-700">Approximate layout — {pdf.data.error}</p>
+          ) : null}
           <Paper>
             <div className={MARK_CSS} dangerouslySetInnerHTML={{ __html: html }} />
           </Paper>
+          </>
         )}
       </DialogContent>
     </Dialog>
