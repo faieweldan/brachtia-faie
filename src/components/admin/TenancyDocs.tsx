@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Plus, Undo2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Copy, Plus, Undo2 } from "lucide-react";
+import { getOrCreateProfileLink } from "@/lib/profile-link.functions";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -505,6 +506,11 @@ export function TenancyDocs({
       <Panel
         title="Tenancy Agreements"
         description="Legal agreement records and revisions. Earlier versions are always kept."
+        action={
+          <Button type="button" size="sm" variant="outline" onClick={() => void copySigningMessage(resident.id)}>
+            <Copy className="mr-1 size-3.5" /> Copy signing message
+          </Button>
+        }
       >
         <div className="space-y-3">
           {(data.agreements as TenancyAgreement[]).map((a) => (
@@ -545,3 +551,31 @@ export function currentMergeValues(
 }
 
 export { money };
+
+/**
+ * The message a resident is sent when their documents are ready, with their
+ * signing link in it - Dani's wording, 30 Sep 2026. Copied to paste into
+ * WhatsApp until emails are sent by the app; *bold* is WhatsApp's bold.
+ */
+async function copySigningMessage(residentId: string) {
+  try {
+    const { token } = await getOrCreateProfileLink({ data: { residentId } });
+    const link = `${window.location.origin}/sign/${token}`;
+    const text = [
+      "Hi! Your Tenancy Agreement (TA) is now ready for your review. 😊",
+      "",
+      "Please take some time to read through and understand the agreement. Once everything is in order, you may proceed to sign it here:",
+      link,
+      "",
+      "If you have any questions or notice anything that needs clarification, feel free to contact us before signing.",
+      "",
+      "Please note that the *Inventory section at the end of the agreement should only be completed after you have checked in*, so you can verify the actual condition and items in the unit. This section will remain open for submission for *48 hours after your check-in*.",
+      "",
+      "Thank you!",
+    ].join("\n");
+    await navigator.clipboard.writeText(text);
+    toast.success("Message copied - paste it into WhatsApp");
+  } catch (e) {
+    toast.error(e instanceof Error ? e.message : "Could not copy the message");
+  }
+}
