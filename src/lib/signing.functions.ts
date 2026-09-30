@@ -54,8 +54,14 @@ async function residentFor(sb: any, token: string) {
   return { resident, linkId: found.link.id as string };
 }
 
-/** The documents this resident has to sign: the latest pack, and its access card form. */
+/**
+ * The documents this resident has to sign: from the latest pack and its access
+ * card form, only those whose template has a place for their signature
+ * ({{Resident_signature}}). A form Brachtia fills and hands in - the access
+ * card form, as it is now - is not theirs to sign (Dani, 30 Sep 2026).
+ */
 async function documentsOf(sb: any, residentId: string): Promise<SigningDoc[]> {
+  const { asksResidentSignature } = await import("@/lib/templates.functions");
   const out: SigningDoc[] = [];
   const { data: ag } = await sb
     .from("tenancy_agreements")
@@ -64,13 +70,14 @@ async function documentsOf(sb: any, residentId: string): Promise<SigningDoc[]> {
     .order("created_at", { ascending: false })
     .limit(1);
   if (ag?.length) {
-    const { data: rows } = await sb.from("agreement_documents").select("id, doc_type, version, status").eq("agreement_id", ag[0].id);
+    const { data: rows } = await sb.from("agreement_documents").select("id, doc_type, version, status, template_version_id").eq("agreement_id", ag[0].id);
     // the latest version of each document
     const latest = new Map<string, any>();
     for (const r of (rows ?? []) as any[]) if (!latest.has(r.doc_type) || latest.get(r.doc_type).version < r.version) latest.set(r.doc_type, r);
     for (const t of ORDER) {
       const r = latest.get(t);
-      if (!r) continue;
+      // already signed stays listed; otherwise only if it asks for their signature
+      if (!r || (!SIGNED.has(r.status) && !(await asksResidentSignature(sb, r.template_version_id)))) continue;
       out.push({
         kind: "agreement",
         id: r.id,
@@ -83,11 +90,11 @@ async function documentsOf(sb: any, residentId: string): Promise<SigningDoc[]> {
   }
   const { data: cards } = await sb
     .from("access_card_forms")
-    .select("id, status, generated_pdf_path")
+    .select("id, status, generated_pdf_path, template_version_id")
     .eq("resident_id", residentId)
     .order("created_at", { ascending: false })
     .limit(1);
-  if (cards?.length) out.push({ kind: "card", id: cards[0].id, label: "Access Card Form", signed: !!cards[0].generated_pdf_path, locked: "" });
+  if (cards?.length && (cards[0].generated_pdf_path || (await asksResidentSignature(sb, cards[0].template_version_id)))) out.push({ kind: "card", id: cards[0].id, label: "Access Card Form", signed: !!cards[0].generated_pdf_path, locked: "" });
   return out;
 }
 

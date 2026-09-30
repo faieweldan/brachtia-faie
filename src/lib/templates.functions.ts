@@ -584,6 +584,18 @@ export async function renderGeneratedPdf(
   return r.ok ? { ok: true, bytes: Uint8Array.from(atob(r.base64), (c) => c.charCodeAt(0)), gaps } : r;
 }
 
+/**
+ * Whether a template version asks the resident to sign: it has a
+ * {{Resident_signature}} placeholder, or a box of that name on a PDF form.
+ * Only those documents go on the resident's signing page (Dani, 30 Sep 2026).
+ */
+export async function asksResidentSignature(db: any, versionId: string | null | undefined): Promise<boolean> {
+  if (!versionId) return false;
+  const { data: v } = await db.from("template_versions").select("content_html, file_path, boxes").eq("id", versionId).maybeSingle();
+  if (!v) return false;
+  return (await placeholdersOf(db, v)).some((k) => /^resident_signature$/i.test(k.trim()));
+}
+
 async function pdfResult(docx: Uint8Array) {
   const { docxToPdf, PdfPreviewUnavailable } = await import("@/lib/docx-to-pdf.server");
   try {
