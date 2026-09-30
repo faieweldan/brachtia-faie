@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Maximize2, Minus, Plus, Trash2 } from "lucide-react";
 
 import { Choice } from "@/components/admin/Choice";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,13 @@ export function PdfBoxEditor({
   const frame = useRef<HTMLDivElement>(null);
   const [pdf, setPdf] = useState<LoadedPdf | null>(null);
   const [page, setPage] = useState(0);
+  /*
+   * 1 = the page fits the panel's width. Zooming in makes small lines and tick
+   * boxes easy to draw over without the browser's own zoom (30 Sep 2026);
+   * boxes are kept as fractions of the page, so they stay put at any zoom.
+   */
+  const [zoom, setZoom] = useState(1);
+  const ZOOMS = [1, 1.25, 1.5, 2, 2.5, 3];
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -79,7 +86,7 @@ export function PdfBoxEditor({
     let cancelled = false;
     void pdf.getPage(page + 1).then(async (p) => {
       const base = p.getViewport({ scale: 1 });
-      const scale = Math.max(0.5, (frame.current?.clientWidth ?? base.width) / base.width);
+      const scale = Math.max(0.5, ((frame.current?.clientWidth ?? base.width) - 2) / base.width) * zoom;
       const vp = p.getViewport({ scale });
       const c = canvas.current;
       if (!c || cancelled) return;
@@ -96,7 +103,7 @@ export function PdfBoxEditor({
     return () => {
       cancelled = true;
     };
-  }, [pdf, page]);
+  }, [pdf, page, zoom]);
 
   const at = (e: React.PointerEvent) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -179,7 +186,7 @@ export function PdfBoxEditor({
         </div>
       )}
 
-      <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground">
         <Button type="button" size="icon" variant="ghost" disabled={page <= 0} onClick={() => setPage(page - 1)}>
           <ChevronLeft className="size-4" />
         </Button>
@@ -196,11 +203,37 @@ export function PdfBoxEditor({
         <Button type="button" size="icon" variant="ghost" disabled={page >= total - 1} onClick={() => setPage(page + 1)}>
           <ChevronRight className="size-4" />
         </Button>
+        <span className="mx-1 h-5 w-px bg-border" />
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          title="Zoom out"
+          disabled={zoom <= ZOOMS[0]!}
+          onClick={() => setZoom(ZOOMS[Math.max(0, ZOOMS.indexOf(zoom) - 1)]!)}
+        >
+          <Minus className="size-4" />
+        </Button>
+        <span className="w-10 text-center tabular-nums">{Math.round(zoom * 100)}%</span>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          title="Zoom in"
+          disabled={zoom >= ZOOMS[ZOOMS.length - 1]!}
+          onClick={() => setZoom(ZOOMS[Math.min(ZOOMS.length - 1, ZOOMS.indexOf(zoom) + 1)]!)}
+        >
+          <Plus className="size-4" />
+        </Button>
+        <Button type="button" size="sm" variant="ghost" disabled={zoom === 1} onClick={() => setZoom(1)}>
+          <Maximize2 className="mr-1 size-3.5" /> Fit width
+        </Button>
       </div>
 
-      <div ref={frame} className="overflow-hidden rounded-md border border-border bg-muted">
+      {/* zoomed in, the page scrolls inside this frame both ways */}
+      <div ref={frame} className="max-h-[75vh] overflow-auto rounded-md border border-border bg-muted">
         {error ? <p className="py-20 text-center text-sm text-destructive">{error}</p> : null}
-        <div className="relative mx-auto select-none" style={{ width: size.w || undefined, height: size.h || undefined }}>
+        <div className="relative select-none" style={{ width: size.w || undefined, height: size.h || undefined, margin: zoom === 1 ? "0 auto" : undefined }}>
           <canvas ref={canvas} className="block bg-background" />
           <div
             className="absolute inset-0 cursor-crosshair touch-none"
