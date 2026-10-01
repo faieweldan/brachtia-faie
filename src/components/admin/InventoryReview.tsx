@@ -155,7 +155,7 @@ function InventoryReviewDialog({ docId, onClose, onChanged }: { docId: string; o
               <div className="space-y-3 py-8 text-center text-sm text-muted-foreground">
                 <p>
                   {tab === "in"
-                    ? "The resident has not sent in the move-in check yet. It opens on their signing link on their check-in day."
+                    ? "The resident has not sent in the move-in check yet. It is on their signing link, after their documents."
                     : file
                       ? "The move-out check is open on the resident's signing link. It appears here once they send it in."
                       : "Not opened yet. Open it when the resident is about to move out - it goes on their signing link."}
