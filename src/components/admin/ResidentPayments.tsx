@@ -614,15 +614,18 @@ export function InvoiceDetail({ invoice, onPay }: { invoice: BillingInvoice; onP
             const receipt = invoice.receipts.find((r) => r.paymentId === p.id);
             return (
               <li key={p.id} className="flex items-center justify-between px-4 py-2 text-sm">
-                <span className="text-muted-foreground">
-                  {p.description ? `${p.description} · ` : ""}
-                  {fmtDate(p.paidOn)}
-                  {p.method ? ` · ${p.method}` : ""}
-                  {p.reference ? ` · ${p.reference}` : ""}
-                  {receipt ? ` · ${receipt.number}` : ""}
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground">
+                  <span>
+                    {p.description ? `${p.description} · ` : ""}
+                    {fmtDate(p.paidOn)}
+                    {p.method ? ` · ${p.method}` : ""}
+                    {p.reference ? ` · ${p.reference}` : ""}
+                    {receipt ? ` · ${receipt.number}` : ""}
+                  </span>
+                  {/* who recorded it, beside the receipt it made (Dani, 1 Oct 2026) */}
+                  <StaffTag name={p.recordedBy} />
                 </span>
                 <span className="flex items-center gap-3">
-                  <StaffTag name={p.recordedBy} />
                   <ProofLink path={p.proofPath} />
                   {p.proofPath ? <ReplaceProofButton paymentId={p.id} oldPath={p.proofPath} /> : null}
                   <span className="tabular-nums text-emerald-700">{money(p.amount)}</span>
