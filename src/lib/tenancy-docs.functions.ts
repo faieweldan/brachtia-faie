@@ -54,7 +54,8 @@ async function versions(db: any, residentId: string): Promise<Record<string, str
 async function requireFiles(db: any, residentId: string, types: string[]) {
   const { activeVersions, residenceIdOf } = await import("@/lib/template-versions.server");
   const byKey = await activeVersions(db, await residenceIdOf(db, residentId));
-  const missing = types.filter((t) => !byKey[TEMPLATE_KEY[t] ?? t]?.hasFile).map((t) => DOC_LABEL[t] ?? t);
+  // Schedule C is a checklist the resident answers on their signing page - no file (1 Oct 2026)
+  const missing = types.filter((t) => t !== "sched_c" && !byKey[TEMPLATE_KEY[t] ?? t]?.hasFile).map((t) => DOC_LABEL[t] ?? t);
   if (missing.length) throw new Error(`No file uploaded yet for: ${missing.join(", ")}. Upload and activate it in Settings → Templates first.`);
 }
 

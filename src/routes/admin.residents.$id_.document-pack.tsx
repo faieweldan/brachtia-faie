@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, ClipboardCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -117,7 +117,7 @@ function DocumentPackPage() {
    * resident's record (Dani, 30 Sep 2026). The server refuses it too.
    */
   const noFile = pack.data
-    ? menu.flatMap((g) => g.items).filter((i) => !pack.data?.[TEMPLATE_KEY[i.key]!]?.hasFile)
+    ? menu.flatMap((g) => g.items).filter((i) => i.key !== "sched_c" && !pack.data?.[TEMPLATE_KEY[i.key]!]?.hasFile)
     : [];
   // the open document was taken out of use: open the first one still in use
   useEffect(() => {
@@ -291,6 +291,17 @@ function DocumentPackPage() {
             <p className="py-24 text-center text-sm text-muted-foreground">Loading template…</p>
           ) : pack.isError ? (
             <p className="py-24 text-center text-sm text-destructive">Could not load the template.</p>
+          ) : selected === "sched_c" ? (
+            // a checklist the resident answers - nothing to fill or upload (1 Oct 2026)
+            <div className="mx-auto max-w-md space-y-3 py-16 text-center">
+              <ClipboardCheck className="mx-auto size-8 text-brand" />
+              <p className="text-sm font-semibold text-brand-deep">Filled in by the resident</p>
+              <p className="text-sm text-muted-foreground">
+                Schedule C is a checklist on the resident&rsquo;s signing page. They tick each item Present, Defect or Not
+                provided in the room itself, from their check-in day until 48 hours after check-in, then sign. Nothing to
+                upload here.
+              </p>
+            </div>
           ) : !tpl ? (
             <div className="py-24 text-center text-sm text-muted-foreground">
               <p>No active template for this document yet.</p>
