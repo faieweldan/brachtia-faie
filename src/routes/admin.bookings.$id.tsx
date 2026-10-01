@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -98,6 +98,13 @@ import {
 } from "@/lib/admin.functions";
 import { proofOwner, refreshMoney, releaseBookingFor } from "@/lib/billing-client";
 import { RecordPaymentDialog, type PayableInvoice } from "@/components/admin/RecordPaymentDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { GenderMark } from "@/components/admin/GenderMark";
 import { SlaCountdown } from "@/components/admin/SlaCountdown";
 
@@ -194,6 +201,10 @@ function BookingDetail() {
   // what "Other" actually was - the reason is read months later by someone else
   const [otherReason, setOtherReason] = useState("");
   const [roomSearch, setRoomSearch] = useState("");
+  // who is working on this booking right now - asked on every entry, so the
+  // activity log credits the person who actually did each step, not whoever
+  // happened to be assigned first (Dani, 1 Oct 2026)
+  const [whoOpen, setWhoOpen] = useState(false);
   const [showAllRooms, setShowAllRooms] = useState(false);
   const [openUnitId, setOpenUnitId] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
@@ -202,6 +213,20 @@ function BookingDetail() {
     queryKey: ["admin", "enquiry", id],
     queryFn: () => getEnquiry({ data: { id } }),
   });
+
+  /*
+   * Ask who is here each time a booking is opened. A booking passes through
+   * several hands - one person reserves the room, another issues the invoice -
+   * and whoever opens it now should own the steps they take, so the log names
+   * the right person. Asked once per booking opened, not on every re-render.
+   */
+  const promptedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!row || row.status === "closed") return;
+    if (promptedFor.current === row.id) return;
+    promptedFor.current = row.id;
+    setWhoOpen(true);
+  }, [row]);
 
   /*
    * Only fetched once they say "Duplicate" - it reads every open booking, and
@@ -2079,6 +2104,41 @@ function BookingDetail() {
             onClose={() => setPaying(null)}
             onRecorded={() => goTo("payment")}
           />
+
+          {/*
+            Asked on every entry: who is working on this booking now. The pick
+            becomes the booking's staff, so the steps taken next are logged
+            under the person who actually did them (Dani, 1 Oct 2026).
+          */}
+          <Dialog open={whoOpen} onOpenChange={setWhoOpen}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Who&rsquo;s working on this booking?</DialogTitle>
+                <DialogDescription>
+                  Your name is recorded against every step you take now, so the activity log stays accurate.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-2">
+                {STAFF.map((s) => (
+                  <Button
+                    key={s}
+                    type="button"
+                    variant={row.assigned_staff === s ? "default" : "outline"}
+                    className="justify-start"
+                    onClick={() => {
+                      if (row.assigned_staff !== s) mutate.mutate({ assignedStaff: s });
+                      setWhoOpen(false);
+                    }}
+                  >
+                    {s}
+                    {row.assigned_staff === s ? (
+                      <span className="ml-auto text-xs opacity-80">last on this booking</span>
+                    ) : null}
+                  </Button>
+                ))}
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {/*
             An invoice with money still owing on it: the message asking for it,
