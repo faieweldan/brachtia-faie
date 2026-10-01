@@ -30,6 +30,7 @@ import { fmtDate, money } from "@/lib/ops-store";
 import { getResidentBilling, type BillingInvoice } from "@/lib/resident-billing.functions";
 import {
   ProofLink,
+  ReplaceProofButton,
   RecordPaymentDialog,
   type PayableInvoice,
 } from "@/components/admin/RecordPaymentDialog";
@@ -621,6 +622,7 @@ export function InvoiceDetail({ invoice, onPay }: { invoice: BillingInvoice; onP
                 </span>
                 <span className="flex items-center gap-3">
                   <ProofLink path={p.proofPath} />
+                  {p.proofPath ? <ReplaceProofButton paymentId={p.id} oldPath={p.proofPath} /> : null}
                   <span className="tabular-nums text-emerald-700">{money(p.amount)}</span>
                   {receipt ? (
                     <PdfPreviewButton

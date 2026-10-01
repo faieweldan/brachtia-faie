@@ -726,3 +726,63 @@ export const getInvoiceBilling = createServerFn({ method: "GET" })
       await residentCodeFor(supabase, String(raw.resident_id ?? "")),
     );
   });
+
+/* ---------------- replacing a wrong payment proof (1 Oct 2026) ---------------- */
+
+/*
+ * A proof attached by mistake - the wrong slip, another student's - is taken
+ * off the payment, but never deleted: accounts must be able to see what was
+ * there, when it changed, and why. Each change is kept in
+ * proof-history/<payment id>.json beside the proofs, and the new proof is
+ * required in the same step, so a payment is never left without one.
+ */
+type ProofChange = { at: string; reason: string; removedPath: string; newPath: string };
+const historyPath = (paymentId: string) => `proof-history/${paymentId}.json`;
+
+async function readProofHistory(supabase: any, paymentId: string): Promise<ProofChange[]> {
+  const { data } = await supabase.storage.from(DOC_BUCKET).download(historyPath(paymentId));
+  if (!data) return [];
+  try {
+    return JSON.parse(await data.text()) as ProofChange[];
+  } catch {
+    return [];
+  }
+}
+
+export const replacePaymentProof = createServerFn({ method: "POST" })
+  .inputValidator((data: { paymentId: string; reason: string; proofPath: string }) => data)
+  .handler(async ({ data }) => {
+    const { requireAdminSession } = await import("@/lib/admin-session.server");
+    await requireAdminSession();
+    const reason = String(data.reason ?? "").trim();
+    if (reason.length < 3) throw new Error("Say why the proof is being replaced");
+    if (!data.proofPath) throw new Error("Attach the correct proof");
+    const supabase = await admin();
+    const { data: payment, error } = await supabase.from("payments").select("id, proof_path").eq("id", data.paymentId).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!payment) throw new Error("Payment not found");
+    if (payment.proof_path === data.proofPath) throw new Error("That is the same file");
+
+    const history = await readProofHistory(supabase, data.paymentId);
+    history.push({ at: new Date().toISOString(), reason: reason.slice(0, 500), removedPath: String(payment.proof_path ?? ""), newPath: data.proofPath });
+    // the history first: if it cannot be kept, the proof is not changed
+    const { error: hErr } = await supabase.storage
+      .from(DOC_BUCKET)
+      .upload(historyPath(data.paymentId), new Blob([JSON.stringify(history, null, 2)], { type: "application/json" }), {
+        upsert: true,
+        contentType: "application/json",
+      });
+    if (hErr) throw new Error(`Could not keep the history: ${hErr.message}`);
+    const { error: uErr } = await supabase.from("payments").update({ proof_path: data.proofPath } as any).eq("id", data.paymentId);
+    if (uErr) throw new Error(uErr.message);
+    return { ok: true as const, changes: history.length };
+  });
+
+/** Every proof change on a payment, oldest first - for accounts. */
+export const paymentProofHistory = createServerFn({ method: "GET" })
+  .inputValidator((data: { paymentId: string }) => data)
+  .handler(async ({ data }) => {
+    const { requireAdminSession } = await import("@/lib/admin-session.server");
+    await requireAdminSession();
+    return readProofHistory(await admin(), data.paymentId);
+  });

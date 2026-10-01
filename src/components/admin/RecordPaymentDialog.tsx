@@ -18,7 +18,8 @@ import { recordPayment } from "@/lib/admin.functions";
 import { afterPaymentRecorded, uploadProof } from "@/lib/billing-client";
 import { formatRM } from "@/data/properties";
 import { PAY_METHODS } from "@/lib/ops-store";
-import { paymentProofUrl } from "@/lib/resident-billing.functions";
+import { paymentProofHistory, paymentProofUrl, replacePaymentProof } from "@/lib/resident-billing.functions";
+import { Textarea } from "@/components/ui/textarea";
 
 export type PayableInvoice = {
   id: string;
@@ -229,5 +230,119 @@ export function ProofLink({ path }: { path: string }) {
     >
       Proof
     </button>
+  );
+}
+
+/**
+ * Replace a proof attached by mistake (Dani, 1 Oct 2026). A reason is asked
+ * for, and the right file is attached in the same step - so the payment is
+ * never left without a proof. The wrong file is kept, with the reason and the
+ * time, for accounts; the receipt picks up the new proof by itself.
+ */
+export function ReplaceProofButton({ paymentId, oldPath }: { paymentId: string; oldPath: string }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [proof, setProof] = useState<{ name: string; path: string } | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [history, setHistory] = useState<{ at: string; reason: string }[] | null>(null);
+
+  async function openBox() {
+    setOpen(true);
+    setReason("");
+    setProof(null);
+    setHistory(null);
+    try {
+      setHistory(await paymentProofHistory({ data: { paymentId } }));
+    } catch {
+      setHistory([]);
+    }
+  }
+
+  async function upload(file: File) {
+    setUploading(true);
+    try {
+      // the same folder the wrong one was filed in
+      setProof({ name: file.name, path: await uploadProof(file, oldPath.split("/")[0] || "payments") });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not upload the proof");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function save() {
+    if (!proof) return;
+    setSaving(true);
+    try {
+      await replacePaymentProof({ data: { paymentId, reason, proofPath: proof.path } });
+      await queryClient.invalidateQueries();
+      toast.success("Proof replaced", { description: "The old one is kept with your reason." });
+      setOpen(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not replace the proof");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => void openBox()}
+        className="text-xs font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+      >
+        Replace
+      </button>
+      <Dialog open={open} onOpenChange={(o) => !saving && setOpen(o)}>
+        <DialogContent className="admin-ui max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-brand-deep">Replace payment proof</DialogTitle>
+            <DialogDescription>The current proof is taken off this payment and kept, with your reason, for accounts.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Why is it being replaced?</p>
+              <Textarea
+                rows={2}
+                value={reason}
+                onChange={(e) => setReason(e.target.value.slice(0, 500))}
+                placeholder="e.g. Uploaded another student's bank slip by mistake"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">The correct proof</p>
+              <Input
+                type="file"
+                accept="image/*,application/pdf"
+                disabled={uploading || saving}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void upload(file);
+                }}
+              />
+              <p className="text-xs text-muted-foreground">{uploading ? "Uploading…" : proof ? `Attached: ${proof.name}` : "Required - a payment always keeps a proof"}</p>
+            </div>
+            {history?.length ? (
+              <div className="rounded-lg border border-border bg-muted/40 p-2.5 text-xs">
+                <p className="font-medium text-foreground">Replaced before</p>
+                <ul className="mt-1 space-y-0.5 text-muted-foreground">
+                  {history.map((h) => (
+                    <li key={h.at}>
+                      {new Date(h.at).toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" })} — {h.reason}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+          <Button onClick={() => void save()} disabled={saving || uploading || !proof || reason.trim().length < 3}>
+            {saving ? "Replacing…" : "Replace proof"}
+          </Button>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
