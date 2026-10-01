@@ -1,18 +1,19 @@
 import { describe, expect, test } from "bun:test";
 
-import { ALL_ITEMS, emptyRecord, inventoryProblems, inventoryWindow } from "../src/lib/inventory";
+import { ALL_ITEMS, emptyRecord, inventoryDefects, inventoryProblems, inventoryWindow } from "../src/lib/inventory";
 
 const allPresent = () => {
   const r = emptyRecord();
   for (const i of ALL_ITEMS) r.answers[i.id] = { status: "present", remark: "" };
+  r.meters.keys = "2";
   return r;
 };
 
-describe("Schedule C - what stops signing", () => {
-  test("nothing answered: every item is still to check", () => {
-    expect(inventoryProblems(emptyRecord())).toEqual([`${ALL_ITEMS.length} items not checked yet`]);
+describe("Schedule C - what stops submitting", () => {
+  test("nothing answered: every item, and the keys", () => {
+    expect(inventoryProblems(emptyRecord())).toEqual([`${ALL_ITEMS.length} items not checked yet`, "number of keys not filled in"]);
   });
-  test("every item present: ready", () => {
+  test("every item present and the keys counted: ready", () => {
     expect(inventoryProblems(allPresent())).toEqual([]);
   });
   test("a defect needs its description", () => {
@@ -22,10 +23,23 @@ describe("Schedule C - what stops signing", () => {
     r.answers["room-aircon"] = { status: "defect", remark: "Remote missing back cover" };
     expect(inventoryProblems(r)).toEqual([]);
   });
-  test("an Other line is optional, but once named it is checked", () => {
+  test("an added item, once named, is checked like the rest", () => {
     const r = allPresent();
-    r.others[0] = { name: "Iron", status: "", remark: "" };
-    expect(inventoryProblems(r)).toEqual(['1 "Other" item not checked']);
+    r.extras.push({ id: "x1", areaId: "room", name: "Iron", qty: "1", status: "", remark: "" });
+    expect(inventoryProblems(r)).toEqual(["1 added item not checked"]);
+    r.extras[0]!.status = "defect";
+    expect(inventoryProblems(r)).toEqual(["1 defect not described"]);
+  });
+  test("an added row left without a name is ignored", () => {
+    const r = allPresent();
+    r.extras.push({ id: "x2", areaId: "room", name: " ", qty: "1", status: "", remark: "" });
+    expect(inventoryProblems(r)).toEqual([]);
+  });
+  test("the defects, in list order, for admin to review", () => {
+    const r = allPresent();
+    r.answers["room-aircon"] = { status: "defect", remark: "Drips" };
+    r.extras.push({ id: "x3", areaId: "foyer", name: "Shoe rack", qty: "1", status: "defect", remark: "Wobbly" });
+    expect(inventoryDefects(r).map((d) => d.name)).toEqual(["Shoe rack", "Air Conditioner + Remote"]);
   });
 });
 

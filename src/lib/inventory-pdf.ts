@@ -8,9 +8,10 @@
  */
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 
-import { INVENTORY, STATUS_LABEL, type InventoryRecord } from "@/lib/inventory";
+import { INVENTORY, MODE_LABEL, STATUS_LABEL, type InventoryMode, type InventoryRecord } from "@/lib/inventory";
 
 export type InventoryPdfInput = {
+  mode: InventoryMode;
   record: InventoryRecord;
   header: {
     agreementNo: string;
@@ -81,6 +82,7 @@ export async function inventoryPdf(input: InventoryPdfInput): Promise<Uint8Array
 
   // title and the record's particulars
   para("SCHEDULE C – INVENTORY & CONDITION RECORD", 16, bold, HEAD);
+  para(MODE_LABEL[input.mode].toUpperCase(), 10, bold, MUTED);
   y -= 6;
   const h = input.header;
   para(`This Schedule C forms part of the Tenancy Agreement bearing Agreement No. ${h.agreementNo || "—"}, dated ${h.agreementDate || "—"}.`);
@@ -139,13 +141,27 @@ export async function inventoryPdf(input: InventoryPdfInput): Promise<Uint8Array
     tableHead();
     for (const it of area.items) {
       const a = r.answers[it.id];
-      row(it.name, it.qty, a?.status ? STATUS_LABEL[a.status] : "", a?.remark ?? "");
+      // what the resident counted, when it differs from the list
+      row(it.name, a?.qty?.trim() || it.qty, a?.status ? STATUS_LABEL[a.status] : "", a?.remark ?? "");
     }
-    if (area.id === "other") {
-      for (const o of r.others.filter((o) => o.name.trim())) {
-        row(`Other: ${o.name.trim()}`, "", o.status ? STATUS_LABEL[o.status] : "", o.remark);
-      }
+    for (const e of r.extras.filter((e) => e.areaId === area.id && e.name.trim())) {
+      row(`${e.name.trim()} (added)`, e.qty, e.status ? STATUS_LABEL[e.status] : "", e.remark);
     }
+  }
+
+  y -= 10;
+  room(60);
+  text("METERS AND KEYS", M, 11, bold, HEAD);
+  y -= 16;
+  for (const [k, v] of [
+    ["Number of keys", r.meters.keys],
+    ["Water meter reading", r.meters.water],
+    ["Electric meter reading", r.meters.electric],
+  ] as const) {
+    room(14);
+    text(`${k}:`, M, 10, bold);
+    text(v.trim() || "—", M + 140, 10);
+    y -= 14;
   }
 
   y -= 10;

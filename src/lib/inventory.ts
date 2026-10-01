@@ -123,45 +123,69 @@ export const INVENTORY: InventoryArea[] = [
   },
 ];
 
-/** "Other: ____" lines - an item the list does not name, written in by the resident. */
-export const OTHER_LINES = 3;
-
 export const STATUS_LABEL: Record<InventoryStatus, string> = {
   present: "Present",
   defect: "Defect",
   not_provided: "Not provided",
 };
 
-export type InventoryAnswer = { status: InventoryStatus | ""; remark: string };
-export type OtherLine = { name: string; status: InventoryStatus | ""; remark: string };
+/** One answered item. `qty` is what the resident counted, when it differs. */
+export type InventoryAnswer = { status: InventoryStatus | ""; remark: string; qty?: string };
+/** An item the list did not name, added by the resident in that area. */
+export type ExtraItem = { id: string; areaId: string; name: string; qty: string; status: InventoryStatus | ""; remark: string };
+export type Meters = { keys: string; water: string; electric: string };
+
 export type InventoryRecord = {
   answers: Record<string, InventoryAnswer>;
-  others: OtherLine[];
+  extras: ExtraItem[];
+  meters: Meters;
   generalRemarks: string;
 };
 
+/** Moving in is the Schedule C record; moving out is checked against it. */
+export type InventoryMode = "in" | "out";
+export const MODE_LABEL: Record<InventoryMode, string> = { in: "Move-in check", out: "Move-out check" };
+
 export const emptyRecord = (): InventoryRecord => ({
   answers: {},
-  others: Array.from({ length: OTHER_LINES }, () => ({ name: "", status: "", remark: "" })),
+  extras: [],
+  meters: { keys: "", water: "", electric: "" },
   generalRemarks: "",
 });
 
 export const ALL_ITEMS = INVENTORY.flatMap((a) => a.items);
 
 /**
- * What still stops the record being signed: every item answered, and every
- * defect described - the form asks for the defect to be "described under
- * Remarks". An "Other" line is optional, but once named it is answered too.
+ * What still stops the record being submitted: every item answered, every
+ * defect described (the form: "described under Remarks"), every added item
+ * named and answered, and the keys counted - a key not counted at move-in is
+ * a deduction nobody can make at move-out.
  */
 export function inventoryProblems(r: InventoryRecord): string[] {
   const out: string[] = [];
   const unanswered = ALL_ITEMS.filter((i) => !r.answers[i.id]?.status).length;
   if (unanswered) out.push(`${unanswered} item${unanswered === 1 ? "" : "s"} not checked yet`);
-  const undescribed = ALL_ITEMS.filter((i) => r.answers[i.id]?.status === "defect" && !r.answers[i.id]!.remark.trim()).length;
-  const otherUndescribed = r.others.filter((o) => o.name.trim() && o.status === "defect" && !o.remark.trim()).length;
-  if (undescribed + otherUndescribed) out.push(`${undescribed + otherUndescribed} defect${undescribed + otherUndescribed === 1 ? "" : "s"} not described`);
-  const otherNoStatus = r.others.filter((o) => o.name.trim() && !o.status).length;
-  if (otherNoStatus) out.push(`${otherNoStatus} "Other" item${otherNoStatus === 1 ? "" : "s"} not checked`);
+  const extras = r.extras.filter((e) => e.name.trim());
+  const extraOpen = extras.filter((e) => !e.status).length;
+  if (extraOpen) out.push(`${extraOpen} added item${extraOpen === 1 ? "" : "s"} not checked`);
+  const undescribed =
+    ALL_ITEMS.filter((i) => r.answers[i.id]?.status === "defect" && !r.answers[i.id]!.remark.trim()).length +
+    extras.filter((e) => e.status === "defect" && !e.remark.trim()).length;
+  if (undescribed) out.push(`${undescribed} defect${undescribed === 1 ? "" : "s"} not described`);
+  if (!r.meters.keys.trim()) out.push("number of keys not filled in");
+  return out;
+}
+
+/** Every defect in a record, in list order - what admin reviews first. */
+export function inventoryDefects(r: InventoryRecord): { area: string; name: string; remark: string }[] {
+  const out: { area: string; name: string; remark: string }[] = [];
+  for (const area of INVENTORY) {
+    for (const it of area.items) {
+      const a = r.answers[it.id];
+      if (a?.status === "defect") out.push({ area: area.name, name: it.name, remark: a.remark });
+    }
+    for (const e of r.extras) if (e.areaId === area.id && e.name.trim() && e.status === "defect") out.push({ area: area.name, name: e.name, remark: e.remark });
+  }
   return out;
 }
 
