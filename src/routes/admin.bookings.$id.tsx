@@ -223,6 +223,9 @@ function BookingDetail() {
   const promptedFor = useRef<string | null>(null);
   useEffect(() => {
     if (!row || row.status === "closed") return;
+    // a booking that already became a resident is finished - nothing left to
+    // log on it - so there is no one to credit and no reason to ask
+    if (row.resident_id) return;
     if (promptedFor.current === row.id) return;
     promptedFor.current = row.id;
     setWhoOpen(true);
