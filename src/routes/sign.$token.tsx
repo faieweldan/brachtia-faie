@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DocumentView } from "@/components/admin/DocumentView";
 import { SignaturePad } from "@/components/site/SignaturePad";
-import { getSigningPack, getSigningPdf, signDocument, type SigningDoc } from "@/lib/signing.functions";
+import { getSigningPack, getSigningPdf, signDocument, signInventory, type SigningDoc } from "@/lib/signing.functions";
+import { InventoryChecklist } from "@/components/site/InventoryChecklist";
+import { inventoryProblems, type InventoryRecord } from "@/lib/inventory";
 
 export const Route = createFileRoute("/sign/$token")({
   head: () => ({ meta: [{ title: "Sign your documents — Brachtia Homes" }, { name: "robots", content: "noindex" }] }),
@@ -148,7 +150,8 @@ function Section({
   const pdf = useQuery({
     queryKey: ["signing-pdf", token, doc.id, doc.signed],
     queryFn: () => getSigningPdf({ data: { token, kind: doc.kind, id: doc.id } }),
-    enabled: open && !doc.locked,
+    // a checklist has no pages until it is signed
+    enabled: open && !doc.locked && (doc.form !== "inventory" || doc.signed),
     staleTime: Infinity,
   });
   /*
@@ -161,15 +164,29 @@ function Section({
   const [png, setPng] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const isList = doc.form === "inventory";
+  const [record, setRecord] = useState<InventoryRecord | null>(null);
+  const listProblems = record ? inventoryProblems(record) : ["Loading"];
+
   async function sign() {
     setBusy(true);
     try {
-      const r = await signDocument({ data: { token, kind: doc.kind, id: doc.id, typedName: name, agreed: true, png } });
+      const r = isList
+        ? await signInventory({ data: { token, kind: doc.kind, id: doc.id, typedName: name, agreed: true, png, record: record! as never } })
+        : await signDocument({ data: { token, kind: doc.kind, id: doc.id, typedName: name, agreed: true, png } });
       if (!r.ok) {
         toast.error(r.error);
         return;
       }
       toast.success(`${doc.label} signed`);
+      // the signed record is the copy now; the draft on this device is done with
+      if (isList) {
+        try {
+          localStorage.removeItem(`brachtia-inventory-${doc.id}`);
+        } catch {
+          /* nothing kept */
+        }
+      }
       await qc.invalidateQueries({ queryKey: ["signing", token] });
       onSigned();
     } catch (e) {
@@ -179,8 +196,8 @@ function Section({
     }
   }
 
-  const ready = pdf.data?.ok === true && !pdf.data.gaps.length;
-  const incomplete = pdf.data?.ok === true && pdf.data.gaps.length > 0;
+  const ready = isList ? listProblems.length === 0 : pdf.data?.ok === true && !pdf.data.gaps.length;
+  const incomplete = !isList && pdf.data?.ok === true && pdf.data.gaps.length > 0;
 
   return (
     <section className={`${CARD} overflow-hidden ${open ? "ring-2 ring-brand/15" : ""}`}>
@@ -219,9 +236,22 @@ function Section({
             <p className="text-sm text-muted-foreground">{doc.locked}</p>
           ) : (
             <>
-              <div className="overflow-hidden rounded-xl border border-border bg-background">
-                <DocumentView pdf={pdf.data} pdfLoading={pdf.isLoading} onLastPage={() => setReadToEnd(true)} />
-              </div>
+              {isList && !doc.signed ? (
+                <>
+                  {doc.closes ? (
+                    <p className="text-xs text-muted-foreground">
+                      Open until{" "}
+                      {new Date(doc.closes).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kuala_Lumpur" })}
+                      . Your answers are kept on this device until you sign.
+                    </p>
+                  ) : null}
+                  <InventoryChecklist draftKey={`brachtia-inventory-${doc.id}`} onChange={setRecord} disabled={busy} />
+                </>
+              ) : (
+                <div className="overflow-hidden rounded-xl border border-border bg-background">
+                  <DocumentView pdf={pdf.data} pdfLoading={pdf.isLoading} onLastPage={() => setReadToEnd(true)} />
+                </div>
+              )}
               {doc.signed ? (
                 <p className="flex items-center gap-2 text-sm text-emerald-800">
                   <CheckCircle2 className="size-4" /> You have signed this document. The pages above are your signed copy.
@@ -230,7 +260,11 @@ function Section({
                 <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                   This document is not complete yet, so it cannot be signed. Please contact Brachtia.
                 </p>
-              ) : ready && !readToEnd ? (
+              ) : isList && !ready ? (
+                <p className="rounded-xl border border-dashed border-border bg-card p-3 text-sm text-muted-foreground">
+                  To sign: {listProblems.join(" · ")}.
+                </p>
+              ) : !isList && ready && !readToEnd ? (
                 <p className="flex items-center gap-2 rounded-xl border border-dashed border-border bg-card p-3 text-sm text-muted-foreground">
                   <ChevronRight className="size-4 shrink-0" /> Read to the last page with the arrow above. You sign there.
                 </p>
@@ -240,7 +274,11 @@ function Section({
                   <Step n={1} done={agreed} title="Agree">
                     <label className="flex cursor-pointer items-start gap-2.5 text-sm">
                       <input type="checkbox" className="mt-0.5 size-4 accent-brand" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
-                      <span>I have read this document and I agree to it.</span>
+                      <span>
+                        {isList
+                          ? "I have checked the items above, and I agree this is their condition as I received them."
+                          : "I have read this document and I agree to it."}
+                      </span>
                     </label>
                   </Step>
                   <Step n={2} done={!!name.trim()} title="Your full name" hint="As it appears on the document">
