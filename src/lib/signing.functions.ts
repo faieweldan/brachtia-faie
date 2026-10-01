@@ -45,8 +45,14 @@ export type SigningDoc = {
   locked: string;
   /** Schedule C: a checklist answered on the page, not a document to read */
   form?: "inventory";
+  /** Schedule C: the move-in check, or the move-out check */
+  mode?: "in" | "out";
+  /** Schedule C: sent in, waiting for Brachtia to review and sign */
+  submitted?: boolean;
   /** Schedule C: until when it can still be filled in (ISO), while open */
   closes?: string;
+  /** unique on the page - Schedule C's move-in and move-out share a document */
+  key: string;
 };
 
 async function residentFor(sb: any, token: string) {
@@ -87,33 +93,54 @@ async function documentsOf(sb: any, residentId: string): Promise<SigningDoc[]> {
        * after the check-in time; the room has to be seen to be checked.
        */
       if (t === "sched_c") {
+        const { readInventory } = await import("@/lib/inventory.server");
         const signed = SIGNED.has(r.status);
-        const w = signed ? null : await inventoryWindowFor(sb, residentId);
+        const submitted = r.status === "submitted";
+        const w = signed || submitted ? null : await inventoryWindowFor(sb, residentId);
         const now = Date.now();
         const fmt = (d: Date) =>
           d.toLocaleString("en-GB", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kuala_Lumpur" });
         out.push({
           kind: "agreement",
           id: r.id,
-          label: LABEL[t] ?? t,
+          key: `${r.id}:in`,
+          label: "Schedule C – Move-in check",
           signed,
+          submitted,
           form: "inventory",
-          locked: signed
-            ? ""
-            : !w
-              ? "Opens on your check-in day, so you can check the room first."
-              : now < w.opens.getTime()
-                ? `Opens on your check-in day, ${fmt(w.opens)}, so you can check the room first.`
-                : now > w.closes.getTime()
-                  ? "The 48 hours after check-in have passed. Please contact Brachtia."
-                  : "",
+          mode: "in",
+          locked:
+            signed || submitted
+              ? ""
+              : !w
+                ? "Opens on your check-in day, so you can check the room first."
+                : now < w.opens.getTime()
+                  ? `Opens on your check-in day, ${fmt(w.opens)}, so you can check the room first.`
+                  : now > w.closes.getTime()
+                    ? "The 48 hours after check-in have passed. Please contact Brachtia."
+                    : "",
           ...(w && now >= w.opens.getTime() && now <= w.closes.getTime() ? { closes: w.closes.toISOString() } : {}),
         });
+        // the move-out check, once Brachtia has opened it
+        const outFile = signed ? await readInventory(sb, residentId, r.id, "out") : null;
+        if (outFile) {
+          out.push({
+            kind: "agreement",
+            id: r.id,
+            key: `${r.id}:out`,
+            label: "Schedule C – Move-out check",
+            signed: outFile.status === "signed",
+            submitted: outFile.status === "submitted",
+            form: "inventory",
+            mode: "out",
+            locked: "",
+          });
+        }
         continue;
       }
       // already signed stays listed; otherwise only if it asks for their signature
       if (!SIGNED.has(r.status) && !(await asksResidentSignature(sb, r.template_version_id))) continue;
-      out.push({ kind: "agreement", id: r.id, label: LABEL[t] ?? t, signed: SIGNED.has(r.status), locked: "" });
+      out.push({ kind: "agreement", id: r.id, key: r.id, label: LABEL[t] ?? t, signed: SIGNED.has(r.status), locked: "" });
     }
   }
   const { data: cards } = await sb
@@ -122,7 +149,7 @@ async function documentsOf(sb: any, residentId: string): Promise<SigningDoc[]> {
     .eq("resident_id", residentId)
     .order("created_at", { ascending: false })
     .limit(1);
-  if (cards?.length && (cards[0].generated_pdf_path || (await asksResidentSignature(sb, cards[0].template_version_id)))) out.push({ kind: "card", id: cards[0].id, label: "Access Card Form", signed: !!cards[0].generated_pdf_path, locked: "" });
+  if (cards?.length && (cards[0].generated_pdf_path || (await asksResidentSignature(sb, cards[0].template_version_id)))) out.push({ kind: "card", id: cards[0].id, key: cards[0].id, label: "Access Card Form", signed: !!cards[0].generated_pdf_path, locked: "" });
   return out;
 }
 
@@ -166,11 +193,18 @@ const toBase64 = (bytes: Uint8Array) => {
 
 /** One document as the PDF it is - signed, the signed file; otherwise as it will be signed. */
 export const getSigningPdf = createServerFn({ method: "POST" })
-  .inputValidator((d) => docInput.parse(d))
+  .inputValidator((d) => docInput.extend({ mode: z.enum(["in", "out"]).optional() }).parse(d))
   .handler(async ({ data }) => {
     const sb = await db();
     const own = await ownDoc(sb, data.token, data.kind, data.id);
     if ("error" in own) return { ok: false as const, error: own.error! };
+    // the signed move-out check is its own PDF, kept beside the move-in one
+    if (data.mode === "out") {
+      const { getFile, readInventory } = await import("@/lib/inventory.server");
+      const f = await readInventory(sb, own.resident.id, data.id, "out");
+      const bytes = f?.signed ? await getFile(sb, f.signed.pdfPath) : null;
+      return bytes ? { ok: true as const, base64: toBase64(bytes), gaps: [] as string[] } : { ok: false as const, error: "Not signed yet." };
+    }
     const { renderGeneratedPdf } = await import("@/lib/templates.functions");
     const r = await renderGeneratedPdf(sb, data.kind, data.id);
     return r.ok ? { ok: true as const, base64: toBase64(r.bytes), gaps: r.gaps } : r;
@@ -250,124 +284,101 @@ export const signDocument = createServerFn({ method: "POST" })
   });
 
 const statusSchema = z.enum(["present", "defect", "not_provided"]);
+const recordSchema = z.object({
+  answers: z.record(z.string().max(60), z.object({ status: statusSchema, remark: z.string().max(500), qty: z.string().max(12).optional() })),
+  extras: z
+    .array(
+      z.object({
+        id: z.string().max(20),
+        areaId: z.string().max(20),
+        name: z.string().max(80),
+        qty: z.string().max(12),
+        status: z.union([statusSchema, z.literal("")]),
+        remark: z.string().max(500),
+      }),
+    )
+    .max(60),
+  meters: z.object({ keys: z.string().max(30), water: z.string().max(30), electric: z.string().max(30) }),
+  generalRemarks: z.string().max(2000),
+});
 
 /**
- * Sign Schedule C: the checklist as answered, drawn into a PDF with both
- * signatures, kept and fingerprinted like every other signed document.
+ * Send in a Schedule C check - move-in or move-out - with the resident's
+ * signature. It waits for Brachtia to review it and sign; only then is the PDF
+ * made and the document Signed (Dani, 1 Oct 2026).
  */
-export const signInventory = createServerFn({ method: "POST" })
+export const submitInventory = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     docInput
       .extend({
+        mode: z.enum(["in", "out"]),
         typedName: z.string().trim().min(1).max(200),
         agreed: z.literal(true),
         png: z.string().min(100).max(600_000),
-        record: z.object({
-          answers: z.record(z.string().max(60), z.object({ status: statusSchema, remark: z.string().max(500) })),
-          others: z.array(z.object({ name: z.string().max(80), status: z.union([statusSchema, z.literal("")]), remark: z.string().max(500) })).max(5),
-          generalRemarks: z.string().max(2000),
-        }),
+        record: recordSchema,
       })
       .parse(d),
   )
   .handler(async ({ data }) => {
     const sb = await db();
-    const own = await ownDoc(sb, data.token, data.kind, data.id);
-    if ("error" in own) return { ok: false as const, error: own.error! };
-    if (own.doc.form !== "inventory") return { ok: false as const, error: "This document is not the inventory." };
-    if (own.doc.signed) return { ok: false as const, error: "This document is already signed." };
-    if (own.doc.locked) return { ok: false as const, error: own.doc.locked };
-    if (norm(data.typedName) !== norm(String(own.resident.full_name ?? ""))) {
-      return { ok: false as const, error: "Type your full name exactly as it appears on the document." };
+    const found = await residentFor(sb, data.token);
+    if ("error" in found) return { ok: false as const, error: found.error };
+    const doc = (await documentsOf(sb, found.resident.id)).find((d) => d.key === `${data.id}:${data.mode}`);
+    if (!doc) return { ok: false as const, error: "This check is not part of your documents." };
+    if (doc.signed) return { ok: false as const, error: "This check is already signed." };
+    if (doc.submitted) return { ok: false as const, error: "This check has already been sent in." };
+    if (doc.locked) return { ok: false as const, error: doc.locked };
+    if (norm(data.typedName) !== norm(String(found.resident.full_name ?? ""))) {
+      return { ok: false as const, error: "Type your full name exactly as it appears on your documents." };
     }
     const { inventoryProblems } = await import("@/lib/inventory");
-    const problems = inventoryProblems(data.record);
+    // the schema's optional qty reads as "string | undefined"; the record type means the same
+    const record = data.record as import("@/lib/inventory").InventoryRecord;
+    const problems = inventoryProblems(record);
     if (problems.length) return { ok: false as const, error: `Not finished yet: ${problems.join(", ")}.` };
     // TODO(OTP): when email codes arrive, check a fresh code for this link here
 
     const png = Uint8Array.from(atob(data.png), (c) => c.charCodeAt(0));
     if (png[0] !== 0x89 || png[1] !== 0x50) return { ok: false as const, error: "The signature could not be read. Please sign again." };
-    const sigHash = hex(await crypto.subtle.digest("SHA-256", png as Uint8Array<ArrayBuffer>));
-    const signedAt = new Date();
-    const date = signedAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kuala_Lumpur" });
-
-    // the record's particulars, as saved when the pack was generated
-    const { data: row } = await sb.from("agreement_documents").select("agreement_id, merge_values").eq("id", data.id).maybeSingle();
-    const mv = (row?.merge_values ?? {}) as Record<string, string>;
-    const { data: ag } = await sb.from("tenancy_agreements").select("agreement_no, created_at").eq("id", row?.agreement_id).maybeSingle();
-    const pick = (...keys: string[]) => keys.map((k) => mv[k]).find((v) => v && String(v).trim()) ?? "";
-    /*
-     * The room as it is today, from the resident's bed: Schedule C records the
-     * unit "as at the Effective Date" - the day it is signed - and a value
-     * saved when the pack was made can be stale, or from a wrong mapping (a
-     * Residence_name mapped to the resident's name printed their name as the
-     * residence, 1 Oct 2026). The saved values are only the fallback.
-     */
-    const live = { residence: "", unitNo: "", room: "", bed: "" };
-    {
-      const { data: bed } = await sb.from("beds").select("label, room_id").eq("resident_id", own.resident.id).limit(1).maybeSingle();
-      const { data: rm } = bed ? await sb.from("rooms").select("letter, unit_id").eq("id", bed.room_id).maybeSingle() : { data: null };
-      const { data: un } = rm ? await sb.from("units").select("unit_no, residence_id").eq("id", rm.unit_id).maybeSingle() : { data: null };
-      const { data: rs } = un ? await sb.from("residences").select("name").eq("id", un.residence_id).maybeSingle() : { data: null };
-      live.bed = String(bed?.label ?? "");
-      live.room = rm?.letter ? `Room ${rm.letter}` : "";
-      live.unitNo = String(un?.unit_no ?? "");
-      live.residence = String(rs?.name ?? "");
+    const { inventoryBase, putFile, readInventory, sha256, writeInventory } = await import("@/lib/inventory.server");
+    const base = inventoryBase(found.resident.id, data.id, data.mode);
+    try {
+      await putFile(sb, `${base}-signature.png`, png, "image/png");
+      const h = getRequest()?.headers;
+      const before = data.mode === "out" ? await readInventory(sb, found.resident.id, data.id, "out") : null;
+      await writeInventory(sb, found.resident.id, data.id, {
+        ...(before ?? {}),
+        mode: data.mode,
+        status: "submitted",
+        record,
+        submitted: {
+          at: new Date().toISOString(),
+          typedName: data.typedName.trim(),
+          ip: h?.get("x-forwarded-for")?.split(",")[0]?.trim() ?? h?.get("x-real-ip") ?? "",
+          userAgent: h?.get("user-agent") ?? "",
+          profileLinkId: found.linkId,
+          signaturePath: `${base}-signature.png`,
+          signatureSha256: await sha256(png),
+        },
+      });
+    } catch (e) {
+      return { ok: false as const, error: e instanceof Error ? e.message : "Could not send it in." };
     }
-    const dmy = (v: string) => {
-      const d = new Date(v);
-      return Number.isNaN(d.getTime()) ? v : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-    };
-    const { loadSignatory, loadSignatureImage } = await import("@/lib/signatory.server");
-    const signatory = await loadSignatory(sb);
-    const { inventoryPdf } = await import("@/lib/inventory-pdf");
-    const bytes = await inventoryPdf({
-      record: data.record,
-      header: {
-        agreementNo: ag?.agreement_no ?? "",
-        agreementDate: ag?.created_at ? dmy(ag.created_at) : dmy(pick("agreement_date", "Agreement_date")),
-        effectiveDate: date,
-        residence: live.residence || pick("residence"),
-        unitNo: live.unitNo || pick("unit_no", "Unit_no"),
-        room: live.room || pick("room", "Room_no"),
-        bed: live.bed || pick("bed", "Bed"),
-      },
-      resident: { name: String(own.resident.full_name ?? ""), date, signature: png },
-      brachtia: {
-        name: signatory?.name ?? "",
-        date,
-        signature: signatory?.token ? await loadSignatureImage(sb, signatory.token) : null,
-      },
-    });
-    const pdfHash = hex(await crypto.subtle.digest("SHA-256", bytes as Uint8Array<ArrayBuffer>));
-
-    const base = `signed/${own.resident.id}/${data.kind}-${data.id}`;
-    const h = getRequest()?.headers;
-    const evidence = {
-      document: { kind: data.kind, id: data.id, label: own.doc.label },
-      resident: { id: own.resident.id, name: own.resident.full_name, typedName: data.typedName.trim() },
-      agreedToDocument: true,
-      signedAt: signedAt.toISOString(),
-      ip: h?.get("x-forwarded-for")?.split(",")[0]?.trim() ?? h?.get("x-real-ip") ?? "",
-      userAgent: h?.get("user-agent") ?? "",
-      profileLinkId: own.linkId,
-      pdfSha256: pdfHash,
-      signatureSha256: sigHash,
-      verification: "link",
-      // the answers themselves, so the record can be read without the PDF
-      inventory: data.record,
-    };
-    const put = (path: string, body: Uint8Array | string, type: string) =>
-      sb.storage.from(BUCKET).upload(path, new Blob([body as any], { type }), { contentType: type, upsert: true });
-    for (const [path, body, type] of [
-      [`${base}.pdf`, bytes, "application/pdf"],
-      [`${base}-signature.png`, png, "image/png"],
-      [`${base}.json`, JSON.stringify(evidence, null, 2), "application/json"],
-    ] as const) {
-      const { error } = await put(path, body, type);
-      if (error) return { ok: false as const, error: `Could not save your record: ${error.message}` };
+    if (data.mode === "in") {
+      const { error } = await sb.from("agreement_documents").update({ status: "submitted" }).eq("id", data.id);
+      if (error) return { ok: false as const, error: error.message };
     }
-    const { error } = await sb.from("agreement_documents").update({ status: "signed", generated_pdf_path: `${base}.pdf` }).eq("id", data.id);
-    if (error) return { ok: false as const, error: error.message };
     return { ok: true as const };
+  });
+
+/** At move-out: the move-in record, shown beside each item. */
+export const getInventoryBaseline = createServerFn({ method: "POST" })
+  .inputValidator((d) => docInput.parse(d))
+  .handler(async ({ data }) => {
+    const sb = await db();
+    const found = await residentFor(sb, data.token);
+    if ("error" in found) return null;
+    if (!(await documentsOf(sb, found.resident.id)).some((d) => d.key === `${data.id}:out`)) return null;
+    const { readInventory } = await import("@/lib/inventory.server");
+    return (await readInventory(sb, found.resident.id, data.id, "in"))?.record ?? null;
   });

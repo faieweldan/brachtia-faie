@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DocumentView } from "@/components/admin/DocumentView";
 import { SignaturePad } from "@/components/site/SignaturePad";
-import { getSigningPack, getSigningPdf, signDocument, signInventory, type SigningDoc } from "@/lib/signing.functions";
+import { getInventoryBaseline, getSigningPack, getSigningPdf, signDocument, submitInventory, type SigningDoc } from "@/lib/signing.functions";
 import { InventoryChecklist } from "@/components/site/InventoryChecklist";
 import { inventoryProblems, type InventoryRecord } from "@/lib/inventory";
 
@@ -53,13 +53,14 @@ function SigningPage() {
   }
 
   const docs = pack.data.documents;
-  const signed = docs.filter((d) => d.signed).length;
+  // a check sent in is done, for the resident - Brachtia signs it next
+  const signed = docs.filter((d) => d.signed || d.submitted).length;
   const pct = docs.length ? Math.round((signed / docs.length) * 100) : 0;
-  const allDone = docs.length > 0 && docs.every((d) => d.signed || d.locked);
+  const allDone = docs.length > 0 && docs.every((d) => d.signed || d.submitted || d.locked);
   // after signing one, the next one still to sign opens by itself
-  const nextAfter = (id: string) => {
-    const i = docs.findIndex((d) => d.id === id);
-    return docs.slice(i + 1).find((d) => !d.signed && !d.locked)?.id ?? null;
+  const nextAfter = (key: string) => {
+    const i = docs.findIndex((d) => d.key === key);
+    return docs.slice(i + 1).find((d) => !d.signed && !d.submitted && !d.locked)?.key ?? null;
   };
 
   return (
@@ -110,13 +111,13 @@ function SigningPage() {
         ) : (
           docs.map((d, i) => (
             <Section
-              key={d.id}
+              key={d.key}
               n={i + 1}
               token={token}
               doc={d}
-              open={open === d.id}
-              onToggle={() => setOpen(open === d.id ? null : d.id)}
-              onSigned={() => setOpen(nextAfter(d.id))}
+              open={open === d.key}
+              onToggle={() => setOpen(open === d.key ? null : d.key)}
+              onSigned={() => setOpen(nextAfter(d.key))}
             />
           ))
         )}
@@ -148,9 +149,9 @@ function Section({
 }) {
   const qc = useQueryClient();
   const pdf = useQuery({
-    queryKey: ["signing-pdf", token, doc.id, doc.signed],
-    queryFn: () => getSigningPdf({ data: { token, kind: doc.kind, id: doc.id } }),
-    // a checklist has no pages until it is signed
+    queryKey: ["signing-pdf", token, doc.key, doc.signed],
+    queryFn: () => getSigningPdf({ data: { token, kind: doc.kind, id: doc.id, ...(doc.mode ? { mode: doc.mode } : {}) } }),
+    // a checklist has no pages until Brachtia has signed it
     enabled: open && !doc.locked && (doc.form !== "inventory" || doc.signed),
     staleTime: Infinity,
   });
@@ -165,6 +166,13 @@ function Section({
   const [busy, setBusy] = useState(false);
 
   const isList = doc.form === "inventory";
+  // at move-out, how each item was at move-in
+  const baseline = useQuery({
+    queryKey: ["inventory-baseline", token, doc.id],
+    queryFn: () => getInventoryBaseline({ data: { token, kind: doc.kind, id: doc.id } }),
+    enabled: open && doc.mode === "out" && !doc.signed && !doc.submitted,
+    staleTime: Infinity,
+  });
   const [record, setRecord] = useState<InventoryRecord | null>(null);
   const listProblems = record ? inventoryProblems(record) : ["Loading"];
 
@@ -172,17 +180,17 @@ function Section({
     setBusy(true);
     try {
       const r = isList
-        ? await signInventory({ data: { token, kind: doc.kind, id: doc.id, typedName: name, agreed: true, png, record: record! as never } })
+        ? await submitInventory({ data: { token, kind: doc.kind, id: doc.id, mode: doc.mode ?? "in", typedName: name, agreed: true, png, record: record! as never } })
         : await signDocument({ data: { token, kind: doc.kind, id: doc.id, typedName: name, agreed: true, png } });
       if (!r.ok) {
         toast.error(r.error);
         return;
       }
-      toast.success(`${doc.label} signed`);
+      toast.success(isList ? `${doc.label} sent in` : `${doc.label} signed`);
       // the signed record is the copy now; the draft on this device is done with
       if (isList) {
         try {
-          localStorage.removeItem(`brachtia-inventory-${doc.id}`);
+          localStorage.removeItem(`brachtia-inventory-${doc.key}`);
         } catch {
           /* nothing kept */
         }
@@ -205,23 +213,33 @@ function Section({
         {/* the same marks as the profile form's steps */}
         <span
           className={`flex size-9 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold ${
-            doc.signed
+            doc.signed || doc.submitted
               ? "border-brand bg-brand text-primary-foreground"
               : doc.locked
                 ? "border-border bg-muted text-muted-foreground"
                 : "border-brand-deep text-brand-deep"
           }`}
         >
-          {doc.signed ? <Check className="size-4" /> : doc.locked ? <Lock className="size-3.5" /> : n}
+          {doc.signed || doc.submitted ? <Check className="size-4" /> : doc.locked ? <Lock className="size-3.5" /> : n}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-semibold text-brand-deep">{doc.label}</span>
           <span className="block text-xs text-muted-foreground">
-            {doc.signed ? "Signed" : doc.locked ? "Opens after you check in" : "Read and sign"}
+            {doc.signed
+              ? "Signed"
+              : doc.submitted
+                ? "Sent in — Brachtia is reviewing it"
+                : doc.locked
+                  ? "Opens after you check in"
+                  : isList
+                    ? "Check each item and sign"
+                    : "Read and sign"}
           </span>
         </span>
         {doc.signed ? (
           <span className="hidden shrink-0 rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-900 sm:inline">Signed</span>
+        ) : doc.submitted ? (
+          <span className="hidden shrink-0 rounded-full border border-sky-200 bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-900 sm:inline">Sent in</span>
         ) : doc.locked ? (
           <span className="hidden shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground sm:inline">Later</span>
         ) : (
@@ -236,7 +254,12 @@ function Section({
             <p className="text-sm text-muted-foreground">{doc.locked}</p>
           ) : (
             <>
-              {isList && !doc.signed ? (
+              {isList && doc.submitted ? (
+                <p className="flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+                  <CheckCircle2 className="size-4 shrink-0" /> Sent in. Brachtia will review it and sign; you will see the
+                  signed copy here.
+                </p>
+              ) : isList && !doc.signed ? (
                 <>
                   {doc.closes ? (
                     <p className="text-xs text-muted-foreground">
@@ -245,14 +268,20 @@ function Section({
                       . Your answers are kept on this device until you sign.
                     </p>
                   ) : null}
-                  <InventoryChecklist draftKey={`brachtia-inventory-${doc.id}`} onChange={setRecord} disabled={busy} />
+                  <InventoryChecklist
+                    draftKey={`brachtia-inventory-${doc.key}`}
+                    onChange={setRecord}
+                    mode={doc.mode ?? "in"}
+                    baseline={baseline.data ?? null}
+                    disabled={busy}
+                  />
                 </>
               ) : (
                 <div className="overflow-hidden rounded-xl border border-border bg-background">
                   <DocumentView pdf={pdf.data} pdfLoading={pdf.isLoading} onLastPage={() => setReadToEnd(true)} />
                 </div>
               )}
-              {doc.signed ? (
+              {isList && doc.submitted ? null : doc.signed ? (
                 <p className="flex items-center gap-2 text-sm text-emerald-800">
                   <CheckCircle2 className="size-4" /> You have signed this document. The pages above are your signed copy.
                 </p>
@@ -289,7 +318,7 @@ function Section({
                   </Step>
                   <Button type="button" className="w-full sm:w-auto" disabled={!agreed || !name.trim() || !png || busy} onClick={() => void sign()}>
                     {busy ? <Loader2 className="size-4 animate-spin" /> : <PenLine className="size-4" />}
-                    {busy ? "Signing…" : "Sign document"}
+                    {busy ? (isList ? "Sending…" : "Signing…") : isList ? "Sign & send in" : "Sign document"}
                   </Button>
                 </div>
               ) : null}
