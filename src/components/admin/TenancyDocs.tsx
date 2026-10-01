@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Plus, Undo2 } from "lucide-react";
 import { SigningMessageCard } from "@/components/admin/SigningMessageCard";
+import { InventoryActions, InventoryPill } from "@/components/admin/InventoryReview";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -125,10 +126,19 @@ function DocumentRow({
             : "—"}
         </td>
         <td className="py-2.5 pr-3">
-          <StatusPill status={doc.status} label={docLabel(doc.status)} />
+          {/* Schedule C is checked by the resident and reviewed here (1 Oct 2026) */}
+          {doc.docType === "sched_c" ? (
+            <InventoryPill state={doc.status === "generated" ? "none" : doc.status} />
+          ) : (
+            <StatusPill status={doc.status} label={docLabel(doc.status)} />
+          )}
         </td>
         <td className="py-2.5 text-right">
           <span className="inline-flex flex-wrap justify-end gap-1.5">
+            {doc.docType === "sched_c" ? (
+              <InventoryActions docId={doc.id} status={doc.status} onChanged={onChanged} />
+            ) : (
+            <>
             <Button size="sm" variant="ghost" onClick={() => setViewing({ kind: "agreement", id: doc.id, title: DOC_TYPE_LABELS[doc.docType] })}>
               View
             </Button>
@@ -137,6 +147,8 @@ function DocumentRow({
                 Mark {nextStatus.label}
               </Button>
             ) : null}
+            </>
+            )}
           </span>
           <DocumentViewDialog target={viewing} title={viewing?.title ?? ""} onClose={() => setViewing(null)} />
         </td>

@@ -297,9 +297,9 @@ function DocumentPackPage() {
               <ClipboardCheck className="mx-auto size-8 text-brand" />
               <p className="text-sm font-semibold text-brand-deep">Filled in by the resident</p>
               <p className="text-sm text-muted-foreground">
-                Schedule C is a checklist on the resident&rsquo;s signing page. They tick each item Present, Defect or Not
-                provided in the room itself, from their check-in day until 48 hours after check-in, then sign. Nothing to
-                upload here.
+                Schedule C is a checklist on the resident&rsquo;s signing page. They check each item Present, Defect or Not
+                provided in the room itself, from their check-in day until 48 hours after check-in, and send it in. You
+                review it on the Tenancy tab and sign it there. Nothing to upload here.
               </p>
             </div>
           ) : !tpl ? (
