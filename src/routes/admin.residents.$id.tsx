@@ -52,6 +52,7 @@ import { ResidentPayments } from "@/components/admin/ResidentPayments";
 import { RESIDENT_DOCS, residentDocsFor, residentDocLabel } from "@/lib/resident-documents";
 import { compressImage } from "@/lib/compress";
 import { removeResidentDoc, residentDocUrl, uploadResidentDoc } from "@/lib/residents.functions";
+import { PdfPreviewDialog } from "@/components/admin/PdfPreview";
 import {
   PAY_METHODS,
   SCHEDULES,
@@ -226,6 +227,8 @@ function ResidentProfilePage() {
   const [updateTenancyOpen, setUpdateTenancyOpen] = useState(false);
   const [tenancyEdit, setTenancyEdit] = useState({ start: "", end: "", rent: "" });
   const [asRenewal, setAsRenewal] = useState(false);
+  // a resident's uploaded file, open in the preview window
+  const [docPreview, setDocPreview] = useState<{ title: string; fileName: string; url: string } | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const isEditing = (key: string) => !!editing[key];
   const editAction = (key: string) => (
@@ -913,9 +916,15 @@ function ResidentProfilePage() {
               ))}
 
               <section id="sec-documents" ref={sectionRef("documents")} className="scroll-mt-24">
+                <PdfPreviewDialog
+                  title={docPreview?.title ?? ""}
+                  fileName={docPreview?.fileName ?? ""}
+                  url={docPreview?.url ?? null}
+                  onClose={() => setDocPreview(null)}
+                />
                 <Panel
                   title="Documents"
-                  description="Files the resident sent, and any added here. Preview opens a private link."
+                  description="Files the resident sent, and any added here."
                 >
                   {/*
                     The documents the form asks this resident for - one list, so
@@ -941,19 +950,30 @@ function ResidentProfilePage() {
                         fileName={doc?.fileName}
                         uploadedAt={doc?.uploadedAt}
                         onPreview={async () => {
-                          // opened before the link is fetched, so the browser
-                          // treats it as the click it came from and not a pop-up
-                          const tab = window.open("", "_blank");
+                          /*
+                           * Shown in the same preview window as invoices and
+                           * receipts, with a Download button - a new tab on a
+                           * private link could not be saved (Dani, 1 Oct 2026).
+                           * The file is fetched into the page so Download
+                           * works across sites, for a photo as for a PDF.
+                           */
                           const res = await residentDocUrl({
                             data: { residentId: form.id, key: d.key },
                           });
                           if (!res.ok) {
-                            tab?.close();
                             toast.error(res.error);
                             return;
                           }
-                          if (tab) tab.location.href = res.url;
-                          else window.location.href = res.url;
+                          try {
+                            const blob = await (await fetch(res.url)).blob();
+                            setDocPreview({
+                              title: `${label} · ${form.fullName}`,
+                              fileName: doc?.fileName || label,
+                              url: URL.createObjectURL(blob),
+                            });
+                          } catch {
+                            toast.error("Could not open the file. Try again.");
+                          }
                         }}
                         onUpload={async (file) => {
                           const small = await compressImage(file);
