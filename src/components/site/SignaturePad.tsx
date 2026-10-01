@@ -11,19 +11,31 @@ export function SignaturePad({ onChange, disabled = false }: { onChange: (png: s
   const [inked, setInked] = useState(false);
   const drew = useRef(false);
 
-  useEffect(() => {
+  /*
+   * The drawing surface is sized to the box as it is shown. Measured once on
+   * mount it could be 0 wide - the box appeared inside a panel still being
+   * laid out - and every stroke landed nowhere (1 Oct 2026). So it is measured
+   * again when a stroke starts, if the box has changed size; before the first
+   * stroke there is nothing on it to lose.
+   */
+  function fit() {
     const c = canvas.current;
     if (!c) return;
+    // sharp on a high-density screen
     const ratio = window.devicePixelRatio || 1;
-    c.width = c.clientWidth * ratio;
-    c.height = c.clientHeight * ratio;
+    const w = Math.round(c.clientWidth * ratio);
+    const h = Math.round(c.clientHeight * ratio);
+    if (c.width === w && c.height === h) return;
+    c.width = w;
+    c.height = h;
     const ctx = c.getContext("2d")!;
     ctx.scale(ratio, ratio);
     ctx.lineWidth = 2.2;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.strokeStyle = "#0d1a59"; // dark blue, like a pen
-  }, []);
+  }
+  useEffect(fit, []);
 
   const at = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -45,6 +57,7 @@ export function SignaturePad({ onChange, disabled = false }: { onChange: (png: s
           ref={canvas}
           className={`h-36 w-full touch-none rounded-lg border border-dashed bg-white ${disabled ? "pointer-events-none opacity-50" : "border-brand/50"}`}
           onPointerDown={(e) => {
+            if (!drew.current) fit();
             e.currentTarget.setPointerCapture(e.pointerId);
             last.current = at(e);
           }}
