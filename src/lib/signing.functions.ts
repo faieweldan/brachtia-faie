@@ -142,7 +142,8 @@ async function documentsOf(sb: any, residentId: string): Promise<SigningDoc[]> {
    * page, straight after them (Dani, 1 Oct 2026). Not tied to the check-in
    * date: the resident goes on to it as soon as they have signed.
    */
-  const unsigned = out.filter((d) => d.form !== "inventory" && !d.signed).length;
+  const { INVENTORY_AFTER_DOCUMENTS } = await import("@/lib/inventory");
+  const unsigned = INVENTORY_AFTER_DOCUMENTS ? out.filter((d) => d.form !== "inventory" && !d.signed).length : 0;
   for (const d of out) {
     if (d.form === "inventory" && d.mode === "in" && !d.signed && !d.submitted && unsigned) {
       d.locked = `Sign your ${unsigned === 1 ? "last document" : `${unsigned} documents`} first - the inventory check comes after them.`;

@@ -201,3 +201,11 @@ export function inventoryWindow(checkinOn: string, checkinSlot: string): { opens
   const at = new Date(`${checkinOn}T${slot}:00+08:00`);
   return { opens, closes: new Date(at.getTime() + 48 * 3600 * 1000) };
 }
+
+/**
+ * Whether the inventory check waits for the documents to be signed first.
+ * OFF while testing (Dani, 1 Oct 2026), so the checklist can be tried without
+ * signing the TA and Schedules A and B. Turn it back on before real residents
+ * get their links.
+ */
+export const INVENTORY_AFTER_DOCUMENTS = false;
