@@ -11,7 +11,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Select, Text } from "@/components/admin/ops-ui";
+import { Text } from "@/components/admin/ops-ui";
+import { Choice } from "@/components/admin/Choice";
+import { paymentMissing, ruleFor } from "@/lib/payment-methods";
 import { recordPayment } from "@/lib/admin.functions";
 import { afterPaymentRecorded, uploadProof } from "@/lib/billing-client";
 import { formatRM } from "@/data/properties";
@@ -79,21 +81,21 @@ export function RecordPaymentDialog({
   }
 
   /*
-   * Everything but the description is required: a payment with no proof, no
-   * reference or no method is a figure nobody can check back against the bank.
-   * The button stays down until it is all there, and save refuses it too - the
-   * button can be re-enabled, the record cannot be un-saved.
+   * What is required depends on how it was paid (Dani, 1 Oct 2026): a transfer
+   * needs its reference and slip, a cheque its number and a photo, and cash
+   * neither - the receipt issued is the record. The rule lives in
+   * payment-methods.ts, so this form and the server ask the same things.
    */
-  const complete = Number(amount) > 0 && !!paidOn && !!reference.trim() && !!method && !!proof;
+  const rule = ruleFor(method);
+  const missing = paymentMissing({ method, reference, proofPath: proof?.path ?? "" });
+  const complete = Number(amount) > 0 && !!paidOn && !missing;
 
   async function save() {
     if (!invoice) return;
     const value = Number(amount);
     if (!(value > 0)) return void toast.error("Enter the amount received");
     if (!paidOn) return void toast.error("Enter the payment date");
-    if (!reference.trim()) return void toast.error("Enter the reference from the bank slip");
-    if (!method) return void toast.error("Choose how it was paid");
-    if (!proof) return void toast.error("Attach the payment proof");
+    if (missing) return void toast.error(missing);
 
     setSaving(true);
     try {
@@ -103,7 +105,8 @@ export function RecordPaymentDialog({
           amount: value,
           paidOn,
           method,
-          reference: reference.trim(),
+          // a method with no reference keeps none, even one typed before switching
+          reference: rule.reference ? reference.trim() : "",
           proofPath: proof?.path ?? "",
           description: description.trim(),
         },
@@ -146,20 +149,19 @@ export function RecordPaymentDialog({
             autoFocus
             required
           />
-          <Text
-            label="Reference no."
-            value={reference}
-            onChange={setReference}
-            placeholder="From the bank slip"
-            required
-          />
-          <Select
-            label="Method"
-            value={method}
-            onChange={setMethod}
-            options={PAY_METHODS}
-            required
-          />
+          {/* how it was paid comes first: it decides what else is asked */}
+          <Choice label="Method" value={method} onChange={setMethod} options={PAY_METHODS} />
+          {rule.reference ? (
+            <Text
+              label={rule.reference.label}
+              value={reference}
+              onChange={setReference}
+              placeholder={rule.reference.placeholder}
+              required
+            />
+          ) : (
+            <div className="hidden sm:block" />
+          )}
           {/* after the money, not before it: the amount and the invoice it lands
               on already say what this is, so an empty box reads as nothing missing */}
           <div className="sm:col-span-2">
@@ -173,8 +175,8 @@ export function RecordPaymentDialog({
           <div className="space-y-1.5 sm:col-span-2">
             {/* hand-rolled markup, so the same dot is drawn here by hand */}
             <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              Payment proof
-              {proof ? null : (
+              {rule.proof.required ? "Payment proof" : "Payment proof (optional)"}
+              {proof || !rule.proof.required ? null : (
                 <span aria-hidden title="Still empty" className="size-1.5 rounded-full bg-brand" />
               )}
             </p>
@@ -192,7 +194,7 @@ export function RecordPaymentDialog({
                 ? "Uploading…"
                 : proof
                   ? `Attached: ${proof.name}`
-                  : "A photo of the bank slip, or a PDF"}
+                  : rule.proof.hint}
             </p>
           </div>
         </div>

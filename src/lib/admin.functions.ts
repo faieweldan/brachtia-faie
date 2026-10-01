@@ -1570,6 +1570,12 @@ export const recordPayment = createServerFn({ method: "POST" })
     if ((invoice as any).status === "scheduled") {
       throw new Error("This invoice is not billed yet");
     }
+    // the same rule the form shows: what this way of paying needs (1 Oct 2026)
+    {
+      const { paymentMissing } = await import("@/lib/payment-methods");
+      const missing = paymentMissing({ method: data.method ?? "", reference: data.reference ?? "", proofPath: data.proofPath ?? "" });
+      if (missing) throw new Error(missing);
+    }
 
     // money on a booking's invoice is recorded by the booking's staff member
     const payStaff = (invoice as any).enquiry_id
