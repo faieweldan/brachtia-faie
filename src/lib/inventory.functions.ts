@@ -102,3 +102,28 @@ export const inventoryPdfUrl = createServerFn({ method: "GET" })
     if (!bytes) throw new Error("Not signed yet.");
     return { base64: toBase64(bytes) };
   });
+
+/**
+ * Send a check back to the resident to do again - a wrong answer, a missing
+ * defect - before it is confirmed. What they sent is cleared; the check is
+ * open on their link again (Dani, 1 Oct 2026).
+ */
+export const sendBackInventory = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ docId: z.string().uuid(), mode: z.enum(["in", "out"]) }).parse(d))
+  .handler(async ({ data }) => {
+    const sb = await admin();
+    const residentId = await residentOf(sb, data.docId);
+    const { inventoryBase, readInventory, writeInventory } = await import("@/lib/inventory.server");
+    const file = await readInventory(sb, residentId, data.docId, data.mode);
+    if (file?.status !== "submitted") throw new Error("Only a check waiting for review can be sent back.");
+    const base = inventoryBase(residentId, data.docId, data.mode);
+    if (data.mode === "in") {
+      await sb.storage.from("resident-documents").remove([`${base}.json`, `${base}-signature.png`]);
+      const { error } = await sb.from("agreement_documents").update({ status: "generated" }).eq("id", data.docId);
+      if (error) throw new Error(error.message);
+    } else {
+      await sb.storage.from("resident-documents").remove([`${base}-signature.png`]);
+      await writeInventory(sb, residentId, data.docId, { mode: "out", status: "open", ...(file.openedAt ? { openedAt: file.openedAt } : {}) });
+    }
+    return { ok: true as const };
+  });

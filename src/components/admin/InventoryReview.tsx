@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PdfPreviewDialog } from "@/components/admin/PdfPreview";
-import { confirmInventory, getInventoryReview, inventoryPdfUrl, openMoveOutCheck } from "@/lib/inventory.functions";
+import { confirmInventory, getInventoryReview, inventoryPdfUrl, openMoveOutCheck, sendBackInventory } from "@/lib/inventory.functions";
 import {
   INVENTORY,
   MODE_LABEL,
@@ -75,6 +75,19 @@ function InventoryReviewDialog({ docId, onClose, onChanged }: { docId: string; o
       await refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not sign it");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendBack() {
+    setBusy(true);
+    try {
+      await sendBackInventory({ data: { docId, mode: tab } });
+      toast.success("Sent back", { description: "It is open on the resident's link to do again." });
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not send it back");
     } finally {
       setBusy(false);
     }
@@ -268,6 +281,11 @@ function InventoryReviewDialog({ docId, onClose, onChanged }: { docId: string; o
                   </Button>
                 ) : null}
               </>
+            ) : null}
+            {file?.status === "submitted" ? (
+              <Button size="sm" variant="ghost" disabled={busy} onClick={() => void sendBack()}>
+                Send back to resident
+              </Button>
             ) : null}
             {file?.status === "submitted" ? (
               <Button size="sm" disabled={busy} onClick={() => void confirm()}>
