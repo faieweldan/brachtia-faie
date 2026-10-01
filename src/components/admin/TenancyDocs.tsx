@@ -193,7 +193,8 @@ function AgreementBlock({
    * A pack nothing has happened to yet can be taken back and made again - a
    * pack generated before a template changed, say (Dani, 30 Sep 2026).
    */
-  const untouched = docs.length > 0 && agreement.documents.every((d) => d.status === "generated");
+  // until anything is signed - a sent link or an unconfirmed inventory check does not stop it
+  const untouched = docs.length > 0 && agreement.documents.every((d) => ["generated", "pending_signature", "submitted"].includes(d.status));
   const [undoing, setUndoing] = useState(false);
   const [busy, setBusy] = useState(false);
   async function undo() {

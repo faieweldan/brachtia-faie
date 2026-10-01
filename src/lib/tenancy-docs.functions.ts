@@ -413,26 +413,36 @@ export const getDocumentView = createServerFn({ method: "GET" })
  * Take back a pack that nothing has happened to yet (Dani, 30 Sep 2026): every
  * document still "generated" - none sent, signed or submitted. It is removed
  * as if never made, so it can be generated again from the current templates.
- * Once anything has moved on, the pack is a record and cannot be undone.
+ * A sent link, or an inventory check sent in but not yet confirmed, does not
+ * stop it (Dani, 1 Oct 2026); anything signed does - that is the record.
  */
+/** What a document can be while its pack may still be reset: not signed. */
+export const RESETTABLE = new Set(["generated", "pending_signature", "submitted"]);
+
 export const undoDocumentPack = createServerFn({ method: "POST" })
   .inputValidator((data: { agreementId: string }) => data)
   .handler(async ({ data }) => {
     const db = await admin();
     const { data: agreement } = await db.from("tenancy_agreements").select("id, resident_id, kind").eq("id", data.agreementId).maybeSingle();
     if (!agreement) throw new Error("This pack no longer exists.");
-    const { data: docs } = await db.from("agreement_documents").select("status").eq("agreement_id", agreement.id);
-    if ((docs ?? []).some((d: any) => d.status !== "generated")) {
-      throw new Error("A document in this pack has moved on (sent, signed or submitted), so it can no longer be reset.");
+    const { data: docs } = await db.from("agreement_documents").select("id, doc_type, status").eq("agreement_id", agreement.id);
+    if ((docs ?? []).some((d: any) => !RESETTABLE.has(d.status))) {
+      throw new Error("A document in this pack is already signed, so it is a record and can no longer be reset.");
     }
     // the first pack brought the first access card form with it; it goes too
     let cardIds: string[] = [];
     if (agreement.kind === "initial") {
       const { data: cards } = await db.from("access_card_forms").select("id, status").eq("resident_id", agreement.resident_id);
       if ((cards ?? []).some((c: any) => c.status !== "generated")) {
-        throw new Error("The access card form has moved on, so this pack can no longer be reset.");
+        throw new Error("The access card form has moved on (signed or submitted), so this pack can no longer be reset.");
       }
       cardIds = (cards ?? []).map((c: any) => c.id);
+    }
+    // an inventory check sent in goes with its Schedule C
+    for (const d of (docs ?? []) as any[]) {
+      if (d.doc_type !== "sched_c") continue;
+      const files = ["in", "out"].flatMap((m) => ["json", "pdf"].map((x) => `inventory/${agreement.resident_id}/${d.id}-${m}.${x}`).concat(`inventory/${agreement.resident_id}/${d.id}-${m}-signature.png`));
+      await db.storage.from("resident-documents").remove(files);
     }
     const { error: dErr } = await db.from("agreement_documents").delete().eq("agreement_id", agreement.id);
     if (dErr) throw new Error(dErr.message);
