@@ -585,18 +585,14 @@ function CollectionsPage() {
                   const opened = openInvoice === r.invoiceId;
                   const ref = r.scheduled ? "Not billed yet" : invoiceRef(r.number, r.type);
                   const unpaid = r.paid === 0;
-                  // part-paid and also due soon or late: the whole row is tinted
+                  // Partially paid's pill is normally sky - but once it's close to or
+                  // past its due date, the pill itself should say so (Dani, 1 Oct 2026)
                   const urgency = partPaidUrgency(r, today);
-                  const tint =
-                    urgency === "late"
-                      ? "bg-red-50 hover:bg-red-100/70"
-                      : urgency === "soon"
-                        ? "bg-amber-50 hover:bg-amber-100/70"
-                        : `hover:bg-muted/40 ${opened ? "bg-muted/40" : ""}`;
+                  const pillTone = urgency === "late" ? "late" : urgency === "soon" ? "due" : state.tone;
                   return (
                     <Fragment key={r.invoiceId}>
                       <tr
-                        className={`transition-colors ${tint}`}
+                        className={`transition-colors hover:bg-muted/40 ${opened ? "bg-muted/40" : ""}`}
                       >
                         <td className="whitespace-nowrap px-5 py-3">
                           <span
@@ -624,14 +620,14 @@ function CollectionsPage() {
                         <td
                           className={`whitespace-nowrap px-3 py-3 text-right tabular-nums ${
                             r.outstanding > 0 && !r.scheduled
-                              ? `font-medium ${TONE[state.tone].text}`
+                              ? `font-medium ${TONE[pillTone].text}`
                               : "text-muted-foreground"
                           }`}
                         >
                           {r.outstanding > 0 && !r.scheduled ? money(r.outstanding) : "—"}
                         </td>
                         <td className="px-3 py-3">
-                          <TonePill tone={state.tone}>{state.status}</TonePill>
+                          <TonePill tone={pillTone}>{state.status}</TonePill>
                           <p className="mt-1 whitespace-nowrap text-[11px] text-muted-foreground">
                             {r.scheduled
                               ? `Bills ${fmtDate(r.billOn)}`
