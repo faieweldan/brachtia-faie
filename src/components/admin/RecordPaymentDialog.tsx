@@ -18,6 +18,7 @@ import { recordPayment } from "@/lib/admin.functions";
 import { afterPaymentRecorded, uploadProof } from "@/lib/billing-client";
 import { formatRM } from "@/data/properties";
 import { PAY_METHODS } from "@/lib/ops-store";
+import { STAFF } from "@/data/form-options";
 import { paymentProofHistory, paymentProofUrl, replacePaymentProof } from "@/lib/resident-billing.functions";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -33,7 +34,29 @@ export type PayableInvoice = {
   description?: string;
   /** what the box is called, when it is not just any payment - "Record booking fee" */
   title?: string;
+  /** who is already known to be working - the booking's picked staff */
+  staff?: string;
 };
+
+/* each staff member's colour, so "by Syazwani" is told apart at a glance */
+const STAFF_TONE: Record<string, string> = {
+  Syazwani: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  Norfadirah: "border-violet-200 bg-violet-50 text-violet-800",
+  Valsala: "border-sky-200 bg-sky-50 text-sky-800",
+};
+
+/** "by Syazwani" beside a payment - who recorded it (Dani, 1 Oct 2026). */
+export function StaffTag({ name }: { name: string }) {
+  if (!name) return null;
+  return (
+    <span
+      title={`Recorded by ${name}`}
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${STAFF_TONE[name] ?? "border-border bg-muted text-muted-foreground"}`}
+    >
+      by {name}
+    </span>
+  );
+}
 
 /**
  * Record money received against one invoice: what it was for, the date, the
@@ -68,6 +91,8 @@ export function RecordPaymentDialog({
   const [proof, setProof] = useState<{ name: string; path: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  // who is recording it - asked every time, as on entering a booking
+  const [recordedBy, setRecordedBy] = useState(invoice?.staff ?? "");
 
   async function upload(file: File) {
     if (!invoice) return;
@@ -89,7 +114,7 @@ export function RecordPaymentDialog({
    */
   const rule = ruleFor(method);
   const missing = paymentMissing({ method, reference, proofPath: proof?.path ?? "" });
-  const complete = Number(amount) > 0 && !!paidOn && !missing;
+  const complete = Number(amount) > 0 && !!paidOn && !missing && !!recordedBy;
 
   async function save() {
     if (!invoice) return;
@@ -97,6 +122,7 @@ export function RecordPaymentDialog({
     if (!(value > 0)) return void toast.error("Enter the amount received");
     if (!paidOn) return void toast.error("Enter the payment date");
     if (missing) return void toast.error(missing);
+    if (!recordedBy) return void toast.error("Choose who is recording this payment");
 
     setSaving(true);
     try {
@@ -110,6 +136,7 @@ export function RecordPaymentDialog({
           reference: rule.reference ? reference.trim() : "",
           proofPath: proof?.path ?? "",
           description: description.trim(),
+          recordedBy,
         },
       });
       await afterPaymentRecorded(queryClient, res);
@@ -137,6 +164,27 @@ export function RecordPaymentDialog({
               : ""}
           </DialogDescription>
         </DialogHeader>
+
+        {/* the same picker as "Who's working on this booking?" */}
+        <div className="space-y-1.5">
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            Recorded by
+            {recordedBy ? null : <span aria-hidden className="size-1.5 rounded-full bg-brand" />}
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            {STAFF.map((s) => (
+              <Button
+                key={s}
+                type="button"
+                size="sm"
+                variant={recordedBy === s ? "default" : "outline"}
+                onClick={() => setRecordedBy(s)}
+              >
+                {s}
+              </Button>
+            ))}
+          </div>
+        </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
           {/* the money first, and the cursor starts on the amount - that is what

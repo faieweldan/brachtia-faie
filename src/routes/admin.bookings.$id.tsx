@@ -569,6 +569,7 @@ function BookingDetail() {
       label: row.full_name ?? "",
       title: "Record booking fee",
       description: "Booking fee",
+      staff: row.assigned_staff ?? "",
     });
   }
 

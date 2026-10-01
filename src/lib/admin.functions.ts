@@ -1553,10 +1553,16 @@ export const recordPayment = createServerFn({ method: "POST" })
       proofPath?: string;
       /** what the money is for - "Booking fee" */
       description?: string;
+      /** the staff member recording it - shown as "by Syazwani" */
+      recordedBy?: string;
     }) => data,
   )
   .handler(async ({ data }) => {
     const supabase = await admin();
+    {
+      const { STAFF } = await import("@/data/form-options");
+      if (!STAFF.includes(String(data.recordedBy ?? ""))) throw new Error("Choose who is recording this payment");
+    }
     const { data: invoice, error } = await supabase
       .from("invoices")
       .select("*")
@@ -1587,21 +1593,25 @@ export const recordPayment = createServerFn({ method: "POST" })
     const amount = Number(data.amount || 0);
     const balance = Number((invoice as any).total || 0) - paidBefore - amount;
 
-    const { data: payment, error: payErr } = await supabase
-      .from("payments")
-      .insert({
-        invoice_id: data.invoiceId,
-        enquiry_id: (invoice as any).enquiry_id,
-        resident_id: (invoice as any).resident_id ?? "",
-        amount,
-        paid_on: data.paidOn,
-        method: data.method,
-        reference: data.reference ?? "",
-        proof_path: data.proofPath ?? "",
-        description: data.description ?? "",
-      } as any)
-      .select("*")
-      .maybeSingle();
+    const row: Record<string, unknown> = {
+      invoice_id: data.invoiceId,
+      enquiry_id: (invoice as any).enquiry_id,
+      resident_id: (invoice as any).resident_id ?? "",
+      amount,
+      paid_on: data.paidOn,
+      method: data.method,
+      reference: data.reference ?? "",
+      proof_path: data.proofPath ?? "",
+      description: data.description ?? "",
+      recorded_by: data.recordedBy ?? "",
+    };
+    let { data: payment, error: payErr } = await supabase.from("payments").insert(row as any).select("*").maybeSingle();
+    // the recorded_by column comes with the 1 Oct 2026 SQL: until a database
+    // has it, the payment is still saved, only without the name
+    if (payErr && /recorded_by/.test(payErr.message)) {
+      delete row["recorded_by"];
+      ({ data: payment, error: payErr } = await supabase.from("payments").insert(row as any).select("*").maybeSingle());
+    }
     if (payErr) throw new Error(payErr.message);
 
     const { data: receipt, error: recErr } = await supabase

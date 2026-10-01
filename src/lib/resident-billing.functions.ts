@@ -54,6 +54,8 @@ export type BillingInvoice = {
     proofPath: string;
     /** what the money was for - "Booking fee" */
     description: string;
+    /** who recorded it; "" before 1 Oct 2026 */
+    recordedBy: string;
   }[];
   receipts: {
     number: string;
@@ -571,6 +573,7 @@ function toBillingInvoice(
     reference: String(p.reference ?? ""),
     proofPath: String(p.proof_path ?? ""),
     description: String(p.description ?? ""),
+    recordedBy: String(p.recorded_by ?? ""),
   }));
   const paid = myPayments.reduce((n, p) => n + p.amount, 0);
   const total = num(raw.total);
