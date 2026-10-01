@@ -43,22 +43,22 @@ import {
  * loses nothing.
  */
 /*
- * Each room its own colour and icon, so a long list reads as a walk through
+ * Each room its own coloured header and icon, so a long list reads as a walk through
  * the unit rather than one white column (Dani, 1 Oct 2026) - the same idea as
  * the paper form's mock, in the site's own palette.
  */
-const AREA_LOOK: Record<string, { icon: LucideIcon; head: string; stripe: string; ink: string }> = {
-  foyer: { icon: DoorOpen, head: "bg-teal-50", stripe: "border-l-teal-600", ink: "text-teal-800" },
-  living: { icon: Sofa, head: "bg-emerald-50", stripe: "border-l-emerald-600", ink: "text-emerald-800" },
-  dining: { icon: UtensilsCrossed, head: "bg-lime-50", stripe: "border-l-lime-600", ink: "text-lime-800" },
-  kitchen: { icon: CookingPot, head: "bg-amber-50", stripe: "border-l-amber-500", ink: "text-amber-800" },
-  yard: { icon: WashingMachine, head: "bg-sky-50", stripe: "border-l-sky-600", ink: "text-sky-800" },
-  room: { icon: BedDouble, head: "bg-indigo-50", stripe: "border-l-indigo-500", ink: "text-indigo-800" },
-  bath1: { icon: Bath, head: "bg-cyan-50", stripe: "border-l-cyan-600", ink: "text-cyan-800" },
-  bath2: { icon: Bath, head: "bg-cyan-50", stripe: "border-l-cyan-600", ink: "text-cyan-800" },
-  other: { icon: KeyRound, head: "bg-rose-50", stripe: "border-l-rose-500", ink: "text-rose-800" },
+const AREA_LOOK: Record<string, { icon: LucideIcon; head: string; ink: string }> = {
+  foyer: { icon: DoorOpen, head: "bg-teal-50", ink: "text-teal-800" },
+  living: { icon: Sofa, head: "bg-emerald-50", ink: "text-emerald-800" },
+  dining: { icon: UtensilsCrossed, head: "bg-lime-50", ink: "text-lime-800" },
+  kitchen: { icon: CookingPot, head: "bg-amber-50", ink: "text-amber-800" },
+  yard: { icon: WashingMachine, head: "bg-sky-50", ink: "text-sky-800" },
+  room: { icon: BedDouble, head: "bg-indigo-50", ink: "text-indigo-800" },
+  bath1: { icon: Bath, head: "bg-cyan-50", ink: "text-cyan-800" },
+  bath2: { icon: Bath, head: "bg-cyan-50", ink: "text-cyan-800" },
+  other: { icon: KeyRound, head: "bg-rose-50", ink: "text-rose-800" },
 };
-const FALLBACK_LOOK = { icon: DoorOpen, head: "bg-muted/40", stripe: "border-l-brand", ink: "text-brand-deep" };
+const FALLBACK_LOOK = { icon: DoorOpen, head: "bg-muted/40", ink: "text-brand-deep" };
 
 /** an answered row, tinted by its answer */
 const ROW_TINT: Record<string, string> = {
@@ -174,7 +174,7 @@ export function InventoryChecklist({
         const look = AREA_LOOK[area.id] ?? FALLBACK_LOOK;
         const Icon = look.icon;
         return (
-          <section key={area.id} className={`overflow-hidden rounded-xl border border-l-4 border-border bg-card ${look.stripe}`}>
+          <section key={area.id} className="overflow-hidden rounded-xl border border-border bg-card">
             <button
               type="button"
               onClick={() => setClosed((c) => ({ ...c, [area.id]: !c[area.id] }))}
@@ -273,7 +273,7 @@ export function InventoryChecklist({
         );
       })}
 
-      <section className="overflow-hidden rounded-xl border border-l-4 border-border border-l-slate-500 bg-card">
+      <section className="overflow-hidden rounded-xl border border-border bg-card">
         <p className="flex items-center gap-2.5 border-b border-border bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800">
           <span className="flex size-8 items-center justify-center rounded-full bg-white/80">
             <Gauge className="size-4" />
@@ -303,7 +303,7 @@ export function InventoryChecklist({
         </div>
       </section>
 
-      <section className="space-y-2 rounded-xl border border-l-4 border-border border-l-brand bg-card p-4">
+      <section className="space-y-2 rounded-xl border border-border bg-card p-4">
         <p className="flex items-center gap-2 text-sm font-semibold text-brand-deep">
           <MessageSquareText className="size-4" /> Anything else to add?
         </p>
