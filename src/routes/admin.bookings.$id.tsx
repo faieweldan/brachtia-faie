@@ -101,7 +101,6 @@ import { RecordPaymentDialog, type PayableInvoice } from "@/components/admin/Rec
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -2117,9 +2116,6 @@ function BookingDetail() {
             <DialogContent className="max-w-sm">
               <DialogHeader>
                 <DialogTitle>Who&rsquo;s working on this booking?</DialogTitle>
-                <DialogDescription>
-                  Your name is recorded against every step you take now, so the activity log stays accurate.
-                </DialogDescription>
               </DialogHeader>
               <div className="grid gap-2">
                 {STAFF.map((s) => (
