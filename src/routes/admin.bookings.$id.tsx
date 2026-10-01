@@ -7,6 +7,7 @@ import {
   ArrowRight,
   Calendar,
   Check,
+  ChevronDown,
   Download,
   Eye,
   Link2,
@@ -492,7 +493,7 @@ function BookingDetail() {
 
   // every step on a booking is done by someone - its assigned staff member - so
   // nothing happens until one is picked. The server refuses it too.
-  const staffRef = useRef<HTMLSelectElement>(null);
+  const staffRef = useRef<HTMLButtonElement>(null);
 
   // Next action takes you to where the step is done: the card scrolls into view
   // and is outlined for a moment
@@ -517,7 +518,8 @@ function BookingDetail() {
   function needStaff() {
     if (row?.assigned_staff) return false;
     toast.error(NEED_STAFF);
-    staffRef.current?.focus();
+    // the same picker as on entry, rather than a field to go and find
+    setWhoOpen(true);
     return true;
   }
 
@@ -1143,25 +1145,23 @@ function BookingDetail() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* a booking is never left without someone on it: staff is changed, not removed */}
-          <select
+          {/*
+            The name, as a button that opens the same picker asked on entry -
+            not the browser's own list, which the operating system draws in its
+            own colours on every machine (Dani, 1 Oct 2026).
+          */}
+          <Button
             ref={staffRef}
-            value={row.assigned_staff ?? ""}
-            onChange={(e) => e.target.value && mutate.mutate({ assignedStaff: e.target.value })}
-            className={`h-9 rounded-md border bg-background px-2 text-xs ${
-              row.assigned_staff ? "border-input" : "border-amber-400 text-amber-900"
-            }`}
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setWhoOpen(true)}
+            title="Who is working on this booking"
+            className={`h-9 gap-1.5 ${row.assigned_staff ? "" : "border-amber-400 text-amber-900 hover:text-amber-900"}`}
           >
-            {row.assigned_staff ? null : (
-              <option value="" disabled>
-                Assign staff
-              </option>
-            )}
-            {STAFF.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+            {row.assigned_staff || "Assign staff"}
+            <ChevronDown className="size-3.5 opacity-60" />
+          </Button>
           {row.email ? (
             <Button asChild size="sm" variant="outline">
               <a
