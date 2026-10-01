@@ -20,8 +20,11 @@ export type InventoryItem = {
   /** as the form prints it - "1", "1 set", "4 or 6"; "" when not stated */
   qty: string;
   /**
-   * The form's "Brand / Model / Serial No." column, when it asks for one: what
-   * to write - "Brand", or the choices it gives. Filled in by the resident.
+   * The form's "Brand / Model / Serial No." column: the choices the resident
+   * taps, "A / B / C". The form lists them for the fridge, the mattress
+   * protector and the wardrobe; where it only said "Brand", these are the
+   * common brands in Malaysia (1 Oct 2026) - change them here to what the
+   * units really have. "Other" is always offered beside them.
    */
   detail?: string;
 };
@@ -67,11 +70,11 @@ export const INVENTORY: InventoryArea[] = [
       item("kitchen-ceiling-lights", "Ceiling Lights", "1"),
       item("kitchen-cabinet", "Kitchen Cabinet (Top & Bottom)", "1 set"),
       item("kitchen-hood-hob", "Built In Cooker Hood & Hob", "1 set"),
-      item("kitchen-induction-cooker", "Portable Induction Cooker", "1", "Brand"),
+      item("kitchen-induction-cooker", "Portable Induction Cooker", "1", "Philips / Panasonic / Midea / Khind / Pensonic"),
       item("kitchen-refrigerator", "Refrigerator", "1", "Midea / Panasonic / Toshiba / Sharp"),
-      item("kitchen-microwave", "Microwave", "1", "Brand"),
-      item("kitchen-rice-cooker", "Rice Cooker", "1", "Brand"),
-      item("kitchen-kettle", "Electric Jug / Kettle", "1", "Brand"),
+      item("kitchen-microwave", "Microwave", "1", "Panasonic / Sharp / Samsung / Midea / Toshiba"),
+      item("kitchen-rice-cooker", "Rice Cooker", "1", "Panasonic / Philips / Khind / Pensonic / Toshiba"),
+      item("kitchen-kettle", "Electric Jug / Kettle", "1", "Philips / Panasonic / Khind / Pensonic / Tefal"),
       item("kitchen-pot-pan", "Pot with Lid & Pan", "1 set"),
       item("kitchen-induction-pot", "Induction Pot", "1"),
       item("kitchen-dish-drainer", "Dish Drainer", "1"),
@@ -83,7 +86,7 @@ export const INVENTORY: InventoryArea[] = [
     id: "yard",
     name: "Yard",
     items: [
-      item("yard-washing-machine", "Washing Machine", "1", "Brand"),
+      item("yard-washing-machine", "Washing Machine", "1", "Samsung / LG / Panasonic / Sharp / Midea / Electrolux"),
       item("yard-pail-mop", "Pail, Mop & Toilet Brush", "1 set"),
       item("yard-broom", "Broom, Dustpan & Dustbin", "1 set"),
       item("yard-ceiling-lights", "Ceiling Lights", "1"),
@@ -94,9 +97,9 @@ export const INVENTORY: InventoryArea[] = [
     name: "Room",
     items: [
       item("room-ceiling-lights", "Ceiling Lights"),
-      item("room-ceiling-fan", "Ceiling Fan", "1", "Brand"),
+      item("room-ceiling-fan", "Ceiling Fan", "1", "KDK / Panasonic / Deka / Alpha"),
       item("room-curtains", "Curtains"),
-      item("room-aircon", "Air Conditioner + Remote", "1", "Brand"),
+      item("room-aircon", "Air Conditioner + Remote", "1", "Daikin / Panasonic / Midea / York / Acson / Samsung"),
       item("room-bed", "Bed Frame + Mattress"),
       item("room-mattress-protector", "Mattress Protector (Jean Perry)", "1", "Single / Queen / King"),
       item("room-bedside", "Bedside Table / Drawer"),
@@ -110,7 +113,7 @@ export const INVENTORY: InventoryArea[] = [
     items: [
       item("bath1-ceiling-lights", "Ceiling Lights", "1"),
       item("bath1-mirror", "Wall Mirror", "1"),
-      item("bath1-water-heater", "Water Heater", "1", "Brand"),
+      item("bath1-water-heater", "Water Heater", "1", "Joven / Alpha / Rheem / Panasonic / Midea"),
     ],
   },
   {
@@ -119,7 +122,7 @@ export const INVENTORY: InventoryArea[] = [
     items: [
       item("bath2-ceiling-lights", "Ceiling Lights", "1"),
       item("bath2-mirror", "Wall Mirror", "1"),
-      item("bath2-water-heater", "Water Heater", "1", "Brand"),
+      item("bath2-water-heater", "Water Heater", "1", "Joven / Alpha / Rheem / Panasonic / Midea"),
     ],
   },
   {

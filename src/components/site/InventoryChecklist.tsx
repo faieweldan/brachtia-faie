@@ -1,5 +1,21 @@
 import { useEffect, useState } from "react";
-import { Check, ChevronDown, Plus, X } from "lucide-react";
+import {
+  Bath,
+  BedDouble,
+  Check,
+  ChevronDown,
+  CookingPot,
+  DoorOpen,
+  Gauge,
+  KeyRound,
+  MessageSquareText,
+  Plus,
+  Sofa,
+  UtensilsCrossed,
+  WashingMachine,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,6 +42,31 @@ import {
  * Answers are kept in this browser as they go, so closing the page part-way
  * loses nothing.
  */
+/*
+ * Each room its own colour and icon, so a long list reads as a walk through
+ * the unit rather than one white column (Dani, 1 Oct 2026) - the same idea as
+ * the paper form's mock, in the site's own palette.
+ */
+const AREA_LOOK: Record<string, { icon: LucideIcon; head: string; stripe: string; ink: string }> = {
+  foyer: { icon: DoorOpen, head: "bg-teal-50", stripe: "border-l-teal-600", ink: "text-teal-800" },
+  living: { icon: Sofa, head: "bg-emerald-50", stripe: "border-l-emerald-600", ink: "text-emerald-800" },
+  dining: { icon: UtensilsCrossed, head: "bg-lime-50", stripe: "border-l-lime-600", ink: "text-lime-800" },
+  kitchen: { icon: CookingPot, head: "bg-amber-50", stripe: "border-l-amber-500", ink: "text-amber-800" },
+  yard: { icon: WashingMachine, head: "bg-sky-50", stripe: "border-l-sky-600", ink: "text-sky-800" },
+  room: { icon: BedDouble, head: "bg-indigo-50", stripe: "border-l-indigo-500", ink: "text-indigo-800" },
+  bath1: { icon: Bath, head: "bg-cyan-50", stripe: "border-l-cyan-600", ink: "text-cyan-800" },
+  bath2: { icon: Bath, head: "bg-cyan-50", stripe: "border-l-cyan-600", ink: "text-cyan-800" },
+  other: { icon: KeyRound, head: "bg-rose-50", stripe: "border-l-rose-500", ink: "text-rose-800" },
+};
+const FALLBACK_LOOK = { icon: DoorOpen, head: "bg-muted/40", stripe: "border-l-brand", ink: "text-brand-deep" };
+
+/** an answered row, tinted by its answer */
+const ROW_TINT: Record<string, string> = {
+  present: "bg-emerald-50/50",
+  defect: "bg-amber-50/70",
+  not_provided: "bg-slate-50",
+};
+
 export function InventoryChecklist({
   draftKey,
   onChange,
@@ -130,16 +171,20 @@ export function InventoryChecklist({
         const areaTotal = area.items.length + mine.filter((e) => e.name.trim()).length;
         const done = area.items.filter((i) => record.answers[i.id]?.status).length + mine.filter((e) => e.name.trim() && e.status).length;
         const isClosed = closed[area.id];
+        const look = AREA_LOOK[area.id] ?? FALLBACK_LOOK;
+        const Icon = look.icon;
         return (
-          <section key={area.id} className="overflow-hidden rounded-xl border border-border bg-card">
+          <section key={area.id} className={`overflow-hidden rounded-xl border border-l-4 border-border bg-card ${look.stripe}`}>
             <button
               type="button"
               onClick={() => setClosed((c) => ({ ...c, [area.id]: !c[area.id] }))}
               aria-expanded={!isClosed}
-              className="flex w-full items-center gap-2 border-b border-border bg-muted/30 px-4 py-2.5 text-left"
+              className={`flex w-full items-center gap-2.5 border-b border-border px-4 py-3 text-left ${look.head}`}
             >
-              <ChevronDown className={`size-4 shrink-0 text-brand-deep transition-transform ${isClosed ? "-rotate-90" : ""}`} />
-              <span className="flex-1 text-sm font-semibold text-brand-deep">{area.name}</span>
+              <span className={`flex size-8 shrink-0 items-center justify-center rounded-full bg-white/80 ${look.ink}`}>
+                <Icon className="size-4" />
+              </span>
+              <span className={`flex-1 text-sm font-semibold ${look.ink}`}>{area.name}</span>
               <span className={`text-[11px] font-medium ${done === areaTotal ? "text-emerald-700" : "text-muted-foreground"}`}>
                 {done === areaTotal ? (
                   <span className="inline-flex items-center gap-1">
@@ -149,6 +194,7 @@ export function InventoryChecklist({
                   `${done} / ${areaTotal}`
                 )}
               </span>
+              <ChevronDown className={`size-4 shrink-0 transition-transform ${look.ink} ${isClosed ? "-rotate-90" : ""}`} />
             </button>
             {isClosed ? null : (
               <ul className="divide-y divide-border">
@@ -156,7 +202,7 @@ export function InventoryChecklist({
                   const a = record.answers[it.id];
                   const before = was(it.id);
                   return (
-                    <li key={it.id} className="space-y-2 px-4 py-3">
+                    <li key={it.id} className={`space-y-2 px-4 py-3 transition-colors ${ROW_TINT[a?.status ?? ""] ?? ""}`}>
                       <div className="flex flex-wrap items-center gap-2">
                         <div className="min-w-0 flex-1">
                           <p className="text-sm">{it.name}</p>
@@ -172,12 +218,11 @@ export function InventoryChecklist({
                       </div>
                       {/* the form's "Brand / Model / Serial No." column, where it asks */}
                       {it.detail ? (
-                        <Input
+                        <DetailPicker
+                          hint={it.detail}
                           value={a?.detail ?? ""}
-                          onChange={(e) => setAnswer(it.id, { detail: e.target.value.slice(0, 80) })}
-                          placeholder={it.detail === "Brand" ? "Brand / model (optional)" : `${it.detail} (optional)`}
-                          aria-label={`Brand or model of ${it.name}`}
-                          className="h-8 text-sm"
+                          onChange={(detail) => setAnswer(it.id, { detail })}
+                          label={it.name}
                         />
                       ) : null}
                       {a?.status === "defect" ? (
@@ -187,7 +232,7 @@ export function InventoryChecklist({
                   );
                 })}
                 {mine.map((e) => (
-                  <li key={e.id} className="space-y-2 px-4 py-3">
+                  <li key={e.id} className={`space-y-2 px-4 py-3 transition-colors ${ROW_TINT[e.status] ?? ""}`}>
                     <div className="flex flex-wrap items-center gap-2">
                       <Input
                         value={e.name}
@@ -217,7 +262,7 @@ export function InventoryChecklist({
                   <button
                     type="button"
                     onClick={() => addExtra(area.id)}
-                    className="flex w-full items-center justify-center gap-1 px-4 py-2.5 text-xs font-medium text-brand hover:bg-muted/40"
+                    className={`flex w-full items-center justify-center gap-1 border-t border-dashed border-border px-4 py-2.5 text-xs font-medium hover:bg-muted/40 ${look.ink}`}
                   >
                     <Plus className="size-3.5" /> Add something else in this room
                   </button>
@@ -228,8 +273,13 @@ export function InventoryChecklist({
         );
       })}
 
-      <section className="overflow-hidden rounded-xl border border-border bg-card">
-        <p className="border-b border-border bg-muted/30 px-4 py-2.5 text-sm font-semibold text-brand-deep">Meter readings</p>
+      <section className="overflow-hidden rounded-xl border border-l-4 border-border border-l-slate-500 bg-card">
+        <p className="flex items-center gap-2.5 border-b border-border bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800">
+          <span className="flex size-8 items-center justify-center rounded-full bg-white/80">
+            <Gauge className="size-4" />
+          </span>
+          Meter readings
+        </p>
         <div className="grid gap-3 p-4 sm:grid-cols-2">
           {(
             [
@@ -253,8 +303,10 @@ export function InventoryChecklist({
         </div>
       </section>
 
-      <section className="space-y-2 rounded-xl border border-border bg-card p-4">
-        <p className="text-sm font-semibold text-brand-deep">Anything else to add?</p>
+      <section className="space-y-2 rounded-xl border border-l-4 border-border border-l-brand bg-card p-4">
+        <p className="flex items-center gap-2 text-sm font-semibold text-brand-deep">
+          <MessageSquareText className="size-4" /> Anything else to add?
+        </p>
         <p className="text-xs text-muted-foreground">Cleanliness, marks on walls, anything not listed above.</p>
         <Textarea
           rows={3}
@@ -264,6 +316,71 @@ export function InventoryChecklist({
           className="text-sm"
         />
       </section>
+    </div>
+  );
+}
+
+/**
+ * The form's "Brand / Model / Serial No." column. Where the form lists the
+ * choices - "Midea / Panasonic / Toshiba / Sharp" - they are tapped, as the
+ * resident ticks what is there (Dani, 1 Oct 2026); where it only says
+ * "Brand", the brand is typed. Optional either way; a second tap clears it.
+ */
+function DetailPicker({ hint, value, onChange, label }: { hint: string; value: string; onChange: (v: string) => void; label: string }) {
+  const choices = hint.split("/").map((c) => c.trim()).filter(Boolean);
+  // a brand typed in, not one of the buttons
+  const typed = !!value && !choices.includes(value);
+  const [other, setOther] = useState(typed);
+  // sizes and types (Single / Queen / King) are a closed list; brands are not
+  const brands = !/single|built in/i.test(hint);
+  const chip = (on: boolean) =>
+    `rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+      on ? "border-brand-deep bg-brand-deep text-primary-foreground" : "border-border bg-background text-muted-foreground hover:bg-muted"
+    }`;
+  return (
+    <div className="space-y-1.5">
+      <div role="radiogroup" aria-label={`Which one - ${label}`} className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[11px] text-muted-foreground">{brands ? "Brand" : "Which one?"}</span>
+        {choices.map((c) => (
+          <button
+            key={c}
+            type="button"
+            role="radio"
+            aria-checked={value === c}
+            onClick={() => {
+              setOther(false);
+              onChange(value === c ? "" : c);
+            }}
+            className={chip(value === c)}
+          >
+            {c}
+          </button>
+        ))}
+        {brands ? (
+          <button
+            type="button"
+            role="radio"
+            aria-checked={other}
+            onClick={() => {
+              setOther(!other);
+              if (!other) onChange("");
+            }}
+            className={chip(other)}
+          >
+            Other
+          </button>
+        ) : null}
+      </div>
+      {other ? (
+        <Input
+          value={typed ? value : ""}
+          onChange={(e) => onChange(e.target.value.slice(0, 80))}
+          placeholder="Which brand?"
+          aria-label={`Brand of ${label}`}
+          autoFocus
+          className="h-8 max-w-56 text-sm"
+        />
+      ) : null}
     </div>
   );
 }
