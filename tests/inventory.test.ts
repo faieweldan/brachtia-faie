@@ -5,15 +5,18 @@ import { ALL_ITEMS, emptyRecord, inventoryDefects, inventoryProblems, inventoryW
 const allPresent = () => {
   const r = emptyRecord();
   for (const i of ALL_ITEMS) r.answers[i.id] = { status: "present", remark: "" };
-  r.meters.keys = "2";
   return r;
 };
 
 describe("Schedule C - what stops submitting", () => {
-  test("nothing answered: every item, and the keys", () => {
-    expect(inventoryProblems(emptyRecord())).toEqual([`${ALL_ITEMS.length} items not checked yet`, "number of keys not filled in"]);
+  test("nothing answered: every item is still to check", () => {
+    expect(inventoryProblems(emptyRecord())).toEqual([`${ALL_ITEMS.length} items not checked yet`]);
   });
-  test("every item present and the keys counted: ready", () => {
+  test("the keys and cards are items of their own (form of 1 Oct 2026)", () => {
+    expect(ALL_ITEMS.map((i) => i.name)).toContain("Main Grill Key");
+    expect(ALL_ITEMS.map((i) => i.name)).toContain("Car Sticker");
+  });
+  test("every item present: ready", () => {
     expect(inventoryProblems(allPresent())).toEqual([]);
   });
   test("a defect needs its description", () => {

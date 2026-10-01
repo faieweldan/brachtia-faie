@@ -170,6 +170,16 @@ export function InventoryChecklist({
                         <Qty value={a?.qty ?? it.qty} onChange={(qty) => setAnswer(it.id, { qty })} label={it.name} />
                         <StatusPicker value={a?.status ?? ""} onPick={(status) => setAnswer(it.id, { status })} label={it.name} />
                       </div>
+                      {/* the form's "Brand / Model / Serial No." column, where it asks */}
+                      {it.detail ? (
+                        <Input
+                          value={a?.detail ?? ""}
+                          onChange={(e) => setAnswer(it.id, { detail: e.target.value.slice(0, 80) })}
+                          placeholder={it.detail === "Brand" ? "Brand / model (optional)" : `${it.detail} (optional)`}
+                          aria-label={`Brand or model of ${it.name}`}
+                          className="h-8 text-sm"
+                        />
+                      ) : null}
                       {a?.status === "defect" ? (
                         <DefectNote value={a.remark} onChange={(remark) => setAnswer(it.id, { remark })} label={it.name} />
                       ) : null}
@@ -219,11 +229,10 @@ export function InventoryChecklist({
       })}
 
       <section className="overflow-hidden rounded-xl border border-border bg-card">
-        <p className="border-b border-border bg-muted/30 px-4 py-2.5 text-sm font-semibold text-brand-deep">Meters and keys</p>
-        <div className="grid gap-3 p-4 sm:grid-cols-3">
+        <p className="border-b border-border bg-muted/30 px-4 py-2.5 text-sm font-semibold text-brand-deep">Meter readings</p>
+        <div className="grid gap-3 p-4 sm:grid-cols-2">
           {(
             [
-              ["keys", "Number of keys", "numeric", true],
               ["water", "Water meter reading", "decimal", false],
               ["electric", "Electric meter reading", "decimal", false],
             ] as const

@@ -17,14 +17,20 @@ export type InventoryItem = {
   /** stable across edits to the wording, so an answer stays with its item */
   id: string;
   name: string;
-  /** as the form prints it - "1", "1 set", "4 / 6"; "" when not stated */
+  /** as the form prints it - "1", "1 set", "4 or 6"; "" when not stated */
   qty: string;
+  /**
+   * The form's "Brand / Model / Serial No." column, when it asks for one: what
+   * to write - "Brand", or the choices it gives. Filled in by the resident.
+   */
+  detail?: string;
 };
 
 export type InventoryArea = { id: string; name: string; items: InventoryItem[] };
 
-const item = (id: string, name: string, qty = ""): InventoryItem => ({ id, name, qty });
+const item = (id: string, name: string, qty = "", detail?: string): InventoryItem => ({ id, name, qty, ...(detail ? { detail } : {}) });
 
+/* the Schedule C form of 1 Oct 2026 (references/agreement and access) */
 export const INVENTORY: InventoryArea[] = [
   {
     id: "foyer",
@@ -41,13 +47,13 @@ export const INVENTORY: InventoryArea[] = [
       item("living-sofa", "Sofa (3 Seater)", "1"),
       item("living-coffee-table", "Coffee Table", "1"),
       item("living-tv-cabinet", "TV Cabinet", "1"),
+      item("dining-wall-tv-frame", "Wall TV Frame", "1"),
     ],
   },
   {
     id: "dining",
     name: "Dining",
     items: [
-      item("dining-wall-tv-frame", "Wall TV Frame", "1"),
       item("dining-ceiling-lights", "Ceiling Lights"),
       item("dining-ceiling-fan", "Ceiling Fan", "1"),
       item("dining-table", "Dining Table", "1"),
@@ -60,24 +66,24 @@ export const INVENTORY: InventoryArea[] = [
     items: [
       item("kitchen-ceiling-lights", "Ceiling Lights", "1"),
       item("kitchen-cabinet", "Kitchen Cabinet (Top & Bottom)", "1 set"),
-      item("kitchen-hood-hob", "Cooker Hood & Hob", "1 set"),
-      item("kitchen-induction-cooker", "Induction Cooker", "1"),
-      item("kitchen-refrigerator", "Refrigerator", "1"),
-      item("kitchen-microwave", "Microwave", "1"),
-      item("kitchen-rice-cooker", "Rice Cooker", "1"),
-      item("kitchen-kettle", "Electric Jug / Kettle", "1"),
+      item("kitchen-hood-hob", "Built In Cooker Hood & Hob", "1 set"),
+      item("kitchen-induction-cooker", "Portable Induction Cooker", "1", "Brand"),
+      item("kitchen-refrigerator", "Refrigerator", "1", "Midea / Panasonic / Toshiba / Sharp"),
+      item("kitchen-microwave", "Microwave", "1", "Brand"),
+      item("kitchen-rice-cooker", "Rice Cooker", "1", "Brand"),
+      item("kitchen-kettle", "Electric Jug / Kettle", "1", "Brand"),
       item("kitchen-pot-pan", "Pot with Lid & Pan", "1 set"),
       item("kitchen-induction-pot", "Induction Pot", "1"),
       item("kitchen-dish-drainer", "Dish Drainer", "1"),
-      item("kitchen-cutlery", "Cutlery, Plates, Bowls & Mugs", "4 / 6"),
-      item("kitchen-spoon-spatula", "Wooden Spoon & Spatula", "1 set"),
+      item("kitchen-cutlery", "Cutlery, Plates, Bowls & Mugs", "4 or 6"),
+      item("kitchen-spoon-spatula", "Cooking Spoon & Spatula", "1 set"),
     ],
   },
   {
     id: "yard",
     name: "Yard",
     items: [
-      item("yard-washing-machine", "Washing Machine", "1"),
+      item("yard-washing-machine", "Washing Machine", "1", "Brand"),
       item("yard-pail-mop", "Pail, Mop & Toilet Brush", "1 set"),
       item("yard-broom", "Broom, Dustpan & Dustbin", "1 set"),
       item("yard-ceiling-lights", "Ceiling Lights", "1"),
@@ -88,13 +94,13 @@ export const INVENTORY: InventoryArea[] = [
     name: "Room",
     items: [
       item("room-ceiling-lights", "Ceiling Lights"),
-      item("room-ceiling-fan", "Ceiling Fan", "1"),
+      item("room-ceiling-fan", "Ceiling Fan", "1", "Brand"),
       item("room-curtains", "Curtains"),
-      item("room-aircon", "Air Conditioner + Remote", "1"),
+      item("room-aircon", "Air Conditioner + Remote", "1", "Brand"),
       item("room-bed", "Bed Frame + Mattress"),
-      item("room-mattress-protector", "Mattress Protector (Single / King)", "1"),
+      item("room-mattress-protector", "Mattress Protector (Jean Perry)", "1", "Single / Queen / King"),
       item("room-bedside", "Bedside Table / Drawer"),
-      item("room-wardrobe", "Wardrobe (Built-in / Movable)", "1 set"),
+      item("room-wardrobe", "Wardrobe", "1 set", "Built In / Movable"),
       item("room-study", "Study Table + Chair", "1 set"),
     ],
   },
@@ -104,7 +110,7 @@ export const INVENTORY: InventoryArea[] = [
     items: [
       item("bath1-ceiling-lights", "Ceiling Lights", "1"),
       item("bath1-mirror", "Wall Mirror", "1"),
-      item("bath1-water-heater", "Water Heater", "1"),
+      item("bath1-water-heater", "Water Heater", "1", "Brand"),
     ],
   },
   {
@@ -113,13 +119,20 @@ export const INVENTORY: InventoryArea[] = [
     items: [
       item("bath2-ceiling-lights", "Ceiling Lights", "1"),
       item("bath2-mirror", "Wall Mirror", "1"),
-      item("bath2-water-heater", "Water Heater", "1"),
+      item("bath2-water-heater", "Water Heater", "1", "Brand"),
     ],
   },
   {
     id: "other",
     name: "Other Items",
-    items: [item("other-keys", "Keys")],
+    items: [
+      item("other-grill-key", "Main Grill Key", "1"),
+      item("other-door-key", "Main Door Key"),
+      item("other-room-key", "Room Door Key"),
+      item("other-access-card", "Resident Access Card"),
+      item("other-carpark-card", "Carpark Access Card"),
+      item("other-car-sticker", "Car Sticker"),
+    ],
   },
 ];
 
@@ -130,7 +143,7 @@ export const STATUS_LABEL: Record<InventoryStatus, string> = {
 };
 
 /** One answered item. `qty` is what the resident counted, when it differs. */
-export type InventoryAnswer = { status: InventoryStatus | ""; remark: string; qty?: string };
+export type InventoryAnswer = { status: InventoryStatus | ""; remark: string; qty?: string; detail?: string };
 /** An item the list did not name, added by the resident in that area. */
 export type ExtraItem = { id: string; areaId: string; name: string; qty: string; status: InventoryStatus | ""; remark: string };
 export type Meters = { keys: string; water: string; electric: string };
@@ -158,8 +171,8 @@ export const ALL_ITEMS = INVENTORY.flatMap((a) => a.items);
 /**
  * What still stops the record being submitted: every item answered, every
  * defect described (the form: "described under Remarks"), every added item
- * named and answered, and the keys counted - a key not counted at move-in is
- * a deduction nobody can make at move-out.
+ * named and answered. The keys and cards are items in Other Items now (form of
+ * 1 Oct 2026), so they are checked like everything else.
  */
 export function inventoryProblems(r: InventoryRecord): string[] {
   const out: string[] = [];
@@ -172,7 +185,6 @@ export function inventoryProblems(r: InventoryRecord): string[] {
     ALL_ITEMS.filter((i) => r.answers[i.id]?.status === "defect" && !r.answers[i.id]!.remark.trim()).length +
     extras.filter((e) => e.status === "defect" && !e.remark.trim()).length;
   if (undescribed) out.push(`${undescribed} defect${undescribed === 1 ? "" : "s"} not described`);
-  if (!r.meters.keys.trim()) out.push("number of keys not filled in");
   return out;
 }
 

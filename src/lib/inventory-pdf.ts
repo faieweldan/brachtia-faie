@@ -142,7 +142,9 @@ export async function inventoryPdf(input: InventoryPdfInput): Promise<Uint8Array
     for (const it of area.items) {
       const a = r.answers[it.id];
       // what the resident counted, when it differs from the list
-      row(it.name, a?.qty?.trim() || it.qty, a?.status ? STATUS_LABEL[a.status] : "", a?.remark ?? "");
+      // the brand or model written in, after the name - the form's own column
+      const named = a?.detail?.trim() ? `${it.name} - ${a.detail.trim()}` : it.name;
+      row(named, a?.qty?.trim() || it.qty, a?.status ? STATUS_LABEL[a.status] : "", a?.remark ?? "");
     }
     for (const e of r.extras.filter((e) => e.areaId === area.id && e.name.trim())) {
       row(`${e.name.trim()} (added)`, e.qty, e.status ? STATUS_LABEL[e.status] : "", e.remark);
@@ -151,10 +153,9 @@ export async function inventoryPdf(input: InventoryPdfInput): Promise<Uint8Array
 
   y -= 10;
   room(60);
-  text("METERS AND KEYS", M, 11, bold, HEAD);
+  text("METER READINGS", M, 11, bold, HEAD);
   y -= 16;
   for (const [k, v] of [
-    ["Number of keys", r.meters.keys],
     ["Water meter reading", r.meters.water],
     ["Electric meter reading", r.meters.electric],
   ] as const) {

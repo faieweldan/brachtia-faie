@@ -193,10 +193,9 @@ function InventoryReviewDialog({ docId, onClose, onChanged }: { docId: string; o
                   </p>
                 )}
 
-                <section className="grid grid-cols-3 gap-2 text-sm">
+                <section className="grid grid-cols-2 gap-2 text-sm">
                   {(
                     [
-                      ["Keys", record.meters.keys],
                       ["Water meter", record.meters.water],
                       ["Electric meter", record.meters.electric],
                     ] as const
@@ -228,6 +227,7 @@ function InventoryReviewDialog({ docId, onClose, onChanged }: { docId: string; o
                             <p key={it.id} className="flex justify-between gap-2">
                               <span>
                                 {it.name}
+                                {a?.detail ? <span className="text-muted-foreground"> · {a.detail}</span> : null}
                                 {a?.qty && a.qty !== it.qty ? <span className="text-muted-foreground"> · counted {a.qty}</span> : null}
                               </span>
                               <span className={a?.status === "defect" ? "font-medium text-amber-700" : "text-muted-foreground"}>

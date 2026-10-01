@@ -274,7 +274,10 @@ export const signDocument = createServerFn({ method: "POST" })
 
 const statusSchema = z.enum(["present", "defect", "not_provided"]);
 const recordSchema = z.object({
-  answers: z.record(z.string().max(60), z.object({ status: statusSchema, remark: z.string().max(500), qty: z.string().max(12).optional() })),
+  answers: z.record(
+    z.string().max(60),
+    z.object({ status: statusSchema, remark: z.string().max(500), qty: z.string().max(12).optional(), detail: z.string().max(80).optional() }),
+  ),
   extras: z
     .array(
       z.object({
