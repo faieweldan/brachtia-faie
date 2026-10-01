@@ -756,7 +756,8 @@ export const listRetiredPackDocs = createServerFn({ method: "GET" }).handler(asy
   const db = await admin();
   const { data } = await db.from("document_templates").select("doc_key, deactivated_at");
   const rows = (data ?? []) as { doc_key: string; deactivated_at: string | null }[];
-  const keys = [...new Set(rows.map((r) => r.doc_key).filter(Boolean))];
+  // Schedule C is the resident's checklist, not a template: never retired (1 Oct 2026)
+  const keys = [...new Set(rows.map((r) => r.doc_key).filter((k) => k && k !== "schedule_c"))];
   // retired only when every template for that document is deactivated
   return keys.filter((k) => rows.filter((r) => r.doc_key === k).every((r) => r.deactivated_at));
 });

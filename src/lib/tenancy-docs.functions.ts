@@ -75,7 +75,8 @@ const DOC_LABEL: Record<string, string> = {
 async function retiredDocKeys(db: any): Promise<Set<string>> {
   const { data } = await db.from("document_templates").select("doc_key, deactivated_at");
   const rows = (data ?? []) as { doc_key: string; deactivated_at: string | null }[];
-  const keys = new Set(rows.map((r) => r.doc_key).filter(Boolean));
+  // Schedule C is the resident's checklist, not a template: always in the pack (1 Oct 2026)
+  const keys = new Set(rows.map((r) => r.doc_key).filter((k) => k && k !== "schedule_c"));
   return new Set([...keys].filter((k) => rows.filter((r) => r.doc_key === k).every((r) => r.deactivated_at)));
 }
 const DOC_KEY_OF: Record<AgreementDocType, string> = {
