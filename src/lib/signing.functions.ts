@@ -96,10 +96,6 @@ async function documentsOf(sb: any, residentId: string): Promise<SigningDoc[]> {
         const { readInventory } = await import("@/lib/inventory.server");
         const signed = SIGNED.has(r.status);
         const submitted = r.status === "submitted";
-        const w = signed || submitted ? null : await inventoryWindowFor(sb, residentId);
-        const now = Date.now();
-        const fmt = (d: Date) =>
-          d.toLocaleString("en-GB", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kuala_Lumpur" });
         out.push({
           kind: "agreement",
           id: r.id,
@@ -109,17 +105,8 @@ async function documentsOf(sb: any, residentId: string): Promise<SigningDoc[]> {
           submitted,
           form: "inventory",
           mode: "in",
-          locked:
-            signed || submitted
-              ? ""
-              : !w
-                ? "Opens on your check-in day, so you can check the room first."
-                : now < w.opens.getTime()
-                  ? `Opens on your check-in day, ${fmt(w.opens)}, so you can check the room first.`
-                  : now > w.closes.getTime()
-                    ? "The 48 hours after check-in have passed. Please contact Brachtia."
-                    : "",
-          ...(w && now >= w.opens.getTime() && now <= w.closes.getTime() ? { closes: w.closes.toISOString() } : {}),
+          // set below, once the documents to sign before it are known
+          locked: "",
         });
         // the move-out check, once Brachtia has opened it
         const outFile = signed ? await readInventory(sb, residentId, r.id, "out") : null;
@@ -150,17 +137,18 @@ async function documentsOf(sb: any, residentId: string): Promise<SigningDoc[]> {
     .order("created_at", { ascending: false })
     .limit(1);
   if (cards?.length && (cards[0].generated_pdf_path || (await asksResidentSignature(sb, cards[0].template_version_id)))) out.push({ kind: "card", id: cards[0].id, key: cards[0].id, label: "Access Card Form", signed: !!cards[0].generated_pdf_path, locked: "" });
+  /*
+   * The move-in check opens once the documents before it are signed - its own
+   * page, straight after them (Dani, 1 Oct 2026). Not tied to the check-in
+   * date: the resident goes on to it as soon as they have signed.
+   */
+  const unsigned = out.filter((d) => d.form !== "inventory" && !d.signed).length;
+  for (const d of out) {
+    if (d.form === "inventory" && d.mode === "in" && !d.signed && !d.submitted && unsigned) {
+      d.locked = `Sign your ${unsigned === 1 ? "last document" : `${unsigned} documents`} first - the inventory check comes after them.`;
+    }
+  }
   return out;
-}
-
-/** The check-in the resident chose; their tenancy start when they chose none. */
-async function inventoryWindowFor(sb: any, residentId: string) {
-  const { inventoryWindow } = await import("@/lib/inventory");
-  const { data: res } = await sb.from("residents").select("checkin_on, checkin_slot").eq("id", residentId).maybeSingle();
-  if (res?.checkin_on) return inventoryWindow(String(res.checkin_on).slice(0, 10), String(res.checkin_slot ?? ""));
-  const { data: ten } = await sb.from("tenancies").select("start_date").eq("resident_id", residentId).order("start_date", { ascending: false }).limit(1);
-  const start = String((ten ?? [])[0]?.start_date ?? "");
-  return start ? inventoryWindow(start.slice(0, 10), "") : null;
 }
 
 const tokenOnly = z.object({ token: z.string().min(16).max(128) });

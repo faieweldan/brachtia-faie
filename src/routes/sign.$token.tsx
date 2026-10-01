@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CheckCircle2, ChevronDown, ChevronRight, FileSignature, Loader2, Lock, PenLine, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardCheck, FileSignature, Loader2, Lock, PenLine, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ function SigningPage() {
   const { token } = Route.useParams();
   const pack = useQuery({ queryKey: ["signing", token], queryFn: () => getSigningPack({ data: { token } }) });
   const [open, setOpen] = useState<string | null>(null);
+  const [page, setPage] = useState<"docs" | "inventory">("docs");
 
   if (pack.isLoading) {
     return (
@@ -52,16 +53,70 @@ function SigningPage() {
     );
   }
 
-  const docs = pack.data.documents;
-  // a check sent in is done, for the resident - Brachtia signs it next
-  const signed = docs.filter((d) => d.signed || d.submitted).length;
+  const all = pack.data.documents;
+  // the documents to read and sign; the inventory checks have their own page
+  const docs = all.filter((d) => d.form !== "inventory");
+  const checks = all.filter((d) => d.form === "inventory");
+  const signed = docs.filter((d) => d.signed).length;
   const pct = docs.length ? Math.round((signed / docs.length) * 100) : 0;
-  const allDone = docs.length > 0 && docs.every((d) => d.signed || d.submitted || d.locked);
+  const docsDone = docs.every((d) => d.signed || d.locked);
+  // a check still to do, and open - what the Next button leads to
+  const checkToDo = checks.find((c) => !c.signed && !c.submitted && !c.locked);
   // after signing one, the next one still to sign opens by itself
   const nextAfter = (key: string) => {
     const i = docs.findIndex((d) => d.key === key);
-    return docs.slice(i + 1).find((d) => !d.signed && !d.submitted && !d.locked)?.key ?? null;
+    return docs.slice(i + 1).find((d) => !d.signed && !d.locked)?.key ?? null;
   };
+
+  /*
+   * The inventory check is its own page, after the documents (Dani, 1 Oct
+   * 2026): one long checklist done in the room, not a fourth card squeezed
+   * under three documents.
+   */
+  if (page === "inventory" && checks.length) {
+    return (
+      <Shell>
+        <button
+          type="button"
+          onClick={() => {
+            setPage("docs");
+            window.scrollTo({ top: 0 });
+          }}
+          className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" /> Back to your documents
+        </button>
+        <section className={`${CARD} p-5 sm:p-6`}>
+          <div className="flex items-start gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-tint text-brand-deep">
+              <ClipboardCheck className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <h1 className="text-xl font-bold text-brand-deep sm:text-2xl">Inventory check</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Schedule C – Inventory &amp; Condition Record. Walk through the unit room by room and check each item. Mark
+                anything damaged as a defect and say what is wrong — it protects your deposit when you move out.
+              </p>
+            </div>
+          </div>
+        </section>
+        <div className="mt-4 space-y-3">
+          {checks.map((c, i) => (
+            <Section
+              key={c.key}
+              n={i + 1}
+              token={token}
+              doc={c}
+              open={open === c.key || (checks.length === 1 && open === null)}
+              onToggle={() => setOpen(open === c.key ? "" : c.key)}
+              onSigned={() => setOpen("")}
+            />
+          ))}
+        </div>
+        <Footnote />
+      </Shell>
+    );
+  }
 
   return (
     <Shell>
@@ -91,22 +146,8 @@ function SigningPage() {
         ) : null}
       </section>
 
-      {allDone ? (
-        <section className={`${CARD} mt-4 flex items-start gap-3 border-emerald-200 bg-emerald-50/60 p-5`}>
-          <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-700" />
-          <div>
-            <p className="text-sm font-semibold text-emerald-900">All done — thank you!</p>
-            <p className="mt-0.5 text-sm text-emerald-900/80">
-              {docs.some((d) => d.locked)
-                ? "The rest opens after you check in. We will let you know."
-                : "Everything is signed. We will be in touch about the next steps."}
-            </p>
-          </div>
-        </section>
-      ) : null}
-
       <div className="mt-4 space-y-3">
-        {docs.length === 0 ? (
+        {all.length === 0 ? (
           <div className={`${CARD} p-8 text-center text-sm text-muted-foreground`}>Nothing to sign yet. We will send you a message when your documents are ready.</div>
         ) : (
           docs.map((d, i) => (
@@ -123,12 +164,53 @@ function SigningPage() {
         )}
       </div>
 
-      <p className="mt-6 flex items-start gap-2 px-1 text-[11px] leading-relaxed text-muted-foreground">
-        <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
-        Signing here is your electronic signature. For each document we keep the exact file you signed, with the time, your device
-        and a fingerprint of the file, so it cannot be changed afterwards.
-      </p>
+      {/* the next page: the inventory check, once the documents are signed */}
+      {checks.length ? (
+        <section className={`${CARD} mt-4 flex flex-wrap items-center gap-4 p-5 ${checkToDo ? "ring-2 ring-brand/20" : ""}`}>
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-tint text-brand-deep">
+            <ClipboardCheck className="size-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-brand-deep">Next: Inventory check</p>
+            <p className="text-sm text-muted-foreground">
+              {checkToDo
+                ? "Check every item in your unit and sign — Schedule C."
+                : checks.every((c) => c.signed)
+                  ? "Signed. You can look at it any time."
+                  : checks.some((c) => c.submitted)
+                    ? "Sent in — Brachtia is reviewing it."
+                    : docsDone
+                      ? "Check every item in your unit and sign — Schedule C."
+                      : "Opens once the documents above are signed."}
+            </p>
+          </div>
+          <Button
+            type="button"
+            disabled={!checkToDo && !checks.some((c) => c.signed || c.submitted)}
+            variant={checkToDo ? "default" : "outline"}
+            onClick={() => {
+              setPage("inventory");
+              setOpen(null);
+              window.scrollTo({ top: 0 });
+            }}
+          >
+            {checkToDo ? "Start" : "Open"} <ArrowRight className="size-4" />
+          </Button>
+        </section>
+      ) : null}
+
+      <Footnote />
     </Shell>
+  );
+}
+
+function Footnote() {
+  return (
+    <p className="mt-6 flex items-start gap-2 px-1 text-[11px] leading-relaxed text-muted-foreground">
+      <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
+      Signing here is your electronic signature. For each document we keep the exact file you signed, with the time, your device
+      and a fingerprint of the file, so it cannot be changed afterwards.
+    </p>
   );
 }
 
