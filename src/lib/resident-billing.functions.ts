@@ -392,6 +392,8 @@ export type NewResidentInvoice = {
   values: Record<string, unknown>;
   /** amount is the price of one; the line is worth quantity x amount */
   items: { label: string; kind: string; amount: number; quantity?: number }[];
+  /** raised for a lost or damaged access card - the new form waits for it to be paid */
+  forAccessCard?: boolean;
 };
 
 /**
@@ -451,6 +453,10 @@ export const createResidentInvoice = createServerFn({ method: "POST" })
     {
       const { recordInvoiceVersion } = await import("@/lib/document-versions.functions");
       await recordInvoiceVersion(supabase, String(inv.id));
+    }
+    if (data.forAccessCard) {
+      const { linkReplacementInvoice } = await import("@/lib/access-card.functions");
+      await linkReplacementInvoice(supabase, data.residentId, String(inv.id), String(inv.number ?? ""));
     }
     return { id: String(inv.id), number: String(inv.number ?? "") };
   });

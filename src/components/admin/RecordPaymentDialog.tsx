@@ -21,6 +21,7 @@ import { PAY_METHODS } from "@/lib/ops-store";
 import { STAFF } from "@/data/form-options";
 import { paymentProofHistory, paymentProofUrl, replacePaymentProof } from "@/lib/resident-billing.functions";
 import { Textarea } from "@/components/ui/textarea";
+import { klToday } from "@/lib/kl-date";
 
 export type PayableInvoice = {
   id: string;
@@ -85,7 +86,7 @@ export function RecordPaymentDialog({
   // type - Lav, 21 Sept 2026
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState(invoice?.description ?? "");
-  const [paidOn, setPaidOn] = useState(new Date().toISOString().slice(0, 10));
+  const [paidOn, setPaidOn] = useState(klToday());
   const [method, setMethod] = useState(PAY_METHODS[0] ?? "");
   const [reference, setReference] = useState("");
   const [proof, setProof] = useState<{ name: string; path: string } | null>(null);

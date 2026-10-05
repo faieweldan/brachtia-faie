@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { ChargeInput } from "@/components/admin/ChargePicker";
 import { Textarea } from "@/components/ui/textarea";
 import { refreshMoney } from "@/lib/billing-client";
 import type { InvoiceDoc } from "@/lib/invoice-pdf";
@@ -26,6 +27,7 @@ import {
   updateResidentInvoice,
   type BillingInvoice,
 } from "@/lib/resident-billing.functions";
+import { klToday } from "@/lib/kl-date";
 
 /**
  * A resident's next invoice, from their Payments tab: rent for a period,
@@ -70,7 +72,7 @@ const FREQUENCIES = SCHEDULES;
 
 const MONTHS: Record<string, number> = { monthly: 1, bimonthly: 2, quarterly: 3, semiannual: 6 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => klToday();
 
 function shift(iso: string, { days = 0, months = 0 }: { days?: number; months?: number }) {
   const d = new Date(`${iso}T00:00:00Z`);
@@ -127,6 +129,7 @@ export function ResidentInvoiceDialog({
   preset,
   tenancyId,
   editing,
+  accessCard,
   onClose,
   onCreated,
 }: {
@@ -143,6 +146,8 @@ export function ResidentInvoiceDialog({
   tenancyId?: string;
   /** an invoice being changed - scheduled rent before it is billed, or one nothing is paid on */
   editing?: BillingInvoice | undefined;
+  /** a lost or damaged access card's charge - the line it starts with; the new form waits for it to be paid */
+  accessCard?: { label: string; amount: number };
   onClose: () => void;
   onCreated: (type: "rental" | "charge") => void;
 }) {
@@ -171,16 +176,13 @@ export function ResidentInvoiceDialog({
   );
   const [lines, setLines] = useState<Line[]>(
     editing
-      ? // one amount per line: a line saved as 2 x RM50 comes back as RM100,
-        // so nothing is lost now that there is no quantity to show
-        editing.items.map((l) => ({
-          ...l,
-          amount: Number(l.amount || 0) * lineQty(l.quantity),
-          quantity: 1,
-        }))
+      ? // price and quantity as saved - the line shows both again (Dani, 2 Oct 2026)
+        editing.items.map((l) => ({ ...l, amount: Number(l.amount || 0), quantity: lineQty(l.quantity) }))
       : startAs === "rental"
         ? [first.line]
-        : [firstLine(startAs)],
+        : accessCard
+          ? [{ label: accessCard.label, kind: "charge", amount: accessCard.amount, quantity: 1 }]
+          : [firstLine(startAs)],
   );
   // a scheduled invoice's date is the day it is billed
   const [invoiceDate, setInvoiceDate] = useState(
@@ -196,7 +198,7 @@ export function ResidentInvoiceDialog({
           ? first.start
           : shift(today(), { days: 15 }),
   );
-  const [notes, setNotes] = useState(editing?.doc.notes ?? "");
+  const [notes, setNotes] = useState(editing?.doc.notes ?? (accessCard ? "Access card replacement" : ""));
   const [saving, setSaving] = useState(false);
 
   const isRental = kind === "rental";
@@ -306,6 +308,7 @@ export function ResidentInvoiceDialog({
           items: lines,
           ...(isRental ? { periodStart, periodEnd } : {}),
           ...(isRental && tenancyId ? { tenancyId } : {}),
+          ...(accessCard ? { forAccessCard: true } : {}),
         },
       });
       toast.success(`Invoice ${res.number} generated`);
@@ -427,8 +430,14 @@ export function ResidentInvoiceDialog({
           <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
             {/* the boxes below are unlabelled on their own - this names them */}
             <div className="flex items-center gap-2 bg-muted/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              <span className="flex-1">Description</span>
-              <span className="w-28 text-right">Amount (RM)</span>
+              <span className="flex-1">Item</span>
+              {editing?.scheduled ? null : (
+                <>
+                  <span className="w-24 text-right">Price (RM)</span>
+                  <span className="w-16 text-right">Qty</span>
+                </>
+              )}
+              <span className="w-24 text-right">Amount (RM)</span>
               <span className="size-8 shrink-0" aria-hidden />
             </div>
             {lines.map((l, i) =>
@@ -442,27 +451,46 @@ export function ResidentInvoiceDialog({
               editing?.scheduled ? (
                 <div key={i} className="flex items-center gap-2 px-3 py-2 text-sm">
                   <span className="flex-1">{l.label || "—"}</span>
-                  <span className="w-28 text-right tabular-nums">
-                    {money(Number(l.amount) || 0)}
+                  <span className="w-24 text-right tabular-nums">
+                    {money((Number(l.amount) || 0) * lineQty(l.quantity))}
                   </span>
                   <span className="size-8 shrink-0" aria-hidden />
                 </div>
               ) : (
                 <div key={i} className="flex items-center gap-2 px-3 py-2">
-                  <Input
-                    value={l.label}
-                    placeholder="Description"
-                    className="h-8 flex-1"
-                    onChange={(e) => edit(i, { label: e.target.value })}
-                  />
-                  {/* the line's amount, as it is - no quantity and price each */}
+                  {/* an additional charge: Schedule B's list is the box's own dropdown */}
+                  {kind === "charge" ? (
+                    <ChargeInput
+                      value={l.label}
+                      onChange={(label) => edit(i, { label })}
+                      onPick={(label, amount) => edit(i, { label, ...(amount != null ? { amount } : {}) })}
+                    />
+                  ) : (
+                    <Input
+                      value={l.label}
+                      placeholder="Description"
+                      className="h-8 flex-1"
+                      onChange={(e) => edit(i, { label: e.target.value })}
+                    />
+                  )}
+                  {/* Item | Price | Qty | Amount - the amount is price x quantity */}
                   <Input
                     type="number"
                     value={l.amount}
-                    aria-label="Amount"
-                    className="h-8 w-28 text-right tabular-nums"
-                    onChange={(e) => edit(i, { amount: Number(e.target.value), quantity: 1 })}
+                    aria-label="Price"
+                    className="h-8 w-24 text-right tabular-nums"
+                    onChange={(e) => edit(i, { amount: Number(e.target.value) })}
                   />
+                  <Input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={l.quantity}
+                    aria-label="Quantity"
+                    className="h-8 w-16 text-right tabular-nums"
+                    onChange={(e) => edit(i, { quantity: Math.max(1, Math.round(Number(e.target.value) || 1)) })}
+                  />
+                  <span className="w-24 text-right text-sm tabular-nums">{money((Number(l.amount) || 0) * lineQty(l.quantity))}</span>
                   <Button
                     size="icon"
                     variant="ghost"

@@ -1648,6 +1648,23 @@ export const recordPayment = createServerFn({ method: "POST" })
       } as any)
       .eq("id", data.invoiceId);
 
+    // a replacement access card waits for its invoice to be paid (Dani, 2 Oct 2026)
+    if (balance <= 0.005) {
+      try {
+        const { replacementAfterPayment } = await import("@/lib/access-card.functions");
+        await replacementAfterPayment(supabase, data.invoiceId);
+      } catch (err) {
+        console.warn(`access card after payment: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      // and an Update Tenancy's documents wait for its difference to be paid (Dani, 3 Oct 2026)
+      try {
+        const { tenancyChangeAfterPayment } = await import("@/lib/tenancy-change.functions");
+        await tenancyChangeAfterPayment(supabase, data.invoiceId);
+      } catch (err) {
+        console.warn(`tenancy change after payment: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
     const enquiryId = (invoice as any).enquiry_id as string | null;
     let residentId = "";
     let residentCode = "";

@@ -1,5 +1,5 @@
 import { loadProofFile } from "@/lib/payment-proof";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   CalendarClock,
@@ -35,6 +35,7 @@ import {
   RecordPaymentDialog,
   type PayableInvoice,
 } from "@/components/admin/RecordPaymentDialog";
+import { CheckoutStatement } from "@/components/admin/CheckoutStatement";
 
 /**
  * A resident's money, shown the way an admin thinks about it.
@@ -49,11 +50,26 @@ import {
  */
 
 export function ResidentPayments({
+  openCheckout = 0,
+  cardCharge = null,
+  focusInvoice = null,
+  onCardChargeOpened,
+  onInactive,
   residentId,
   quickbooksId,
   tenancyEnd,
   details,
 }: {
+  /** counts up each time the resident card's Checkout button is pressed */
+  openCheckout?: number;
+  /** a lost or damaged access card's charge, to open as a new invoice (n: each request) */
+  cardCharge?: { label: string; amount: number; n: number } | null;
+  /** an invoice to bring into view - from the Access Card panel's link (n: each request) */
+  focusInvoice?: { number: string; n: number } | null;
+  /** the charge invoice above has opened - the page forgets it */
+  onCardChargeOpened?: () => void;
+  /** checkout settled: the resident becomes Inactive and their bed is freed */
+  onInactive?: () => Promise<void>;
   residentId: string;
   quickbooksId?: string;
   tenancyEnd?: string;
@@ -68,9 +84,33 @@ export function ResidentPayments({
 
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const toggle = (k: string) => setOpen((o) => ({ ...o, [k]: !o[k] }));
+  // from the Checkout button: open the settlement and bring it into view
+  useEffect(() => {
+    if (!openCheckout) return;
+    setOpen((o) => ({ ...o, checkout: true }));
+    setTimeout(() => document.getElementById("checkout-settlement")?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
+  }, [openCheckout]);
   const [paying, setPaying] = useState<PayableInvoice | null>(null);
   // a new invoice: rent or a charge
-  const [raising, setRaising] = useState<{ as: "rental" | "charge" } | null>(null);
+  const [raising, setRaising] = useState<{ as: "rental" | "charge"; card?: { label: string; amount: number } } | null>(null);
+  // from the Access Card panel: the charge invoice opens, filled at Schedule B's price
+  // the link on the Access Card panel: open every group, then bring the invoice into view
+  useEffect(() => {
+    if (!focusInvoice || isLoading) return;
+    setOpen((o) => ({ ...o, initial: true, rental: true, charge: true, checkout: true }));
+    setTimeout(() => {
+      const el = document.querySelector(`[data-invoice="${CSS.escape(focusInvoice.number)}"]`);
+      el?.scrollIntoView({ behavior: "smooth", block: "start" });
+      el?.classList.add("ring-2", "ring-amber-400", "rounded-xl");
+      setTimeout(() => el?.classList.remove("ring-2", "ring-amber-400", "rounded-xl"), 2500);
+    }, 300);
+  }, [focusInvoice, isLoading]);
+  // opened once, then let go - else every visit to Payments opened it again (Dani, 4 Oct 2026)
+  useEffect(() => {
+    if (!cardCharge) return;
+    setRaising({ as: "charge", card: { label: cardCharge.label, amount: cardCharge.amount } });
+    onCardChargeOpened?.();
+  }, [cardCharge, onCardChargeOpened]);
   // a scheduled rent invoice being changed before it is billed
   const [editingRent, setEditingRent] = useState<BillingInvoice | null>(null);
   // the rent terms admin confirmed for the current tenancy - none means setup is needed
@@ -394,8 +434,8 @@ export function ResidentPayments({
           <Row
             icon={DoorOpen}
             title="Checkout settlement"
-            tone={checkout.length ? "due" : "idle"}
-            status={checkout.length ? "In progress" : "Not started"}
+            tone="idle"
+            status="Credit note"
             detail={[
               tenancyEnd ? `Ends ${fmtDate(tenancyEnd)}` : null,
               (b?.depositsHeld ?? 0) > 0 ? `${money(b!.depositsHeld)} deposits held` : null,
@@ -403,11 +443,14 @@ export function ResidentPayments({
               .filter(Boolean)
               .join(" · ")}
             open={!!open["checkout"]}
-            onToggle={checkout.length ? () => toggle("checkout") : undefined}
+            onToggle={() => toggle("checkout")}
           >
+            {/* older checkout invoices, from before the statement (2 Oct 2026) */}
             {checkout.map((inv) => (
               <InvoiceDetail key={inv.id} invoice={inv} onPay={() => pay(inv)} />
             ))}
+            <div id="checkout-settlement" className="scroll-mt-24" />
+            <CheckoutStatement residentId={residentId} phone={details.phone} onInactive={onInactive} />
           </Row>
         </div>
       </Panel>
@@ -422,6 +465,7 @@ export function ResidentPayments({
         <ResidentInvoiceDialog
           open
           startAs={raising.as}
+          {...(raising.card ? { accessCard: raising.card } : {})}
           {...(tenancyId ? { tenancyId } : {})}
           residentId={residentId}
           details={invoiceDetails}
@@ -559,7 +603,7 @@ export function InvoiceDetail({ invoice, onPay }: { invoice: BillingInvoice; onP
   // its own, because this is exported and drawn outside the page that holds one
   const state = paymentStateOf(invoice, new Date().toISOString().slice(0, 10));
   return (
-    <div className="space-y-3 p-5">
+    <div className="scroll-mt-24 space-y-3 p-5" data-invoice={invoice.number}>
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-sm font-medium text-brand-deep">
           {invoice.scheduled ? "Not billed yet" : invoiceRef(invoice.number, invoice.type)}
