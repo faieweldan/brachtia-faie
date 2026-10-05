@@ -275,6 +275,29 @@ function ResidentProfilePage() {
     if (stored && !form) setForm(stored);
   }, [stored, form]);
 
+  /*
+   * The tenancy is in the database, but this browser has no copy of it - a new
+   * computer, or the site at a new address (Dani, 5 Oct 2026: the Vercel site
+   * said "No tenancy yet"). The copy is made from the database, once.
+   */
+  const dbTenancy = form ? savedDates.data?.[form.id] : undefined;
+  const hasLocal = !!form && tenancies.some((t) => t.residentId === form.id);
+  useEffect(() => {
+    if (!form || hasLocal || !dbTenancy?.id) return;
+    const row = findBedForResident(units, form);
+    createTenancy({
+      id: dbTenancy.id,
+      residentId: form.id,
+      unitId: row?.unit.id,
+      roomId: row?.room.id,
+      bedId: row?.bed.id ?? form.bedId,
+      start: dbTenancy.start,
+      end: dbTenancy.end,
+      rent: row?.bed.rent ?? row?.room.rent ?? 0,
+      schedule: form.paySchedule,
+    });
+  }, [form, hasLocal, dbTenancy, units]);
+
   if ((!stored && !isNew) || !form) {
     return (
       <EmptyState
