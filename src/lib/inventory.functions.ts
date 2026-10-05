@@ -4,10 +4,13 @@ import { z } from "zod";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /**
- * Brachtia's side of Schedule C (Dani, 1 Oct 2026): read what the resident
- * sent in, then confirm and sign - only then is the PDF made and the check
- * Signed. Once the move-in is signed, the move-out check can be opened on the
- * same signing link.
+ * Brachtia's side of Schedule C (Dani, 1 Oct 2026). Two turns:
+ *   1. the resident sends the check in, unsigned: answer each defect -
+ *      Resolved or Accepted - and send it back to them
+ *   2. once they agree and sign: confirm and sign - only then is the PDF made
+ *      and the check Signed
+ * Once the move-in is signed, the move-out check can be opened on the same
+ * signing link.
  */
 
 async function admin(): Promise<any> {
@@ -22,6 +25,8 @@ const toBase64 = (bytes: Uint8Array) => {
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return btoa(bin);
 };
+
+type InventoryFileT = import("@/lib/inventory.server").InventoryFile;
 
 async function residentOf(sb: any, docId: string): Promise<string> {
   const { data: doc } = await sb.from("agreement_documents").select("agreement_id, doc_type").eq("id", docId).maybeSingle();
@@ -38,14 +43,24 @@ export const getInventoryReview = createServerFn({ method: "GET" })
     const sb = await admin();
     const residentId = await residentOf(sb, data.docId);
     const { getFile, readInventory } = await import("@/lib/inventory.server");
-    const out: Record<"in" | "out", null | { file: any; signature: string }> = { in: null, out: null };
+    const out: Record<"in" | "out", null | { file: InventoryFileT; signature: string }> = { in: null, out: null };
     for (const mode of ["in", "out"] as const) {
       const file = await readInventory(sb, residentId, data.docId, mode);
       if (!file) continue;
       const sig = file.submitted ? await getFile(sb, file.submitted.signaturePath) : null;
       out[mode] = { file, signature: sig ? `data:image/png;base64,${toBase64(sig)}` : "" };
     }
-    return out;
+    // the defects' photos, to look at
+    const { recordPhotos } = await import("@/lib/inventory");
+    const { photoUrls } = await import("@/lib/inventory.server");
+    const paths = [out.in, out.out].flatMap((e) => (e?.file.record ? recordPhotos(e.file.record) : []));
+    // who to send the link back to, once the check is answered
+    const { data: res } = await sb.from("residents").select("full_name, mobile").eq("id", residentId).maybeSingle();
+    return {
+      ...out,
+      photos: await photoUrls(sb, paths),
+      resident: { id: residentId, name: String(res?.full_name ?? ""), mobile: String(res?.mobile ?? "") },
+    };
   });
 
 /** Confirm a check the resident sent in, and sign it for Brachtia. */
@@ -59,12 +74,19 @@ export const confirmInventory = createServerFn({ method: "POST" })
     if (!file || file.status !== "submitted") throw new Error("There is nothing waiting to be confirmed.");
     const { loadSignatory } = await import("@/lib/signatory.server");
     if (!(await loadSignatory(sb))?.token) throw new Error("Save the signatory's signature in Settings → Signatory first.");
-    const { bytes, signatory, at } = await buildInventoryPdf(sb, residentId, data.docId, file);
+    // the resident's signature as they drew it on the copy they read, and Brachtia's now
+    const png = file.submitted ? await (await import("@/lib/inventory.server")).getFile(sb, file.submitted.signaturePath) : null;
+    if (!file.submitted || !png) throw new Error("The resident's signature could not be found.");
+    const { bytes, signatory, at } = await buildInventoryPdf(sb, residentId, data.docId, file, {
+      resident: { png, at: file.submitted.at, typedName: file.submitted.typedName },
+      brachtia: true,
+    });
     const pdfPath = `${inventoryBase(residentId, data.docId, data.mode)}.pdf`;
     await putFile(sb, pdfPath, bytes, "application/pdf");
     await writeInventory(sb, residentId, data.docId, {
       ...file,
       status: "signed",
+      history: [...(file.history ?? []), { at, step: "signed by Brachtia" }],
       signed: { at, by: signatory, pdfPath, pdfSha256: await sha256(bytes) },
     });
     // the move-in check is Schedule C itself; the move-out one sits beside it
@@ -104,26 +126,48 @@ export const inventoryPdfUrl = createServerFn({ method: "GET" })
   });
 
 /**
- * Send a check back to the resident to do again - a wrong answer, a missing
- * defect - before it is confirmed. What they sent is cleared; the check is
- * open on their link again (Dani, 1 Oct 2026).
+ * Answer every defect - Resolved or Accepted - and send the check back to the
+ * resident to read. With no defects, it goes back as it came (Dani, 1 Oct
+ * 2026): the resident still waits for Brachtia before signing.
  */
-export const sendBackInventory = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ docId: z.string().uuid(), mode: z.enum(["in", "out"]) }).parse(d))
+export const returnInventory = createServerFn({ method: "POST" })
+  .inputValidator((d) =>
+    z
+      .object({
+        docId: z.string().uuid(),
+        mode: z.enum(["in", "out"]),
+        verdicts: z.record(z.string().max(60), z.enum(["resolved", "accepted"])),
+      })
+      .parse(d),
+  )
   .handler(async ({ data }) => {
     const sb = await admin();
     const residentId = await residentOf(sb, data.docId);
-    const { inventoryBase, readInventory, writeInventory } = await import("@/lib/inventory.server");
+    const { readInventory, writeInventory } = await import("@/lib/inventory.server");
+    const { inventoryAnswerables } = await import("@/lib/inventory");
     const file = await readInventory(sb, residentId, data.docId, data.mode);
-    if (file?.status !== "submitted") throw new Error("Only a check waiting for review can be sent back.");
-    const base = inventoryBase(residentId, data.docId, data.mode);
+    // "returned": already with the resident, answers changed before they sign (Dani, 2 Oct 2026)
+    if ((file?.status !== "review" && file?.status !== "returned") || !file.record)
+      throw new Error("Only a check waiting for review, or not signed yet, can be answered.");
+    const at = new Date().toISOString();
+    const decisions: NonNullable<typeof file.decisions> = {};
+    for (const d of inventoryAnswerables(file.record)) {
+      const verdict = data.verdicts[d.key];
+      if (!verdict) throw new Error(`Answer every item first - ${d.name} has no answer.`);
+      // an answer already given to the same defect keeps its time
+      const was = file.decisions?.[d.key];
+      decisions[d.key] = was && was.verdict === verdict && was.remark === d.remark ? was : { verdict, remark: d.remark, at };
+    }
+    await writeInventory(sb, residentId, data.docId, {
+      ...file,
+      status: "returned",
+      decisions,
+      returnedAt: at,
+      history: [...(file.history ?? []), { at, step: "answered" }],
+    });
     if (data.mode === "in") {
-      await sb.storage.from("resident-documents").remove([`${base}.json`, `${base}-signature.png`]);
-      const { error } = await sb.from("agreement_documents").update({ status: "generated" }).eq("id", data.docId);
+      const { error } = await sb.from("agreement_documents").update({ status: "pending_signature" }).eq("id", data.docId);
       if (error) throw new Error(error.message);
-    } else {
-      await sb.storage.from("resident-documents").remove([`${base}-signature.png`]);
-      await writeInventory(sb, residentId, data.docId, { mode: "out", status: "open", ...(file.openedAt ? { openedAt: file.openedAt } : {}) });
     }
     return { ok: true as const };
   });

@@ -4,7 +4,7 @@ import { ALL_ITEMS, emptyRecord, inventoryDefects, inventoryProblems, inventoryW
 
 const allPresent = () => {
   const r = emptyRecord();
-  for (const i of ALL_ITEMS) r.answers[i.id] = { status: "present", remark: "" };
+  for (const i of ALL_ITEMS) r.answers[i.id] = { status: "present", remark: "", ...(i.details ? { detail: i.details[0]! } : {}) };
   return r;
 };
 
@@ -16,14 +16,32 @@ describe("Schedule C - what stops submitting", () => {
     expect(ALL_ITEMS.map((i) => i.name)).toContain("Main Grill Key");
     expect(ALL_ITEMS.map((i) => i.name)).toContain("Car Sticker");
   });
+  test("a brand or type is needed where the form has one - not when the item is not there", () => {
+    const r = allPresent();
+    r.answers["kitchen-refrigerator"] = { status: "present", remark: "" };
+    expect(inventoryProblems(r)).toEqual(["1 detail not chosen"]);
+    r.answers["kitchen-refrigerator"] = { status: "present", remark: "", detail: "Other" };
+    expect(inventoryProblems(r)).toEqual(["1 detail not chosen"]);
+    r.answers["kitchen-refrigerator"] = { status: "present", remark: "", detail: "Hisense" };
+    expect(inventoryProblems(r)).toEqual([]);
+    r.answers["kitchen-refrigerator"] = { status: "not_provided", remark: "" };
+    expect(inventoryProblems(r)).toEqual([]);
+  });
   test("every item present: ready", () => {
     expect(inventoryProblems(allPresent())).toEqual([]);
   });
   test("a defect needs its description", () => {
     const r = allPresent();
-    r.answers["room-aircon"] = { status: "defect", remark: " " };
+    r.answers["room-curtains"] = { status: "defect", remark: " ", photos: ["p.jpg"] };
     expect(inventoryProblems(r)).toEqual(["1 defect not described"]);
-    r.answers["room-aircon"] = { status: "defect", remark: "Remote missing back cover" };
+    r.answers["room-curtains"] = { status: "defect", remark: "Remote missing back cover", photos: ["p.jpg"] };
+    expect(inventoryProblems(r)).toEqual([]);
+  });
+  test("a defect needs a photo - the form asks for supporting image(s)", () => {
+    const r = allPresent();
+    r.answers["room-curtains"] = { status: "defect", remark: "Remote missing back cover" };
+    expect(inventoryProblems(r)).toEqual(["1 defect without a photo"]);
+    r.answers["room-curtains"] = { status: "defect", remark: "Remote missing back cover", photos: ["p.jpg"] };
     expect(inventoryProblems(r)).toEqual([]);
   });
   test("an added item, once named, is checked like the rest", () => {
@@ -31,7 +49,7 @@ describe("Schedule C - what stops submitting", () => {
     r.extras.push({ id: "x1", areaId: "room", name: "Iron", qty: "1", status: "", remark: "" });
     expect(inventoryProblems(r)).toEqual(["1 added item not checked"]);
     r.extras[0]!.status = "defect";
-    expect(inventoryProblems(r)).toEqual(["1 defect not described"]);
+    expect(inventoryProblems(r)).toEqual(["1 defect not described", "1 defect without a photo"]);
   });
   test("an added row left without a name is ignored", () => {
     const r = allPresent();
@@ -40,9 +58,9 @@ describe("Schedule C - what stops submitting", () => {
   });
   test("the defects, in list order, for admin to review", () => {
     const r = allPresent();
-    r.answers["room-aircon"] = { status: "defect", remark: "Drips" };
+    r.answers["room-curtains"] = { status: "defect", remark: "Drips" };
     r.extras.push({ id: "x3", areaId: "foyer", name: "Shoe rack", qty: "1", status: "defect", remark: "Wobbly" });
-    expect(inventoryDefects(r).map((d) => d.name)).toEqual(["Shoe rack", "Air Conditioner + Remote"]);
+    expect(inventoryDefects(r).map((d) => d.name)).toEqual(["Shoe rack", "Curtains"]);
   });
 });
 

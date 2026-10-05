@@ -1,13 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Bath,
   BedDouble,
+  Camera,
   Check,
   ChevronDown,
   CookingPot,
   DoorOpen,
-  Gauge,
   KeyRound,
+  Loader2,
+  Minus,
   MessageSquareText,
   Plus,
   Sofa,
@@ -18,12 +20,19 @@ import {
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   ALL_ITEMS,
   INVENTORY,
+  MAX_PHOTOS,
+  OTHER,
+  SERIAL,
   STATUS_LABEL,
+  VERDICT_LABEL,
   emptyRecord,
+  inventoryGaps,
+  type DefectDecision,
   type ExtraItem,
   type InventoryMode,
   type InventoryRecord,
@@ -72,7 +81,11 @@ export function InventoryChecklist({
   onChange,
   mode,
   baseline,
+  initial,
+  decisions,
+  photos,
   disabled = false,
+  locked = false,
 }: {
   /** where this browser keeps the answers between visits */
   draftKey: string;
@@ -80,7 +93,15 @@ export function InventoryChecklist({
   mode: InventoryMode;
   /** at move-out: the record signed at move-in, shown beside each item */
   baseline?: InventoryRecord | null;
+  /** once Brachtia has answered: the check as answered, to start from */
+  initial?: InventoryRecord;
+  /** Brachtia's answer to each defect, shown under it while it is unchanged */
+  decisions?: Record<string, DefectDecision>;
+  /** a defect's photos: save one, and the links to show them */
+  photos: PhotoProps;
   disabled?: boolean;
+  /** sent to Brachtia already: shown, not changed */
+  locked?: boolean;
 }) {
   const [record, setRecord] = useState<InventoryRecord>(() => {
     try {
@@ -92,9 +113,55 @@ export function InventoryChecklist({
     } catch {
       /* no saved draft - start empty */
     }
-    return emptyRecord();
+    return initial ?? emptyRecord();
   });
   const [closed, setClosed] = useState<Record<string, boolean>>({});
+  /*
+   * A room closes by itself once every row in it is answered in full - status,
+   * brand, and a described, pictured defect - and the next room comes up, so a
+   * phone is not one endless scroll (Dani, 2 Oct 2026). Only when a room
+   * becomes complete: one opened again by hand stays open.
+   */
+  const complete = (areaId: string) => {
+    const ids = new Set([
+      ...(INVENTORY.find((x) => x.id === areaId)?.items.map((i) => i.id) ?? []),
+      ...record.extras.filter((e) => e.areaId === areaId && e.name.trim()).map((e) => e.id),
+    ]);
+    return !inventoryGaps(record).some((g) => g.rows.some((r) => ids.has(r)));
+  };
+  const wasComplete = useRef<Record<string, boolean> | null>(null);
+  useEffect(() => {
+    const now = Object.fromEntries(INVENTORY.map((x) => [x.id, complete(x.id)]));
+    const before = wasComplete.current;
+    wasComplete.current = now;
+    // the first look - a draft reopened - closes nothing
+    if (!before) return;
+    const done = INVENTORY.find((x) => now[x.id] && !before[x.id]);
+    if (!done) return;
+    const i = INVENTORY.indexOf(done);
+    setClosed((c) => ({ ...c, [done.id]: true, ...(INVENTORY[i + 1] ? { [INVENTORY[i + 1]!.id]: false } : {}) }));
+    const next = INVENTORY[i + 1];
+    if (next) setTimeout(() => document.getElementById(`inventory-area-${next.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [record]);
+
+  // a "take me there" from the list of what is missing: open the room, then go
+  useEffect(() => {
+    const go = (ev: Event) => {
+      const id = (ev as CustomEvent<string>).detail;
+      const area = INVENTORY.find((x) => x.items.some((i) => i.id === id))?.id ?? record.extras.find((e) => e.id === id)?.areaId;
+      if (area) setClosed((c) => ({ ...c, [area]: false }));
+      setTimeout(() => {
+        const el = document.getElementById(rowId(id));
+        if (!el) return;
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        el.classList.add("ring-2", "ring-inset", "ring-amber-500");
+        setTimeout(() => el.classList.remove("ring-2", "ring-inset", "ring-amber-500"), 2200);
+      }, 60);
+    };
+    window.addEventListener("inventory-goto", go);
+    return () => window.removeEventListener("inventory-goto", go);
+  }, [record.extras]);
 
   useEffect(() => {
     onChange(record);
@@ -131,7 +198,12 @@ export function InventoryChecklist({
   const was = (id: string) => baseline?.answers[id];
 
   return (
-    <div className={`space-y-4 ${disabled ? "pointer-events-none opacity-60" : ""}`}>
+    <div className={`space-y-4 ${disabled ? "pointer-events-none opacity-60" : locked ? "pointer-events-none" : ""}`}>
+      {locked ? (
+        <p className="pointer-events-auto rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          Your check as you sent it - view only. If something is not right, contact Brachtia.
+        </p>
+      ) : null}
       <div className="rounded-xl border border-border bg-card p-4">
         <p className="text-sm text-muted-foreground">
           {mode === "in" ? (
@@ -174,7 +246,7 @@ export function InventoryChecklist({
         const look = AREA_LOOK[area.id] ?? FALLBACK_LOOK;
         const Icon = look.icon;
         return (
-          <section key={area.id} className="overflow-hidden rounded-xl border border-border bg-card">
+          <section key={area.id} id={`inventory-area-${area.id}`} className="scroll-mt-40 overflow-hidden rounded-xl border border-border bg-card">
             <button
               type="button"
               onClick={() => setClosed((c) => ({ ...c, [area.id]: !c[area.id] }))}
@@ -197,14 +269,25 @@ export function InventoryChecklist({
               <ChevronDown className={`size-4 shrink-0 transition-transform ${look.ink} ${isClosed ? "-rotate-90" : ""}`} />
             </button>
             {isClosed ? null : (
-              <ul className="divide-y divide-border">
+              <div className="divide-y divide-border">
+                {/* the form's own columns (Dani, 1 Oct 2026) - on a phone each row stacks */}
+                <div className={`hidden px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid ${GRID}`}>
+                  <span>Item</span>
+                  <span>Qty</span>
+                  <span>Details</span>
+                  <span>Status</span>
+                </div>
                 {area.items.map((it) => {
                   const a = record.answers[it.id];
                   const before = was(it.id);
                   return (
-                    <li key={it.id} className={`space-y-2 px-4 py-3 transition-colors ${ROW_TINT[a?.status ?? ""] ?? ""}`}>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="min-w-0 flex-1">
+                    <Row
+                      key={it.id}
+                      id={it.id}
+                      tint={ROW_TINT[a?.status ?? ""] ?? ""}
+                      showRemarks={a?.status === "defect" || !!a?.remark?.trim()}
+                      item={
+                        <>
                           <p className="text-sm">{it.name}</p>
                           {before?.status ? (
                             <p className="text-[11px] text-muted-foreground">
@@ -212,96 +295,105 @@ export function InventoryChecklist({
                               {before.remark ? ` — ${before.remark}` : ""}
                             </p>
                           ) : null}
-                        </div>
-                        <Qty value={a?.qty ?? it.qty} onChange={(qty) => setAnswer(it.id, { qty })} label={it.name} />
-                        <StatusPicker value={a?.status ?? ""} onPick={(status) => setAnswer(it.id, { status })} label={it.name} />
-                      </div>
-                      {/* the form's "Brand / Model / Serial No." column, where it asks */}
-                      {it.detail ? (
-                        <DetailPicker
-                          hint={it.detail}
-                          value={a?.detail ?? ""}
-                          onChange={(detail) => setAnswer(it.id, { detail })}
+                        </>
+                      }
+                      qty={<Qty value={a?.qty ?? String(it.qty)} onChange={(qty) => setAnswer(it.id, { qty })} label={it.name} />}
+                      details={
+                        // not there: nothing to name - no brand, no serial number (Dani, 2 Oct 2026)
+                        a?.status === "not_provided" ? (
+                          <span className="hidden text-sm text-muted-foreground md:inline">—</span>
+                        ) : it.details === SERIAL ? (
+                          <Input
+                            value={a?.detail ?? ""}
+                            onChange={(ev) => setAnswer(it.id, { detail: ev.target.value.slice(0, 40) })}
+                            placeholder="Serial No."
+                            aria-label={`Serial number of ${it.name}`}
+                            className={`h-8 text-sm ${a?.status && !a.detail?.trim() ? "border-amber-500" : ""}`}
+                          />
+                        ) : it.details ? (
+                          <DetailSelect
+                            options={it.details}
+                            value={a?.detail ?? ""}
+                            needed={!!a?.status}
+                            onChange={(detail) => setAnswer(it.id, { detail })}
+                            label={it.name}
+                          />
+                        ) : (
+                          <span className="hidden text-sm text-muted-foreground md:inline">—</span>
+                        )
+                      }
+                      status={
+                        <StatusPicker
+                          value={a?.status ?? ""}
+                          // marked not there: a brand or serial number given before goes with it
+                          onPick={(status) => setAnswer(it.id, status === "not_provided" ? { status, detail: "" } : { status })}
                           label={it.name}
                         />
-                      ) : null}
-                      {a?.status === "defect" ? (
-                        <DefectNote value={a.remark} onChange={(remark) => setAnswer(it.id, { remark })} label={it.name} />
-                      ) : null}
-                    </li>
+                      }
+                      remarks={
+                        <>
+                          <Remark defect={a?.status === "defect"} value={a?.remark ?? ""} onChange={(remark) => setAnswer(it.id, { remark })} label={it.name} />
+                          {a?.status === "defect" ? (
+                            <Photos {...photos} item={it.id} value={a.photos ?? []} onChange={(p) => setAnswer(it.id, { photos: p })} />
+                          ) : null}
+                          {a?.status === "defect" ? <Verdict d={decisions?.[it.id]} remark={a.remark} /> : null}
+                        </>
+                      }
+                    />
                   );
                 })}
                 {mine.map((e) => (
-                  <li key={e.id} className={`space-y-2 px-4 py-3 transition-colors ${ROW_TINT[e.status] ?? ""}`}>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Input
-                        value={e.name}
-                        onChange={(ev) => setExtra(e.id, { name: ev.target.value.slice(0, 80) })}
-                        placeholder="What is it?"
-                        aria-label={`Added item in ${area.name}`}
-                        className="h-8 min-w-0 flex-1 text-sm"
-                        autoFocus={!e.name}
-                      />
-                      <Qty value={e.qty} onChange={(qty) => setExtra(e.id, { qty })} label={e.name || "added item"} />
-                      <StatusPicker value={e.status} onPick={(status) => setExtra(e.id, { status })} label={e.name || "added item"} />
-                      <button
-                        type="button"
-                        onClick={() => removeExtra(e.id)}
-                        title="Remove"
-                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                      >
-                        <X className="size-4" />
-                      </button>
-                    </div>
-                    {e.status === "defect" ? (
-                      <DefectNote value={e.remark} onChange={(remark) => setExtra(e.id, { remark })} label={e.name} />
-                    ) : null}
-                  </li>
+                  <Row
+                    key={e.id}
+                    id={e.id}
+                    tint={ROW_TINT[e.status] ?? ""}
+                    showRemarks={e.status === "defect" || !!e.remark.trim()}
+                    item={
+                      <div className="flex items-center gap-1">
+                        <Input
+                          value={e.name}
+                          onChange={(ev) => setExtra(e.id, { name: ev.target.value.slice(0, 80) })}
+                          placeholder="What is it?"
+                          aria-label={`Added item in ${area.name}`}
+                          className="h-8 min-w-0 flex-1 text-sm"
+                          autoFocus={!e.name}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeExtra(e.id)}
+                          title="Remove"
+                          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        >
+                          <X className="size-4" />
+                        </button>
+                      </div>
+                    }
+                    qty={<Qty value={e.qty} onChange={(qty) => setExtra(e.id, { qty })} label={e.name || "added item"} />}
+                    details={<span className="hidden text-sm text-muted-foreground md:inline">—</span>}
+                    status={<StatusPicker value={e.status} onPick={(status) => setExtra(e.id, { status })} label={e.name || "added item"} />}
+                    remarks={
+                      <>
+                        <Remark defect={e.status === "defect"} value={e.remark} onChange={(remark) => setExtra(e.id, { remark })} label={e.name} />
+                        {e.status === "defect" ? (
+                          <Photos {...photos} item={e.id} value={e.photos ?? []} onChange={(p) => setExtra(e.id, { photos: p })} />
+                        ) : null}
+                        {e.status === "defect" ? <Verdict d={decisions?.[e.id]} remark={e.remark} /> : null}
+                      </>
+                    }
+                  />
                 ))}
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => addExtra(area.id)}
-                    className={`flex w-full items-center justify-center gap-1 border-t border-dashed border-border px-4 py-2.5 text-xs font-medium hover:bg-muted/40 ${look.ink}`}
-                  >
-                    <Plus className="size-3.5" /> Add something else in this room
-                  </button>
-                </li>
-              </ul>
+                <button
+                  type="button"
+                  onClick={() => addExtra(area.id)}
+                  className={`flex w-full items-center justify-center gap-1 border-dashed px-4 py-2.5 text-xs font-medium hover:bg-muted/40 ${look.ink}`}
+                >
+                  <Plus className="size-3.5" /> Add something else in this room
+                </button>
+              </div>
             )}
           </section>
         );
       })}
-
-      <section className="overflow-hidden rounded-xl border border-border bg-card">
-        <p className="flex items-center gap-2.5 border-b border-border bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800">
-          <span className="flex size-8 items-center justify-center rounded-full bg-white/80">
-            <Gauge className="size-4" />
-          </span>
-          Meter readings
-        </p>
-        <div className="grid gap-3 p-4 sm:grid-cols-2">
-          {(
-            [
-              ["water", "Water meter reading", "decimal", false],
-              ["electric", "Electric meter reading", "decimal", false],
-            ] as const
-          ).map(([k, label, mode, required]) => (
-            <label key={k} className="space-y-1.5">
-              <span className="block text-xs text-muted-foreground">
-                {label}
-                {required ? "" : " (optional)"}
-              </span>
-              <Input
-                inputMode={mode}
-                value={record.meters[k]}
-                onChange={(e) => setMeter(k, e.target.value)}
-                className={`h-9 text-sm ${required && !record.meters[k].trim() ? "border-amber-400" : ""}`}
-              />
-            </label>
-          ))}
-        </div>
-      </section>
 
       <section className="space-y-2 rounded-xl border border-border bg-card p-4">
         <p className="flex items-center gap-2 text-sm font-semibold text-brand-deep">
@@ -320,96 +412,212 @@ export function InventoryChecklist({
   );
 }
 
+const rowId = (id: string) => `inventory-row-${id}`;
+
 /**
- * The form's "Brand / Model / Serial No." column. Where the form lists the
- * choices - "Midea / Panasonic / Toshiba / Sharp" - they are tapped, as the
- * resident ticks what is there (Dani, 1 Oct 2026); where it only says
- * "Brand", the brand is typed. Optional either way; a second tap clears it.
+ * Take the resident to a row that still needs something (Dani, 2 Oct 2026):
+ * its room is opened, the page scrolls to it and it is outlined for a moment.
  */
-function DetailPicker({ hint, value, onChange, label }: { hint: string; value: string; onChange: (v: string) => void; label: string }) {
-  const choices = hint.split("/").map((c) => c.trim()).filter(Boolean);
-  // a brand typed in, not one of the buttons
-  const typed = !!value && !choices.includes(value);
-  const [other, setOther] = useState(typed);
-  // sizes and types (Single / Queen / King) are a closed list; brands are not
-  const brands = !/single|built in/i.test(hint);
-  const chip = (on: boolean) =>
-    `rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-      on ? "border-brand-deep bg-brand-deep text-primary-foreground" : "border-border bg-background text-muted-foreground hover:bg-muted"
-    }`;
+export function goToInventoryRow(id: string) {
+  window.dispatchEvent(new CustomEvent("inventory-goto", { detail: id }));
+}
+
+/** Item · Qty · Details · Status · Remarks - the form's columns, on a wide screen */
+/*
+ * Item · Qty · Details · Status. No Remarks column (Dani, 4 Oct 2026): an empty
+ * column read as something to fill in on every row. A defect opens its remark
+ * and photos on a line of their own under the row.
+ */
+const GRID = "md:grid-cols-[minmax(0,1.4fr)_88px_minmax(0,1.1fr)_236px] md:gap-4";
+
+/** One row of the table; on a phone it stacks - the item and its count, then the rest. */
+function Row({
+  id,
+  tint,
+  item,
+  qty,
+  details,
+  status,
+  remarks,
+  showRemarks,
+}: {
+  id: string;
+  tint: string;
+  item: React.ReactNode;
+  qty: React.ReactNode;
+  details: React.ReactNode;
+  status: React.ReactNode;
+  remarks: React.ReactNode;
+  /** a defect (or a remark written before): the remark line shows */
+  showRemarks: boolean;
+}) {
+  return (
+    <div id={rowId(id)} className={`grid scroll-mt-40 gap-2 px-4 py-3 transition-colors md:items-center ${GRID} ${tint}`}>
+      <div className="flex items-start justify-between gap-2 md:contents">
+        <div className="min-w-0">{item}</div>
+        <div>{qty}</div>
+      </div>
+      <div className="min-w-0">{details}</div>
+      <div>{status}</div>
+      {showRemarks ? (
+        <div className="min-w-0 space-y-2 rounded-lg border border-amber-200 bg-white/70 p-2.5 md:col-span-4">{remarks}</div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The form's "Brand / Model / Serial No." column, as a list to pick from
+ * (Dani, 1 Oct 2026). Required unless the item is not there. "Other" asks
+ * for the name.
+ */
+function DetailSelect({
+  options,
+  value,
+  needed,
+  onChange,
+  label,
+}: {
+  options: readonly string[];
+  value: string;
+  needed: boolean;
+  onChange: (v: string) => void;
+  label: string;
+}) {
+  // a name typed in after "Other"
+  const typed = !!value && !options.includes(value);
+  const picked = typed ? OTHER : value;
+  const missing = needed && (!value.trim() || value === OTHER);
   return (
     <div className="space-y-1.5">
-      <div role="radiogroup" aria-label={`Which one - ${label}`} className="flex flex-wrap items-center gap-1.5">
-        <span className="text-[11px] text-muted-foreground">{brands ? "Brand" : "Which one?"}</span>
-        {choices.map((c) => (
-          <button
-            key={c}
-            type="button"
-            role="radio"
-            aria-checked={value === c}
-            onClick={() => {
-              setOther(false);
-              onChange(value === c ? "" : c);
-            }}
-            className={chip(value === c)}
-          >
-            {c}
-          </button>
-        ))}
-        {brands ? (
-          <button
-            type="button"
-            role="radio"
-            aria-checked={other}
-            onClick={() => {
-              setOther(!other);
-              if (!other) onChange("");
-            }}
-            className={chip(other)}
-          >
-            Other
-          </button>
-        ) : null}
-      </div>
-      {other ? (
+      {/* our own list, not the phone's or the Mac's - the same everywhere (Dani, 4 Oct 2026) */}
+      <Select value={picked} onValueChange={onChange}>
+        <SelectTrigger
+          aria-label={`Details of ${label}`}
+          className={`h-8 w-full text-sm ${missing ? "border-amber-500" : "border-border"} ${picked ? "" : "text-muted-foreground"}`}
+        >
+          <SelectValue placeholder={options.includes("Midea") ? "Choose brand…" : "Choose…"} />
+        </SelectTrigger>
+        <SelectContent className="max-h-72">
+          {options.map((o) => (
+            <SelectItem key={o} value={o}>
+              {o}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {picked === OTHER ? (
         <Input
           value={typed ? value : ""}
-          onChange={(e) => onChange(e.target.value.slice(0, 80))}
+          onChange={(e) => onChange(e.target.value.slice(0, 80) || OTHER)}
           placeholder="Which brand?"
           aria-label={`Brand of ${label}`}
           autoFocus
-          className="h-8 max-w-56 text-sm"
+          className="h-8 text-sm"
         />
       ) : null}
     </div>
   );
 }
 
+/** The count, as − 1 + - a number only (Dani, 1 Oct 2026). */
 function Qty({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+  const n = Number.parseInt(value, 10);
+  const now = Number.isFinite(n) ? n : 1;
+  const step = (d: number) => onChange(String(Math.min(99, Math.max(0, now + d))));
+  const btn = "flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-background hover:text-foreground";
   return (
-    <label className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground">
-      Qty
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value.slice(0, 12))}
-        aria-label={`Quantity of ${label}`}
-        className="w-10 border-b border-dashed border-border bg-transparent text-center text-xs font-semibold text-foreground focus:border-brand focus:outline-none"
-      />
-    </label>
+    <div className="inline-flex shrink-0 items-center rounded-full bg-muted" role="group" aria-label={`Quantity of ${label}`}>
+      <button type="button" onClick={() => step(-1)} className={btn} aria-label="One fewer">
+        <Minus className="size-3" />
+      </button>
+      <span className="w-6 text-center text-sm font-semibold tabular-nums">{now}</span>
+      <button type="button" onClick={() => step(1)} className={btn} aria-label="One more">
+        <Plus className="size-3" />
+      </button>
+    </div>
   );
 }
 
-function DefectNote({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+/**
+ * Remarks - only on a defect, where it says what is wrong (Dani, 2 Oct 2026:
+ * a box on every row made residents think each one needed a remark). A
+ * remark written before stays visible.
+ */
+function Remark({ defect, value, onChange, label }: { defect: boolean; value: string; onChange: (v: string) => void; label: string }) {
+  if (!defect && !value.trim()) return null;
   return (
     <Textarea
       rows={2}
       value={value}
       onChange={(e) => onChange(e.target.value.slice(0, 500))}
-      placeholder="What is wrong with it? e.g. scratch on the left door, remote missing"
-      aria-label={`Defect on ${label}`}
-      autoFocus={!value}
-      className={`border-amber-300 bg-amber-50/60 text-sm ${value.trim() ? "" : "border-amber-500"}`}
+      placeholder={defect ? "What is wrong with it?" : "Remarks (optional)"}
+      aria-label={`Remarks on ${label}`}
+      className={`min-h-8 py-1.5 text-sm ${defect ? `bg-amber-50/60 ${value.trim() ? "border-amber-300" : "border-amber-500"}` : ""}`}
     />
+  );
+}
+
+export type PhotoProps = {
+  upload: (item: string, file: File) => Promise<string | null>;
+  urls: Record<string, string>;
+};
+
+/**
+ * A defect's photos (Dani, 1 Oct 2026): the form asks for "supporting
+ * image(s)" with every defect. Taken with the phone's camera or picked from
+ * its photos; each is saved as soon as it is added.
+ */
+function Photos({ upload, urls, item, value, onChange }: PhotoProps & { item: string; value: string[]; onChange: (p: string[]) => void }) {
+  const [busy, setBusy] = useState(false);
+  async function add(files: FileList | null) {
+    if (!files?.length) return;
+    setBusy(true);
+    let next = value;
+    for (const f of [...files].slice(0, MAX_PHOTOS - value.length)) {
+      const path = await upload(item, f);
+      if (path) next = [...next, path];
+    }
+    onChange(next);
+    setBusy(false);
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {value.map((p) => (
+        <span key={p} className="relative size-14 overflow-hidden rounded-lg border border-amber-300 bg-muted">
+          {urls[p] ? <img src={urls[p]} alt="Defect photo" className="size-full object-cover" /> : null}
+          <button
+            type="button"
+            onClick={() => onChange(value.filter((x) => x !== p))}
+            title="Remove photo"
+            className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white"
+          >
+            <X className="size-3" />
+          </button>
+        </span>
+      ))}
+      {value.length < MAX_PHOTOS ? (
+        <label
+          className={`relative inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-dashed px-3 py-2 text-xs font-medium ${
+            value.length ? "border-border text-muted-foreground" : "border-amber-500 bg-amber-50 text-amber-900"
+          }`}
+        >
+          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Camera className="size-3.5" />}
+          {busy ? "Saving…" : value.length ? "Add another" : "Add a photo"}
+          <input type="file" accept="image/*" multiple className="sr-only" disabled={busy} onChange={(e) => void add(e.target.files)} />
+        </label>
+      ) : null}
+    </div>
+  );
+}
+
+/** Brachtia's answer under a defect - only while the defect reads as it did when answered. */
+function Verdict({ d, remark }: { d: DefectDecision | undefined; remark: string }) {
+  if (!d || d.remark.trim() !== remark.trim()) return null;
+  return (
+    <p className={`text-xs font-medium ${d.verdict === "resolved" ? "text-emerald-800" : "text-slate-700"}`}>
+      Brachtia: {VERDICT_LABEL[d.verdict]}
+    </p>
   );
 }
 

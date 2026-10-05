@@ -2,17 +2,35 @@
  * The signed Schedule C, drawn from the resident's answers (1 Oct 2026).
  *
  * There is no Word file behind it: the checklist was answered on the signing
- * page, so the record is laid out here - the form's own headings, table and
- * acknowledgement - and both signatures placed at the end. This file is what
- * is kept, fingerprinted and shown afterwards.
+ * page, so the record is laid out here. Since 2 Oct 2026 (Dani's sketch) it is
+ * one page in the invoice's and quote's look - the green band, then every
+ * item in three columns with a mark for its status, then only what needs
+ * reading in full: the defects with Brachtia's answers, and any remarks. Then
+ * the acknowledgement and both signatures. A record with many remarks runs
+ * onto a second page rather than lose any.
  */
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 
-import { INVENTORY, MODE_LABEL, STATUS_LABEL, type InventoryMode, type InventoryRecord } from "@/lib/inventory";
+import { company } from "@/data/properties";
+import {
+  ACKNOWLEDGEMENT,
+  INVENTORY,
+  MODE_LABEL,
+  VERDICT_LABEL,
+  type DefectDecision,
+  type InventoryMode,
+  type InventoryRecord,
+} from "@/lib/inventory";
 
 export type InventoryPdfInput = {
   mode: InventoryMode;
   record: InventoryRecord;
+  /** Brachtia's answer to each defect */
+  decisions?: Record<string, DefectDecision>;
+  /** how many photos each defect has - the photos stay in storage, beside the PDF */
+  photoCount?: Record<string, number>;
+  /** the resident agreed to each of Brachtia's answers before signing */
+  residentAgreed?: boolean;
   header: {
     agreementNo: string;
     agreementDate: string;
@@ -22,24 +40,28 @@ export type InventoryPdfInput = {
     room: string;
     bed: string;
   };
-  resident: { name: string; date: string; signature: Uint8Array };
+  /** no signature yet: the copy the resident reads before signing */
+  resident: { name: string; date: string; signature: Uint8Array | null };
   brachtia: { name: string; date: string; signature: Uint8Array | null };
 };
 
 const A4 = { w: 595.28, h: 841.89 };
-const M = 48; // margin
-const INK = rgb(0.1, 0.12, 0.14);
-const HEAD = rgb(0.09, 0.22, 0.3); // the form's dark blue headings
-const MUTED = rgb(0.42, 0.45, 0.48);
-const RULE = rgb(0.82, 0.84, 0.86);
-const DEFECT = rgb(0.62, 0.25, 0.08);
+const M = 36; // margin
+// the invoice's colours (invoice-pdf.ts)
+const GREEN = rgb(26 / 255, 71 / 255, 52 / 255);
+const PEACH = rgb(250 / 255, 240 / 255, 231 / 255);
+const INK = rgb(0.12, 0.12, 0.12);
+const MUTED = rgb(110 / 255, 110 / 255, 105 / 255);
+const RULE = rgb(230 / 255, 226 / 255, 220 / 255);
+const AMBER = rgb(0.72, 0.4, 0.05);
+const PRESENT = rgb(0.13, 0.5, 0.3);
 
 /** Helvetica speaks WinAnsi only: anything else becomes a plain stand-in. */
 const safe = (s: string) =>
   s
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
-    .replace(/[^\x20-\x7E -ÿ–—•]/g, "?");
+    .replace(/[^\x20-\x7E -ÿ–—•·]/g, "?");
 
 function wrap(text: string, font: PDFFont, size: number, width: number): string[] {
   const lines: string[] = [];
@@ -58,155 +80,247 @@ function wrap(text: string, font: PDFFont, size: number, width: number): string[
   return lines;
 }
 
+/** cut to fit, with an ellipsis */
+function fit(text: string, font: PDFFont, size: number, width: number) {
+  let s = safe(text);
+  if (font.widthOfTextAtSize(s, size) <= width) return s;
+  while (s.length > 1 && font.widthOfTextAtSize(`${s}…`, size) > width) s = s.slice(0, -1);
+  return `${s.trimEnd()}…`;
+}
+
+/** The status marks - drawn, since Helvetica has no tick or cross. */
+function mark(page: PDFPage, status: string, x: number, y: number) {
+  if (status === "present") {
+    page.drawLine({ start: { x, y: y + 3 }, end: { x: x + 2.5, y: y + 0.5 }, thickness: 1.1, color: PRESENT });
+    page.drawLine({ start: { x: x + 2.5, y: y + 0.5 }, end: { x: x + 7, y: y + 6 }, thickness: 1.1, color: PRESENT });
+  } else if (status === "defect") {
+    page.drawLine({ start: { x, y }, end: { x: x + 6, y: y + 6 }, thickness: 1.2, color: AMBER });
+    page.drawLine({ start: { x, y: y + 6 }, end: { x: x + 6, y }, thickness: 1.2, color: AMBER });
+  } else if (status === "not_provided") {
+    page.drawLine({ start: { x: x + 0.5, y: y + 3 }, end: { x: x + 6, y: y + 3 }, thickness: 1, color: MUTED });
+  }
+}
+
 export async function inventoryPdf(input: InventoryPdfInput): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   let page: PDFPage = pdf.addPage([A4.w, A4.h]);
-  let y = A4.h - M;
+  const FOOT = 40;
+  const r = input.record;
+  const h = input.header;
 
+  const text = (s: string, x: number, y: number, size: number, f = font, color = INK) =>
+    page.drawText(safe(s), { x, y, size, font: f, color });
+  const right = (s: string, x: number, y: number, size: number, f = font, color = INK) =>
+    page.drawText(safe(s), { x: x - f.widthOfTextAtSize(safe(s), size), y, size, font: f, color });
+
+  // the green band, as on the invoice and the quote
+  const band = 62;
+  page.drawRectangle({ x: 0, y: A4.h - band, width: A4.w, height: band, color: GREEN });
+  text(company.name, M, A4.h - 28, 14, bold, rgb(1, 1, 1));
+  text(company.tagline, M, A4.h - 41, 8, font, rgb(1, 1, 1));
+  text(`${company.email}  ·  WhatsApp ${company.phones[0]}`, M, A4.h - 52, 7.5, font, rgb(1, 1, 1));
+  right("SCHEDULE C", A4.w - M, A4.h - 25, 12, bold, rgb(1, 1, 1));
+  right("INVENTORY & CONDITION RECORD", A4.w - M, A4.h - 38, 8, font, rgb(1, 1, 1));
+  right(MODE_LABEL[input.mode].toUpperCase(), A4.w - M, A4.h - 50, 8, bold, rgb(1, 1, 1));
+
+  // the particulars, on the peach panel
+  let y = A4.h - band - 12;
+  const panel = 44;
+  page.drawRectangle({ x: M, y: y - panel, width: A4.w - 2 * M, height: panel, color: PEACH });
+  text(
+    `Part of Tenancy Agreement ${h.agreementNo || "—"}, dated ${h.agreementDate || "—"}.`,
+    M + 10,
+    y - 13,
+    8,
+    font,
+    MUTED,
+  );
+  const facts: [string, string][] = [
+    ["Effective", h.effectiveDate],
+    ["Residence", h.residence],
+    ["Unit", h.unitNo],
+    ["Room", [h.room, h.bed].filter(Boolean).join(", ")],
+  ];
+  const fw = (A4.w - 2 * M - 20) / facts.length;
+  facts.forEach(([k, v], i) => {
+    text(k.toUpperCase(), M + 10 + i * fw, y - 26, 6.5, bold, MUTED);
+    text(fit(v || "—", bold, 8.5, fw - 8), M + 10 + i * fw, y - 37, 8.5, bold, INK);
+  });
+  y -= panel + 14;
+
+  // every item, in three columns: an area's heading, then name, count, mark
+  type Line = { kind: "area"; name: string } | { kind: "item"; name: string; detail: string; qty: string; status: string };
+  const lines: Line[] = [];
+  for (const area of INVENTORY) {
+    lines.push({ kind: "area", name: area.name });
+    for (const it of area.items) {
+      const a = r.answers[it.id];
+      lines.push({ kind: "item", name: it.name, detail: it.details ? (a?.detail ?? "") : "", qty: a?.qty?.trim() || String(it.qty), status: a?.status ?? "" });
+    }
+    for (const e of r.extras.filter((x) => x.areaId === area.id && x.name.trim()))
+      lines.push({ kind: "item", name: `${e.name.trim()} (added)`, detail: "", qty: e.qty, status: e.status });
+  }
+  const LH = 10.2;
+  const gap = 14;
+  const cw = (A4.w - 2 * M - 2 * gap) / 3;
+  const perCol = Math.ceil(lines.length / 3);
+  const cols: Line[][] = [[], [], []];
+  // fill column by column; a column never starts on a bare item - its area is repeated, "(cont.)"
+  let c = 0;
+  let lastArea = "";
+  for (const l of lines) {
+    if (cols[c]!.length >= perCol && c < 2) {
+      c++;
+      if (l.kind === "item") cols[c]!.push({ kind: "area", name: `${lastArea} (cont.)` });
+    }
+    if (l.kind === "area") {
+      // a heading never ends a column
+      if (cols[c]!.length >= perCol - 1 && c < 2) c++;
+      lastArea = l.name;
+    }
+    cols[c]!.push(l);
+  }
+  const gridTop = y;
+  cols.forEach((col, i) => {
+    const x = M + i * (cw + gap);
+    let yy = gridTop;
+    for (const l of col) {
+      if (l.kind === "area") {
+        if (yy !== gridTop) yy -= 3;
+        text(fit(l.name.toUpperCase(), bold, 7, cw), x, yy - 7, 7, bold, GREEN);
+        yy -= LH;
+        continue;
+      }
+      const qtyX = x + cw - 22;
+      const nameW = qtyX - x - 4;
+      const name = fit(l.name, font, 7.5, nameW);
+      text(name, x, yy - 7, 7.5);
+      // the brand or serial number, after the name when there is room
+      if (l.detail) {
+        const used = font.widthOfTextAtSize(name, 7.5) + 4;
+        if (used < nameW - 18) text(fit(l.detail, font, 6.5, nameW - used), x + used, yy - 7, 6.5, font, MUTED);
+      }
+      right(l.qty, qtyX + 8, yy - 7, 7.5, font, MUTED);
+      mark(page, l.status, x + cw - 8, yy - 7.5);
+      page.drawLine({ start: { x, y: yy - 9.6 }, end: { x: x + cw, y: yy - 9.6 }, thickness: 0.3, color: RULE });
+      yy -= LH;
+    }
+  });
+  y = gridTop - Math.max(...cols.map((col) => col.reduce((n, l, i) => n + LH + (l.kind === "area" && i ? 3 : 0), 0))) - 8;
+
+  // the key to the marks
+  const keys: [string, string][] = [
+    ["present", "Present"],
+    ["defect", "Defect"],
+    ["not_provided", "Not provided"],
+  ];
+  let kx = M;
+  for (const [s, label] of keys) {
+    mark(page, s, kx, y - 7.5);
+    text(label, kx + 11, y - 7, 7.5, font, MUTED);
+    kx += 22 + font.widthOfTextAtSize(label, 7.5) + 10;
+  }
+  y -= 16;
+
+  // what needs reading in full: defects with Brachtia's answers, then remarks
   const room = (need: number) => {
-    if (y - need < M + 20) {
+    if (y - need < M + FOOT) {
       page = pdf.addPage([A4.w, A4.h]);
       y = A4.h - M;
     }
   };
-  const text = (s: string, x: number, size = 10, f = font, color = INK) => page.drawText(safe(s), { x, y, size, font: f, color });
-  const para = (s: string, size = 10, f = font, color = INK, width = A4.w - 2 * M) => {
-    for (const line of wrap(s, f, size, width)) {
-      room(size + 4);
-      text(line, M, size, f, color);
-      y -= size + 4;
+  const heading = (s: string) => {
+    room(24);
+    page.drawLine({ start: { x: M, y: y - 2 }, end: { x: A4.w - M, y: y - 2 }, thickness: 0.6, color: RULE });
+    y -= 13;
+    text(s, M, y, 8.5, bold, GREEN);
+    y -= 11;
+  };
+  const para = (s: string, size: number, f = font, color = INK, indent = 0) => {
+    for (const ln of wrap(s, f, size, A4.w - 2 * M - indent)) {
+      room(size + 3);
+      text(ln, M + indent, y, size, f, color);
+      y -= size + 3;
     }
   };
 
-  // title and the record's particulars
-  para("SCHEDULE C – INVENTORY & CONDITION RECORD", 16, bold, HEAD);
-  para(MODE_LABEL[input.mode].toUpperCase(), 10, bold, MUTED);
-  y -= 6;
-  const h = input.header;
-  para(`This Schedule C forms part of the Tenancy Agreement bearing Agreement No. ${h.agreementNo || "—"}, dated ${h.agreementDate || "—"}.`);
-  y -= 4;
-  for (const [k, v] of [
-    ["Effective Date", h.effectiveDate],
-    ["Residence", h.residence],
-    ["Unit No.", h.unitNo],
-    ["Room", [h.room, h.bed].filter(Boolean).join(", ")],
-  ] as const) {
-    room(14);
-    text(`${k}:`, M, 10, bold);
-    text(v || "—", M + 90, 10);
-    y -= 14;
-  }
-  y -= 6;
-  para("Present – Item is provided. Defect – Item is provided with an existing defect, described under Remarks. Not Provided – Item is not provided as part of the premises.", 9, font, MUTED);
-  y -= 8;
-
-  // the table: item, quantity, status, remarks
-  const col = { item: M, qty: M + 200, status: M + 250, remark: M + 330 };
-  const remarkW = A4.w - M - col.remark;
-  const tableHead = () => {
-    room(30);
-    page.drawLine({ start: { x: M, y: y + 4 }, end: { x: A4.w - M, y: y + 4 }, thickness: 0.6, color: RULE });
-    y -= 8;
-    text("Item", col.item, 8.5, bold, MUTED);
-    text("Qty", col.qty, 8.5, bold, MUTED);
-    text("Status", col.status, 8.5, bold, MUTED);
-    text("Remarks", col.remark, 8.5, bold, MUTED);
-    y -= 14;
-  };
-  const row = (name: string, qty: string, status: string, remark: string) => {
-    const nameLines = wrap(name, font, 9.5, col.qty - col.item - 8);
-    const remarkLines = remark ? wrap(remark, font, 9, remarkW) : [];
-    const lines = Math.max(nameLines.length, remarkLines.length, 1);
-    room(lines * 12 + 6);
-    const top = y;
-    nameLines.forEach((l, i) => page.drawText(l, { x: col.item, y: top - i * 12, size: 9.5, font, color: INK }));
-    page.drawText(safe(qty || "—"), { x: col.qty, y: top, size: 9.5, font, color: INK });
-    const isDefect = status === STATUS_LABEL.defect;
-    page.drawText(safe(status || "—"), { x: col.status, y: top, size: 9.5, font: isDefect ? bold : font, color: isDefect ? DEFECT : INK });
-    remarkLines.forEach((l, i) => page.drawText(l, { x: col.remark, y: top - i * 12, size: 9, font, color: INK }));
-    // the rule sits below the last line's descenders, the next row clear of it
-    const rule = top - (lines - 1) * 12 - 5;
-    page.drawLine({ start: { x: M, y: rule }, end: { x: A4.w - M, y: rule }, thickness: 0.3, color: RULE });
-    y = rule - 12;
-  };
-
-  const r = input.record;
+  heading("DEFECTS & REMARKS");
+  let any = false;
   for (const area of INVENTORY) {
-    room(50);
-    y -= 6;
-    text(area.name.toUpperCase(), M, 11, bold, HEAD);
-    y -= 12;
-    tableHead();
-    for (const it of area.items) {
-      const a = r.answers[it.id];
-      // what the resident counted, when it differs from the list
-      // the brand or model written in, after the name - the form's own column
-      const named = a?.detail?.trim() ? `${it.name} - ${a.detail.trim()}` : it.name;
-      row(named, a?.qty?.trim() || it.qty, a?.status ? STATUS_LABEL[a.status] : "", a?.remark ?? "");
-    }
-    for (const e of r.extras.filter((e) => e.areaId === area.id && e.name.trim())) {
-      row(`${e.name.trim()} (added)`, e.qty, e.status ? STATUS_LABEL[e.status] : "", e.remark);
+    const rows = [
+      ...area.items.map((it) => ({ key: it.id, name: it.name, a: r.answers[it.id] })),
+      ...r.extras
+        .filter((e) => e.areaId === area.id && e.name.trim())
+        .map((e) => ({ key: e.id, name: e.name.trim(), a: { status: e.status, remark: e.remark } })),
+    ];
+    for (const { key, name, a } of rows) {
+      const answer = input.decisions?.[key];
+      if (!a || (a.status !== "defect" && !a.remark?.trim() && !(a.status === "not_provided" && answer))) continue;
+      any = true;
+      const n = input.photoCount?.[key] ?? 0;
+      const pics = n ? ` (${n} photo${n === 1 ? "" : "s"})` : "";
+      if (a.status === "defect") {
+        para(`${area.name} · ${name} — ${a.remark.trim() || "—"}${pics}`, 8, bold, AMBER);
+        const d = input.decisions?.[key];
+        if (d) para(`Brachtia: ${VERDICT_LABEL[d.verdict]}${input.residentAgreed && d.verdict === "resolved" ? " · agreed by the resident" : ""}`, 7.5, font, MUTED, 10);
+      } else if (a.status === "not_provided") {
+        // a missing item: Resolved is Brachtia providing it, Accepted is it staying missing
+        para(`${area.name} · ${name} — Not provided${a.remark?.trim() ? `: ${a.remark.trim()}` : ""}`, 8, bold, MUTED);
+        if (answer)
+          para(
+            `Brachtia: ${VERDICT_LABEL[answer.verdict]}${input.residentAgreed && answer.verdict === "resolved" ? " · agreed by the resident" : ""}`,
+            7.5,
+            font,
+            MUTED,
+            10,
+          );
+      } else {
+        para(`${area.name} · ${name} — ${a.remark.trim()}`, 8);
+      }
+      y -= 2;
     }
   }
+  if (!any) para("No defects reported.", 8, font, MUTED);
+  para(`General: ${r.generalRemarks.trim() || "none."}`, 8, font, r.generalRemarks.trim() ? INK : MUTED);
 
-  y -= 10;
-  room(60);
-  text("METER READINGS", M, 11, bold, HEAD);
-  y -= 16;
-  for (const [k, v] of [
-    ["Water meter reading", r.meters.water],
-    ["Electric meter reading", r.meters.electric],
-  ] as const) {
-    room(14);
-    text(`${k}:`, M, 10, bold);
-    text(v.trim() || "—", M + 140, 10);
-    y -= 14;
-  }
-
-  y -= 10;
-  room(40);
-  text("GENERAL REMARKS", M, 11, bold, HEAD);
-  y -= 16;
-  para(r.generalRemarks.trim() || "None.", 10);
-
-  y -= 10;
-  room(40);
-  text("ACKNOWLEDGEMENT", M, 11, bold, HEAD);
-  y -= 16;
-  for (const p of [
-    "The Resident acknowledges that the items marked Present were provided with the premises as at the Effective Date stated above. Items marked Not Provided are not included as part of the inventory provided to the Resident.",
-    "Any existing defect must be marked Defect, described under Remarks and submitted to Brachtia Homes for review within 48 hours of the Effective Date together with supporting image(s).",
-    "Any defect not reported within this 48-hour period may not be recognised as an existing defect at the commencement of the Resident's occupancy.",
-    "The Resident agrees to take reasonable care of the items provided and shall be responsible for any loss or damage beyond reasonable wear and tear, subject to the terms of the Tenancy Agreement.",
-  ]) {
-    para(p, 9.5);
-    y -= 4;
+  heading("ACKNOWLEDGEMENT");
+  for (const p of ACKNOWLEDGEMENT) {
+    para(p, 6.8, font, MUTED);
+    y -= 1;
   }
 
   // the two signatures, side by side
-  room(130);
-  y -= 10;
+  room(92);
+  y -= 6;
   const blocks = [
     { title: "Resident", x: M, ...input.resident },
     { title: "Brachtia Homes", x: A4.w / 2 + 10, ...input.brachtia },
   ];
   const top = y;
   for (const b of blocks) {
-    y = top;
-    text(b.title, b.x, 10.5, bold);
-    y -= 52;
+    let yy = top;
+    text(b.title, b.x, yy - 8, 8.5, bold, GREEN);
+    yy -= 46;
     if (b.signature) {
       const img = await pdf.embedPng(b.signature);
-      const k = Math.min(160 / img.width, 40 / img.height);
-      page.drawImage(img, { x: b.x, y: y + 2, width: img.width * k, height: img.height * k });
+      const k = Math.min(150 / img.width, 34 / img.height);
+      page.drawImage(img, { x: b.x, y: yy + 2, width: img.width * k, height: img.height * k });
     }
-    page.drawLine({ start: { x: b.x, y }, end: { x: b.x + 190, y }, thickness: 0.6, color: INK });
-    y -= 14;
-    text(`Name: ${b.name || "—"}`, b.x, 9.5);
-    y -= 13;
-    text(`Date: ${b.date || "—"}`, b.x, 9.5);
+    page.drawLine({ start: { x: b.x, y: yy }, end: { x: b.x + 190, y: yy }, thickness: 0.6, color: INK });
+    text(`Name: ${b.name || "—"}`, b.x, yy - 11, 8);
+    text(`Date: ${b.date || "—"}`, b.x, yy - 22, 8);
   }
+
+  // the invoice's footer, on every page
+  const pages = pdf.getPages();
+  pages.forEach((p, i) => {
+    p.drawLine({ start: { x: M, y: FOOT }, end: { x: A4.w - M, y: FOOT }, thickness: 0.5, color: RULE });
+    p.drawText(safe(`${company.legalName} · ${company.registration}`), { x: M, y: FOOT - 11, size: 6.5, font, color: MUTED });
+    p.drawText(safe(company.address), { x: M, y: FOOT - 20, size: 6.5, font, color: MUTED });
+    const n = `Page ${i + 1} of ${pages.length}`;
+    p.drawText(n, { x: A4.w - M - font.widthOfTextAtSize(n, 6.5), y: FOOT - 11, size: 6.5, font, color: MUTED });
+  });
   return pdf.save();
 }
