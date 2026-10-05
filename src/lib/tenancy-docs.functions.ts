@@ -37,6 +37,9 @@ const TEMPLATE_KEY: Record<string, string> = {
   access_card: "access_card_form",
 };
 
+/** The Active template version of each document, for this resident's residence. */
+export const templateVersionsFor = (db: any, residentId: string) => versions(db, residentId);
+
 async function versions(db: any, residentId: string): Promise<Record<string, string>> {
   const { activeVersions, residenceIdOf } = await import("@/lib/template-versions.server");
   const byKey = await activeVersions(db, await residenceIdOf(db, residentId));
@@ -60,7 +63,7 @@ async function requireFiles(db: any, residentId: string, types: string[]) {
 }
 
 const DOC_LABEL: Record<string, string> = {
-  agreement: "Tenancy Agreement",
+  agreement: "General Terms",
   sched_a: "Schedule A",
   sched_b: "Schedule B",
   sched_c: "Schedule C",
@@ -154,6 +157,14 @@ export const getTenancyDocs = createServerFn({ method: "GET" })
         .order("created_at", { ascending: true });
       if (dErr) throw new Error(dErr.message);
       docs = (rows ?? []).map(toDoc);
+      // Schedule C's status is its check's, kept beside it (1 Oct 2026)
+      const { readInventory } = await import("@/lib/inventory.server");
+      for (const d of docs) {
+        if (d.docType !== "sched_c") continue;
+        d.stage = ["signed", "pending_stamping", "stamped"].includes(d.status)
+          ? "signed"
+          : ((await readInventory(db, data.residentId, d.id, "in"))?.status ?? "open");
+      }
     }
 
     const { data: cards, error: cErr } = await db
@@ -182,6 +193,8 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
       mergeValues: Record<string, string>;
       periodStart?: string | undefined;
       periodEnd?: string | undefined;
+      /** the resident's files to merge after the access card form - IC copy, photo */
+      cardAttachments?: string[] | undefined;
     }) => data,
   )
   .handler(async ({ data }) => {
@@ -234,13 +247,20 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
     if (dErr) throw new Error(dErr.message);
 
     if (!(await retiredDocKeys(db)).has("access_card_form")) {
-      const { error: cErr } = await db.from("access_card_forms").insert({
-        resident_id: data.residentId,
-        reason: "Initial Tenancy",
-        status: "generated",
-        template_version_id: tv["access_card"] || null,
-      });
+      // Brachtia fills it and hands it to ARC - nothing for the resident to sign (Dani, 2 Oct 2026)
+      const { data: card, error: cErr } = await db
+        .from("access_card_forms")
+        .insert({
+          resident_id: data.residentId,
+          reason: "Initial Tenancy",
+          status: "pending_approval",
+          template_version_id: tv["access_card"] || null,
+        })
+        .select("id")
+        .single();
       if (cErr) throw new Error(cErr.message);
+      const { ownFiles, writeCardExtras } = await import("@/lib/access-card.functions");
+      await writeCardExtras(db, card.id, { attachments: ownFiles(data.residentId, data.cardAttachments ?? []) });
     }
 
     return { ok: true as const, agreementId: agreement.id, agreementNo };
@@ -444,6 +464,8 @@ export const undoDocumentPack = createServerFn({ method: "POST" })
       if (d.doc_type !== "sched_c") continue;
       const files = ["in", "out"].flatMap((m) => ["json", "pdf"].map((x) => `inventory/${agreement.resident_id}/${d.id}-${m}.${x}`).concat(`inventory/${agreement.resident_id}/${d.id}-${m}-signature.png`));
       await db.storage.from("resident-documents").remove(files);
+      const { removePhotos } = await import("@/lib/inventory.server");
+      await removePhotos(db, agreement.resident_id, d.id);
     }
     const { error: dErr } = await db.from("agreement_documents").delete().eq("agreement_id", agreement.id);
     if (dErr) throw new Error(dErr.message);

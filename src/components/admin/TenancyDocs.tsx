@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Plus, Undo2 } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, FileStack, Plus, Stamp, Undo2, Upload } from "lucide-react";
 import { SigningMessageCard } from "@/components/admin/SigningMessageCard";
 import { InventoryActions, InventoryPill } from "@/components/admin/InventoryReview";
 import { toast } from "sonner";
@@ -15,7 +15,26 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { DocumentViewDialog } from "@/components/admin/DocumentViewDialog";
+import { PdfPreviewDialog } from "@/components/admin/PdfPreview";
+import {
+  REPLACEMENT_FEE,
+  REPLACEMENT_REASONS,
+  accessCardReceiptUrl,
+  activateAccessCard,
+  cancelReplacementCard,
+  getReplacementCard,
+  startReplacementCard,
+} from "@/lib/access-card.functions";
+import {
+  Select as Choice,
+  SelectContent as ChoiceContent,
+  SelectItem as ChoiceItem,
+  SelectTrigger as ChoiceTrigger,
+  SelectValue as ChoiceValue,
+} from "@/components/ui/select";
+import { fullAgreementPdf, uploadExistingAgreement, uploadStampPage } from "@/lib/agreement-files.functions";
 import { EmptyState, Panel, Select, StatusPill } from "@/components/admin/ops-ui";
 import { fmtDate, money, type Resident, type Tenancy } from "@/lib/ops-store";
 import {
@@ -38,6 +57,49 @@ import {
 } from "@/lib/tenancy-docs.functions";
 
 const DOC_ORDER: AgreementDocType[] = ["agreement", "sched_a", "sched_b", "sched_c"];
+// signed, whatever came after - what can be stamped and put in the full agreement
+const DONE = ["signed", "pending_stamping", "stamped"];
+
+const pdfUrl = (base64: string) =>
+  URL.createObjectURL(new Blob([Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))], { type: "application/pdf" }));
+
+/**
+ * The stamp page, uploaded beside the document's name (Dani, 1 Oct 2026): it
+ * is one extra page from the stamping, put in front of the signed document.
+ * Uploading it marks the document Stamped; uploading again replaces it.
+ */
+function StampUpload({ doc, onChanged }: { doc: AgreementDoc; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  async function upload(file: File | undefined) {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.set("documentId", doc.id);
+      fd.set("file", file);
+      await uploadStampPage({ data: fd });
+      toast.success(`${DOC_TYPE_LABELS[doc.docType].split(" – ")[0]} stamped`);
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not upload the stamp page");
+    } finally {
+      setBusy(false);
+    }
+  }
+  const stamped = doc.status === "stamped";
+  return (
+    <label
+      title={stamped ? "Replace the stamp page" : "Upload the stamp page (PDF or photo)"}
+      className={`relative ml-2 inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+        stamped ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-dashed border-border text-muted-foreground hover:bg-muted"
+      }`}
+    >
+      {stamped ? <Check className="size-3" /> : <Stamp className="size-3" />}
+      {busy ? "Uploading…" : stamped ? "Stamped" : "Upload stamp"}
+      <input type="file" accept="application/pdf,image/jpeg,image/png" className="sr-only" disabled={busy} onChange={(e) => void upload(e.target.files?.[0])} />
+    </label>
+  );
+}
 
 function docLabel(status: string) {
   return DOC_STATUSES.find((s) => s.key === status)?.label ?? status;
@@ -128,7 +190,7 @@ function DocumentRow({
         <td className="py-2.5 pr-3">
           {/* Schedule C is checked by the resident and reviewed here (1 Oct 2026) */}
           {doc.docType === "sched_c" ? (
-            <InventoryPill state={doc.status === "generated" ? "none" : doc.status} />
+            <InventoryPill stage={doc.stage ?? "open"} periodEnd={doc.periodEnd} />
           ) : (
             <StatusPill status={doc.status} label={docLabel(doc.status)} />
           )}
@@ -136,17 +198,17 @@ function DocumentRow({
         <td className="py-2.5 text-right">
           <span className="inline-flex flex-wrap justify-end gap-1.5">
             {doc.docType === "sched_c" ? (
-              <InventoryActions docId={doc.id} status={doc.status} onChanged={onChanged} />
+              <InventoryActions docId={doc.id} stage={doc.stage ?? "open"} periodEnd={doc.periodEnd} onChanged={onChanged} />
             ) : (
             <>
             <Button size="sm" variant="ghost" onClick={() => setViewing({ kind: "agreement", id: doc.id, title: DOC_TYPE_LABELS[doc.docType] })}>
               View
             </Button>
-            {nextStatus ? (
-              <Button size="sm" variant="outline" onClick={() => void advance()}>
-                Mark {nextStatus.label}
-              </Button>
-            ) : null}
+            {/*
+              No "Mark ..." buttons (Dani, 2 Oct 2026): Pending Signature comes
+              from sending the link, Signed from signing, Stamped from the stamp
+              upload beside the agreement number.
+            */}
             </>
             )}
           </span>
@@ -197,6 +259,21 @@ function AgreementBlock({
   const untouched = docs.length > 0 && agreement.documents.every((d) => ["generated", "pending_signature", "submitted"].includes(d.status));
   const [undoing, setUndoing] = useState(false);
   const [busy, setBusy] = useState(false);
+  // every document signed: the whole agreement opens as one PDF
+  const complete = docs.length > 0 && docs.every((d) => DONE.includes(d.status));
+  const [full, setFull] = useState<string | null>(null);
+  const [opening, setOpening] = useState(false);
+  async function openFull() {
+    setOpening(true);
+    try {
+      const { base64 } = await fullAgreementPdf({ data: { agreementId: agreement.id } });
+      setFull(pdfUrl(base64));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not open the agreement");
+    } finally {
+      setOpening(false);
+    }
+  }
   async function undo() {
     setBusy(true);
     try {
@@ -217,19 +294,25 @@ function AgreementBlock({
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="flex min-w-0 flex-1 items-center justify-between gap-3 px-4 py-3 text-left"
+        className="flex shrink-0 items-center gap-2 py-3 pl-4 text-left text-sm font-semibold text-brand-deep"
       >
-        <span className="flex items-center gap-2 text-sm font-semibold text-brand-deep">
-          {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-          {agreement.agreementNo}
-          {agreement.kind === "renewal" ? (
-            <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-              Renewal
-            </span>
-          ) : null}
-        </span>
+        {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+        {agreement.agreementNo}
+      </button>
+      {/* the stamp is for the agreement as a whole: one upload, beside its number (Dani, 2 Oct 2026) */}
+      {parent && DONE.includes(parent.status) ? <StampUpload doc={parent} onChanged={onChanged} /> : null}
+      {agreement.kind === "renewal" ? (
+        <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Renewal</span>
+      ) : null}
+      <button type="button" onClick={() => setExpanded(!expanded)} aria-label="Show or hide documents" className="flex min-w-0 flex-1 justify-end py-3 pr-1">
         {parent ? <StatusPill status={parent.status} label={docLabel(parent.status)} /> : null}
       </button>
+      {complete ? (
+        <Button type="button" size="sm" variant="outline" className="h-7 shrink-0 px-2 text-xs" disabled={opening} onClick={() => void openFull()}>
+          <FileStack className="mr-1 size-3.5" /> {opening ? "Opening…" : "Full agreement"}
+        </Button>
+      ) : null}
+      <PdfPreviewDialog title={`${agreement.agreementNo} – Full agreement`} fileName={`${agreement.agreementNo}.pdf`} url={full} onClose={() => setFull(null)} />
       {untouched ? (
         <Button type="button" size="sm" variant="ghost" className="h-7 shrink-0 px-2 text-xs text-muted-foreground" onClick={() => setUndoing(true)}>
           <Undo2 className="mr-1 size-3.5" /> Reset
@@ -283,67 +366,139 @@ function AccessCardTable({
   cards,
   residentId,
   onChanged,
+  onCardCharge,
+  onOpenInvoice,
 }: {
   cards: AccessCardForm[];
   residentId: string;
   onChanged: () => void;
+  /** opens the additional-charge invoice on Payments, filled in */
+  onCardCharge?: ((line: { label: string; amount: number }) => void) | undefined;
+  /** shows an invoice already raised, on Payments */
+  onOpenInvoice?: ((number: string) => void) | undefined;
 }) {
   const [adding, setAdding] = useState(false);
   const [viewCard, setViewCard] = useState<{ id: string; n: number } | null>(null);
-  const [reason, setReason] = useState(ACCESS_CARD_REASONS[1] ?? "Lost Card");
-  const [cardNoFor, setCardNoFor] = useState<string | null>(null);
-  const [cardNo, setCardNo] = useState("");
+  const [reason, setReason] = useState<string>("");
+  // a lost or damaged card waiting for its invoice, then its payment
+  const replacement = useQuery({
+    queryKey: ["access-card-replacement", residentId],
+    queryFn: () => getReplacementCard({ data: { residentId } }),
+  });
+  const waiting = replacement.data?.request ?? null;
+  // ARC's receipt and the serial number, for the form being made Active
+  const [activating, setActivating] = useState<AccessCardForm | null>(null);
+  const [serial, setSerial] = useState("");
+  const [receipt, setReceipt] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  async function add() {
+  async function activate() {
+    if (!activating) return;
+    setBusy(true);
     try {
-      await createAccessCardForm({ data: { residentId, reason } });
-      toast.success("Access card form created");
+      const fd = new FormData();
+      fd.set("cardId", activating.id);
+      fd.set("serial", serial);
+      if (receipt) fd.set("file", receipt);
+      await activateAccessCard({ data: fd });
+      toast.success("Access card Active", { description: `Serial ${serial.trim()}` });
+      setActivating(null);
+      onChanged();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Lost or Damaged: the card in use ends now, and its invoice opens */
+  async function startReplacement() {
+    setBusy(true);
+    try {
+      const line = await startReplacementCard({ data: { residentId, reason: reason as (typeof REPLACEMENT_REASONS)[number] } });
+      toast.success(`The card in use is marked ${reason === "Lost Card" ? "Lost" : "Damaged"}`, {
+        description: "Generate the invoice. The new form is made once it is paid.",
+      });
       setAdding(false);
+      setReason("");
       onChanged();
+      await replacement.refetch();
+      onCardCharge?.(line);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not create the form");
+      toast.error(err instanceof Error ? err.message : "Could not start the replacement");
+    } finally {
+      setBusy(false);
     }
   }
 
-  async function setStatus(card: AccessCardForm, status: string) {
+  async function cancelReplacement() {
     try {
-      await updateAccessCard({ data: { id: card.id, status } });
-      toast.success(`Marked ${cardLabel(status)}`);
-      onChanged();
+      await cancelReplacementCard({ data: { residentId } });
+      await replacement.refetch();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not update the card");
+      toast.error(err instanceof Error ? err.message : "Could not cancel it");
     }
   }
 
-  async function saveCardNo(card: AccessCardForm) {
-    if (!cardNo.trim()) {
-      toast.error("Enter the card number first");
-      return;
-    }
+  async function openReceipt(id: string) {
     try {
-      await updateAccessCard({ data: { id: card.id, cardNo: cardNo.trim(), status: "issued" } });
-      toast.success("Card number recorded — marked Issued");
-      setCardNoFor(null);
-      setCardNo("");
-      onChanged();
+      const { url } = await accessCardReceiptUrl({ data: { cardId: id } });
+      if (url) window.open(url, "_blank", "noopener");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not save the card number");
+      toast.error(err instanceof Error ? err.message : "Could not open the receipt");
     }
   }
-
-  const nextFor = (card: AccessCardForm) =>
-    ACCESS_CARD_STATUSES[ACCESS_CARD_STATUSES.findIndex((s) => s.key === card.status) + 1];
 
   return (
     <Panel
       title="Access Card"
-      description="Applications and replacements. Each one is a new record — nothing is overwritten."
+      description="Made by Brachtia and handed to ARC. Each form is a new record - nothing is overwritten."
       action={
         <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
           <Plus className="mr-1 size-3.5" /> New Access Card Form
         </Button>
       }
     >
+      {waiting ? (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <span className="min-w-0 flex-1">
+            Replacement - {waiting.reason}.{" "}
+            {waiting.invoiceId ? (
+              <>
+                Waiting for payment of{" "}
+                {/* straight to the invoice on Payments - no copying the number (Dani, 4 Oct 2026) */}
+                <button
+                  type="button"
+                  onClick={() => onOpenInvoice?.(waiting.invoiceNumber ?? "")}
+                  className="font-semibold underline underline-offset-2 hover:text-amber-950"
+                >
+                  {waiting.invoiceNumber || "its invoice"}
+                </button>
+                . The new form is made once it is paid in full.
+              </>
+            ) : (
+              "No invoice yet."
+            )}
+          </span>
+          {waiting.invoiceId ? null : (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const fee = REPLACEMENT_FEE[waiting.reason];
+                  if (fee) onCardCharge?.({ label: fee.label, amount: fee.amount });
+                }}
+              >
+                Raise the invoice
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => void cancelReplacement()}>
+                Cancel
+              </Button>
+            </>
+          )}
+        </div>
+      ) : null}
       {cards.length ? (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] border-collapse">
@@ -352,67 +507,49 @@ function AccessCardTable({
                 <th className="pb-2 pr-3 font-medium">Form</th>
                 <th className="pb-2 pr-3 font-medium">Date</th>
                 <th className="pb-2 pr-3 font-medium">Reason</th>
-                <th className="pb-2 pr-3 font-medium">Card No.</th>
+                <th className="pb-2 pr-3 font-medium">Serial No.</th>
                 <th className="pb-2 pr-3 font-medium">Status</th>
                 <th className="pb-2 font-medium text-right">Action</th>
               </tr>
             </thead>
             <tbody>
-              {cards.map((c, i) => {
-                const next = nextFor(c);
-                const isEndState = ACCESS_CARD_END_STATES.some((s) => s.key === c.status);
-                return (
-                  <tr key={c.id} className="border-t border-border">
-                    <td className="py-2.5 pr-3 text-sm text-foreground">
-                      Access Card Form {cards.length - i}
-                    </td>
-                    <td className="py-2.5 pr-3 text-sm text-muted-foreground">{fmtDate(c.formDate)}</td>
-                    <td className="py-2.5 pr-3 text-sm text-muted-foreground">{c.reason}</td>
-                    <td className="py-2.5 pr-3 text-sm text-muted-foreground">{c.cardNo || "—"}</td>
-                    <td className="py-2.5 pr-3">
-                      <StatusPill status={c.status} label={cardLabel(c.status)} />
-                    </td>
-                    <td className="py-2.5 text-right">
-                      <span className="inline-flex flex-wrap justify-end gap-1.5">
-                        <Button size="sm" variant="ghost" onClick={() => setViewCard({ id: c.id, n: cards.length - i })}>
-                          View
+              {cards.map((c, i) => (
+                <tr key={c.id} className="border-t border-border">
+                  <td className="py-2.5 pr-3 text-sm text-foreground">Access Card Form {cards.length - i}</td>
+                  <td className="py-2.5 pr-3 text-sm text-muted-foreground">{fmtDate(c.formDate)}</td>
+                  <td className="py-2.5 pr-3 text-sm text-muted-foreground">{c.reason}</td>
+                  <td className="py-2.5 pr-3 text-sm text-muted-foreground">{c.cardNo || "—"}</td>
+                  <td className="py-2.5 pr-3">
+                    <StatusPill status={c.status} label={cardLabel(c.status)} />
+                  </td>
+                  <td className="py-2.5 text-right">
+                    <span className="inline-flex flex-wrap justify-end gap-1.5">
+                      <Button size="sm" variant="ghost" onClick={() => setViewCard({ id: c.id, n: cards.length - i })}>
+                        View
+                      </Button>
+                      {/* ARC has approved it: their receipt and the card's serial number make it Active */}
+                      {c.status === "pending_approval" || c.status === "generated" ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setSerial(c.cardNo);
+                            setReceipt(null);
+                            setActivating(c);
+                          }}
+                        >
+                          Receipt & serial
                         </Button>
-                        {next && next.key !== "issued" ? (
-                          <Button size="sm" variant="outline" onClick={() => void setStatus(c, next.key)}>
-                            Mark {next.label}
-                          </Button>
-                        ) : null}
-                        {next?.key === "issued" ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setCardNo(c.cardNo);
-                              setCardNoFor(c.id);
-                            }}
-                          >
-                            Enter Card No. & Issue
-                          </Button>
-                        ) : null}
-                        {c.status === "issued"
-                          ? ACCESS_CARD_END_STATES.map((s) => (
-                              <Button
-                                key={s.key}
-                                size="sm"
-                                variant="ghost"
-                                className="text-muted-foreground"
-                                onClick={() => void setStatus(c, s.key)}
-                              >
-                                {s.label}
-                              </Button>
-                            ))
-                          : null}
-                        {isEndState ? null : null}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
+                      ) : null}
+                      {c.status === "active" ? (
+                        <Button size="sm" variant="ghost" onClick={() => void openReceipt(c.id)}>
+                          Receipt
+                        </Button>
+                      ) : null}
+                    </span>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -420,47 +557,62 @@ function AccessCardTable({
         <p className="text-sm text-muted-foreground">No access card forms yet.</p>
       )}
 
-      <Dialog open={adding} onOpenChange={setAdding}>
+      {/* a replacement: Lost or Damaged only - a unit change gets its form from Update Tenancy */}
+      <Dialog open={adding} onOpenChange={(v) => !busy && setAdding(v)}>
         <DialogContent className="admin-ui">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-brand-deep">
-              New Access Card Form
-            </DialogTitle>
-            <DialogDescription>A new record is created; previous forms are kept.</DialogDescription>
-          </DialogHeader>
-          <Select
-            label="Reason"
-            value={reason}
-            onChange={setReason}
-            options={ACCESS_CARD_REASONS.map((r) => ({ value: r, label: r }))}
-          />
-          <Button onClick={() => void add()}>Create form</Button>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!cardNoFor} onOpenChange={(v) => !v && setCardNoFor(null)}>
-        <DialogContent className="admin-ui">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-brand-deep">Issue access card</DialogTitle>
+            <DialogTitle className="text-base font-bold text-brand-deep">New Access Card Form</DialogTitle>
             <DialogDescription>
-              Enter the card number printed on the access card before marking it issued.
+              The card in use is marked Lost or Damaged at once. Then the invoice opens at the Schedule B price - lost RM60,
+              damaged RM30. The new form is made when that invoice is paid.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
-            <p className="text-xs text-muted-foreground">Access Card Number</p>
-            <Input
-              autoFocus
-              value={cardNo}
-              onChange={(e) => setCardNo(e.target.value)}
-              placeholder="e.g. AC-10234"
-            />
+            <p className="text-xs text-muted-foreground">Reason</p>
+            <Choice value={reason} onValueChange={setReason}>
+              <ChoiceTrigger>
+                <ChoiceValue placeholder="Lost or damaged?" />
+              </ChoiceTrigger>
+              <ChoiceContent className="admin-ui">
+                {REPLACEMENT_REASONS.map((r) => (
+                  <ChoiceItem key={r} value={r}>
+                    {r}
+                  </ChoiceItem>
+                ))}
+              </ChoiceContent>
+            </Choice>
           </div>
-          <Button onClick={() => void saveCardNo(cards.find((c) => c.id === cardNoFor)!)}>
-            Save & mark Issued
+          <Button disabled={!reason || busy || !!waiting?.invoiceId} onClick={() => void startReplacement()}>
+            {busy ? "Saving…" : "Mark the card and open the invoice"}
+          </Button>
+          {waiting?.invoiceId ? <p className="text-xs text-amber-800">A replacement is already waiting for payment.</p> : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!activating} onOpenChange={(v) => !v && !busy && setActivating(null)}>
+        <DialogContent className="admin-ui">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-brand-deep">ARC receipt and serial number</DialogTitle>
+            <DialogDescription>From the building management, once they approve the form. The card becomes Active.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">Access card serial number</p>
+            <Input autoFocus value={serial} onChange={(e) => setSerial(e.target.value)} placeholder="e.g. 0012345" />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">ARC&apos;s receipt</p>
+            <Input type="file" accept="image/*,application/pdf" onChange={(e) => setReceipt(e.target.files?.[0] ?? null)} className="text-xs" />
+          </div>
+          <Button disabled={busy || !serial.trim() || !receipt} onClick={() => void activate()}>
+            {busy ? "Saving…" : "Save - make Active"}
           </Button>
         </DialogContent>
       </Dialog>
-      <DocumentViewDialog target={viewCard ? { kind: "card", id: viewCard.id } : null} title={viewCard ? `Access Card Form ${viewCard.n}` : ""} onClose={() => setViewCard(null)} />
+      <DocumentViewDialog
+        target={viewCard ? { kind: "card", id: viewCard.id } : null}
+        title={viewCard ? `Access Card Form ${viewCard.n}` : ""}
+        onClose={() => setViewCard(null)}
+      />
     </Panel>
   );
 }
@@ -473,10 +625,15 @@ export function TenancyDocs({
   resident,
   tenancy,
   checklist,
+  onCardCharge,
+  onOpenInvoice,
 }: {
   resident: Resident;
   tenancy?: Tenancy | undefined;
   checklist?: React.ReactNode;
+  /** a lost or damaged card's invoice, opened on Payments */
+  onCardCharge?: (line: { label: string; amount: number }) => void;
+  onOpenInvoice?: (number: string) => void;
 }) {
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
@@ -500,11 +657,15 @@ export function TenancyDocs({
               Review the resident and tenancy information before generating the initial documents.
             </p>
           </div>
-          <Button asChild size="sm" disabled={!tenancy}>
-            <Link to="/admin/residents/$id/document-pack" params={{ id: resident.id }}>
-              Create Document Pack
-            </Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild size="sm" disabled={!tenancy}>
+              <Link to="/admin/residents/$id/document-pack" params={{ id: resident.id }}>
+                Create Document Pack
+              </Link>
+            </Button>
+            {/* a resident who signed on paper before the website */}
+            <UploadExisting resident={resident} tenancy={tenancy} onDone={refresh} />
+          </div>
           {!tenancy ? (
             <p className="text-xs text-muted-foreground">Create the tenancy first.</p>
           ) : null}
@@ -521,13 +682,99 @@ export function TenancyDocs({
         description="Legal agreement records and revisions. Earlier versions are always kept."
       >
         <div className="space-y-3">
-          <SigningMessageCard residentId={resident.id} phone={resident.mobile} />
+          <SigningMessageCard
+            residentId={resident.id}
+            phone={resident.mobile}
+            packId={data.agreements[0]!.id}
+            // nothing signed in the latest pack yet: the message is still to send
+            fresh={!data.agreements[0]!.documents.some((d: AgreementDoc) => ["signed", "pending_stamping", "stamped"].includes(d.status))}
+          />
           {(data.agreements as TenancyAgreement[]).map((a) => (
             <AgreementBlock key={a.id} agreement={a} onChanged={refresh} />
           ))}
         </div>
       </Panel>
-      <AccessCardTable cards={data.accessCards} residentId={resident.id} onChanged={refresh} />
+      <AccessCardTable cards={data.accessCards} residentId={resident.id} onChanged={refresh} onCardCharge={onCardCharge} onOpenInvoice={onOpenInvoice} />
+    </>
+  );
+}
+
+/**
+ * An existing resident's tenancy, signed on paper before the website (Dani,
+ * 1 Oct 2026): upload the scans and the pack is recorded as already signed.
+ * The Tenancy Agreement is needed; the schedules are added when there are any.
+ */
+function UploadExisting({ resident, tenancy, onDone }: { resident: Resident; tenancy?: Tenancy | undefined; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [files, setFiles] = useState<Partial<Record<AgreementDocType, File>>>({});
+  const [start, setStart] = useState(tenancy?.start ?? "");
+  const [end, setEnd] = useState(tenancy?.end ?? "");
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.set("residentId", resident.id);
+      fd.set("periodStart", start);
+      fd.set("periodEnd", end);
+      for (const [k, f] of Object.entries(files)) if (f) fd.set(k, f);
+      const { agreementNo } = await uploadExistingAgreement({ data: fd });
+      toast.success(`${agreementNo} recorded`, { description: "Uploaded as signed." });
+      setOpen(false);
+      onDone();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not upload the agreement");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+        <Upload className="size-4" /> Upload existing agreement
+      </Button>
+      <Dialog open={open} onOpenChange={(o) => !busy && setOpen(o)}>
+        <DialogContent className="admin-ui max-w-md">
+          <DialogHeader>
+            <DialogTitle>Upload existing agreement</DialogTitle>
+            <DialogDescription>For a resident who signed on paper. Each file is a PDF, or a photo of a one-page document.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {DOC_ORDER.map((t) => (
+              <label key={t} className="block space-y-1">
+                <span className="text-xs font-medium text-foreground">
+                  {DOC_TYPE_LABELS[t]}
+                  {t === "agreement" ? <span className="text-red-600"> *</span> : <span className="text-muted-foreground"> (if any)</span>}
+                </span>
+                <Input
+                  type="file"
+                  accept="application/pdf,image/jpeg,image/png"
+                  onChange={(e) => setFiles((m) => ({ ...m, [t]: e.target.files?.[0] }))}
+                  className="h-9 text-xs"
+                />
+              </label>
+            ))}
+            <div className="grid grid-cols-2 gap-2">
+              <label className="space-y-1">
+                <span className="text-xs text-muted-foreground">Tenancy start</span>
+                <DateInput value={start} onChange={(e) => setStart(e.target.value)} className="h-9" />
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs text-muted-foreground">Tenancy end</span>
+                <DateInput value={end} onChange={(e) => setEnd(e.target.value)} className="h-9" />
+              </label>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" disabled={busy} onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" disabled={busy || !files.agreement} onClick={() => void save()}>
+              {busy ? "Uploading…" : "Upload"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

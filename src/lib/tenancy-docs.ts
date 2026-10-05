@@ -19,6 +19,8 @@ export type AgreementDoc = {
   mergeValues: Record<string, string>;
   supersedes?: string;
   createdAt: string;
+  /** Schedule C: where the move-in check is - open, review, returned, submitted, signed */
+  stage?: string;
 };
 
 export type TenancyAgreement = {
@@ -42,7 +44,7 @@ export type AccessCardForm = {
 };
 
 export const DOC_TYPE_LABELS: Record<AgreementDocType, string> = {
-  agreement: "Tenancy Agreement",
+  agreement: "General Terms",
   sched_a: "Schedule A – Particulars",
   sched_b: "Schedule B – House Rules & Additional Charges",
   sched_c: "Schedule C – Inventory & Condition Record",
@@ -65,6 +67,9 @@ export const ACCESS_CARD_REASONS = [
 ];
 
 export const ACCESS_CARD_STATUSES = [
+  // since 2 Oct 2026: made by Brachtia, waiting for ARC; then Active with ARC's receipt and the serial number
+  { key: "pending_approval", label: "Pending Approval" },
+  { key: "active", label: "Active" },
   { key: "generated", label: "Form Generated" },
   // the resident signed it on their signing page (30 Sep 2026)
   { key: "signed", label: "Signed" },

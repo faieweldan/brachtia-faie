@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Copy, MessageCircle } from "lucide-react";
+import { Check, Copy, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -28,8 +28,23 @@ const messageFor = (link: string) =>
     "Thank you!",
   ].join("\n");
 
-export function SigningMessageCard({ residentId, phone }: { residentId: string; phone: string }) {
-  const [open, setOpen] = useState(false);
+/*
+ * Open by itself when a pack has just been made and its message not copied
+ * yet - the next thing to do is send it; closed once copied (Dani, 1 Oct
+ * 2026). Whether it was copied is remembered in this browser, per pack.
+ */
+const copiedKey = (packId: string) => `brachtia-signing-copied-${packId}`;
+const wasCopied = (packId: string) => {
+  try {
+    return !!localStorage.getItem(copiedKey(packId));
+  } catch {
+    return false;
+  }
+};
+
+export function SigningMessageCard({ residentId, phone, packId, fresh }: { residentId: string; phone: string; packId: string; fresh: boolean }) {
+  const [copied, setCopied] = useState(() => wasCopied(packId));
+  const [open, setOpen] = useState(() => fresh && !wasCopied(packId));
   const [message, setMessage] = useState("");
 
   // the link is made (or the live one reused) only when the message is opened
@@ -45,23 +60,47 @@ export function SigningMessageCard({ residentId, phone }: { residentId: string; 
   }, [open, message, residentId]);
 
   async function copy() {
-    await navigator.clipboard.writeText(message);
+    try {
+      await navigator.clipboard.writeText(message);
+    } catch {
+      // the browser refused the clipboard - it stays open to copy by hand
+      toast.error("Could not copy", { description: "Select the message and copy it by hand." });
+      return;
+    }
     toast.success("Message copied", { description: "Paste it into WhatsApp." });
+    try {
+      localStorage.setItem(copiedKey(packId), new Date().toISOString());
+    } catch {
+      /* not remembered - it just opens again next time */
+    }
+    setCopied(true);
+    setOpen(false);
   }
 
   const digits = waDigits(phone);
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div className={`rounded-xl border p-4 ${copied ? "border-emerald-200 bg-emerald-50/60" : "border-amber-300 bg-amber-50"}`}>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-brand-deep">Signing message</p>
+        <p className="flex items-center gap-2 text-sm font-semibold text-brand-deep">
+          <span aria-hidden>📩</span> Signing message
+          {copied ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-900">
+              <Check className="size-3" /> Copied
+            </span>
+          ) : (
+            <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+              Not sent yet
+            </span>
+          )}
+        </p>
         <MessageToggle open={open} onToggle={() => setOpen((v) => !v)} />
       </div>
       {open ? (
         message ? (
           <div className="mt-3 space-y-3">
             {/* editable, so a line can be added before sending */}
-            <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={12} />
+            <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={12} className="bg-background" />
             <div className="flex flex-wrap gap-2">
               <Button size="sm" onClick={() => void copy()}>
                 <Copy className="size-4" /> Copy message

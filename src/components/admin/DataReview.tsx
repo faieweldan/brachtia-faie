@@ -4,7 +4,10 @@ import { ExternalLink } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { readableValue } from "@/lib/signatory";
-import { isDocumentOwn, type MappingResult } from "@/lib/template-fields";
+import { isDocumentOwn, isTickResult, type MappingResult } from "@/lib/template-fields";
+
+// "yes" ticks it, empty or "no" leaves it - the same rule as the PDF (pdf-boxes.ts)
+const ticked = (v: string | null | undefined) => !["", "no", "false", "0"].includes(String(v ?? "").trim().toLowerCase());
 
 /**
  * What a document will say, checked before it is generated.
@@ -41,7 +44,8 @@ export function DataReview({
         const own = isDocumentOwn(key);
         const blankByHand = r?.source === "Left blank";
         const issuedLater = key.toLowerCase().startsWith("agreement_id") && !r?.value;
-        const missing = !blankByHand && !issuedLater && (r?.result !== "mapped" || !r.value.trim());
+        // an unticked box is a choice, not a gap
+        const missing = !blankByHand && !issuedLater && !isTickResult(r) && (r?.result !== "mapped" || !r.value.trim());
         return { key, r, own, blankByHand, issuedLater, missing, edited: overrides[key] !== undefined };
       }),
     [placeholders, results, overrides],
@@ -101,21 +105,35 @@ export function DataReview({
           <table className="w-full text-xs">
             <thead className="sticky top-0 bg-card text-left text-muted-foreground">
               <tr>
-                <th className="py-2 pr-2 font-medium">Placeholder</th>
+                <th className="py-2 pr-2 font-medium">Field</th>
                 <th className="py-2 font-medium">Value</th>
               </tr>
             </thead>
             <tbody>
               {(onlyIssues ? rows.filter((r) => r.missing) : rows).map((row) => (
                 <tr key={row.key} className="border-t border-border align-top">
+                  {/* the field's name first - what admin checks the value against - then the box it fills (Dani, 2 Oct 2026) */}
                   <td className="py-2 pr-2">
-                    <code className="break-all text-[11px]">{row.key}</code>
+                    <div className="text-xs font-medium text-foreground">{row.own ? "Set here" : row.r?.label || row.r?.source || "—"}</div>
                     <div className="text-[10px] text-muted-foreground">
-                      {row.own ? "Set here" : (row.r?.source ?? "—")}
+                      <code className="break-all">{row.key}</code>
+                      {!row.own && row.r?.source && row.r.source !== row.r.label ? ` · ${row.r.source}` : ""}
                     </div>
                   </td>
                   <td className="py-2">
-                    {row.own ? (
+                    {/* a tick box: ticked by the system where it can tell, changed here by hand (Dani, 2 Oct 2026) */}
+                    {isTickResult(row.r) ? (
+                      <label className="inline-flex cursor-pointer items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          className="size-4 accent-brand"
+                          aria-label={row.r?.label ?? row.key}
+                          checked={ticked(row.r?.value)}
+                          onChange={(e) => onOverride(row.key, e.target.checked ? "yes" : "")}
+                        />
+                        <span className="text-muted-foreground">{ticked(row.r?.value) ? "Ticked" : "Not ticked"}</span>
+                      </label>
+                    ) : row.own ? (
                       <Input
                         className="h-7 text-xs"
                         aria-label={row.key}

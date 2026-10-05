@@ -30,7 +30,7 @@ const NONE = "none";
 /** The documents a pack looks templates up by, for a template made for one residence. */
 const PACK_DOCUMENTS: { key: string; label: string }[] = [
   { key: NONE, label: "Not part of the document pack" },
-  { key: "tenancy_agreement", label: "Tenancy Agreement" },
+  { key: "tenancy_agreement", label: "General Terms" },
   { key: "schedule_a", label: "Schedule A – Particulars" },
   { key: "schedule_b", label: "Schedule B – House Rules" },
   { key: "schedule_c", label: "Schedule C – Inventory" },

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Loader2, ClipboardCheck } from "lucide-react";
+import { ArrowLeft, Check, Loader2, ClipboardCheck, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -13,8 +13,9 @@ import {
   type AgreementDocType,
 } from "@/lib/tenancy-docs";
 import { generateDocumentPack } from "@/lib/tenancy-docs.functions";
+import { createCardFromDraft } from "@/lib/access-card.functions";
 import { fillPackDocx, getPackTemplates, listRetiredPackDocs, previewPackPdf } from "@/lib/templates.functions";
-import { isDocumentOwn, renderTemplate, type MappingResult } from "@/lib/template-fields";
+import { isDocumentOwn, isTickResult, renderTemplate, type MappingResult } from "@/lib/template-fields";
 import { MARK_CSS, Paper } from "@/components/admin/TemplatePaper";
 import { DocumentView } from "@/components/admin/DocumentView";
 import { TEMPLATE_CATEGORIES } from "@/components/admin/TemplatesTab";
@@ -30,6 +31,8 @@ const TEMPLATE_KEY: Record<string, string> = {
 };
 
 export const Route = createFileRoute("/admin/residents/$id_/document-pack")({
+  // ?card=Lost Card - a replacement access card form on its own (Dani, 2 Oct 2026)
+  validateSearch: (s: Record<string, unknown>): { card?: string } => (typeof s["card"] === "string" && s["card"] ? { card: s["card"] } : {}),
   component: DocumentPackPage,
 });
 
@@ -51,13 +54,43 @@ const MENU: { group: string; items: { key: DocKey; label: string }[] }[] = [
 
 function DocumentPackPage() {
   const { id } = Route.useParams();
+  const { card } = Route.useSearch();
   const navigate = useNavigate();
   const { residents, units, tenancies } = useOps();
   const resident = residents.find((r) => r.id === id);
   const tenancy = tenancies.find((t) => t.residentId === id);
   const placed = resident ? findBed(units, resident.bedId || "") : undefined;
 
-  const [selected, setSelected] = useState<DocKey>("agreement");
+  const [selected, setSelected] = useState<DocKey>(card ? "access_card" : "agreement");
+  // the list on the left folds away; remembered on this browser
+  const [navOpen, setNavOpen] = useState(() => {
+    try {
+      return localStorage.getItem("brachtia-pack-nav") !== "folded";
+    } catch {
+      return true;
+    }
+  });
+  const toggleNav = (open: boolean) => {
+    setNavOpen(open);
+    try {
+      localStorage.setItem("brachtia-pack-nav", open ? "open" : "folded");
+    } catch {
+      /* not remembered */
+    }
+  };
+  /*
+   * Every document is opened before the pack is made (Dani, 2 Oct 2026): its
+   * data review read, not a button pressed past. The one open counts as seen.
+   */
+  const [seen, setSeen] = useState<Set<DocKey>>(() => new Set([card ? "access_card" : "agreement"]));
+  /*
+   * The resident's IC copy and photo, attached to the access card form - ticked
+   * when they are on file, each one can be left out (Dani, 2 Oct 2026).
+   */
+  const files = (resident?.docs ?? []).filter((d) => (d.key === "id" || d.key === "photo") && d.path);
+  const [attach, setAttach] = useState<Record<string, boolean>>({ id: true, photo: true });
+  const attachments = files.filter((d) => attach[d.key]).map((d) => d.path!);
+  useEffect(() => setSeen((s) => (s.has(selected) ? s : new Set([...s, selected]))), [selected]);
   const [generating, setGenerating] = useState(false);
 
   const defaults = useMemo<Record<string, string>>(() => {
@@ -86,8 +119,8 @@ function DocumentPackPage() {
   const vals = values ?? defaults;
   const fetchPack = useServerFn(getPackTemplates);
   const pack = useQuery({
-    queryKey: ["pack-templates", id],
-    queryFn: () => fetchPack({ data: { residentId: id } }),
+    queryKey: ["pack-templates", id, card ?? ""],
+    queryFn: () => fetchPack({ data: { residentId: id, ...(card ? { cardReason: card } : {}) } }),
   });
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const tpl = pack.data?.[TEMPLATE_KEY[selected]!] ?? null;
@@ -102,7 +135,10 @@ function DocumentPackPage() {
   const retiredFn = useServerFn(listRetiredPackDocs);
   const retired = useQuery({ queryKey: ["retired-pack-docs"], queryFn: () => retiredFn() });
   const menu = useMemo(() => {
-    const items = MENU.flatMap((g) => g.items).filter((i) => !(retired.data ?? []).includes(TEMPLATE_KEY[i.key]!));
+    const items = MENU.flatMap((g) => g.items)
+      .filter((i) => !(retired.data ?? []).includes(TEMPLATE_KEY[i.key]!))
+      // a replacement card is the access card form alone
+      .filter((i) => !card || i.key === "access_card");
     const categoryOf = (key: DocKey) =>
       pack.data?.[TEMPLATE_KEY[key]!]?.category || (key === "access_card" ? "Access Card" : "Agreement");
     const order = [...TEMPLATE_CATEGORIES, ...items.map((i) => categoryOf(i.key))];
@@ -110,7 +146,7 @@ function DocumentPackPage() {
       .map((group) => ({ group, items: items.filter((i) => categoryOf(i.key) === group) }))
       .filter((g) => g.items.length);
     return groups;
-  }, [pack.data, retired.data]);
+  }, [pack.data, retired.data, card]);
   /*
    * Every document in the pack needs its file before the pack is made - a
    * Schedule C with only a template name would be a blank page on the
@@ -119,6 +155,8 @@ function DocumentPackPage() {
   const noFile = pack.data
     ? menu.flatMap((g) => g.items).filter((i) => i.key !== "sched_c" && !pack.data?.[TEMPLATE_KEY[i.key]!]?.hasFile)
     : [];
+  // what is still to be opened - Schedule C has no data to review, so it is not asked for
+  const unseen = menu.flatMap((g) => g.items).filter((i) => i.key !== "sched_c" && !seen.has(i.key));
   // the open document was taken out of use: open the first one still in use
   useEffect(() => {
     const shown = menu.flatMap((g) => g.items);
@@ -203,7 +241,15 @@ function DocumentPackPage() {
     setGenerating(true);
     try {
       const filled: Record<string, string> = {};
-      for (const t of Object.values(pack.data ?? {})) for (const r of t?.results ?? []) filled[r.key] = (isDocumentOwn(r.key) ? overrides[r.key] : undefined) ?? r.value;
+      // the document's own values, and every tick as admin left it
+      for (const t of Object.values(pack.data ?? {}))
+        for (const r of t?.results ?? []) filled[r.key] = (isDocumentOwn(r.key) || isTickResult(r) ? overrides[r.key] : undefined) ?? r.value;
+      if (card) {
+        await createCardFromDraft({ data: { residentId: resident.id, reason: card, values: { ...vals, ...filled }, attachments } });
+        toast.success("Access card form made");
+        void navigate({ to: "/admin/residents/$id", params: { id: resident.id }, search: { tab: "tenancy" } });
+        return;
+      }
       const res = await generateDocumentPack({
         data: {
           residentId: resident.id,
@@ -211,6 +257,7 @@ function DocumentPackPage() {
           mergeValues: { ...vals, ...filled },
           periodStart: vals["tenancy_start"],
           periodEnd: vals["tenancy_end"],
+          cardAttachments: attachments,
         },
       });
       toast.success(`Document pack generated — ${res.agreementNo}`);
@@ -231,16 +278,25 @@ function DocumentPackPage() {
       </Button>
 
       <div>
-        <h1 className="text-2xl font-bold text-brand-deep">Create Document Pack</h1>
+        <h1 className="text-2xl font-bold text-brand-deep">{card ? `New Access Card Form - ${card}` : "Create Document Pack"}</h1>
         <p className="text-sm text-muted-foreground">
           Review the values on the right, then generate. Corrections here apply to the documents
           only — they do not change the resident's record.
         </p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_300px]">
-        {/* LEFT — documents menu */}
+      <div className={`grid gap-4 ${navOpen ? "lg:grid-cols-[220px_minmax(0,1fr)_300px]" : "lg:grid-cols-[56px_minmax(0,1fr)_300px]"}`}>
+        {/* LEFT — documents menu; folds to a narrow rail to give the preview room (Dani, 2 Oct 2026) */}
+        {navOpen ? (
         <nav className="space-y-4 rounded-2xl border border-border bg-card p-4">
+          <button
+            type="button"
+            onClick={() => toggleNav(false)}
+            title="Fold the list - more room for the preview"
+            className="-mt-1 ml-auto hidden items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground lg:flex"
+          >
+            <PanelLeftClose className="size-4" /> Fold
+          </button>
           {menu.map((g) => (
             <div key={g.group}>
               <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -258,7 +314,10 @@ function DocumentPackPage() {
                           : "text-muted-foreground hover:bg-muted"
                       }`}
                     >
-                      {item.label}
+                      <span className="flex items-center justify-between gap-2">
+                        {item.label}
+                        {seen.has(item.key) ? <Check className="size-3.5 shrink-0 text-emerald-600" aria-label="Checked" /> : null}
+                      </span>
                     </button>
                   </li>
                 ))}
@@ -266,6 +325,34 @@ function DocumentPackPage() {
             </div>
           ))}
         </nav>
+        ) : (
+          <nav className="flex flex-col items-center gap-2 rounded-2xl border border-border bg-card py-3">
+            <button
+              type="button"
+              onClick={() => toggleNav(true)}
+              title="Show the list of documents"
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <PanelLeftOpen className="size-4" />
+            </button>
+            {menu
+              .flatMap((g) => g.items)
+              .map((item, i) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  title={item.label}
+                  onClick={() => setSelected(item.key)}
+                  className={`relative flex size-8 items-center justify-center rounded-full text-xs font-semibold ${
+                    selected === item.key ? "bg-brand-deep text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-brand-tint"
+                  }`}
+                >
+                  {i + 1}
+                  {seen.has(item.key) ? <Check className="absolute -right-1 -top-1 size-3 rounded-full bg-emerald-600 p-px text-white" /> : null}
+                </button>
+              ))}
+          </nav>
+        )}
 
         {/* CENTRE — the Active template from Settings, filled in */}
         <div className="min-w-0 rounded-2xl border border-border bg-card p-4">
@@ -296,11 +383,7 @@ function DocumentPackPage() {
             <div className="mx-auto max-w-md space-y-3 py-16 text-center">
               <ClipboardCheck className="mx-auto size-8 text-brand" />
               <p className="text-sm font-semibold text-brand-deep">Filled in by the resident</p>
-              <p className="text-sm text-muted-foreground">
-                Schedule C is a checklist on the resident&rsquo;s signing page. They check each item Present, Defect or Not
-                provided in the room itself, from their check-in day until 48 hours after check-in, and send it in. You
-                review it on the Tenancy tab and sign it there. Nothing to upload here.
-              </p>
+              <p className="text-sm text-muted-foreground">Schedule C is a checklist on the resident&rsquo;s signing page.</p>
             </div>
           ) : !tpl ? (
             <div className="py-24 text-center text-sm text-muted-foreground">
@@ -349,8 +432,39 @@ function DocumentPackPage() {
                   </Link>
                 </div>
               ) : null}
-              <Button className="w-full" disabled={generating || !pack.data || noFile.length > 0} onClick={() => void generate()}>
-                {generating ? "Generating…" : "Generate Document Pack"}
+              {selected === "access_card" ? (
+                <div className="space-y-1.5 rounded-lg border border-border p-2.5 text-[11px]">
+                  <p className="font-semibold text-foreground">Attach to the form</p>
+                  {files.length ? (
+                    files.map((d) => (
+                      <label key={d.key} className="flex cursor-pointer items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="size-3.5 accent-brand"
+                          checked={!!attach[d.key]}
+                          onChange={(e) => setAttach((a) => ({ ...a, [d.key]: e.target.checked }))}
+                        />
+                        {d.key === "id" ? "IC / passport copy" : "Passport photo"}
+                        <span className="text-muted-foreground">· {d.fileName ?? "on file"}</span>
+                      </label>
+                    ))
+                  ) : (
+                    <p className="text-muted-foreground">No IC copy or photo on file - upload them on the resident's profile.</p>
+                  )}
+                  <p className="text-muted-foreground">Merged after the form, in the PDF given to ARC.</p>
+                </div>
+              ) : null}
+              {unseen.length ? (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-[11px] text-amber-900">
+                  Open each document and check its data first: {unseen.map((i) => i.label).join(", ")}.
+                </p>
+              ) : null}
+              <Button
+                className="w-full"
+                disabled={generating || !pack.data || noFile.length > 0 || unseen.length > 0}
+                onClick={() => void generate()}
+              >
+                {generating ? "Generating…" : "Confirm and proceed"}
               </Button>
             </div>
           }

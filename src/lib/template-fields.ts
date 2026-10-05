@@ -21,6 +21,8 @@ export type MappingContext = {
   agreement?: Record<string, any> | null;
   /** who signs for Brachtia - Settings → Signatory */
   signatory?: { name: string; title: string; token: string } | null;
+  /** an access card form made on its own - "Lost Card", "Damaged Card" - not with the pack */
+  cardReason?: string;
 };
 
 export type TemplateField = {
@@ -167,7 +169,26 @@ export const TEMPLATE_FIELDS: TemplateField[] = [
   { key: "has_id_copy", label: "Tick: IC / passport copy uploaded", source: "Resident Record", get: (c) => (hasDoc(c, "id") ? "yes" : "") },
   { key: "has_photo", label: "Tick: passport photo uploaded", source: "Resident Record", get: (c) => (hasDoc(c, "photo") ? "yes" : "") },
   { key: "has_agreement", label: "Tick: tenancy agreement generated", source: "Tenancy Record", get: (c) => (c.agreement ? "yes" : "") },
+  /*
+   * The access card form's own ticks (Dani, 2 Oct 2026). The owner's papers
+   * are kept outside the system, so admin ticks them in the draft; which part
+   * of "Charges" applies follows why the form is made - a first card, or a
+   * replacement for a damaged or lost one. Every tick can be changed in the draft.
+   */
+  { key: "tick_owner_letter", label: "Tick: authorize letter from the owner (admin ticks)", source: "Other", get: () => "" },
+  { key: "tick_owner_ta", label: "Tick: owner's tenancy agreement copy (admin ticks)", source: "Other", get: () => "" },
+  { key: "tick_new_application", label: "Tick: new application", source: "Other", get: (c) => (!c.cardReason || c.cardReason === "Initial Tenancy" ? "yes" : "") },
+  {
+    key: "tick_replace_damage",
+    label: "Tick: replacement - damage / change",
+    source: "Other",
+    get: (c) => (c.cardReason === "Damaged Card" || c.cardReason === "Unit Change" ? "yes" : ""),
+  },
+  { key: "tick_replace_loss", label: "Tick: replacement - loss", source: "Other", get: (c) => (c.cardReason === "Lost Card" ? "yes" : "") },
 ];
+
+/** A field that is a tick box - admin can tick or untick it in the draft. */
+export const isTickResult = (r: { label?: string } | undefined) => !!r?.label?.startsWith("Tick:");
 
 export const FIELD_BY_KEY = new Map(TEMPLATE_FIELDS.map((f) => [f.key, f]));
 
@@ -262,15 +283,23 @@ export function describeMapping(m: Mapping | null): string {
   return FIELD_BY_KEY.get(m.key)?.source ?? "—";
 }
 
-export type MappingResult = { key: string; source: string; value: string; result: "mapped" | "missing" | "unmapped" };
+export type MappingResult = {
+  key: string;
+  source: string;
+  value: string;
+  result: "mapped" | "missing" | "unmapped";
+  /** what the box is filled with - "Full name" - read first in the data review (Dani, 2 Oct 2026) */
+  label?: string;
+};
 
 export function testMappingFor(keys: string[], ctx: MappingContext, m?: Mappings): MappingResult[] {
   return keys.map((key) => {
     const map = mappingFor(key, m);
     if (!isComplete(map)) return { key, source: "—", value: "", result: "unmapped" };
-    if (map!.kind === "blank") return { key, source: "Left blank", value: "", result: "mapped" };
+    if (map!.kind === "blank") return { key, source: "Left blank", value: "", result: "mapped", label: "Left blank" };
     const value = map!.kind === "formula" ? evalFormula(map!.expr, ctx) : String(FIELD_BY_KEY.get(map!.key)!.get(ctx) ?? "");
-    return { key, source: describeMapping(map), value, result: value.trim() ? "mapped" : "missing" };
+    const label = map!.kind === "formula" ? "Formula" : (FIELD_BY_KEY.get(map!.key)?.label ?? "");
+    return { key, source: describeMapping(map), value, result: value.trim() ? "mapped" : "missing", label };
   });
 }
 

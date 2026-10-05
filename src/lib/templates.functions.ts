@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import type { PdfBox } from "@/lib/pdf-boxes";
 import { z } from "zod";
 
-import { detectPlaceholders, isDocumentOwn, testMappingFor, unmapped, type MappingContext, type Mappings } from "@/lib/template-fields";
+import { detectPlaceholders, isDocumentOwn, isTickResult, testMappingFor, unmapped, type MappingContext, type Mappings } from "@/lib/template-fields";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -113,9 +113,14 @@ async function loadDocx(db: any, filePath: string | null | undefined): Promise<U
 const boxesOf = (row: { boxes?: unknown }): PdfBox[] => (Array.isArray(row.boxes) ? (row.boxes as PdfBox[]) : []);
 
 /** Values for each box, from the resident, as a Word file's placeholders get them. */
-async function valuesFor(placeholders: string[], ctx: MappingContext, mappings: Mappings, overrides?: Record<string, string>) {
+export async function valuesFor(placeholders: string[], ctx: MappingContext, mappings: Mappings, overrides?: Record<string, string>) {
   const values: Record<string, string | null> = {};
   for (const r of testMappingFor(placeholders, ctx, mappings)) {
+    // a tick admin changed in the draft wins either way - unticked is "" (Dani, 2 Oct 2026)
+    if (isTickResult(r) && overrides?.[r.key] !== undefined) {
+      values[r.key] = overrides[r.key]!;
+      continue;
+    }
     const typed = isDocumentOwn(r.key) ? overrides?.[r.key] : undefined;
     if (typed !== undefined && typed.trim() !== "") values[r.key] = typed;
     else if (r.result === "mapped") values[r.key] = r.value;
@@ -357,10 +362,12 @@ export function pickForResidence<T extends { document_templates: { doc_key: stri
 
 /** The Active template per document in the pack, filled with this resident's details. Read-only. */
 export const getPackTemplates = createServerFn({ method: "GET" })
-  .inputValidator((d) => z.object({ residentId: z.string().uuid() }).parse(d))
+  .inputValidator((d) => z.object({ residentId: z.string().uuid(), cardReason: z.string().max(40).optional() }).parse(d))
   .handler(async ({ data }) => {
     const db = await admin();
     const { ctx } = await buildContext(db, data.residentId);
+    // a replacement access card form: its ticks follow the reason
+    if (data.cardReason) ctx.cardReason = data.cardReason;
     const { data: rows } = await db
       .from("template_versions")
       .select("id, version, content_html, file_path, mappings, boxes, document_templates!inner(doc_key, name, residence_id, category, deactivated_at)")
@@ -527,6 +534,26 @@ export const previewGeneratedPdf = createServerFn({ method: "POST" })
  * `extraImages` for pictures not kept in storage.
  */
 export async function renderGeneratedPdf(
+  db: any,
+  kind: "agreement" | "card",
+  id: string,
+  extra: Record<string, string> = {},
+  extraImages: Record<string, Uint8Array> = {},
+): Promise<{ ok: true; bytes: Uint8Array; gaps: string[] } | { ok: false; error: string }> {
+  if (kind !== "card") return renderDocumentPdf(db, kind, id, extra, extraImages);
+  /*
+   * An access card form: its own values when it was made on its own (a
+   * replacement), and the resident's files chosen in the draft merged after
+   * it (Dani, 2 Oct 2026).
+   */
+  const { readCardExtras, withAttachments } = await import("@/lib/access-card.functions");
+  const extras = await readCardExtras(db, id);
+  const r = await renderDocumentPdf(db, kind, id, { ...(extras?.values ?? {}), ...extra }, extraImages);
+  if (!r.ok || !extras?.attachments.length) return r;
+  return { ...r, bytes: await withAttachments(db, r.bytes, extras.attachments) };
+}
+
+async function renderDocumentPdf(
   db: any,
   kind: "agreement" | "card",
   id: string,

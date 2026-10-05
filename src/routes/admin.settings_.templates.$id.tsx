@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { AlertTriangle, ArrowLeft, Check, CheckCircle2, FlaskConical, Pencil, Power, Trash2, Upload, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, CheckCircle2, FlaskConical, PanelLeftClose, PanelLeftOpen, Pencil, Power, Trash2, Upload, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -84,6 +84,22 @@ function TemplateWorkspace() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  // the left panel folds away; remembered on this browser
+  const [navOpen, setNavOpen] = useState(() => {
+    try {
+      return localStorage.getItem("brachtia-template-nav") !== "folded";
+    } catch {
+      return true;
+    }
+  });
+  const toggleNav = (open: boolean) => {
+    setNavOpen(open);
+    try {
+      localStorage.setItem("brachtia-template-nav", open ? "open" : "folded");
+    } catch {
+      /* not remembered */
+    }
+  };
   const [draftHtml, setDraftHtml] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   /*
@@ -332,7 +348,31 @@ function TemplateWorkspace() {
     return <EmptyTemplate tpl={tpl} onDone={() => qc.invalidateQueries({ queryKey: ["doc-templates"] })} />;
   }
 
-  function startEdit() {
+  async function startEdit() {
+    /*
+     * A PDF form has no text to edit: its draft is the same file with the same
+     * boxes and mappings, opened straight in the box drawer. The Word editor
+     * showed a blank page for it (Dani, 2 Oct 2026).
+     */
+    if (docx.data?.kind === "pdf" && selected!.status !== "draft") {
+      setBusy(true);
+      try {
+        const res = await save({ data: { templateId: tpl!.id, fromVersionId: selected!.id, contentHtml: selected!.contentHtml } });
+        await qc.invalidateQueries({ queryKey: ["doc-templates"] });
+        setSelectedId(res.versionId);
+        toast.success("Draft made - draw or change the boxes, then Activate Version");
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not make the draft");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    // a PDF draft is already open for drawing below
+    if (docx.data?.kind === "pdf") {
+      toast.message("Draw the boxes on the page below");
+      return;
+    }
     setDraftHtml(selected!.contentHtml);
     setEditing(true);
   }
@@ -441,9 +481,18 @@ function TemplateWorkspace() {
       )}
 
       {/* minmax(0,1fr): the middle column never grows to fit a zoomed page */}
-      <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)_340px]">
-        {/* LEFT */}
+      <div className={`grid gap-4 ${navOpen ? "lg:grid-cols-[240px_minmax(0,1fr)_340px]" : "lg:grid-cols-[56px_minmax(0,1fr)_340px]"}`}>
+        {/* LEFT - folds to a narrow rail to give the page room, as in the document pack (Dani, 2 Oct 2026) */}
+        {navOpen ? (
         <aside className="space-y-4 self-start rounded-xl border border-border bg-card p-4 text-sm">
+          <button
+            type="button"
+            onClick={() => toggleNav(false)}
+            title="Fold this panel - more room for the page"
+            className="-mt-1 ml-auto hidden items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground lg:flex"
+          >
+            <PanelLeftClose className="size-4" /> Fold
+          </button>
           <dl className="space-y-2">
             {/* name, category and residence can all be changed after the template is made (30 Sep 2026) */}
             <div>
@@ -601,6 +650,33 @@ function TemplateWorkspace() {
             </Dialog>
           </div>
         </aside>
+        ) : (
+          <aside className="flex flex-col items-center gap-2 self-start rounded-xl border border-border bg-card py-3">
+            <button
+              type="button"
+              onClick={() => toggleNav(true)}
+              title="Show the template's details and versions"
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <PanelLeftOpen className="size-4" />
+            </button>
+            {/* each version, as v1, v2 ... - the open one dark; hover for its status */}
+            {tpl.versions.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                disabled={editing}
+                title={`v${v.version} · ${v.status}`}
+                onClick={() => setSelectedId(v.id)}
+                className={`flex h-7 w-10 items-center justify-center rounded-md text-[11px] font-semibold ${
+                  v.id === selected.id ? "bg-brand-deep text-primary-foreground" : v.status === "active" ? "bg-emerald-100 text-emerald-900" : "bg-muted text-muted-foreground hover:bg-brand-tint"
+                }`}
+              >
+                v{v.version}
+              </button>
+            ))}
+          </aside>
+        )}
 
         {/* CENTRE */}
         <section className="min-w-0 rounded-xl border border-border bg-card p-4">
@@ -614,7 +690,7 @@ function TemplateWorkspace() {
                 <input type="file" accept=".docx,.pdf" className="hidden" disabled={!!test} onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }} />
               </label>
               {!editing ? (
-                <Button size="sm" variant="outline" disabled={!!test} onClick={startEdit}>
+                <Button size="sm" variant="outline" disabled={!!test || busy} onClick={() => void startEdit()}>
                   {selected.status === "draft" ? "Edit draft" : "New draft from this"}
                 </Button>
               ) : (
@@ -755,7 +831,14 @@ function TemplateWorkspace() {
                 ) : (
                   <ul className="space-y-2.5">
                     {placeholders.map((k) => (
-                      <MappingRow key={k} ph={k} mapping={mappingFor(k, maps)} disabled={!canMap} onChange={(m) => setMap(k, m)} />
+                      <MappingRow
+                        key={k}
+                        ph={k}
+                        kind={boxes.find((b) => b.key === k)?.kind}
+                        mapping={mappingFor(k, maps)}
+                        disabled={!canMap}
+                        onChange={(m) => setMap(k, m)}
+                      />
                     ))}
                   </ul>
                 )}
@@ -770,7 +853,29 @@ function TemplateWorkspace() {
   );
 }
 
-function MappingRow({ ph, mapping, disabled, onChange }: { ph: string; mapping: Mapping | null; disabled: boolean; onChange: (m: Mapping | null) => void }) {
+/*
+ * A PDF box's kind narrows the list (Dani, 2 Oct 2026): a tick box offers the
+ * Tick fields, a signature box the signatures, a text box everything else. A
+ * Word placeholder has no kind and is offered every field.
+ */
+const fieldKind = (f: { key: string; label: string }) =>
+  f.label.startsWith("Tick:") ? "tick" : /signature/i.test(f.key) ? "signature" : "text";
+
+function MappingRow({
+  ph,
+  kind,
+  mapping,
+  disabled,
+  onChange,
+}: {
+  ph: string;
+  kind?: "text" | "tick" | "signature" | undefined;
+  mapping: Mapping | null;
+  disabled: boolean;
+  onChange: (m: Mapping | null) => void;
+}) {
+  // the field already chosen stays in the list, even if it does not fit the kind
+  const fits = (f: { key: string; label: string }) => !kind || fieldKind(f) === kind || (mapping?.kind === "field" && mapping.key === f.key);
   const value = !mapping ? "" : mapping.kind === "field" ? `field:${mapping.key}` : mapping.kind;
   const ok = mapping && (mapping.kind !== "formula" || mapping.expr.trim());
   const unknown = mapping?.kind === "formula" ? formulaUnknownTokens(mapping.expr) : [];
@@ -795,10 +900,10 @@ function MappingRow({ ph, mapping, disabled, onChange }: { ph: string; mapping: 
           <SelectValue placeholder="Choose a value…" />
         </SelectTrigger>
         <SelectContent className="max-h-80">
-          {FIELD_SOURCES.map((src) => (
+          {FIELD_SOURCES.filter((src) => TEMPLATE_FIELDS.some((f) => f.source === src && fits(f))).map((src) => (
             <SelectGroup key={src}>
               <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">{src}</SelectLabel>
-              {TEMPLATE_FIELDS.filter((f) => f.source === src).map((f) => (
+              {TEMPLATE_FIELDS.filter((f) => f.source === src && fits(f)).map((f) => (
                 <SelectItem key={f.key} value={`field:${f.key}`} className="text-xs">
                   {f.label}
                 </SelectItem>
