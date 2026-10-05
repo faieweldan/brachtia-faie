@@ -8,6 +8,8 @@ const SUB_TABS = [
   { to: "/admin/residents", label: "Residents", exact: true },
   
   { to: "/admin/residents/payments", label: "Collections" },
+  // money out: credit notes owed to residents at checkout (Dani, 2 Oct 2026)
+  { to: "/admin/residents/payables", label: "Payables" },
 ];
 
 function ResidentsLayout() {

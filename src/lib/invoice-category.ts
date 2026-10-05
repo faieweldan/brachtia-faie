@@ -6,18 +6,21 @@
  * after it runs in one order across every category.
  */
 
-export type InvoiceCategory = "initial" | "rental" | "charge";
+export type InvoiceCategory = "initial" | "rental" | "charge" | "checkout";
 
 export const INVOICE_CATEGORIES: Record<InvoiceCategory, { label: string; code: string }> = {
   initial: { label: "Initial payment", code: "IP" },
   rental: { label: "Rental payment", code: "RP" },
   charge: { label: "Additional charge", code: "AC" },
+  // what a resident still owes once their deposit is used up at checkout (Dani, 2 Oct 2026)
+  checkout: { label: "Checkout settlement", code: "CS" },
 };
 
-/** The category an invoice is filed under. A checkout settlement is an additional charge. */
+/** The category an invoice is filed under. */
 export function categoryOf(invoiceType: string): InvoiceCategory {
   if (invoiceType === "rental") return "rental";
-  if (invoiceType === "charge" || invoiceType === "checkout") return "charge";
+  if (invoiceType === "charge") return "charge";
+  if (invoiceType === "checkout") return "checkout";
   return "initial";
 }
 
