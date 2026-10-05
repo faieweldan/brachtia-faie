@@ -77,17 +77,33 @@ async function moneyNow(residentId: string, type?: CheckoutType) {
       photos: [] as string[],
     }));
   const forfeit = (id: string, label: string, amount: number) => ({ id: `ff-${id}`, label, amount: r2(amount), source: "forfeit" as const, photos: [] as string[] });
+  /*
+   * In the agreement's own words - Tenancy Terms and House Rules (Sept 2026),
+   * clauses 4 and 5 (Dani, 5 Oct 2026):
+   *   4. cancellation before the balance of the Initial Payment is paid: RM150
+   *      is non-refundable. Once it is paid: one (1) month's rental + RM150
+   *      Administration Fee
+   *   5. early termination: forfeiture of the Security and Utility Deposits
+   */
   const forfeits =
     kind === "cancellation"
-      ? [
-          forfeit("cancel", "Cancellation fee", CANCELLATION_FEE),
-          // paid in full but not moved in: one month's rent is kept too (Dani, 2 Oct 2026)
-          ...(initialPaid && b.monthlyRent > 0 ? [forfeit("rent", "One month's rental", b.monthlyRent)] : []),
-        ]
+      ? initialPaid
+        ? [
+            forfeit("rent", "One (1) month's rental", b.monthlyRent),
+            forfeit("cancel", "Administration Fee", CANCELLATION_FEE),
+          ].filter((f) => f.amount > 0)
+        : [forfeit("cancel", "Non-refundable amount on cancellation", CANCELLATION_FEE)]
       : kind === "early_termination"
-        ? depositLines
-            .filter((d) => /security|utilit/i.test(d.label))
-            .map((d, i) => forfeit(`dep${i}`, `${d.label} - forfeited`, d.amount))
+        ? // one line each: the deposit paid at move-in and any difference paid since are one deposit (Dani, 5 Oct 2026)
+          (["Security", "Utility"] as const)
+            .map((name) =>
+              forfeit(
+                name.toLowerCase(),
+                `Forfeiture of ${name} Deposit`,
+                depositLines.filter((d) => (name === "Security" ? /security/i : /utilit/i).test(d.label)).reduce((n, d) => n + d.amount, 0),
+              ),
+            )
+            .filter((f) => f.amount > 0)
         : [];
   return { deposits, outstanding, forfeits, initialPaid, suggested, type: kind };
 }
