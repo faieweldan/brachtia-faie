@@ -112,6 +112,7 @@ import { fetchDaySlots } from "@/lib/public.functions";
 import { formatSlot } from "@/lib/slots";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -201,9 +202,8 @@ function BookingDetail() {
   // what "Other" actually was - the reason is read months later by someone else
   const [otherReason, setOtherReason] = useState("");
   const [roomSearch, setRoomSearch] = useState("");
-  // who is working on this booking right now - asked on every entry, so the
-  // activity log credits the person who actually did each step, not whoever
-  // happened to be assigned first (Dani, 1 Oct 2026)
+  // who is working on this booking: picked from the list under the staff
+  // button, when they choose - no longer asked on every entry (Dani, 2 Oct 2026)
   const [whoOpen, setWhoOpen] = useState(false);
   const [showAllRooms, setShowAllRooms] = useState(false);
   const [openUnitId, setOpenUnitId] = useState<string | null>(null);
@@ -214,22 +214,6 @@ function BookingDetail() {
     queryFn: () => getEnquiry({ data: { id } }),
   });
 
-  /*
-   * Ask who is here each time a booking is opened. A booking passes through
-   * several hands - one person reserves the room, another issues the invoice -
-   * and whoever opens it now should own the steps they take, so the log names
-   * the right person. Asked once per booking opened, not on every re-render.
-   */
-  const promptedFor = useRef<string | null>(null);
-  useEffect(() => {
-    if (!row || row.status === "closed") return;
-    // a booking that already became a resident is finished - nothing left to
-    // log on it - so there is no one to credit and no reason to ask
-    if (row.resident_id) return;
-    if (promptedFor.current === row.id) return;
-    promptedFor.current = row.id;
-    setWhoOpen(true);
-  }, [row]);
 
   /*
    * Only fetched once they say "Duplicate" - it reads every open booking, and
@@ -1151,18 +1135,39 @@ function BookingDetail() {
             not the browser's own list, which the operating system draws in its
             own colours on every machine (Dani, 1 Oct 2026).
           */}
-          <Button
-            ref={staffRef}
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => setWhoOpen(true)}
-            title="Who is working on this booking"
-            className={`h-9 gap-1.5 ${row.assigned_staff ? "" : "border-amber-400 text-amber-900 hover:text-amber-900"}`}
-          >
-            {row.assigned_staff || "Assign staff"}
-            <ChevronDown className="size-3.5 opacity-60" />
-          </Button>
+          <Popover open={whoOpen} onOpenChange={setWhoOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                ref={staffRef}
+                type="button"
+                size="sm"
+                variant="outline"
+                title="Who is working on this booking"
+                className={`h-9 gap-1.5 ${row.assigned_staff ? "" : "border-amber-400 text-amber-900 hover:text-amber-900"}`}
+              >
+                {row.assigned_staff || "Assign staff"}
+                <ChevronDown className="size-3.5 opacity-60" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-56 p-1">
+              {STAFF.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => {
+                    if (row.assigned_staff !== s) mutate.mutate({ assignedStaff: s });
+                    setWhoOpen(false);
+                  }}
+                  className={`flex w-full items-center rounded-md px-3 py-2 text-left text-sm hover:bg-muted ${
+                    row.assigned_staff === s ? "font-semibold text-brand-deep" : ""
+                  }`}
+                >
+                  {s}
+                  {row.assigned_staff === s ? <span className="ml-auto text-xs text-muted-foreground">current</span> : null}
+                </button>
+              ))}
+            </PopoverContent>
+          </Popover>
           {row.email ? (
             <Button asChild size="sm" variant="outline">
               <a
@@ -2108,37 +2113,6 @@ function BookingDetail() {
             onRecorded={() => goTo("payment")}
           />
 
-          {/*
-            Asked on every entry: who is working on this booking now. The pick
-            becomes the booking's staff, so the steps taken next are logged
-            under the person who actually did them (Dani, 1 Oct 2026).
-          */}
-          <Dialog open={whoOpen} onOpenChange={setWhoOpen}>
-            <DialogContent className="max-w-sm">
-              <DialogHeader>
-                <DialogTitle>Who&rsquo;s working on this booking?</DialogTitle>
-              </DialogHeader>
-              <div className="grid gap-2">
-                {STAFF.map((s) => (
-                  <Button
-                    key={s}
-                    type="button"
-                    variant={row.assigned_staff === s ? "default" : "outline"}
-                    className="justify-start"
-                    onClick={() => {
-                      if (row.assigned_staff !== s) mutate.mutate({ assignedStaff: s });
-                      setWhoOpen(false);
-                    }}
-                  >
-                    {s}
-                    {row.assigned_staff === s ? (
-                      <span className="ml-auto text-xs opacity-80">last on this booking</span>
-                    ) : null}
-                  </Button>
-                ))}
-              </div>
-            </DialogContent>
-          </Dialog>
 
           {/*
             An invoice with money still owing on it: the message asking for it,

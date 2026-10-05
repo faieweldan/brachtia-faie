@@ -1,3 +1,5 @@
+import { useQuery } from "@tanstack/react-query";
+import { adminWorkQueue } from "@/lib/work-queue.functions";
 import {
   createFileRoute,
   Link,
@@ -59,6 +61,14 @@ const NAV: { to: string; label: string; icon: typeof Inbox; exact?: boolean }[] 
 function AdminLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const router = useRouter();
+  // work waiting on Brachtia, counted on Tasks wherever admin is (Dani, 5 Oct 2026)
+  const { data: queue } = useQuery({
+    queryKey: ["admin", "work-queue"],
+    queryFn: () => adminWorkQueue(),
+    refetchInterval: 60_000,
+    enabled: pathname !== "/admin-unlock",
+  });
+  const waiting = queue?.length ?? 0;
 
   async function handleLock() {
     await lockAdmin();
@@ -83,6 +93,9 @@ function AdminLayout() {
               >
                 <item.icon className="size-4" />
                 {item.label}
+                {item.to === "/admin/tasks" && waiting ? (
+                  <span className="ml-auto rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">{waiting}</span>
+                ) : null}
               </Link>
             );
           })}
@@ -109,6 +122,7 @@ function AdminLayout() {
                 className="admin-nav-item whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium"
               >
                 {item.label}
+                {item.to === "/admin/tasks" && waiting ? ` (${waiting})` : ""}
               </Link>
             );
           })}

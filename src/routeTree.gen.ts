@@ -38,6 +38,7 @@ import { Route as AdminHomesIndexRouteImport } from './routes/admin.homes.index'
 import { Route as AdminHomesUnitsRouteImport } from './routes/admin.homes.units'
 import { Route as AdminResidentsIndexRouteImport } from './routes/admin.residents.index'
 import { Route as AdminResidentsIdRouteImport } from './routes/admin.residents.$id'
+import { Route as AdminResidentsPayablesRouteImport } from './routes/admin.residents.payables'
 import { Route as AdminResidentsPaymentsRouteImport } from './routes/admin.residents.payments'
 import { Route as AdminResidentsTenanciesRouteImport } from './routes/admin.residents.tenancies'
 import { Route as AdminWebsiteIndexRouteImport } from './routes/admin.website.index'
@@ -195,6 +196,11 @@ const AdminResidentsIdRoute = AdminResidentsIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AdminResidentsRoute,
 } as any)
+const AdminResidentsPayablesRoute = AdminResidentsPayablesRouteImport.update({
+  id: '/payables',
+  path: '/payables',
+  getParentRoute: () => AdminResidentsRoute,
+} as any)
 const AdminResidentsPaymentsRoute = AdminResidentsPaymentsRouteImport.update({
   id: '/payments',
   path: '/payments',
@@ -276,6 +282,7 @@ export interface FileRoutesByFullPath {
   '/admin/bookings/$id': typeof AdminBookingsIdRoute
   '/admin/homes/units': typeof AdminHomesUnitsRoute
   '/admin/residents/$id': typeof AdminResidentsIdRoute
+  '/admin/residents/payables': typeof AdminResidentsPayablesRoute
   '/admin/residents/payments': typeof AdminResidentsPaymentsRoute
   '/admin/residents/tenancies': typeof AdminResidentsTenanciesRoute
   '/admin/appointments/': typeof AdminAppointmentsIndexRoute
@@ -311,6 +318,7 @@ export interface FileRoutesByTo {
   '/admin/bookings/$id': typeof AdminBookingsIdRoute
   '/admin/homes/units': typeof AdminHomesUnitsRoute
   '/admin/residents/$id': typeof AdminResidentsIdRoute
+  '/admin/residents/payables': typeof AdminResidentsPayablesRoute
   '/admin/residents/payments': typeof AdminResidentsPaymentsRoute
   '/admin/residents/tenancies': typeof AdminResidentsTenanciesRoute
   '/admin/appointments': typeof AdminAppointmentsIndexRoute
@@ -353,6 +361,7 @@ export interface FileRoutesById {
   '/admin/bookings/$id': typeof AdminBookingsIdRoute
   '/admin/homes/units': typeof AdminHomesUnitsRoute
   '/admin/residents/$id': typeof AdminResidentsIdRoute
+  '/admin/residents/payables': typeof AdminResidentsPayablesRoute
   '/admin/residents/payments': typeof AdminResidentsPaymentsRoute
   '/admin/residents/tenancies': typeof AdminResidentsTenanciesRoute
   '/admin/appointments/': typeof AdminAppointmentsIndexRoute
@@ -396,6 +405,7 @@ export interface FileRouteTypes {
     | '/admin/bookings/$id'
     | '/admin/homes/units'
     | '/admin/residents/$id'
+    | '/admin/residents/payables'
     | '/admin/residents/payments'
     | '/admin/residents/tenancies'
     | '/admin/appointments/'
@@ -431,6 +441,7 @@ export interface FileRouteTypes {
     | '/admin/bookings/$id'
     | '/admin/homes/units'
     | '/admin/residents/$id'
+    | '/admin/residents/payables'
     | '/admin/residents/payments'
     | '/admin/residents/tenancies'
     | '/admin/appointments'
@@ -472,6 +483,7 @@ export interface FileRouteTypes {
     | '/admin/bookings/$id'
     | '/admin/homes/units'
     | '/admin/residents/$id'
+    | '/admin/residents/payables'
     | '/admin/residents/payments'
     | '/admin/residents/tenancies'
     | '/admin/appointments/'
@@ -711,6 +723,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminResidentsIdRouteImport
       parentRoute: typeof AdminResidentsRoute
     }
+    '/admin/residents/payables': {
+      id: '/admin/residents/payables'
+      path: '/payables'
+      fullPath: '/admin/residents/payables'
+      preLoaderRoute: typeof AdminResidentsPayablesRouteImport
+      parentRoute: typeof AdminResidentsRoute
+    }
     '/admin/residents/payments': {
       id: '/admin/residents/payments'
       path: '/payments'
@@ -829,6 +848,7 @@ const AdminHomesRouteWithChildren = AdminHomesRoute._addFileChildren(
 
 interface AdminResidentsRouteChildren {
   AdminResidentsIdRoute: typeof AdminResidentsIdRoute
+  AdminResidentsPayablesRoute: typeof AdminResidentsPayablesRoute
   AdminResidentsPaymentsRoute: typeof AdminResidentsPaymentsRoute
   AdminResidentsTenanciesRoute: typeof AdminResidentsTenanciesRoute
   AdminResidentsIndexRoute: typeof AdminResidentsIndexRoute
@@ -837,6 +857,7 @@ interface AdminResidentsRouteChildren {
 
 const AdminResidentsRouteChildren: AdminResidentsRouteChildren = {
   AdminResidentsIdRoute: AdminResidentsIdRoute,
+  AdminResidentsPayablesRoute: AdminResidentsPayablesRoute,
   AdminResidentsPaymentsRoute: AdminResidentsPaymentsRoute,
   AdminResidentsTenanciesRoute: AdminResidentsTenanciesRoute,
   AdminResidentsIndexRoute: AdminResidentsIndexRoute,

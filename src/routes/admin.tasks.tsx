@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState, Panel, Select, StatusPill } from "@/components/admin/ops-ui";
 import { adminOverview } from "@/lib/admin.functions";
+import { adminWorkQueue } from "@/lib/work-queue.functions";
 import { deleteTask, fmtDate, toggleTask, useOps } from "@/lib/ops-store";
 
 export const Route = createFileRoute("/admin/tasks")({
@@ -19,6 +20,8 @@ const TYPE_LABELS: Record<string, string> = {
   stamping: "Stamping",
   payment: "Payment",
   hold: "Hold",
+  inventory: "Schedule C",
+  refund: "Checkout refund",
 };
 
 function TasksPage() {
@@ -36,6 +39,9 @@ function TasksPage() {
   const { data: overview } = useQuery({ queryKey: ["admin", "overview"], queryFn: () => adminOverview() });
   const toBook = ((overview as any)?.checkinsToBook ?? []) as { id: string; full_name: string; remind: boolean }[];
   const showToBook = (!type || type === "checkin") && status !== "done" && !overdueOnly;
+  // what is waiting on Brachtia - Schedule C to answer, refunds to pay, pages to stamp (Dani, 5 Oct 2026)
+  const { data: queue } = useQuery({ queryKey: ["admin", "work-queue"], queryFn: () => adminWorkQueue(), refetchInterval: 60_000 });
+  const work = (queue ?? []).filter((w) => (!type || type === w.kind) && status !== "done" && !overdueOnly);
 
   const rows = useMemo(
     () =>
@@ -83,6 +89,28 @@ function TasksPage() {
         </div>
       </Panel>
 
+      {work.length ? (
+        <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+          {work.map((w, i) => (
+            <div key={`${w.kind}-${w.residentId}-${i}`} className="flex flex-wrap items-center gap-3 p-4">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-brand-deep">{w.title}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {TYPE_LABELS[w.kind]} · {w.residentName || "Resident"} · {w.detail}
+                  {w.since ? ` · since ${fmtDate(w.since.slice(0, 10))}` : ""}
+                </p>
+              </div>
+              <StatusPill status="due" label={w.kind === "refund" ? "To pay" : w.kind === "stamping" ? "To stamp" : "Your turn"} />
+              <Button asChild size="sm" variant="outline">
+                <Link to="/admin/residents/$id" params={{ id: w.residentId }} search={{ tab: w.kind === "refund" ? "payments" : "tenancy" }}>
+                  Open
+                </Link>
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       {showToBook && toBook.length ? (
         <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
           {toBook.map((r) => (
@@ -105,7 +133,7 @@ function TasksPage() {
         </div>
       ) : null}
 
-      {tasks.length === 0 && !(showToBook && toBook.length) ? (
+      {tasks.length === 0 && !(showToBook && toBook.length) && !work.length ? (
         <EmptyState
           icon={CheckSquare}
           title="No tasks yet"
