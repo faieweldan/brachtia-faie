@@ -76,6 +76,8 @@ export const getTenancyChangeBasis = createServerFn({ method: "GET" })
       .maybeSingle();
     // the move-in invoice and any difference invoiced since - what is held now
     const original = await getBasisMoney(sb, data.residentId);
+    // each deposit line, with its invoice - the same table as the checkout statement (Dani, 5 Oct 2026)
+    const held = await depositsHeld(sb, data.residentId);
     const { data: s } = t ? await sb.from("rental_schedules").select("monthly_rent").eq("tenancy_id", t.id).maybeSingle() : { data: null };
     return {
       tenancy: t ? { id: String(t.id), start: day(t.start_date), end: day(t.end_date) } : null,
@@ -83,6 +85,7 @@ export const getTenancyChangeBasis = createServerFn({ method: "GET" })
       // no rent terms: the scheduled invoices cannot be made again
       hasSchedule: !!s,
       original,
+      held,
       pending: await readJson<PendingChange>(sb, pendingPath(data.residentId)),
     };
   });
@@ -196,6 +199,34 @@ export async function tenancyChangeAfterPayment(sb: any, invoiceId: string) {
 async function currentRent(sb: any, tenancyId: string): Promise<number> {
   const { data } = await sb.from("rental_schedules").select("monthly_rent").eq("tenancy_id", tenancyId).maybeSingle();
   return Number(data?.monthly_rent ?? 0);
+}
+
+/** every deposit on the initial-payment invoices: its line, its invoice, what it comes to */
+async function depositsHeld(sb: any, residentId: string) {
+  const { data: inv } = await sb
+    .from("invoices")
+    .select("id, number")
+    .eq("resident_id", residentId)
+    .eq("invoice_type", "initial")
+    .neq("status", "void")
+    .order("created_at", { ascending: true });
+  const invoices = (inv ?? []) as any[];
+  if (!invoices.length) return [] as { label: string; amount: number; invoiceNumber: string }[];
+  const { data: items } = await sb
+    .from("invoice_items")
+    .select("invoice_id, label, kind, amount, quantity, sort_order")
+    .in("invoice_id", invoices.map((i) => i.id))
+    .order("sort_order");
+  const number = new Map(invoices.map((i) => [i.id, String(i.number ?? "")]));
+  const order = new Map(invoices.map((i, n) => [i.id, n]));
+  return ((items ?? []) as any[])
+    .filter((i) => i.kind === "refundable" || /deposit/i.test(String(i.label)))
+    .sort((a, b) => (order.get(a.invoice_id) ?? 0) - (order.get(b.invoice_id) ?? 0))
+    .map((i) => ({
+      label: String(i.label),
+      amount: Math.round(Number(i.amount || 0) * Number(i.quantity ?? 1) * 100) / 100,
+      invoiceNumber: number.get(i.invoice_id) ?? "",
+    }));
 }
 
 async function getBasisMoney(sb: any, residentId: string) {

@@ -297,6 +297,25 @@ export function UpdateTenancyDialog({
             ) : null}
           </div>
 
+          {/* what is held now, line by line - so the Original column below can be checked (Dani, 5 Oct 2026) */}
+          {basis.data?.held.length ? (
+            <div className="overflow-hidden rounded-xl border border-border">
+              <div className="bg-muted/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Deposits held</div>
+              {basis.data.held.map((d, i) => (
+                <div key={i} className="flex items-center justify-between gap-2 border-t border-border px-3 py-1.5 text-sm">
+                  <span className="min-w-0">
+                    {d.label} <span className="text-xs text-muted-foreground">· {d.invoiceNumber}</span>
+                  </span>
+                  <span className="tabular-nums">{money(d.amount)}</span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between border-t border-border bg-muted px-3 py-1.5 text-sm font-medium">
+                <span>Total held</span>
+                <span className="tabular-nums">{money(basis.data.held.reduce((n, d) => n + d.amount, 0))}</span>
+              </div>
+            </div>
+          ) : null}
+
           {changed && rows.length ? (
             <div className="overflow-hidden rounded-xl border border-border">
               <div className="grid grid-cols-[1fr_6rem_7rem_6rem_4rem] gap-2 bg-muted/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
