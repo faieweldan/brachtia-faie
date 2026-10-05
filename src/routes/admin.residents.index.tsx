@@ -11,6 +11,8 @@ import { EmptyState, Panel, Select, StatusPill } from "@/components/admin/ops-ui
 import { completeness } from "@/lib/resident-fields";
 import { rowsFromGrid } from "@/lib/master-list";
 import { useBillingLedger } from "@/lib/billing-client";
+import { useQuery } from "@tanstack/react-query";
+import { tenancyDatesByResident } from "@/lib/rental-schedule.functions";
 import {
   blankResident,
   findBedForResident,
@@ -33,6 +35,8 @@ function ResidentsListPage() {
   const { residents, units, tenancies } = useOps();
   // what each resident owes, from the same invoices as Collections
   const { rows: ledger } = useBillingLedger();
+  // each stay's dates as the tenancies table has them (the browser copy said end = start)
+  const savedDates = useQuery({ queryKey: ["tenancy-dates"], queryFn: () => tenancyDatesByResident() });
   const owed = useMemo(() => {
     const m = new Map<string, number>();
     for (const l of ledger) {
@@ -333,6 +337,7 @@ function ResidentsListPage() {
                       tenancies.find((t) => t.residentId === r.id),
                       placed,
                       r,
+                      savedDates.data?.[r.id],
                     );
                     const balance = owed.get(r.id) ?? 0;
                     const pct = completeness(r).pct;

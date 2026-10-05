@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Link2, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, DoorOpen, Link2, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -40,14 +40,8 @@ import {
 } from "@/components/admin/ops-ui";
 import { TenancyDocs, currentMergeValues } from "@/components/admin/TenancyDocs";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog as ActionDialog,
-  DialogContent as ActionDialogContent,
-  DialogDescription as ActionDialogDescription,
-  DialogHeader as ActionDialogHeader,
-  DialogTitle as ActionDialogTitle,
-} from "@/components/ui/dialog";
-import { renewAgreement, reviseSchedule } from "@/lib/tenancy-docs.functions";
+import { UpdateTenancyDialog, type TenancyChangeResult } from "@/components/admin/UpdateTenancyDialog";
+import { tenancyDatesByResident } from "@/lib/rental-schedule.functions";
 import { ResidentPayments } from "@/components/admin/ResidentPayments";
 import { RESIDENT_DOCS, residentDocsFor, residentDocLabel } from "@/lib/resident-documents";
 import { compressImage } from "@/lib/compress";
@@ -57,7 +51,6 @@ import {
   PAY_METHODS,
   SCHEDULES,
   addTask,
-  allBeds,
   blankResident,
   fmtDate,
   fmtDateTime,
@@ -213,23 +206,26 @@ function ResidentProfilePage() {
   const [form, setForm] = useState<Resident | null>(isNew ? blankResident() : (stored ?? null));
   const { tab: startTab } = Route.useSearch();
   const [tab, setTab] = useState<string>(startTab ?? "profile");
+  // the Checkout button pressed: Payments opens on the checkout settlement
+  const [goCheckout, setGoCheckout] = useState(0);
+  // a lost or damaged access card: Payments opens its invoice, filled in (Dani, 2 Oct 2026)
+  const [cardCharge, setCardCharge] = useState<{ label: string; amount: number; n: number } | null>(null);
+  const clearCardCharge = useCallback(() => setCardCharge(null), []);
+  // an invoice to show on Payments, from a link elsewhere on the card
+  const [focusInvoice, setFocusInvoice] = useState<{ number: string; n: number } | null>(null);
   const [active, setActive] = useState("personal");
   // sections are read-only until the pencil is clicked
   const [editing, setEditing] = useState<Record<string, boolean>>({});
   const [linking, setLinking] = useState(false);
   const queryClient = useQueryClient();
+  const savedDates = useQuery({ queryKey: ["tenancy-dates"], queryFn: () => tenancyDatesByResident() });
   // deleting a former resident for good asks for their name to be typed back
   const [deleting, setDeleting] = useState(false);
   const [confirmName, setConfirmName] = useState("");
-  // header actions that change the tenancy and issue revised documents
-  const [roomChange, setRoomChange] = useState(false);
-  const [newBedId, setNewBedId] = useState("");
+  // Update Tenancy: a room, occupancy or date change, and its documents (Dani, 3 Oct 2026)
   const [updateTenancyOpen, setUpdateTenancyOpen] = useState(false);
-  const [tenancyEdit, setTenancyEdit] = useState({ start: "", end: "", rent: "" });
-  const [asRenewal, setAsRenewal] = useState(false);
   // a resident's uploaded file, open in the preview window
   const [docPreview, setDocPreview] = useState<{ title: string; fileName: string; url: string } | null>(null);
-  const [actionBusy, setActionBusy] = useState(false);
   const isEditing = (key: string) => !!editing[key];
   const editAction = (key: string) => (
     <Button
@@ -315,11 +311,11 @@ function ResidentProfilePage() {
         appliesTo: "any" as const,
       })),
   ];
-  const tenancy = tenancies.find((t) => t.residentId === form.id);
+  // the browser's copy of the tenancy, with the dates the tenancies table has (Dani, 4 Oct 2026)
+  const localTenancy = tenancies.find((t) => t.residentId === form.id);
+  const saved = savedDates.data?.[form.id];
+  const tenancy = localTenancy && saved ? { ...localTenancy, start: saved.start || localTenancy.start, end: saved.end || localTenancy.end } : localTenancy;
   const placed = findBedForResident(units, form);
-  const vacantBeds = allBeds(units).filter(
-    ({ bed }) => bed.status === "vacant" || bed.id === form.bedId || bed.status === "held",
-  );
 
   async function save() {
     if (!form) return;
@@ -367,7 +363,8 @@ function ResidentProfilePage() {
       roomId: row?.room.id,
       bedId: form.bedId,
       start: form.moveIn,
-      end: form.moveIn,
+      // not the move-in date again: that read as a stay of 0 days (Dani, 4 Oct 2026)
+      end: row?.bed.tenancyEnd ?? "",
       rent: row?.room.rent ?? 0,
       schedule: form.paySchedule,
     });
@@ -386,7 +383,7 @@ function ResidentProfilePage() {
   // the stay summary: the tenancy record if there is one, otherwise whatever the
   // bed placement and the profile already know
   const stay = {
-    ...stayDates(tenancy, placed, form),
+    ...stayDates(tenancy, placed, form, saved),
     rent: tenancy?.rent || placed?.bed.rent || placed?.room.rent || 0,
     status: (placed?.bed.status ?? "vacant") as BedStatus,
     get duration(): string {
@@ -461,6 +458,15 @@ function ResidentProfilePage() {
     void navigate({ to: "/admin/residents" });
   }
 
+  /** checked out and settled: Inactive, and the bed is free for the next resident (Dani, 2 Oct 2026) */
+  async function checkedOut() {
+    if (!form) return;
+    const bed = placed?.bed;
+    await saveResidentRecord({ ...form, status: "Inactive" } as Resident);
+    if (bed) vacateBed(bed.id);
+    setForm({ ...form, status: "Inactive" } as Resident);
+  }
+
   /**
    * Former residents with no QuickBooks id are test data - real residents from
    * the master list all carry one - so only they can be deleted for good, with
@@ -470,110 +476,41 @@ function ResidentProfilePage() {
   const canDelete = isFormer && !form.quickbooksId.trim();
   const nameTyped = confirmName.trim().toLowerCase() === form.fullName.trim().toLowerCase();
 
-  /** the agreement the resident's documents currently live under, if any */
-  async function latestAgreementId(): Promise<string | null> {
-    const { getTenancyDocs } = await import("@/lib/tenancy-docs.functions");
-    const { agreements } = await getTenancyDocs({ data: { residentId: form!.id } });
-    return agreements[0]?.id ?? null;
-  }
-
   /**
-   * Room Change: move the resident to the new bed, then issue revised
-   * Schedule A and Schedule C under the same Agreement No. Previous versions
-   * are kept by the server.
+   * Update Tenancy saved on the server: the bed moves here, as Room Change
+   * did, and the resident card shows the new end date and rent.
    */
-  async function doRoomChange() {
-    if (!form || !newBedId) return;
-    setActionBusy(true);
-    try {
-      const row = findBed(units, newBedId);
+  async function tenancyChanged(r: TenancyChangeResult) {
+    if (!form || !tenancy) return;
+    if (r.newBed) {
       const oldBed = placed?.bed;
       const updated = {
         ...form,
-        bedId: newBedId,
-        roomId: row?.room.id,
-        unitId: row?.unit.id,
-        occupancy: row?.room.occupancy ?? form.occupancy,
+        bedId: r.newBed.bed.id,
+        roomId: r.newBed.room.id,
+        unitId: r.newBed.unit.id,
+        occupancy: r.newBed.room.occupancy,
       } as Resident;
       await saveResidentRecord(updated);
       setForm(updated);
       if (oldBed) vacateBed(oldBed.id);
-      if (row) {
-        updateBed(newBedId, {
-          status: "booked",
-          residentId: form.id,
-          residentName: form.fullName,
-          university: form.university,
-          nationality: form.nationality,
-          gender: form.gender,
-          studentId: form.studentId,
-        });
-      }
-      const agreementId = await latestAgreementId();
-      if (agreementId) {
-        const newPlaced = row
-          ? { unit: row.unit, room: row.room, bed: row.bed }
-          : undefined;
-        const vals = currentMergeValues(updated, tenancy, newPlaced);
-        await reviseSchedule({ data: { agreementId, docType: "sched_a", mergeValues: vals } });
-        await reviseSchedule({ data: { agreementId, docType: "sched_c", mergeValues: vals } });
-        toast.success("Room changed — revised Schedule A and C issued");
-      } else {
-        toast.success("Room changed");
-      }
-      setRoomChange(false);
-      setNewBedId("");
-      await queryClient.invalidateQueries({ queryKey: ["tenancy-docs", form.id] });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not change the room");
-    } finally {
-      setActionBusy(false);
+      updateBed(r.newBed.bed.id, {
+        status: "booked",
+        residentId: form.id,
+        residentName: form.fullName,
+        university: form.university,
+        nationality: form.nationality,
+        gender: form.gender,
+        studentId: form.studentId,
+      });
     }
-  }
-
-  /**
-   * Update Tenancy: date and/or rent changes issue a revised Schedule A under
-   * the same Agreement No.; a renewal starts a brand-new agreement instead.
-   */
-  async function doUpdateTenancy() {
-    if (!form || !tenancy) return;
-    setActionBusy(true);
-    try {
-      const start = tenancyEdit.start || tenancy.start;
-      const end = tenancyEdit.end || tenancy.end;
-      const rent = tenancyEdit.rent ? Number(tenancyEdit.rent) : tenancy.rent;
-      saveTenancy({ ...tenancy, start, end, rent });
-      const vals = currentMergeValues(form, { ...tenancy, start, end, rent }, placed);
-      if (asRenewal) {
-        const res = await renewAgreement({
-          data: {
-            residentId: form.id,
-            tenancyId: tenancy.id,
-            mergeValues: vals,
-            periodStart: start,
-            periodEnd: end,
-          },
-        });
-        toast.success(`Renewal created — ${res.agreementNo}`);
-      } else {
-        const agreementId = await latestAgreementId();
-        if (agreementId) {
-          await reviseSchedule({
-            data: { agreementId, docType: "sched_a", mergeValues: vals, periodStart: start, periodEnd: end },
-          });
-          toast.success("Tenancy updated — revised Schedule A issued");
-        } else {
-          toast.success("Tenancy updated");
-        }
-      }
-      setUpdateTenancyOpen(false);
-      setAsRenewal(false);
-      await queryClient.invalidateQueries({ queryKey: ["tenancy-docs", form.id] });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not update the tenancy");
-    } finally {
-      setActionBusy(false);
-    }
+    saveTenancy({ ...tenancy, end: r.newEnd, rent: r.newRent || tenancy.rent });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["tenancy-docs", form.id] }),
+      queryClient.invalidateQueries({ queryKey: ["tenancy-change", form.id] }),
+      queryClient.invalidateQueries({ queryKey: ["tenancy-dates"] }),
+      refreshMoney(queryClient),
+    ]);
   }
 
   async function deleteForever() {
@@ -640,27 +577,23 @@ function ResidentProfilePage() {
           <div className="flex shrink-0 flex-wrap items-center gap-1">
             {tenancy && !isNew ? (
               <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setNewBedId("");
-                    setRoomChange(true);
-                  }}
-                >
-                  Room Change
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setTenancyEdit({ start: tenancy.start, end: tenancy.end, rent: String(tenancy.rent || "") });
-                    setAsRenewal(false);
-                    setUpdateTenancyOpen(true);
-                  }}
-                >
+                {/* one button for both: what changes is picked inside (Dani, 2 Oct 2026) */}
+                <Button size="sm" variant="outline" onClick={() => setUpdateTenancyOpen(true)}>
                   Update Tenancy
                 </Button>
+                {/* any time: a resident can cancel, end early or leave at the end (Dani, 2 Oct 2026) */}
+                {!isFormer ? (
+                  <Button
+                    size="sm"
+                    className="bg-amber-600 text-white hover:bg-amber-700"
+                    onClick={() => {
+                      setTab("payments");
+                      setGoCheckout((n) => n + 1);
+                    }}
+                  >
+                    <DoorOpen className="mr-1 size-3.5" /> Checkout
+                  </Button>
+                ) : null}
               </>
             ) : null}
             {isEmptyDraft ? (
@@ -717,81 +650,22 @@ function ResidentProfilePage() {
             </DialogContent>
           </Dialog>
 
-          <ActionDialog open={roomChange} onOpenChange={setRoomChange}>
-            <ActionDialogContent className="admin-ui">
-              <ActionDialogHeader>
-                <ActionDialogTitle className="text-base font-bold text-brand-deep">
-                  Room Change
-                </ActionDialogTitle>
-                <ActionDialogDescription>
-                  The resident moves to the new bed, and revised Schedule A and Schedule C are
-                  issued under the same Agreement No. Previous versions are kept.
-                </ActionDialogDescription>
-              </ActionDialogHeader>
-              <Select
-                label="New bed"
-                value={newBedId}
-                onChange={setNewBedId}
-                options={vacantBeds
-                  .filter(({ bed }) => bed.id !== placed?.bed.id)
-                  .map(({ unit, room, bed }) => ({
-                    value: bed.id,
-                    label: `${unit.unitNo} · Room ${room.letter} · ${bed.label}`,
-                  }))}
-                placeholder="Select bed"
-              />
-              <Button disabled={!newBedId || actionBusy} onClick={() => void doRoomChange()}>
-                {actionBusy ? "Changing…" : "Confirm room change"}
-              </Button>
-            </ActionDialogContent>
-          </ActionDialog>
-
-          <ActionDialog open={updateTenancyOpen} onOpenChange={setUpdateTenancyOpen}>
-            <ActionDialogContent className="admin-ui">
-              <ActionDialogHeader>
-                <ActionDialogTitle className="text-base font-bold text-brand-deep">
-                  Update Tenancy
-                </ActionDialogTitle>
-                <ActionDialogDescription>
-                  Date or rent changes issue a revised Schedule A under the same Agreement No.
-                  Tick renewal to start a brand-new agreement instead.
-                </ActionDialogDescription>
-              </ActionDialogHeader>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="space-y-1.5">
-                  <p className="text-xs text-muted-foreground">Tenancy start</p>
-                  <Input
-                    type="date"
-                    value={tenancyEdit.start}
-                    onChange={(e) => setTenancyEdit({ ...tenancyEdit, start: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <p className="text-xs text-muted-foreground">Tenancy end</p>
-                  <Input
-                    type="date"
-                    value={tenancyEdit.end}
-                    onChange={(e) => setTenancyEdit({ ...tenancyEdit, end: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <p className="text-xs text-muted-foreground">Monthly rent (RM)</p>
-                  <Input
-                    type="number"
-                    value={tenancyEdit.rent}
-                    onChange={(e) => setTenancyEdit({ ...tenancyEdit, rent: e.target.value })}
-                  />
-                </div>
-              </div>
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox checked={asRenewal} onCheckedChange={(v) => setAsRenewal(!!v)} />
-                This is a renewal — create a new Agreement No.
-              </label>
-              <Button disabled={actionBusy} onClick={() => void doUpdateTenancy()}>
-                {actionBusy ? "Saving…" : asRenewal ? "Create renewal" : "Save & revise Schedule A"}
-              </Button>
-            </ActionDialogContent>
-          </ActionDialog>
+          {tenancy ? (
+            <UpdateTenancyDialog
+              open={updateTenancyOpen}
+              onOpenChange={setUpdateTenancyOpen}
+              residentId={form.id}
+              units={units}
+              placed={placed}
+              tenancy={{ start: tenancy.start, end: tenancy.end, rent: tenancy.rent }}
+              residents={residents}
+              gender={form.gender}
+              mergeValuesFor={(r) =>
+                currentMergeValues(form, { ...tenancy, end: r.newEnd, rent: r.newRent || tenancy.rent }, r.newBed ?? placed)
+              }
+              onApplied={tenancyChanged}
+            />
+          ) : null}
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-border pt-4 sm:grid-cols-4 lg:grid-cols-7">
@@ -1044,6 +918,16 @@ function ResidentProfilePage() {
             <TenancyDocs
               resident={form}
               tenancy={tenancy}
+              onOpenInvoice={(number) => {
+                setFocusInvoice({ number, n: Date.now() });
+                setTab("payments");
+                // shown once - a later visit to Payments does not jump again
+                setTimeout(() => setFocusInvoice(null), 3000);
+              }}
+              onCardCharge={(line) => {
+                setCardCharge({ ...line, n: Date.now() });
+                setTab("payments");
+              }}
               checklist={
                 <Panel title="Pre-check-in checklist" description="Prepare for move-in day.">
                   <div className="space-y-2">
@@ -1091,6 +975,11 @@ function ResidentProfilePage() {
 
         <TabsContent value="payments" className="mt-4">
           <ResidentPayments
+            openCheckout={goCheckout}
+            cardCharge={cardCharge}
+            onCardChargeOpened={clearCardCharge}
+            focusInvoice={focusInvoice}
+            onInactive={checkedOut}
             residentId={form.id}
             quickbooksId={form.quickbooksId}
             tenancyEnd={stay.end}

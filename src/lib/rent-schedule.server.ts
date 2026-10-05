@@ -49,7 +49,11 @@ type Tenancy = {
  * and whole months alike.
  */
 export async function initialInvoiceFor(supabase: any, tenancy: Tenancy) {
-  const query = liveInvoices(supabase).eq("invoice_type", "initial");
+  // the move-in invoice - not a difference invoiced later by Update Tenancy, which holds no advance rent
+  // (an invoice with no notes at all is kept - "not like" alone would drop it)
+  const query = liveInvoices(supabase)
+    .eq("invoice_type", "initial")
+    .or('notes.is.null,notes.not.like."Initial payment difference*"');
   const { data: invoice } = await (
     tenancy.enquiry_id
       ? query.eq("enquiry_id", tenancy.enquiry_id)

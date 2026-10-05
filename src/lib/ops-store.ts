@@ -740,10 +740,12 @@ export function stayDates(
   tenancy: Pick<Tenancy, "start" | "end"> | undefined,
   placed: BedRow | undefined,
   resident: { moveIn?: string | undefined },
+  /** the tenancies table's dates - the truth, ahead of the browser's own copy */
+  saved?: { start: string; end: string } | undefined,
 ) {
   return {
-    start: tenancy?.start || placed?.bed.tenancyStart || resident.moveIn || "",
-    end: tenancy?.end || placed?.bed.tenancyEnd || "",
+    start: saved?.start || tenancy?.start || placed?.bed.tenancyStart || resident.moveIn || "",
+    end: saved?.end || placed?.bed.tenancyEnd || tenancy?.end || "",
   };
 }
 

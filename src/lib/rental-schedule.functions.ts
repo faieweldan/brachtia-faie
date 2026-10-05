@@ -162,3 +162,26 @@ export const saveRentalSchedule = createServerFn({ method: "POST" })
     await syncScheduledRent(supabase, tenancyId);
     return { tenancyId };
   });
+
+/**
+ * Every resident's latest tenancy dates, from the tenancies table (Dani, 4 Oct
+ * 2026). The resident pages kept their own browser copy, and "Start tenancy"
+ * wrote it with the end date = the move-in date - so every stay read as 0
+ * days. The table is the truth; the copy is only a fallback.
+ */
+export const tenancyDatesByResident = createServerFn({ method: "GET" }).handler(async () => {
+  const supabase = await admin();
+  const { data, error } = await supabase
+    .from("tenancies")
+    .select("resident_id, start_date, end_date, created_at")
+    .order("start_date", { ascending: true, nullsFirst: true })
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  const out: Record<string, { start: string; end: string }> = {};
+  // the latest tenancy wins - a renewal is the newest
+  for (const t of (data ?? []) as any[]) {
+    if (!t.resident_id) continue;
+    out[String(t.resident_id)] = { start: day(t.start_date), end: day(t.end_date) };
+  }
+  return out;
+});
