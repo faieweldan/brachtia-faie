@@ -21,7 +21,7 @@ const TYPE_LABELS: Record<string, string> = {
   payment: "Payment",
   hold: "Hold",
   inventory: "Schedule C",
-  refund: "Checkout refund",
+  refund: "Checkout settlement",
 };
 
 function TasksPage() {
@@ -100,7 +100,7 @@ function TasksPage() {
                   {w.since ? ` · since ${fmtDate(w.since.slice(0, 10))}` : ""}
                 </p>
               </div>
-              <StatusPill status="due" label={w.kind === "refund" ? "To pay" : w.kind === "stamping" ? "To stamp" : "Your turn"} />
+              <StatusPill status="due" label={w.kind === "refund" ? "Payment" : w.kind === "stamping" ? "To stamp" : "Your turn"} />
               <Button asChild size="sm" variant="outline">
                 <Link to="/admin/residents/$id" params={{ id: w.residentId }} search={{ tab: w.kind === "refund" ? "payments" : "tenancy" }}>
                   Open

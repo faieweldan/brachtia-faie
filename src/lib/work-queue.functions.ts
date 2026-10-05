@@ -7,7 +7,7 @@ import { createServerFn } from "@tanstack/react-start";
  * out from the records each time, not stored as tasks - so a row goes away by
  * itself the moment the work is done, and nobody has to tick it off.
  *   inventory   a resident sent their Schedule C: answer it, or approve it once signed
- *   refund      a checkout statement is signed and money is owed back: pay it and upload the proof
+ *   refund      Checkout Settlement Payment: signed, and a refund to pay out or a CS invoice to collect
  *   stamping    every document of an agreement is signed: upload the stamping page
  */
 export type WorkItem = {
@@ -79,19 +79,33 @@ export const adminWorkQueue = createServerFn({ method: "GET" }).handler(async ()
     });
   }
 
-  // 3. checkout refunds signed for and not paid yet
+  // 3. Checkout Settlement Payment (Dani's words, 5 Oct 2026): the student signed, and money is
+  //    still to move - Brachtia pays out a refund, or the student pays the CS invoice
   const { readStatement } = await import("@/lib/checkout.server");
   const { data: folders } = await sb.storage.from("resident-documents").list("checkout", { limit: 1000 });
   for (const f of ((folders ?? []) as { name: string; id: string | null }[]).filter((x) => !x.id && /^[0-9a-f-]{36}$/.test(x.name))) {
     const s = await readStatement(sb, f.name);
-    if (!s?.settled || s.settled.refund <= 0 || s.refund) continue;
-    out.push({
-      kind: "refund",
-      title: `Pay the checkout refund - ${s.number}`,
-      detail: `RM${s.settled.refund.toLocaleString("en-MY")} owed to the resident · upload the proof once paid`,
-      residentId: f.name,
-      since: s.settled.at,
-    });
+    if (!s?.settled) continue;
+    const rm = (n: number) => `RM${n.toLocaleString("en-MY")}`;
+    if (s.settled.refund > 0 && !s.refund) {
+      out.push({
+        kind: "refund",
+        title: `Checkout Settlement Payment - ${s.number}`,
+        detail: `Signed by the student · pay out ${rm(s.settled.refund)} and upload the receipt`,
+        residentId: f.name,
+        since: s.settled.at,
+      });
+    } else if (s.settled.owed > 0 && s.settled.csInvoiceNumber) {
+      const { data: cs } = await sb.from("invoices").select("status").eq("number", s.settled.csInvoiceNumber).maybeSingle();
+      if (cs?.status === "paid" || cs?.status === "void") continue;
+      out.push({
+        kind: "refund",
+        title: `Checkout Settlement Payment - ${s.settled.csInvoiceNumber}`,
+        detail: `Signed by the student · ${rm(s.settled.owed)} owed by the student · record their payment and upload the receipt`,
+        residentId: f.name,
+        since: s.settled.at,
+      });
+    }
   }
 
   const ids = [...new Set(out.map((o) => o.residentId))];
