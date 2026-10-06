@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PdfPreviewDialog } from "@/components/admin/PdfPreview";
+import { PdfPageViewer } from "@/components/admin/PdfPageViewer";
 import { confirmInventory, getInventoryReview, inventoryPdfUrl, openMoveOutCheck, returnInventory } from "@/lib/inventory.functions";
 import {
   INVENTORY,
@@ -288,6 +289,8 @@ function InventoryReviewDialog({
                     {due.getTime() < Date.now() ? " - overdue" : ""}
                   </p>
                 ) : null}
+                {/* the PDF the resident signed, on top - their signature is seen only on it (Dani, 5 Oct 2026) */}
+                {file.submitted ? <SignedCheck docId={docId} mode={tab} title={`Schedule C – ${MODE_LABEL[tab]}`} /> : null}
                 {/* defects first: what needs an answer */}
                 {defects.length ? (
                   <section className="rounded-xl border border-amber-200 bg-amber-50 p-3">
@@ -476,7 +479,6 @@ function InventoryReviewDialog({
 
                 {file.submitted ? (
                   <section className="flex items-center gap-3 rounded-lg border border-border p-3">
-                    {entry?.signature ? <img src={entry.signature} alt="Resident's signature" className="h-12 w-auto" /> : null}
                     <div className="text-xs text-muted-foreground">
                       <p className="font-medium text-foreground">Signed by {file.submitted?.typedName}</p>
                       <p>Sent in {file.submitted ? fmt(file.submitted.at) : ""}</p>
@@ -551,5 +553,38 @@ function InventoryReviewDialog({
       </Dialog>
       <PdfPreviewDialog title={pdf?.title ?? ""} fileName={`${pdf?.title ?? "Schedule C"}.pdf`} url={pdf?.url ?? null} onClose={() => setPdf(null)} />
     </>
+  );
+}
+
+/** The signed check as a PDF, inside the window, with Preview and Download. */
+function SignedCheck({ docId, mode, title }: { docId: string; mode: InventoryMode; title: string }) {
+  const q = useQuery({
+    queryKey: ["inventory-signed-pdf", docId, mode],
+    queryFn: async () => {
+      const { base64 } = await inventoryPdfUrl({ data: { docId, mode } });
+      return URL.createObjectURL(new Blob([Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))], { type: "application/pdf" }));
+    },
+  });
+  const [open, setOpen] = useState(false);
+  if (q.isLoading) return <p className="text-xs text-muted-foreground">Loading the signed PDF…</p>;
+  if (!q.data) return null;
+  return (
+    <section className="space-y-2 rounded-xl border border-border p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-foreground">Signed by the resident</p>
+        <span className="flex gap-1.5">
+          <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+            <FileText className="size-4" /> Preview
+          </Button>
+          <Button asChild size="sm" variant="outline">
+            <a href={q.data} download={`${title}.pdf`}>
+              <Download className="size-4" /> Download
+            </a>
+          </Button>
+        </span>
+      </div>
+      <PdfPageViewer url={q.data} fileName={`${title}.pdf`} />
+      <PdfPreviewDialog title={title} fileName={`${title}.pdf`} url={open ? q.data : null} onClose={() => setOpen(false)} />
+    </section>
   );
 }

@@ -397,7 +397,7 @@ export function InventoryChecklist({
 
       <section className="space-y-2 rounded-xl border border-border bg-card p-4">
         <p className="flex items-center gap-2 text-sm font-semibold text-brand-deep">
-          <MessageSquareText className="size-4" /> Anything else to add?
+          <MessageSquareText className="size-4" /> Anything else you'd like to let us know about the unit / room condition?
         </p>
         <p className="text-xs text-muted-foreground">Cleanliness, marks on walls, anything not listed above.</p>
         <Textarea

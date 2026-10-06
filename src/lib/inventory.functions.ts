@@ -42,13 +42,17 @@ export const getInventoryReview = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const sb = await admin();
     const residentId = await residentOf(sb, data.docId);
-    const { getFile, readInventory } = await import("@/lib/inventory.server");
-    const out: Record<"in" | "out", null | { file: InventoryFileT; signature: string }> = { in: null, out: null };
+    const { readInventory } = await import("@/lib/inventory.server");
+    /*
+     * No signature image on its own (Dani, 5 Oct 2026): a signature shown apart
+     * from the page it was put on could be taken as used elsewhere. It is seen
+     * only on the signed PDF.
+     */
+    const out: Record<"in" | "out", null | { file: InventoryFileT }> = { in: null, out: null };
     for (const mode of ["in", "out"] as const) {
       const file = await readInventory(sb, residentId, data.docId, mode);
       if (!file) continue;
-      const sig = file.submitted ? await getFile(sb, file.submitted.signaturePath) : null;
-      out[mode] = { file, signature: sig ? `data:image/png;base64,${toBase64(sig)}` : "" };
+      out[mode] = { file };
     }
     // the defects' photos, to look at
     const { recordPhotos } = await import("@/lib/inventory");
@@ -120,7 +124,9 @@ export const inventoryPdfUrl = createServerFn({ method: "GET" })
     const residentId = await residentOf(sb, data.docId);
     const { getFile, readInventory } = await import("@/lib/inventory.server");
     const f = await readInventory(sb, residentId, data.docId, data.mode);
-    const bytes = f?.signed ? await getFile(sb, f.signed.pdfPath) : null;
+    // approved: the copy with both signatures; signed by the resident only: the copy they signed
+    const path = f?.signed?.pdfPath || f?.submitted?.pdfPath || "";
+    const bytes = path ? await getFile(sb, path) : null;
     if (!bytes) throw new Error("Not signed yet.");
     return { base64: toBase64(bytes) };
   });

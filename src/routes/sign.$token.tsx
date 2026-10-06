@@ -475,7 +475,7 @@ function Section({
                     when they approve.
                   </p>
                   <div className="overflow-hidden rounded-xl border border-border bg-background">
-                    <DocumentView pdf={pdf.data} pdfLoading={pdf.isLoading} />
+                    <DocumentView pdf={pdf.data} pdfLoading={pdf.isLoading} fileName={`${doc.label}.pdf`} />
                   </div>
                 </>
               ) : isList && doc.stage === "returned" && !answered ? (
@@ -513,13 +513,17 @@ function Section({
                         }}
                         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
                       >
-                        <ArrowLeft className="size-4" /> Back to the list
+                        <ArrowLeft className="size-4" /> Back to Brachtia's answers
                       </button>
                       <div className="overflow-hidden rounded-xl border border-border bg-background">
-                        <DocumentView pdf={signPdf.data} pdfLoading={signPdf.isLoading} onLastPage={() => setReadToEnd(true)} />
+                        <DocumentView pdf={signPdf.data} pdfLoading={signPdf.isLoading} onLastPage={() => setReadToEnd(true)} fileName={`${doc.label}.pdf`} />
                       </div>
                     </div>
                   ) : (
+                  // once Brachtia has answered, the list is not shown: it cannot change, and the
+                  // PDF they sign shows every item (Dani, 5 Oct 2026). It stays mounted, hidden,
+                  // so what was sent is still what is signed
+                  <div className={doc.stage === "returned" ? "hidden" : ""}>
                   <InventoryChecklist
                     // a new draft each time Brachtia answers, starting from what they answered
                     key={returned.data?.returnedAt ?? "draft"}
@@ -533,11 +537,12 @@ function Section({
                     // sent once, the answers are locked - view only (Dani, 5 Oct 2026)
                     locked={doc.stage === "returned"}
                   />
+                  </div>
                   )}
                 </>
               ) : (
                 <div className="overflow-hidden rounded-xl border border-border bg-background">
-                  <DocumentView pdf={pdf.data} pdfLoading={pdf.isLoading} onLastPage={() => setReadToEnd(true)} />
+                  <DocumentView pdf={pdf.data} pdfLoading={pdf.isLoading} onLastPage={() => setReadToEnd(true)} fileName={`${doc.label}.pdf`} />
                 </div>
               )}
               {isList && doc.submitted ? null : doc.signed ? (
@@ -809,7 +814,7 @@ function CheckoutCard({ token }: { token: string }) {
       {open ? (
         <div className="space-y-4 border-t border-border bg-muted/20 p-4 sm:p-5">
           <div className="overflow-hidden rounded-xl border border-border bg-background">
-            <DocumentView pdf={c.pdf} pdfLoading={false} onLastPage={() => setReadToEnd(true)} />
+            <DocumentView pdf={c.pdf} pdfLoading={false} onLastPage={() => setReadToEnd(true)} fileName={`Checkout statement ${c.number}.pdf`} />
           </div>
           {c.signed ? (
             <p className="flex items-center gap-2 text-sm text-emerald-800">

@@ -30,23 +30,24 @@ export type InventoryItem = {
 };
 
 /** The form's brand list, on the Refrigerator row; "Other" asks for the name. */
+/* A to Z, "Other" last (Dani, 5 Oct 2026) */
 export const BRANDS = [
-  "Midea",
-  "Panasonic",
-  "Toshiba",
-  "Sharp",
-  "Electrolux",
-  "Pensonic",
-  "Samsung",
-  "Mitsubishi",
-  "KDK",
   "Alpha",
   "BeeBest",
-  "York",
   "Daikin",
-  "TSL",
-  "Joven",
+  "Electrolux",
   "Elton",
+  "Joven",
+  "KDK",
+  "Midea",
+  "Mitsubishi",
+  "Panasonic",
+  "Pensonic",
+  "Samsung",
+  "Sharp",
+  "Toshiba",
+  "TSL",
+  "York",
   "Other",
 ] as const;
 export const OTHER = "Other";

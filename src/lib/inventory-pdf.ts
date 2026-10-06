@@ -88,15 +88,27 @@ function fit(text: string, font: PDFFont, size: number, width: number) {
   return `${s.trimEnd()}…`;
 }
 
-/** The status marks - drawn, since Helvetica has no tick or cross. */
-function mark(page: PDFPage, status: string, x: number, y: number) {
-  if (status === "present") {
+/*
+ * The final mark, after Brachtia's answer (Dani and Lav, 5 Oct 2026) - no cross:
+ *   ✓ present, or a defect / missing item Brachtia resolved
+ *   ○ a defect Brachtia accepted - there, but as it is
+ *   — not provided, and both agree it stays so
+ * Drawn, since Helvetica has no tick or circle.
+ */
+export function finalMark(status: string, verdict?: "resolved" | "accepted"): "tick" | "circle" | "dash" | "" {
+  if (status === "present") return "tick";
+  if (status === "defect") return verdict === "resolved" ? "tick" : "circle";
+  if (status === "not_provided") return verdict === "resolved" ? "tick" : "dash";
+  return "";
+}
+
+function mark(page: PDFPage, m: string, x: number, y: number) {
+  if (m === "tick") {
     page.drawLine({ start: { x, y: y + 3 }, end: { x: x + 2.5, y: y + 0.5 }, thickness: 1.1, color: PRESENT });
     page.drawLine({ start: { x: x + 2.5, y: y + 0.5 }, end: { x: x + 7, y: y + 6 }, thickness: 1.1, color: PRESENT });
-  } else if (status === "defect") {
-    page.drawLine({ start: { x, y }, end: { x: x + 6, y: y + 6 }, thickness: 1.2, color: AMBER });
-    page.drawLine({ start: { x, y: y + 6 }, end: { x: x + 6, y }, thickness: 1.2, color: AMBER });
-  } else if (status === "not_provided") {
+  } else if (m === "circle") {
+    page.drawCircle({ x: x + 3.2, y: y + 3, size: 2.9, borderWidth: 1.1, borderColor: AMBER });
+  } else if (m === "dash") {
     page.drawLine({ start: { x: x + 0.5, y: y + 3 }, end: { x: x + 6, y: y + 3 }, thickness: 1, color: MUTED });
   }
 }
@@ -152,15 +164,16 @@ export async function inventoryPdf(input: InventoryPdfInput): Promise<Uint8Array
 
   // every item, in three columns: an area's heading, then name, count, mark
   type Line = { kind: "area"; name: string } | { kind: "item"; name: string; detail: string; qty: string; status: string };
+  const verdictOf = (key: string) => input.decisions?.[key]?.verdict;
   const lines: Line[] = [];
   for (const area of INVENTORY) {
     lines.push({ kind: "area", name: area.name });
     for (const it of area.items) {
       const a = r.answers[it.id];
-      lines.push({ kind: "item", name: it.name, detail: it.details ? (a?.detail ?? "") : "", qty: a?.qty?.trim() || String(it.qty), status: a?.status ?? "" });
+      lines.push({ kind: "item", name: it.name, detail: it.details ? (a?.detail ?? "") : "", qty: a?.qty?.trim() || String(it.qty), status: finalMark(a?.status ?? "", verdictOf(it.id)) });
     }
     for (const e of r.extras.filter((x) => x.areaId === area.id && x.name.trim()))
-      lines.push({ kind: "item", name: `${e.name.trim()} (added)`, detail: "", qty: e.qty, status: e.status });
+      lines.push({ kind: "item", name: `${e.name.trim()} (added)`, detail: "", qty: e.qty, status: finalMark(e.status, verdictOf(e.id)) });
   }
   const LH = 10.2;
   const gap = 14;
@@ -212,9 +225,9 @@ export async function inventoryPdf(input: InventoryPdfInput): Promise<Uint8Array
 
   // the key to the marks
   const keys: [string, string][] = [
-    ["present", "Present"],
-    ["defect", "Defect"],
-    ["not_provided", "Not provided"],
+    ["tick", "Present or resolved"],
+    ["circle", "Accepted"],
+    ["dash", "Not provided"],
   ];
   let kx = M;
   for (const [s, label] of keys) {
@@ -246,7 +259,7 @@ export async function inventoryPdf(input: InventoryPdfInput): Promise<Uint8Array
     }
   };
 
-  heading("DEFECTS & REMARKS");
+  heading("REMARKS");
   let any = false;
   for (const area of INVENTORY) {
     const rows = [
@@ -259,10 +272,9 @@ export async function inventoryPdf(input: InventoryPdfInput): Promise<Uint8Array
       const answer = input.decisions?.[key];
       if (!a || (a.status !== "defect" && !a.remark?.trim() && !(a.status === "not_provided" && answer))) continue;
       any = true;
-      const n = input.photoCount?.[key] ?? 0;
-      const pics = n ? ` (${n} photo${n === 1 ? "" : "s"})` : "";
+      // the photo count is left off the page (Dani, 6 Oct 2026)
       if (a.status === "defect") {
-        para(`${area.name} · ${name} — ${a.remark.trim() || "—"}${pics}`, 8, bold, AMBER);
+        para(`${area.name} · ${name} — ${a.remark.trim() || "—"}`, 8, bold, AMBER);
         const d = input.decisions?.[key];
         if (d) para(`Brachtia: ${VERDICT_LABEL[d.verdict]}${input.residentAgreed && d.verdict === "resolved" ? " · agreed by the resident" : ""}`, 7.5, font, MUTED, 10);
       } else if (a.status === "not_provided") {
@@ -295,8 +307,9 @@ export async function inventoryPdf(input: InventoryPdfInput): Promise<Uint8Array
   room(92);
   y -= 6;
   const blocks = [
-    { title: "Resident", x: M, ...input.resident },
-    { title: "Brachtia Homes", x: A4.w / 2 + 10, ...input.brachtia },
+    // Brachtia on the left, the resident on the right - as on the checkout statement (Dani, 6 Oct 2026)
+    { title: "Brachtia Homes", x: M, ...input.brachtia },
+    { title: "Resident", x: A4.w / 2 + 10, ...input.resident },
   ];
   const top = y;
   for (const b of blocks) {
