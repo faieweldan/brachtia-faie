@@ -110,6 +110,20 @@ export async function residentFromBooking(supabase: any, enquiryId: string) {
     residentId = made.id as string;
   }
 
+  /*
+   * The payment method, prefilled from the booking fee's payment (Dani, 6 Oct
+   * 2026): the student is never asked it. Only into an empty field - one admin
+   * set is kept - and it is a note on the profile: each later payment still
+   * records its own method.
+   */
+  {
+    const [{ data: first }, { data: who }] = await Promise.all([
+      supabase.from("payments").select("method").eq("enquiry_id", enquiry.id).neq("method", "").order("paid_on", { ascending: true }).order("created_at", { ascending: true }).limit(1).maybeSingle(),
+      supabase.from("residents").select("pay_method").eq("id", residentId).maybeSingle(),
+    ]);
+    if (first?.method && !who?.pay_method) await supabase.from("residents").update({ pay_method: first.method }).eq("id", residentId);
+  }
+
   /* ---- 2. the bed, the booking and the money, together ---- */
   const beds = (bedsRes.data ?? []) as { id: string; resident_id: string | null }[];
   // a bed already theirs is left alone - a later payment must not turn a
