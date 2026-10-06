@@ -492,6 +492,7 @@ function AccessCardTable({
                 <button
                   type="button"
                   onClick={() => onOpenInvoice?.(waiting.invoiceNumber ?? "")}
+                  title="Opens the Payments tab, at this invoice"
                   className="font-semibold underline underline-offset-2 hover:text-amber-950"
                 >
                   {waiting.invoiceNumber || "its invoice"}

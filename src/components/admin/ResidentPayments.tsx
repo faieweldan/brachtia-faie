@@ -1,4 +1,5 @@
 import { loadProofFile } from "@/lib/payment-proof";
+import { toast } from "sonner";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -83,6 +84,14 @@ export function ResidentPayments({
   });
 
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  /*
+   * Outline what a link brought admin to, for a few seconds: drawn inside the
+   * edge, with a tint - an outline outside it was cut off by the group (Dani, 6 Oct 2026)
+   */
+  const flash = (el: Element) => {
+    el.classList.add("bg-amber-50", "ring-2", "ring-inset", "ring-amber-400", "rounded-xl", "transition-colors", "duration-700");
+    window.setTimeout(() => el.classList.remove("bg-amber-50", "ring-2", "ring-inset", "ring-amber-400"), 4000);
+  };
   const toggle = (k: string) => setOpen((o) => ({ ...o, [k]: !o[k] }));
   // from the Checkout button: open the settlement and bring it into view
   // Payments is still loading when it opens - the section is looked for until it is there (Dani, 6 Oct 2026)
@@ -94,8 +103,16 @@ export function ResidentPayments({
     let tries = 0;
     const find = () => {
       const el = document.getElementById("checkout-settlement");
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-      else if (tries++ < 40) window.setTimeout(find, 150);
+      if (!el) {
+        if (tries++ < 40) window.setTimeout(find, 150);
+        return;
+      }
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      // the statement is still loading and grows - scroll once more when it has
+      window.setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 900);
+      // said and shown where it landed, like an invoice link (Dani, 6 Oct 2026)
+      flash(el);
+      toast.info("Payments tab · Checkout settlement", { description: "The checkout statement is below, outlined." });
     };
     window.setTimeout(find, 200);
   }, [openCheckout, isLoading]);
@@ -121,10 +138,8 @@ export function ResidentPayments({
         return;
       }
       el.scrollIntoView({ behavior: "smooth", block: "start" });
-      // drawn inside the edge, with a tint: an outline outside it was cut off by the group (Dani, 6 Oct 2026)
-      const marks = ["bg-amber-50", "ring-2", "ring-inset", "ring-amber-400", "rounded-xl", "transition-colors", "duration-700"];
-      el.classList.add(...marks);
-      window.setTimeout(() => el.classList.remove("bg-amber-50", "ring-2", "ring-inset", "ring-amber-400"), 3500);
+      flash(el);
+      if (!justMade) toast.info(`Payments tab · ${target}`, { description: "The invoice is outlined below." });
       setJustMade(null);
     };
     window.setTimeout(find, 200);
@@ -474,8 +489,10 @@ export function ResidentPayments({
             {checkout.map((inv) => (
               <InvoiceDetail key={inv.id} invoice={inv} onPay={() => pay(inv)} />
             ))}
-            <div id="checkout-settlement" className="scroll-mt-24" />
-            <CheckoutStatement residentId={residentId} phone={details.phone} onInactive={onInactive} />
+            {/* wraps the statement, so the outline from the Checkout button has something to draw round */}
+            <div id="checkout-settlement" className="scroll-mt-24 p-1">
+              <CheckoutStatement residentId={residentId} phone={details.phone} onInactive={onInactive} />
+            </div>
           </Row>
         </div>
       </Panel>

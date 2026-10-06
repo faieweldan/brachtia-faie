@@ -609,6 +609,7 @@ function ResidentProfilePage() {
                   <Button
                     size="sm"
                     className="bg-amber-600 text-white hover:bg-amber-700"
+                    title="Opens the Payments tab, at the checkout statement"
                     onClick={() => {
                       setTab("payments");
                       setGoCheckout(Date.now());
