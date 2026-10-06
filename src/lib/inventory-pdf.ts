@@ -259,6 +259,47 @@ export async function inventoryPdf(input: InventoryPdfInput): Promise<Uint8Array
     }
   };
 
+  // a paragraph with **bold** words: wrapped word by word, the bold ones darker
+  const richPara = (s: string, size: number) => {
+    // glue: no space before it - the comma straight after a bold word
+    const words: { w: string; strong: boolean; glue: boolean }[] = [];
+    let gap = true;
+    for (const part of s.split(/(\*\*[^*]+\*\*)/)) {
+      if (!part) continue;
+      const strong = part.startsWith("**");
+      const body = part.replace(/\*\*/g, "");
+      body.split(/\s+/).forEach((w, i) => {
+        if (w) words.push({ w, strong, glue: i === 0 && !gap && !/^\s/.test(body) });
+      });
+      gap = /\s$/.test(body);
+    }
+    const width = A4.w - 2 * M;
+    const space = font.widthOfTextAtSize(" ", size);
+    let line: typeof words = [];
+    let used = 0;
+    const flush = () => {
+      room(size + 3);
+      let x = M;
+      line.forEach(({ w, strong, glue }, i) => {
+        const f = strong ? bold : font;
+        if (i && !glue) x += space;
+        text(w, x, y, size, f, strong ? INK : MUTED);
+        x += f.widthOfTextAtSize(w, size);
+      });
+      y -= size + 3;
+      line = [];
+      used = 0;
+    };
+    for (const word of words) {
+      const w = (word.strong ? bold : font).widthOfTextAtSize(word.w, size);
+      const gapW = line.length && !word.glue ? space : 0;
+      if (line.length && used + gapW + w > width) flush();
+      used += (line.length && !word.glue ? space : 0) + w;
+      line.push(word);
+    }
+    if (line.length) flush();
+  };
+
   heading("REMARKS");
   let any = false;
   for (const area of INVENTORY) {
@@ -293,7 +334,7 @@ export async function inventoryPdf(input: InventoryPdfInput): Promise<Uint8Array
 
   heading("ACKNOWLEDGEMENT");
   for (const p of ACKNOWLEDGEMENT) {
-    para(p, 6.8, font, MUTED);
+    richPara(p, 6.8);
     y -= 1;
   }
 

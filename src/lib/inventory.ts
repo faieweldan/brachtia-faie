@@ -335,11 +335,12 @@ export const toAgree = (r: InventoryRecord, d: Record<string, DefectDecision> | 
 };
 
 /** The form's acknowledgement - shown above the Agree tick, and printed in the PDF. */
+// **...** is printed bold in the PDF - the words a resident must not miss (Dani, 6 Oct 2026)
 export const ACKNOWLEDGEMENT = [
-  "The Resident acknowledges that the items marked Present were provided with the premises as at the Effective Date stated above. Items marked Not Provided are not included as part of the inventory provided to the Resident.",
-  "Any existing defect must be marked Defect, described under Remarks and submitted to Brachtia Homes for review within 48 hours of the Effective Date together with supporting image(s).",
-  "Any defect not reported within this 48-hour period may not be recognised as an existing defect at the commencement of the Resident's occupancy.",
-  "The Resident agrees to take reasonable care of the items provided and shall be responsible for any loss or damage beyond reasonable wear and tear, subject to the terms of the Tenancy Agreement.",
+  "The Resident acknowledges that the items marked **Present** were provided with the premises as at the Effective Date stated above. Items marked **Not Provided** are not included as part of the inventory provided to the Resident.",
+  "Any existing defect must be marked **Defect**, described under **Remarks** and submitted to Brachtia Homes for review **within 48 hours of the Effective Date** together with **supporting image(s)**.",
+  "Any defect not reported within this 48-hour period **may not be recognised as an existing defect** at the commencement of the Resident's occupancy.",
+  "The Resident agrees to take reasonable care of the items provided and shall be **responsible for any loss or damage** beyond reasonable wear and tear, subject to the terms of the Tenancy Agreement.",
 ];
 
 /** Brachtia answers each defect within 48 hours of it being sent in. */

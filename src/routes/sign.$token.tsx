@@ -155,8 +155,8 @@ function SigningPage() {
           <div className="min-w-0">
             <h1 className="text-xl font-bold text-brand-deep sm:text-2xl">Your tenancy documents</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Hi {pack.data.name || "there"}. Open each document, read it through, then sign it. You can sign some now and come
-              back to this link for the rest. If anything needs clarifying, contact us before signing.
+              Hi {pack.data.name || "there"}. Open each document, read it through, then sign it. If anything needs clarifying, contact us
+              before signing.
             </p>
           </div>
         </div>
