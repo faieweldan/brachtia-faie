@@ -167,7 +167,7 @@ function PayablesPage() {
                             ))}
                             {r.lines.map((l, i) => (
                               <div key={`l${i}`} className="flex justify-between border-b border-border/60 px-4 py-2.5">
-                                <span className="text-muted-foreground">Less: {l.label}</span>
+                                <span className="text-muted-foreground">(-) {l.label}</span>
                                 <span className="tabular-nums">-{money(l.amount)}</span>
                               </div>
                             ))}
