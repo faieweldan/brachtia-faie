@@ -554,7 +554,7 @@ export async function renderGeneratedPdf(
    * replacement made after its invoice is paid has no values of its own, so the
    * pack's - a new application's - are turned round here.
    */
-  const { data: cardRow } = await db.from("access_card_forms").select("reason").eq("id", id).maybeSingle();
+  const { data: cardRow } = await db.from("access_card_forms").select("reason, template_version_id").eq("id", id).maybeSingle();
   const reason = String(cardRow?.reason ?? "Initial Tenancy");
   const replacement = reason !== "Initial Tenancy";
   const ticks: Record<string, string> = replacement
@@ -569,7 +569,19 @@ export async function renderGeneratedPdf(
         tick_replace_loss: reason === "Lost Card" ? "yes" : "",
       }
     : { tick_replace_ic: "", tick_replace_damage: "", tick_replace_loss: "" };
-  const r = await renderDocumentPdf(db, kind, id, { ...ticks, ...(extras?.values ?? {}), ...extra }, extraImages);
+  /*
+   * The boxes are filled by their own names (Box_7, Box_9), not by field: each
+   * tick above is put on the boxes mapped to that field in this form's template
+   * (Dani, 6 Oct 2026 - a damaged card still showed section a ticked).
+   */
+  const boxTicks: Record<string, string> = {};
+  if (cardRow?.template_version_id) {
+    const { data: tv } = await db.from("template_versions").select("mappings").eq("id", cardRow.template_version_id).maybeSingle();
+    for (const [box, m] of Object.entries((tv?.mappings ?? {}) as Record<string, { key?: string; kind?: string }>)) {
+      if (m?.kind === "field" && m.key && m.key in ticks) boxTicks[box] = ticks[m.key]!;
+    }
+  }
+  const r = await renderDocumentPdf(db, kind, id, { ...ticks, ...boxTicks, ...(extras?.values ?? {}), ...extra }, extraImages);
   if (!r.ok || !extras?.attachments.length) return r;
   return { ...r, bytes: await withAttachments(db, r.bytes, extras.attachments) };
 }
