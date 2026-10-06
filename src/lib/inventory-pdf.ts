@@ -272,26 +272,20 @@ export async function inventoryPdf(input: InventoryPdfInput): Promise<Uint8Array
       const answer = input.decisions?.[key];
       if (!a || (a.status !== "defect" && !a.remark?.trim() && !(a.status === "not_provided" && answer))) continue;
       any = true;
-      // the photo count is left off the page (Dani, 6 Oct 2026)
+      // the photo count is left off the page (Dani, 6 Oct 2026). One line each, Brachtia's
+      // answer at its end - on two lines, a few remarks pushed the signatures to a 2nd page
+      const verdict = answer
+        ? ` · Brachtia: ${VERDICT_LABEL[answer.verdict]}${input.residentAgreed && answer.verdict === "resolved" ? " (agreed by the resident)" : ""}`
+        : "";
       if (a.status === "defect") {
-        para(`${area.name} · ${name} — ${a.remark.trim() || "—"}`, 8, bold, AMBER);
-        const d = input.decisions?.[key];
-        if (d) para(`Brachtia: ${VERDICT_LABEL[d.verdict]}${input.residentAgreed && d.verdict === "resolved" ? " · agreed by the resident" : ""}`, 7.5, font, MUTED, 10);
+        para(`${area.name} · ${name} — ${a.remark.trim() || "—"}${verdict}`, 7.5, bold, AMBER);
       } else if (a.status === "not_provided") {
         // a missing item: Resolved is Brachtia providing it, Accepted is it staying missing
-        para(`${area.name} · ${name} — Not provided${a.remark?.trim() ? `: ${a.remark.trim()}` : ""}`, 8, bold, MUTED);
-        if (answer)
-          para(
-            `Brachtia: ${VERDICT_LABEL[answer.verdict]}${input.residentAgreed && answer.verdict === "resolved" ? " · agreed by the resident" : ""}`,
-            7.5,
-            font,
-            MUTED,
-            10,
-          );
+        para(`${area.name} · ${name} — Not provided${a.remark?.trim() ? `: ${a.remark.trim()}` : ""}${verdict}`, 7.5, bold, MUTED);
       } else {
-        para(`${area.name} · ${name} — ${a.remark.trim()}`, 8);
+        para(`${area.name} · ${name} — ${a.remark.trim()}`, 7.5);
       }
-      y -= 2;
+      y -= 1;
     }
   }
   if (!any) para("No defects reported.", 8, font, MUTED);
