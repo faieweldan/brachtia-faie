@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PdfPreviewDialog } from "@/components/admin/PdfPreview";
 import { PdfPageViewer } from "@/components/admin/PdfPageViewer";
+import { STAFF } from "@/data/form-options";
+import { StaffTag } from "@/components/admin/RecordPaymentDialog";
 import { confirmInventory, getInventoryReview, inventoryPdfUrl, openMoveOutCheck, returnInventory } from "@/lib/inventory.functions";
 import {
   INVENTORY,
@@ -137,10 +139,13 @@ function InventoryReviewDialog({
         returnedAt?: string;
         submitted?: { at: string; typedName: string };
         signed?: { at: string; by: string };
+        history?: { at: string; step: string; by?: string }[];
       }
     | undefined;
   // the answers being given now, before Send back
   const [verdicts, setVerdicts] = useState<Record<string, "resolved" | "accepted">>({});
+  // who on the team answers or approves it (Dani, 6 Oct 2026)
+  const [by, setBy] = useState("");
 
   async function refresh() {
     await qc.invalidateQueries({ queryKey: ["inventory-review", docId] });
@@ -148,9 +153,10 @@ function InventoryReviewDialog({
   }
 
   async function confirm() {
+    if (!by) return void toast.error("Choose who is approving it");
     setBusy(true);
     try {
-      await confirmInventory({ data: { docId, mode: tab } });
+      await confirmInventory({ data: { docId, mode: tab, by } });
       toast.success(`${MODE_LABEL[tab]} signed`);
       await refresh();
     } catch (e) {
@@ -161,9 +167,10 @@ function InventoryReviewDialog({
   }
 
   async function sendBack() {
+    if (!by) return void toast.error("Choose who is answering it");
     setBusy(true);
     try {
-      await returnInventory({ data: { docId, mode: tab, verdicts: answers } });
+      await returnInventory({ data: { docId, mode: tab, verdicts: answers, by } });
       toast.success("Sent back to the resident", {
         description: "They read your answers, then sign - or send it back again.",
       });
@@ -502,6 +509,30 @@ function InventoryReviewDialog({
             ) : null}
           </div>
 
+          {/* Brachtia's steps and who took them - missing on checks answered before 6 Oct 2026 */}
+          {file?.history?.some((h) => h.by) ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              {file.history
+                .filter((h) => h.by)
+                .map((h, i) => (
+                  <span key={i} className="inline-flex items-center gap-1.5">
+                    {h.step === "answered" ? "Reviewed" : "Approved"} {fmt(h.at)} <StaffTag name={h.by ?? ""} />
+                  </span>
+                ))}
+            </div>
+          ) : null}
+          {inReview || file?.status === "submitted" ? (
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">{file?.status === "submitted" ? "Approved by" : "Reviewed by"}</p>
+              <div className="grid grid-cols-3 gap-2">
+                {STAFF.map((n) => (
+                  <Button key={n} type="button" size="sm" variant={by === n ? "default" : "outline"} onClick={() => setBy(n)}>
+                    {n}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
             {file?.status === "signed" ? (
               <>

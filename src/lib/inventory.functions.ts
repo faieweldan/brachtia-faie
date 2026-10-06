@@ -1,6 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import { STAFF } from "@/data/form-options";
+
+// who on the team did it (Dani, 6 Oct 2026), from the same list as Record payment
+const staffName = z.string().refine((v) => STAFF.includes(v), "Choose who is doing this");
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /**
@@ -69,7 +74,7 @@ export const getInventoryReview = createServerFn({ method: "GET" })
 
 /** Confirm a check the resident sent in, and sign it for Brachtia. */
 export const confirmInventory = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ docId: z.string().uuid(), mode: z.enum(["in", "out"]) }).parse(d))
+  .inputValidator((d) => z.object({ docId: z.string().uuid(), mode: z.enum(["in", "out"]), by: staffName }).parse(d))
   .handler(async ({ data }) => {
     const sb = await admin();
     const residentId = await residentOf(sb, data.docId);
@@ -90,8 +95,8 @@ export const confirmInventory = createServerFn({ method: "POST" })
     await writeInventory(sb, residentId, data.docId, {
       ...file,
       status: "signed",
-      history: [...(file.history ?? []), { at, step: "signed by Brachtia" }],
-      signed: { at, by: signatory, pdfPath, pdfSha256: await sha256(bytes) },
+      history: [...(file.history ?? []), { at, step: "signed by Brachtia", by: data.by }],
+      signed: { at, by: signatory, approvedBy: data.by, pdfPath, pdfSha256: await sha256(bytes) },
     });
     // the move-in check is Schedule C itself; the move-out one sits beside it
     if (data.mode === "in") {
@@ -143,6 +148,7 @@ export const returnInventory = createServerFn({ method: "POST" })
         docId: z.string().uuid(),
         mode: z.enum(["in", "out"]),
         verdicts: z.record(z.string().max(60), z.enum(["resolved", "accepted"])),
+        by: staffName,
       })
       .parse(d),
   )
@@ -169,7 +175,7 @@ export const returnInventory = createServerFn({ method: "POST" })
       status: "returned",
       decisions,
       returnedAt: at,
-      history: [...(file.history ?? []), { at, step: "answered" }],
+      history: [...(file.history ?? []), { at, step: "answered", by: data.by }],
     });
     if (data.mode === "in") {
       const { error } = await sb.from("agreement_documents").update({ status: "pending_signature" }).eq("id", data.docId);

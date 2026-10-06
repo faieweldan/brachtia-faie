@@ -31,7 +31,8 @@ export type InventoryFile = {
   /** the defects whose answers the resident agreed to, before signing */
   residentAgreed?: { at: string; keys: string[] };
   /** each send and answer, in order - who did what, when */
-  history?: { at: string; step: "sent for review" | "answered" | "signed by resident" | "signed by Brachtia" }[];
+  /** `by`: the staff member, on Brachtia's steps (Dani, 6 Oct 2026) - missing before then */
+  history?: { at: string; step: "sent for review" | "answered" | "signed by resident" | "signed by Brachtia"; by?: string }[];
   submitted?: {
     at: string;
     typedName: string;
@@ -44,7 +45,8 @@ export type InventoryFile = {
     pdfPath?: string;
     pdfSha256?: string;
   };
-  signed?: { at: string; by: string; pdfPath: string; pdfSha256: string };
+  /** by: the signatory printed on the PDF; approvedBy: the staff member who approved it */
+  signed?: { at: string; by: string; approvedBy?: string; pdfPath: string; pdfSha256: string };
 };
 
 export const inventoryBase = (residentId: string, docId: string, mode: InventoryMode) => `inventory/${residentId}/${docId}-${mode}`;

@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronRight, FileStack, Plus, Stamp, Undo2, Upload } from "lucide-react";
 import { SigningMessageCard } from "@/components/admin/SigningMessageCard";
 import { STAFF } from "@/data/form-options";
+import { StaffTag } from "@/components/admin/RecordPaymentDialog";
 import { InventoryActions, InventoryPill } from "@/components/admin/InventoryReview";
 import { toast } from "sonner";
 
@@ -23,6 +24,7 @@ import { PdfPreviewDialog } from "@/components/admin/PdfPreview";
 import {
   REPLACEMENT_FEE,
   REPLACEMENT_REASONS,
+  accessCardReceiptNames,
   accessCardReceiptUrl,
   activateAccessCard,
   cancelReplacementCard,
@@ -398,10 +400,17 @@ function AccessCardTable({
     queryFn: () => getReplacementCard({ data: { residentId } }),
   });
   const waiting = replacement.data?.request ?? null;
+  const activeIds = cards.filter((c) => c.status === "active").map((c) => c.id);
+  const receiptNames = useQuery({
+    queryKey: ["access-card-receipt-names", activeIds.join(",")],
+    queryFn: () => accessCardReceiptNames({ data: { cardIds: activeIds } }),
+    enabled: activeIds.length > 0,
+  });
   // ARC's receipt and the serial number, for the form being made Active
   const [activating, setActivating] = useState<AccessCardForm | null>(null);
   const [serial, setSerial] = useState("");
   const [receipt, setReceipt] = useState<File | null>(null);
+  const [receiptBy, setReceiptBy] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function activate() {
@@ -411,6 +420,7 @@ function AccessCardTable({
       const fd = new FormData();
       fd.set("cardId", activating.id);
       fd.set("serial", serial);
+      fd.set("by", receiptBy);
       if (receipt) fd.set("file", receipt);
       await activateAccessCard({ data: fd });
       toast.success("Access card Active", { description: `Serial ${serial.trim()}` });
@@ -547,6 +557,7 @@ function AccessCardTable({
                           onClick={() => {
                             setSerial(c.cardNo);
                             setReceipt(null);
+                            setReceiptBy("");
                             setActivating(c);
                           }}
                         >
@@ -554,9 +565,12 @@ function AccessCardTable({
                         </Button>
                       ) : null}
                       {c.status === "active" ? (
-                        <Button size="sm" variant="ghost" onClick={() => void openReceipt(c.id)}>
-                          Receipt
-                        </Button>
+                        <>
+                          <Button size="sm" variant="ghost" onClick={() => void openReceipt(c.id)}>
+                            Receipt
+                          </Button>
+                          <StaffTag name={receiptNames.data?.[c.id] ?? ""} />
+                        </>
                       ) : null}
                     </span>
                   </td>
@@ -619,7 +633,17 @@ function AccessCardTable({
             <p className="text-xs text-muted-foreground">ARC&apos;s receipt</p>
             <Input type="file" accept="image/*,application/pdf" onChange={(e) => setReceipt(e.target.files?.[0] ?? null)} className="text-xs" />
           </div>
-          <Button disabled={busy || !serial.trim() || !receipt} onClick={() => void activate()}>
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">Uploaded by</p>
+            <div className="grid grid-cols-3 gap-2">
+              {STAFF.map((n) => (
+                <Button key={n} type="button" size="sm" variant={receiptBy === n ? "default" : "outline"} onClick={() => setReceiptBy(n)}>
+                  {n}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <Button disabled={busy || !serial.trim() || !receipt || !receiptBy} onClick={() => void activate()}>
             {busy ? "Saving…" : "Save - make Active"}
           </Button>
         </DialogContent>

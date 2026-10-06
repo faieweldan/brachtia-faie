@@ -33,6 +33,9 @@ export type CardExtras = {
   /** the resident's files merged after the form: IC copy, photo */
   attachments: string[];
   receiptPath?: string;
+  /** the staff member who uploaded ARC's receipt (Dani, 6 Oct 2026) */
+  receiptBy?: string;
+  receiptAt?: string;
 };
 
 /**
@@ -289,6 +292,9 @@ export const activateAccessCard = createServerFn({ method: "POST" })
     const file = data.get("file");
     if (!/^[0-9a-f-]{36}$/.test(cardId)) throw new Error("No access card form");
     if (!serial) throw new Error("Type the card's serial number");
+    const by = String(data.get("by") ?? "");
+    const { STAFF } = await import("@/data/form-options");
+    if (!STAFF.includes(by)) throw new Error("Choose who is uploading the receipt");
     if (!(file instanceof File) || !file.size) throw new Error("Upload ARC's receipt");
     if (file.size > 8 * 1024 * 1024) throw new Error("The receipt is larger than 8MB");
     const ext = /\.([a-z0-9]{1,5})$/i.exec(file.name)?.[1]?.toLowerCase() ?? "pdf";
@@ -298,10 +304,23 @@ export const activateAccessCard = createServerFn({ method: "POST" })
       .upload(path, new Uint8Array(await file.arrayBuffer()), { upsert: true, contentType: file.type || "application/octet-stream" });
     if (upErr) throw new Error(upErr.message);
     const extras = (await readCardExtras(sb, cardId)) ?? { attachments: [] };
-    await writeCardExtras(sb, cardId, { ...extras, receiptPath: path });
+    await writeCardExtras(sb, cardId, { ...extras, receiptPath: path, receiptBy: by, receiptAt: new Date().toISOString() });
     const { error } = await sb.from("access_card_forms").update({ card_no: serial, status: "active" }).eq("id", cardId);
     if (error) throw new Error(error.message);
     return { ok: true as const };
+  });
+
+/** who uploaded each card's ARC receipt, for the "by" beside Receipt (Dani, 6 Oct 2026) */
+export const accessCardReceiptNames = createServerFn({ method: "GET" })
+  .inputValidator((d) => z.object({ cardIds: z.array(z.string().uuid()).max(50) }).parse(d))
+  .handler(async ({ data }) => {
+    const sb = await admin();
+    const out: Record<string, string> = {};
+    for (const id of data.cardIds) {
+      const extras = await readCardExtras(sb, id);
+      if (extras?.receiptBy) out[id] = extras.receiptBy;
+    }
+    return out;
   });
 
 export const accessCardReceiptUrl = createServerFn({ method: "GET" })
