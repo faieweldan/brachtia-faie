@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Dropdown } from "@/components/admin/Dropdown";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -1596,7 +1597,7 @@ function BookingDetail() {
                           <p className="text-xs font-medium text-amber-700">
                             Nobody is taking this viewing
                           </p>
-                          <select
+                          <Dropdown
                             value=""
                             disabled={assignStaff.isPending}
                             aria-label="Who takes this viewing"
@@ -1617,7 +1618,7 @@ function BookingDetail() {
                                 {s}
                               </option>
                             ))}
-                          </select>
+                          </Dropdown>
                         </div>
                       )}
                     </div>
@@ -1676,14 +1677,14 @@ function BookingDetail() {
                   <div className="space-y-4">
                     <div>
                       <p className="mb-1 text-xs font-semibold text-muted-foreground">Mode</p>
-                      <select
+                      <Dropdown
                         value={vMode}
                         onChange={(e) => setVMode(e.target.value as "in_person" | "virtual")}
                         className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
                       >
                         <option value="in_person">In person</option>
                         <option value="virtual">Virtual tour</option>
-                      </select>
+                      </Dropdown>
                     </div>
                     <div>
                       <p className="mb-1 text-xs font-semibold text-muted-foreground">
@@ -1721,7 +1722,7 @@ function BookingDetail() {
                         Assigned staff
                       </p>
                       {/* someone is always responsible for a viewing - it cannot be booked without */}
-                      <select
+                      <Dropdown
                         value={vStaff}
                         onChange={(e) => setVStaff(e.target.value)}
                         className={`h-9 w-full rounded-md border bg-background px-2 text-sm ${
@@ -1736,7 +1737,7 @@ function BookingDetail() {
                             {s}
                           </option>
                         ))}
-                      </select>
+                      </Dropdown>
                     </div>
                   </div>
                 </div>
@@ -2710,7 +2711,7 @@ function EditableCard({
             <div key={k}>
               <label className="text-xs text-muted-foreground">{label}</label>
               {kind === "gender" ? (
-                <select
+                <Dropdown
                   value={draft[k] ?? ""}
                   onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
                   className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
@@ -2731,9 +2732,9 @@ function EditableCard({
                       {g}
                     </option>
                   ))}
-                </select>
+                </Dropdown>
               ) : kind === "sharing" ? (
-                <select
+                <Dropdown
                   value={draft[k] ?? ""}
                   onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
                   className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
@@ -2744,18 +2745,18 @@ function EditableCard({
                       {s.label}
                     </option>
                   ))}
-                </select>
+                </Dropdown>
               ) : kind === "term" ? (
-                <select
+                <Dropdown
                   value={draft[k] ?? ""}
                   onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
                   className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
                 >
                   <option value="long">Long term</option>
                   <option value="short">Short term</option>
-                </select>
+                </Dropdown>
               ) : kind === "residence" ? (
-                <select
+                <Dropdown
                   value={draft[k] ?? ""}
                   onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
                   className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
@@ -2766,9 +2767,9 @@ function EditableCard({
                       {r.name}
                     </option>
                   ))}
-                </select>
+                </Dropdown>
               ) : kind === "payment" ? (
-                <select
+                <Dropdown
                   value={draft[k] ?? ""}
                   onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
                   className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
@@ -2776,9 +2777,9 @@ function EditableCard({
                   <option value="bimonthly">Bi-monthly</option>
                   <option value="quarterly">Quarterly</option>
                   <option value="full">Full upfront</option>
-                </select>
+                </Dropdown>
               ) : kind === "unittype" ? (
-                <select
+                <Dropdown
                   value={draft[k] ?? ""}
                   onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
                   className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
@@ -2791,9 +2792,9 @@ function EditableCard({
                       {u}
                     </option>
                   ))}
-                </select>
+                </Dropdown>
               ) : kind === "room" ? (
-                <select
+                <Dropdown
                   value={draft[k] ?? ""}
                   onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
                   className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
@@ -2806,10 +2807,10 @@ function EditableCard({
                         {r.name}
                       </option>
                     ))}
-                </select>
+                </Dropdown>
               ) : kind === "heard" ? (
                 <div className="mt-1 space-y-1">
-                  <select
+                  <Dropdown
                     value={draft[k] ?? ""}
                     onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
                     className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
@@ -2820,7 +2821,7 @@ function EditableCard({
                         {h}
                       </option>
                     ))}
-                  </select>
+                  </Dropdown>
                   {draft[k] === "Other" ? (
                     <Input
                       value={draft[`${k}_other`] ?? ""}

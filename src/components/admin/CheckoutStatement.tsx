@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Dropdown } from "@/components/admin/Dropdown";
+import { Dropdown, StaffPicker } from "@/components/admin/Dropdown";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Camera, Check, FileText, Loader2, Plus, Send, Trash2, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -571,13 +571,7 @@ export function RefundForm({ residentId, net, onDone }: { residentId: string; ne
       {/* the same picker as Collections' Record payment */}
       <div className="space-y-1.5">
         <p className="text-xs text-muted-foreground">Recorded by</p>
-        <div className="grid grid-cols-3 gap-2">
-          {STAFF.map((n) => (
-            <Button key={n} type="button" size="sm" variant={recordedBy === n ? "default" : "outline"} onClick={() => setRecordedBy(n)}>
-              {n}
-            </Button>
-          ))}
-        </div>
+        <StaffPicker value={recordedBy} onChange={setRecordedBy} />
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="space-y-1">

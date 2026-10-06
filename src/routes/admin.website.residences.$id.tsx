@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { Dropdown } from "@/components/admin/Dropdown";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Loader2, Plus, Trash2 } from "lucide-react";
@@ -875,14 +876,14 @@ function RoomsSection({ residenceId, rooms }: { residenceId: string; rooms: any[
                   onChange={(v) => set("size_label", v)}
                 />
                 <Field label="Bathroom">
-                  <select
+                  <Dropdown
                     className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                     value={editing.bathroom}
                     onChange={(e) => set("bathroom", e.target.value)}
                   >
                     <option value="shared">Shared</option>
                     <option value="ensuite">Ensuite</option>
-                  </select>
+                  </Dropdown>
                 </Field>
               </div>
 
@@ -1070,14 +1071,14 @@ function AddonsEditor({
               value={a.price ?? ""}
               onChange={(e) => patch(i, { price: Number(e.target.value || 0) })}
             />
-            <select
+            <Dropdown
               className="h-9 rounded-md border border-input bg-background px-2 text-sm"
               value={a.chargeType ?? "onetime"}
               onChange={(e) => patch(i, { chargeType: e.target.value as AddonRow["chargeType"] })}
             >
               <option value="onetime">One-time</option>
               <option value="monthly">Per month</option>
-            </select>
+            </Dropdown>
             <Button
               type="button"
               variant="ghost"

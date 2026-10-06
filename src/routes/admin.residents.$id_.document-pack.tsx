@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Dropdown } from "@/components/admin/Dropdown";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { tenancyDatesByResident } from "@/lib/rental-schedule.functions";
@@ -471,7 +472,7 @@ function DocumentPackPage() {
               {card ? null : (
                 <label className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                   Prepared by
-                  <select
+                  <Dropdown
                     value={preparedBy}
                     onChange={(e) => setPreparedBy(e.target.value)}
                     className={`h-8 rounded-md border bg-background px-2 text-xs text-foreground ${preparedBy ? "border-border" : "border-amber-400"}`}
@@ -482,7 +483,7 @@ function DocumentPackPage() {
                         {n}
                       </option>
                     ))}
-                  </select>
+                  </Dropdown>
                 </label>
               )}
               <Button

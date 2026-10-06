@@ -1,6 +1,7 @@
 import { Children, isValidElement, type ReactNode } from "react";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { STAFF } from "@/data/form-options";
 import { cn } from "@/lib/utils";
 
 /*
@@ -71,5 +72,35 @@ export function Dropdown({
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+/**
+ * Who on the team did it - one picker for every name (Dani, 6 Oct 2026): it
+ * was buttons in some places and the computer's grey list in others. Amber
+ * until a name is chosen, like the other must-fill fields.
+ */
+export function StaffPicker({
+  value,
+  onChange,
+  placeholder = "Choose…",
+  className,
+}: {
+  value: string;
+  onChange: (name: string) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  return (
+    <Dropdown value={value} onChange={(e) => onChange(e.target.value)} className={cn("h-9 min-w-44", value ? "" : "border-amber-400", className)}>
+      <option value="" disabled>
+        {placeholder}
+      </option>
+      {STAFF.map((n) => (
+        <option key={n} value={n}>
+          {n}
+        </option>
+      ))}
+    </Dropdown>
   );
 }

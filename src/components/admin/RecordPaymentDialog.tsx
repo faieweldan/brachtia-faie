@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { StaffPicker } from "@/components/admin/Dropdown";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -172,19 +173,7 @@ export function RecordPaymentDialog({
             Recorded by
             {recordedBy ? null : <span aria-hidden className="size-1.5 rounded-full bg-brand" />}
           </p>
-          <div className="grid grid-cols-3 gap-2">
-            {STAFF.map((s) => (
-              <Button
-                key={s}
-                type="button"
-                size="sm"
-                variant={recordedBy === s ? "default" : "outline"}
-                onClick={() => setRecordedBy(s)}
-              >
-                {s}
-              </Button>
-            ))}
-          </div>
+          <StaffPicker value={recordedBy} onChange={setRecordedBy} />
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">

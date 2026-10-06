@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Dropdown } from "@/components/admin/Dropdown";
+import { Dropdown, StaffPicker } from "@/components/admin/Dropdown";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronRight, FileStack, Plus, Stamp, Undo2, Upload } from "lucide-react";
@@ -635,13 +635,7 @@ function AccessCardTable({
           </div>
           <div className="space-y-1.5">
             <p className="text-xs text-muted-foreground">Uploaded by</p>
-            <div className="grid grid-cols-3 gap-2">
-              {STAFF.map((n) => (
-                <Button key={n} type="button" size="sm" variant={receiptBy === n ? "default" : "outline"} onClick={() => setReceiptBy(n)}>
-                  {n}
-                </Button>
-              ))}
-            </div>
+            <StaffPicker value={receiptBy} onChange={setReceiptBy} />
           </div>
           <Button disabled={busy || !serial.trim() || !receipt || !receiptBy} onClick={() => void activate()}>
             {busy ? "Saving…" : "Save - make Active"}

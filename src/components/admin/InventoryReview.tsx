@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { StaffPicker } from "@/components/admin/Dropdown";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Download, FileText, PackageX } from "lucide-react";
 import { ReturnMessage } from "@/components/admin/InventoryReturnMessage";
@@ -524,13 +525,7 @@ function InventoryReviewDialog({
           {inReview || file?.status === "submitted" ? (
             <div className="space-y-1.5">
               <p className="text-xs text-muted-foreground">{file?.status === "submitted" ? "Approved by" : "Reviewed by"}</p>
-              <div className="grid grid-cols-3 gap-2">
-                {STAFF.map((n) => (
-                  <Button key={n} type="button" size="sm" variant={by === n ? "default" : "outline"} onClick={() => setBy(n)}>
-                    {n}
-                  </Button>
-                ))}
-              </div>
+              <StaffPicker value={by} onChange={setBy} />
             </div>
           ) : null}
           <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
