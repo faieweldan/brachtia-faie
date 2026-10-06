@@ -5,6 +5,8 @@ import {
   buildPeriods,
   dueFor,
   firstRentPeriod,
+  splitAtStep,
+  type RentStep,
   type ScheduleTerms,
 } from "@/lib/rental-schedule";
 import { SCHEDULES } from "@/lib/reference-data";
@@ -71,6 +73,23 @@ export async function initialInvoiceFor(supabase: any, tenancy: Tenancy) {
     .filter((i) => i.kind === "advance")
     .reduce((n, i) => n + Number(i.amount || 0) * Number(i.quantity ?? 1), 0);
   return { invoice, advance, rent: Number(invoice.monthly_rent || 0) };
+}
+
+/**
+ * A room change with a move date (Dani, 6 Oct 2026), kept beside the
+ * resident's documents so nothing new is needed on either database. The rent
+ * terms hold the new rent; this says from which day.
+ */
+export const rentStepPath = (residentId: string, tenancyId: string) => `tenancy-change/${residentId}/rent-step-${tenancyId}.json`;
+
+export async function readRentStep(supabase: any, residentId: string, tenancyId: string): Promise<RentStep | null> {
+  const { data } = await supabase.storage.from("resident-documents").download(rentStepPath(residentId, tenancyId), { cacheNonce: Date.now() });
+  if (!data) return null;
+  try {
+    return JSON.parse(await data.text()) as RentStep;
+  } catch {
+    return null;
+  }
 }
 
 async function tenancyById(supabase: any, tenancyId: string): Promise<Tenancy | null> {
@@ -153,7 +172,7 @@ export async function syncScheduledRent(supabase: any, tenancyId: string) {
 
   const { data: rows, error } = await supabase
     .from("invoices")
-    .select("id, status, auto_scheduled, period_start, period_end")
+    .select("id, status, auto_scheduled, period_start, period_end, notes")
     .eq("tenancy_id", tenancyId)
     .eq("invoice_type", "rental")
     .neq("status", "void");
@@ -215,12 +234,38 @@ export async function syncScheduledRent(supabase: any, tenancyId: string) {
   const discounted =
     Number(inv.discount_value) > 0 && Number(inv.monthly_rent) === terms.monthlyRent;
 
-  const made = periods.map((p) => ({
-    id: crypto.randomUUID(),
-    period: p,
-  }));
+  /*
+   * A room change on a set day: the period holding it is split there, the
+   * days before at the old rent (Dani, 6 Oct 2026). A cheaper room moved
+   * into during a period already billed: the difference comes off the next
+   * rent invoice, once - the invoice carries the change's id in its notes.
+   */
+  const step = await readRentStep(supabase, tenancy.resident_id, tenancyId);
+  const room = (r: number) => `RM ${r.toLocaleString("en-MY", { maximumFractionDigits: 2 })} a month`;
+  let credit = step?.credit && !billed.some((r) => String(r.notes ?? "").includes(step.id)) ? step.credit : 0;
+  const made = periods.map((p) => {
+    const lines: { label: string; amount: number }[] = [];
+    let amount = p.amount;
+    let notes = "";
+    const split = step && step.oldRent !== step.newRent ? splitAtStep(p, step) : null;
+    if (split?.before) {
+      amount = split.amount;
+      lines.push({ label: `Rent ${label(split.before.start)} – ${label(split.before.end)} · previous room (${room(step!.oldRent)})`, amount: split.before.amount });
+      if (split.after) lines.push({ label: `Rent ${label(split.after.start)} – ${label(split.after.end)} · new room (${room(step!.newRent)})`, amount: split.after.amount });
+    } else {
+      lines.push({ label: `Rent ${label(p.start)} – ${label(p.end)}${p.prorated !== null ? " (pro-rated)" : ""}`, amount: p.amount });
+    }
+    if (credit > 0) {
+      const off = Math.min(credit, amount);
+      lines.push({ label: `Room change credit - cheaper room from ${label(step!.from)}`, amount: -off });
+      amount = Math.round((amount - off) * 100) / 100;
+      credit = 0;
+      notes = `Room change credit ${step!.id}`;
+    }
+    return { id: crypto.randomUUID(), period: { ...p, amount }, lines, notes };
+  });
   const { error: insErr } = await supabase.from("invoices").insert(
-    made.map(({ id, period: p }) => ({
+    made.map(({ id, period: p, notes }) => ({
       id,
       // a placeholder: the invoice number is given when it is billed
       number: `SCH-${id}`,
@@ -260,19 +305,21 @@ export async function syncScheduledRent(supabase: any, tenancyId: string) {
       period_end: p.end,
       total: p.amount,
       deposits_total: 0,
-      notes: "",
+      notes,
     })),
   );
   if (insErr) throw new Error(insErr.message);
 
   const { error: itemErr } = await supabase.from("invoice_items").insert(
-    made.map(({ id, period: p }) => ({
-      invoice_id: id,
-      label: `Rent ${label(p.start)} – ${label(p.end)}${p.prorated !== null ? " (pro-rated)" : ""}`,
-      kind: "rent",
-      amount: p.amount,
-      sort_order: 0,
-    })),
+    made.flatMap(({ id, lines }) =>
+      lines.map((l, i) => ({
+        invoice_id: id,
+        label: l.label,
+        kind: "rent",
+        amount: l.amount,
+        sort_order: i,
+      })),
+    ),
   );
   if (itemErr) throw new Error(itemErr.message);
 

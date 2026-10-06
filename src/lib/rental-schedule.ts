@@ -202,3 +202,75 @@ export function nextRentalPayment(input: {
   );
   return { start: first.start, end: first.end, due: dueFor(first.start), amount };
 }
+
+/* ------------------------------------------------- a room change mid-period */
+
+/**
+ * A room change with its own move date (Dani, 6 Oct 2026): the rent changes on
+ * the day they move, not for the whole period. Each day is worth the month's
+ * rent over the month's real number of days - 14 of November's 30 days at
+ * RM 1,050 is RM 490.
+ */
+export type RentStep = {
+  id: string;
+  /** yyyy-mm-dd - the first day in the new room */
+  from: string;
+  oldRent: number;
+  newRent: number;
+  /** a cheaper room, the move falling in a period already billed: off the next rent invoice */
+  credit?: number;
+};
+
+const daysInMonth = (d: string) => {
+  const [y, m] = d.split("-").map(Number) as [number, number];
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+};
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** what [from, to] comes to at `rent` a month, day by day: each day = rent / that month's days */
+export function rentForDays(from: string, to: string, rent: number): number {
+  if (!from || !to || to < from) return 0;
+  let total = 0;
+  for (let d = from, guard = 0; d <= to && guard < 4000; d = shiftDate(d, { days: 1 }), guard++) total += rent / daysInMonth(d);
+  return round2(total);
+}
+
+export type StepSplit = {
+  /** the days before the move, at the old rent - "" when the period starts in the new room */
+  before: { start: string; end: string; amount: number } | null;
+  /** the rest of the period, in the new room */
+  after: { start: string; end: string; amount: number } | null;
+  /** the period's amount once split */
+  amount: number;
+};
+
+/**
+ * A rent period, as built at the new rent, split at the move date: the days
+ * before it at the old rent, the rest as it was. A period wholly after the move
+ * is unchanged; one wholly before it is all at the old rent.
+ */
+export function splitAtStep(p: { start: string; end: string; amount: number }, step: RentStep): StepSplit {
+  if (!step.from || step.from <= p.start) return { before: null, after: { start: p.start, end: p.end, amount: p.amount }, amount: p.amount };
+  const lastOld = step.from > p.end ? p.end : shiftDate(step.from, { days: -1 });
+  const atOld = rentForDays(p.start, lastOld, step.oldRent);
+  const sameDaysAtNew = rentForDays(p.start, lastOld, step.newRent);
+  const amount = Math.max(0, round2(p.amount - sameDaysAtNew + atOld));
+  if (step.from > p.end) return { before: { start: p.start, end: p.end, amount }, after: null, amount };
+  return {
+    before: { start: p.start, end: lastOld, amount: atOld },
+    after: { start: step.from, end: p.end, amount: round2(amount - atOld) },
+    amount,
+  };
+}
+
+/**
+ * A move falling in a period already billed at the old rent: what the rest of
+ * that period owes on top (above 0, an adjustment invoice) or back (below 0,
+ * off the next rent invoice).
+ */
+export function billedDifference(p: { start: string; end: string }, step: RentStep): number {
+  if (!step.from || step.from > p.end) return 0;
+  const from = step.from > p.start ? step.from : p.start;
+  return round2(rentForDays(from, p.end, step.newRent) - rentForDays(from, p.end, step.oldRent));
+}

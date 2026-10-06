@@ -113,6 +113,11 @@ export const applyTenancyChange = createServerFn({ method: "POST" })
         waived: z.array(z.string().max(20)).max(10),
         effectiveDate: z.string().max(10),
         mergeValues: z.record(z.string().max(80), z.string().max(2000)),
+        /** the bed they move to, when they move on a later day - held until then (Dani, 6 Oct 2026) */
+        moveTo: z
+          .object({ bedId: z.string().max(80), roomId: z.string().max(80), unitId: z.string().max(80), occupancy: z.string().max(20) })
+          .nullable()
+          .optional(),
       })
       .parse(d),
   )
@@ -127,6 +132,54 @@ export const applyTenancyChange = createServerFn({ method: "POST" })
     const rentChanged = data.newRent > 0 && Math.abs(data.newRent - rentBefore) > 0.005;
     if (!anyChange(flags) && !rentChanged) throw new Error("Nothing has changed.");
     if (await readJson(sb, pendingPath(data.residentId))) throw new Error("An earlier change is still waiting for its payment.");
+
+    /*
+     * 0. a room change on a set day (Dani, 6 Oct 2026): the rent changes on the
+     *    move date, not for the whole period - the scheduled invoice holding it
+     *    is split there. Moved inside a period already billed at the old rent:
+     *    dearer, the rest of it is invoiced now; cheaper, it comes off the next
+     *    rent invoice.
+     */
+    let adjustment: { number: string; amount: number } | null = null;
+    const moved = flags.room || flags.occupancy;
+    // also a later move at the same rent: the bed still waits for its day
+    if (moved && data.effectiveDate && (rentChanged || data.moveTo)) {
+      const { billedDifference } = await import("@/lib/rental-schedule");
+      const { rentStepPath } = await import("@/lib/rent-schedule.server");
+      const step: import("@/lib/rental-schedule").RentStep = {
+        id: crypto.randomUUID().slice(0, 8),
+        from: data.effectiveDate,
+        oldRent: rentBefore,
+        newRent: data.newRent || rentBefore,
+      };
+      const { data: billedRows } = await sb
+        .from("invoices")
+        .select("period_start, period_end")
+        .eq("tenancy_id", data.tenancyId)
+        .eq("invoice_type", "rental")
+        .not("status", "in", "(scheduled,void)")
+        .gte("period_end", data.effectiveDate);
+      const paidSpans = ((billedRows ?? []) as any[]).map((r) => ({ start: day(r.period_start), end: day(r.period_end) }));
+      // the months the advance rent on the initial payment covers are paid at the old rent too
+      const { data: terms } = await sb.from("rental_schedules").select("first_period_start").eq("tenancy_id", data.tenancyId).maybeSingle();
+      const { data: ten } = await sb.from("tenancies").select("start_date").eq("id", data.tenancyId).maybeSingle();
+      const firstRent = day(terms?.first_period_start);
+      if (firstRent && day(ten?.start_date) && data.effectiveDate < firstRent) {
+        const { shiftDate } = await import("@/lib/rental-schedule");
+        paidSpans.push({ start: day(ten?.start_date), end: shiftDate(firstRent, { days: -1 }) });
+      }
+      const diff = Math.round(paidSpans.reduce((n, p) => n + billedDifference(p, step), 0) * 100) / 100;
+      if (diff < 0) step.credit = -diff;
+      if (diff > 0) {
+        const lastEnd = paidSpans.map((p) => p.end).sort().at(-1) ?? "";
+        const inv = await raiseAdjustment(sb, data.residentId, data.tenancyId, {
+          label: `Room change adjustment ${fmtDay(data.effectiveDate)} – ${fmtDay(lastEnd)} (RM ${data.newRent.toLocaleString("en-MY")} a month instead of RM ${rentBefore.toLocaleString("en-MY")}, pro-rated by day)`,
+          amount: diff,
+        });
+        adjustment = { number: inv.number, amount: diff };
+      }
+      await writeJson(sb, rentStepPath(data.residentId, data.tenancyId), { ...step, ...(data.moveTo ? { moveTo: data.moveTo } : {}) });
+    }
 
     // 1. the tenancy and its rent: the scheduled invoices follow
     const end = data.change.newEnd > data.change.oldEnd ? data.change.newEnd : data.change.oldEnd;
@@ -171,7 +224,49 @@ export const applyTenancyChange = createServerFn({ method: "POST" })
     });
     // made now, on Confirm and proceed (Dani, 4 Oct 2026) - the difference invoice is paid alongside
     await makeDocuments(sb, data.residentId, pending);
-    return { invoiceNumber: invoice?.number ?? "", documents: "made" as const };
+    return { invoiceNumber: invoice?.number ?? "", adjustment, documents: "made" as const };
+  });
+
+/**
+ * A move on a later day (Dani, 6 Oct 2026): the bed to move to, once the day
+ * comes. The resident page moves it then, the first time it is opened.
+ */
+// the resident's latest tenancy on the database - the page's own copy has its own ids
+async function latestTenancyId(sb: any, residentId: string): Promise<string> {
+  const { data } = await sb
+    .from("tenancies")
+    .select("id")
+    .eq("resident_id", residentId)
+    .order("start_date", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return String(data?.id ?? "");
+}
+
+export const getPendingMove = createServerFn({ method: "GET" })
+  .inputValidator((d) => z.object({ residentId: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const sb = await admin();
+    const tenancyId = await latestTenancyId(sb, data.residentId);
+    if (!tenancyId) return null;
+    const { readRentStep } = await import("@/lib/rent-schedule.server");
+    const step = (await readRentStep(sb, data.residentId, tenancyId)) as (import("@/lib/rental-schedule").RentStep & { moveTo?: { bedId: string; roomId: string; unitId: string; occupancy: string } }) | null;
+    return step?.moveTo ? { from: step.from, moveTo: step.moveTo } : null;
+  });
+
+export const clearPendingMove = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ residentId: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const sb = await admin();
+    const tenancyId = await latestTenancyId(sb, data.residentId);
+    const { readRentStep, rentStepPath } = await import("@/lib/rent-schedule.server");
+    const step = tenancyId ? ((await readRentStep(sb, data.residentId, tenancyId)) as Record<string, unknown> | null) : null;
+    if (step?.["moveTo"]) {
+      delete step["moveTo"];
+      await writeJson(sb, rentStepPath(data.residentId, tenancyId), step);
+    }
+    return { ok: true as const };
   });
 
 /** The change waiting for its payment, dropped - the invoice stays for admin to cancel. */
@@ -235,6 +330,43 @@ async function getBasisMoney(sb: any, residentId: string) {
   const { data: items } = ids.length ? await sb.from("invoice_items").select("label, amount, quantity").in("invoice_id", ids) : { data: [] };
   const { moneyOf } = await import("@/lib/tenancy-change");
   return moneyOf(((items ?? []) as any[]).map((i) => ({ label: String(i.label), amount: Number(i.amount || 0) * Number(i.quantity ?? 1) })));
+}
+
+const fmtDay = (iso: string) =>
+  iso ? new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : "";
+
+/** the rest of a billed period at the new room's rent - a charge of its own, due in 7 days */
+async function raiseAdjustment(sb: any, residentId: string, tenancyId: string, line: { label: string; amount: number }) {
+  const { data: first } = await sb
+    .from("invoices")
+    .select("full_name, email, phone, university, nationality, residence_name, room_name, occupancy, tenancy_start, tenancy_end, monthly_rent, payment_frequency, company, occupation")
+    .eq("resident_id", residentId)
+    .eq("invoice_type", "initial")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  const { data: inv, error } = await sb
+    .from("invoices")
+    .insert({
+      ...(first ?? {}),
+      resident_id: residentId,
+      tenancy_id: tenancyId,
+      invoice_type: "charge",
+      invoice_date: klToday(),
+      payment_terms: "NET7",
+      issued_at: new Date().toISOString(),
+      total: line.amount,
+      deposits_total: 0,
+      notes: "Room change adjustment - tenancy updated",
+    })
+    .select("id, number")
+    .single();
+  if (error) throw new Error(error.message);
+  const { error: iErr } = await sb.from("invoice_items").insert({ invoice_id: inv.id, label: line.label, kind: "rent", amount: line.amount, quantity: 1, sort_order: 0 });
+  if (iErr) throw new Error(iErr.message);
+  const { recordInvoiceVersion } = await import("@/lib/document-versions.functions");
+  await recordInvoiceVersion(sb, String(inv.id));
+  return { id: String(inv.id), number: String(inv.number ?? "") };
 }
 
 /** the difference, as an initial-payment invoice of its own - beside the move-in one */

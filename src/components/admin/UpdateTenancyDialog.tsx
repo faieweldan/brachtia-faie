@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/date-input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { costBreakdown, getProperty } from "@/data/properties";
 import { allBeds, fmtDate, money, unitAccepts, unitGender, type BedRow, type Resident, type Unit } from "@/lib/ops-store";
 import { GenderMark } from "@/components/admin/GenderMark";
@@ -23,6 +22,7 @@ import {
   type MoneyKey,
 } from "@/lib/tenancy-change";
 import { klToday } from "@/lib/kl-date";
+import { rentForDays } from "@/lib/rental-schedule";
 import { applyTenancyChange, cancelPendingChange, getTenancyChangeBasis } from "@/lib/tenancy-change.functions";
 
 /**
@@ -38,6 +38,8 @@ export type TenancyChangeResult = {
   newBed: BedRow | null;
   newEnd: string;
   newRent: number;
+  /** the move is on a later day: the new bed is held until then, the current one kept */
+  moveOn?: string;
 };
 
 export function UpdateTenancyDialog({
@@ -88,6 +90,19 @@ export function UpdateTenancyDialog({
   // the items waived, each on its own (Dani, 5 Oct 2026)
   const [waived, setWaived] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  // each opening starts from what the resident has now - the page may not have had the bed when this first drew
+  useEffect(() => {
+    if (!open) return;
+    setOcc(oldOcc);
+    setLetter(placed?.room.letter ?? "");
+    setBedId(placed?.bed.id ?? "");
+    setNewEnd("");
+    setEffective(klToday());
+    setRentTyped(null);
+    setNextTyped({});
+    setWaived([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, placed?.bed.id]);
 
   const free = useMemo(
     () =>
@@ -146,7 +161,8 @@ export function UpdateTenancyDialog({
     if (!basis.data?.tenancy) return;
     setBusy(true);
     try {
-      const result: TenancyChangeResult = { newBed: moved ? target : null, newEnd: end, newRent };
+      const later = moved && !!target && effective > klToday();
+      const result: TenancyChangeResult = { newBed: moved ? target : null, newEnd: end, newRent, ...(later ? { moveOn: effective } : {}) };
       const res = await applyTenancyChange({
         data: {
           residentId,
@@ -166,14 +182,19 @@ export function UpdateTenancyDialog({
           waived,
           effectiveDate: moved ? effective : basis.data.tenancy.start,
           mergeValues: mergeValuesFor(result),
+          moveTo: later && target ? { bedId: target.bed.id, roomId: target.room.id, unitId: target.unit.id, occupancy: target.room.occupancy } : null,
         },
       });
       await onApplied(result);
       toast.success("Tenancy updated", {
-        description:
-          res.invoiceNumber
-            ? `The new documents are on the Tenancy tab. Invoice ${res.invoiceNumber} raised for the difference.`
-            : "The new documents are on the Tenancy tab.",
+        description: [
+          "The new documents are on the Tenancy tab.",
+          res.invoiceNumber ? `Invoice ${res.invoiceNumber} raised for the deposit difference.` : "",
+          res.adjustment ? `${res.adjustment.number} raised: the rest of the billed month at the new rent.` : "",
+          later ? `The bed moves on ${fmtDate(effective)}.` : "",
+        ]
+          .filter(Boolean)
+          .join(" "),
       });
       onOpenChange(false);
     } catch (e) {
@@ -183,224 +204,298 @@ export function UpdateTenancyDialog({
     }
   }
 
-  const step = "space-y-1.5 rounded-xl border border-border p-3";
-  const now = (v: string) => <p className="text-xs text-muted-foreground">Current: {v}</p>;
+  // the move month split at the move date, shown as it will be invoiced (Dani, 6 Oct 2026)
+  const later = moved && effective > klToday();
+  const rentMoves = moved && Math.abs(newRent - oldRent) > 0.005 && !!effective;
+  const split = rentMoves ? moveMonthSplit(effective, oldRent, newRent) : null;
+  const kind =
+    flags.date === "renewal" ? "Renewal" : flags.date === "extension" ? (moved ? "Extension + room change" : "Extension") : moved ? "Room change" : "";
+  const occLabel = (o: string) => OCCUPANCY_LABEL[o] ?? o;
+  const bedLabel = (b: BedRow | null | undefined) => (b ? `${b.unit.unitNo} · Room ${b.room.letter} · ${b.bed.label}` : "—");
 
   return (
     <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>
-      <DialogContent className="admin-ui flex max-h-[90vh] max-w-2xl flex-col gap-3 overflow-hidden">
-        <DialogHeader>
-          <DialogTitle className="text-base font-bold text-brand-deep">Update Tenancy</DialogTitle>
-          <DialogDescription>Change what is needed - the rest stays as it is. A shorter tenancy is a checkout (Early termination).</DialogDescription>
+      <DialogContent className="admin-ui flex max-h-[92vh] max-w-5xl flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="border-b border-border px-6 py-4">
+          <DialogTitle className="text-lg font-bold text-brand-deep">Update Tenancy</DialogTitle>
+          <DialogDescription>Change only what the resident asked for. A shorter tenancy is a checkout (Early termination).</DialogDescription>
         </DialogHeader>
 
-        <div className="-mr-2 min-h-0 flex-1 space-y-3 overflow-y-auto pr-4 [scrollbar-gutter:stable]">
-          {pending ? (
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              <span className="min-w-0 flex-1">
-                An earlier change is waiting for {pending.invoiceNumber || "its invoice"} to be paid. Its documents are made then.
-              </span>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => void cancelPendingChange({ data: { residentId } }).then(() => basis.refetch())}
-              >
-                Forget it
-              </Button>
-            </div>
-          ) : null}
+        <div className="grid min-h-0 flex-1 overflow-hidden lg:grid-cols-[1fr_320px]">
+          {/* the steps, top to bottom */}
+          <div className="min-h-0 space-y-6 overflow-y-auto px-6 py-5 [scrollbar-gutter:stable]">
+            {pending ? (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <span className="min-w-0 flex-1">An earlier change is waiting for {pending.invoiceNumber || "its invoice"} to be paid.</span>
+                <Button size="sm" variant="ghost" onClick={() => void cancelPendingChange({ data: { residentId } }).then(() => basis.refetch())}>
+                  Forget it
+                </Button>
+              </div>
+            ) : null}
 
-          <div className={step}>
-            <p className="text-sm font-semibold">1. Occupancy</p>
-            {now(OCCUPANCY_LABEL[oldOcc] ?? oldOcc)}
-            <Select
-              value={occ}
-              onValueChange={(v) => {
-                setOcc(v);
-                setLetter(v === oldOcc ? (placed?.room.letter ?? "") : "");
-                setBedId(v === oldOcc ? (placed?.bed.id ?? "") : "");
-                setRentTyped(null);
-                setNextTyped({});
-              }}
-            >
-              <SelectTrigger className="h-9 w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="admin-ui">
-                {["single", "twin"].map((o) => (
-                  <SelectItem key={o} value={o}>
-                    {OCCUPANCY_LABEL[o]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className={step}>
-            <p className="text-sm font-semibold">2. Room</p>
-            {now(placed ? `${placed.unit.unitNo} · Room ${placed.room.letter} · ${placed.bed.label}` : "no bed")}
-            <div className="flex flex-wrap gap-1.5">
-              {letters.length ? (
-                letters.map((l) => (
-                  <button
-                    key={l}
-                    type="button"
-                    onClick={() => {
+            <Step n={1} title="Room" now={`${occLabel(oldOcc)} · ${bedLabel(placed)}`}>
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+                <Segmented
+                  label="Occupancy"
+                  value={occ}
+                  options={["single", "twin"].map((o) => ({ value: o, label: occLabel(o) }))}
+                  onChange={(v) => {
+                    setOcc(v);
+                    setLetter(v === oldOcc ? (placed?.room.letter ?? "") : "");
+                    setBedId(v === oldOcc ? (placed?.bed.id ?? "") : "");
+                    setRentTyped(null);
+                    setNextTyped({});
+                  }}
+                />
+                {letters.length ? (
+                  <Segmented
+                    label="Room"
+                    value={letter}
+                    options={letters.map((l) => ({ value: l, label: l === "Unit" ? "Whole unit" : l }))}
+                    onChange={(l) => {
                       setLetter(l);
                       setBedId(l === placed?.room.letter && occ === oldOcc ? (placed?.bed.id ?? "") : "");
                       setRentTyped(null);
                       setNextTyped({});
                     }}
-                    className={`h-8 min-w-12 rounded-md border px-3 text-sm font-medium ${
-                      letter === l ? "border-brand-deep bg-brand-deep text-primary-foreground" : "border-border hover:bg-muted"
-                    }`}
-                  >
-                    {l === "Unit" ? "Whole unit" : `Room ${l}`}
-                  </button>
-                ))
-              ) : (
-                <p className="text-xs text-muted-foreground">No free {OCCUPANCY_LABEL[occ]?.toLowerCase()} beds.</p>
-              )}
-            </div>
-            {letter ? (
-              <RoomList
-                rows={beds}
-                residents={residents}
-                current={placed?.bed.id ?? ""}
-                picked={bedId}
-                onPick={(id) => {
-                  setBedId(id);
-                  setRentTyped(null);
-                  setNextTyped({});
-                }}
-              />
-            ) : null}
-            {flags.unit ? <p className="text-xs text-sky-800">Another unit - a new access card form is made.</p> : null}
-            {moved ? (
-              <label className="flex flex-wrap items-center gap-2 pt-1 text-xs text-muted-foreground">
-                Moves on
-                <DateInput value={effective} onChange={(e) => setEffective(e.target.value)} className="h-8 w-40" />
-              </label>
-            ) : null}
-          </div>
-
-          <div className={step}>
-            <p className="text-sm font-semibold">3. Tenancy end date</p>
-            {now(oldEnd ? fmtDate(oldEnd) : "—")}
-            <DateInput min={oldEnd} value={end} onChange={(e) => setNewEnd(e.target.value)} className="h-9 w-48" />
-            {flags.date !== "none" ? (
-              <p className="text-xs font-medium text-brand-deep">
-                {flags.date === "renewal"
-                  ? "6 months or more later - a renewal at the prevailing rate: a new agreement."
-                  : "Less than 6 months later - an extension on the same terms: a revised Schedule A."}
-              </p>
-            ) : null}
-          </div>
-
-          {/* what is held now, line by line - so the Original column below can be checked (Dani, 5 Oct 2026) */}
-          {basis.data?.held.length ? (
-            <div className="overflow-hidden rounded-xl border border-border">
-              <div className="bg-muted/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Deposits held</div>
-              {basis.data.held.map((d, i) => (
-                <div key={i} className="flex items-center justify-between gap-2 border-t border-border px-3 py-1.5 text-sm">
-                  <span className="min-w-0">
-                    {d.label} <span className="text-xs text-muted-foreground">· {d.invoiceNumber}</span>
-                  </span>
-                  <span className="tabular-nums">{money(d.amount)}</span>
-                </div>
-              ))}
-              <div className="flex items-center justify-between border-t border-border bg-muted px-3 py-1.5 text-sm font-medium">
-                <span>Total held</span>
-                <span className="tabular-nums">{money(basis.data.held.reduce((n, d) => n + d.amount, 0))}</span>
-              </div>
-            </div>
-          ) : null}
-
-          {changed && rows.length ? (
-            <div className="overflow-hidden rounded-xl border border-border">
-              <div className="grid grid-cols-[1fr_6rem_7rem_6rem_4rem] gap-2 bg-muted/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                <span>Item</span>
-                <span className="text-right">Original</span>
-                <span className="text-right">New</span>
-                <span className="text-right">Difference</span>
-                <span className="text-center">Waive</span>
-              </div>
-              {rows.map((r) => (
-                <div key={r.key} className="grid grid-cols-[1fr_6rem_7rem_6rem_4rem] items-center gap-2 border-t border-border px-3 py-1.5 text-sm">
-                  <span>{r.label}</span>
-                  <span className="text-right tabular-nums text-muted-foreground">{money(r.original)}</span>
-                  <Input
-                    type="number"
-                    value={r.key === "rent" ? (rentTyped ?? String(listRent)) : (nextTyped[r.key] ?? String(r.next))}
-                    onChange={(e) =>
-                      r.key === "rent" ? setRentTyped(e.target.value) : setNextTyped((t) => ({ ...t, [r.key]: e.target.value }))
-                    }
-                    className="h-8 text-right tabular-nums"
                   />
-                  <span className={`text-right tabular-nums ${r.difference > 0 ? "font-medium text-red-700" : r.difference < 0 ? "text-emerald-700" : "text-muted-foreground"}`}>
-                    {r.difference ? `${r.difference > 0 ? "+" : "-"}${money(Math.abs(r.difference))}` : "-"}
-                  </span>
-                  <span className="flex justify-center">
-                    {/* only an initial-payment item that went up can be waived - never the rent */}
-                    {r.key !== "rent" && r.difference > 0 ? (
-                      <input
-                        type="checkbox"
-                        aria-label={`Waive the ${r.label.toLowerCase()} difference`}
-                        className="size-4 accent-brand"
-                        checked={waived.includes(r.key)}
-                        onChange={(e) => setWaived((w) => (e.target.checked ? [...w, r.key] : w.filter((k) => k !== r.key)))}
-                      />
-                    ) : null}
-                  </span>
-                </div>
-              ))}
-              <div className="space-y-1 border-t border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                <p>The monthly rent changes the scheduled rent invoices{basis.data?.hasSchedule ? "" : " - set up the rent terms on Payments first"}.</p>
-                {rows.some((r) => r.key !== "rent" && r.difference < 0) ? (
-                  <p>A lower amount is not paid back now: what is held comes back at checkout.</p>
-                ) : null}
+                ) : (
+                  <p className="text-xs text-muted-foreground">No free {occLabel(occ).toLowerCase()} beds.</p>
+                )}
               </div>
-            </div>
-          ) : null}
-
-          {changed && (due > 0 || waivedTotal > 0) ? (
-            <div className="rounded-xl border border-border p-3 text-sm">
-              {due > 0 ? (
-                <p>
-                  Invoiced now: <b>{money(due)}</b>{" "}
-                  <span className="text-xs text-muted-foreground">- an initial-payment difference invoice</span>
-                </p>
+              {letter ? (
+                <RoomList
+                  rows={beds}
+                  residents={residents}
+                  current={placed?.bed.id ?? ""}
+                  picked={bedId}
+                  onPick={(id) => {
+                    setBedId(id);
+                    setRentTyped(null);
+                    setNextTyped({});
+                  }}
+                />
               ) : null}
-              {waivedTotal > 0 ? (
-                <p>
-                  Waived: <b>{money(waivedTotal)}</b> <span className="text-xs text-muted-foreground">- recorded with the change</span>
-                </p>
+              {moved ? (
+                <div className="space-y-2 rounded-lg bg-muted/40 p-3">
+                  <label className="flex flex-wrap items-center gap-3 text-sm">
+                    <span className="font-medium">Moves on</span>
+                    <DateInput min={klToday()} value={effective} onChange={(e) => setEffective(e.target.value)} className="h-9 w-44" />
+                    {later ? <span className="text-xs text-muted-foreground">The current bed stays theirs until then; the new one is held.</span> : null}
+                  </label>
+                  {split ? (
+                    <div className="text-xs">
+                      <p className="mb-1 font-medium text-foreground">{split.month} rent, split on the move date</p>
+                      <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-0.5 tabular-nums text-muted-foreground">
+                        {split.before ? (
+                          <>
+                            <span>{split.before.range} · previous room ({split.before.days} days at {money(oldRent)})</span>
+                            <span className="text-right">{money2(split.before.amount)}</span>
+                          </>
+                        ) : null}
+                        <span>{split.after.range} · new room ({split.after.days} days at {money(newRent)})</span>
+                        <span className="text-right">{money2(split.after.amount)}</span>
+                        <span className="border-t border-border pt-0.5 font-medium text-foreground">{split.month}</span>
+                        <span className="border-t border-border pt-0.5 text-right font-medium text-foreground">{money2(split.total)}</span>
+                      </div>
+                      <p className="mt-1 text-muted-foreground">
+                        {newRent < oldRent
+                          ? "Cheaper: if this month is already billed, the difference comes off the next rent invoice."
+                          : "If this month is already billed, the rest is invoiced now as a room change adjustment."}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
-            </div>
-          ) : null}
+              {flags.unit ? <p className="text-xs text-sky-800">Another unit - a new access card form is made.</p> : null}
+            </Step>
 
-          {changed ? (
-            <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
-              <p className="font-semibold">Documents - made when you confirm</p>
-              <p>{documentNames(plan).join(" · ") || "None"}</p>
-            </div>
-          ) : null}
+            <Step n={2} title="End date" now={oldEnd ? fmtDate(oldEnd) : "—"}>
+              <div className="flex flex-wrap items-center gap-3">
+                <DateInput min={oldEnd} value={end} onChange={(e) => setNewEnd(e.target.value)} className="h-9 w-44" />
+                {flags.date !== "none" ? (
+                  <span className="text-xs text-muted-foreground">
+                    {flags.date === "renewal" ? "6 months or more later: a renewal at today's rate, with a new agreement." : "Less than 6 months later: an extension on the same terms."}
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Leave it to keep the same end date.</span>
+                )}
+              </div>
+            </Step>
+
+            <Step n={3} title="Money" now={`Rent ${money(oldRent)} a month`}>
+              {changed && rows.length ? (
+                <div className="overflow-hidden rounded-lg border border-border">
+                  <div className="grid grid-cols-[1fr_6rem_7rem_6rem_3.5rem] gap-2 bg-muted/50 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    <span>Item</span>
+                    <span className="text-right">Now</span>
+                    <span className="text-right">New</span>
+                    <span className="text-right">Difference</span>
+                    <span className="text-center">Waive</span>
+                  </div>
+                  {rows.map((r) => (
+                    <div key={r.key} className="grid grid-cols-[1fr_6rem_7rem_6rem_3.5rem] items-center gap-2 border-t border-border px-3 py-1.5 text-sm">
+                      <span>{r.label}</span>
+                      <span className="text-right tabular-nums text-muted-foreground">{money(r.original)}</span>
+                      <Input
+                        type="number"
+                        value={r.key === "rent" ? (rentTyped ?? String(listRent)) : (nextTyped[r.key] ?? String(r.next))}
+                        onChange={(e) => (r.key === "rent" ? setRentTyped(e.target.value) : setNextTyped((t) => ({ ...t, [r.key]: e.target.value })))}
+                        className="h-8 text-right tabular-nums"
+                      />
+                      <span className={`text-right tabular-nums ${r.difference > 0 ? "font-medium text-rose-700" : r.difference < 0 ? "text-emerald-700" : "text-muted-foreground"}`}>
+                        {r.difference ? `${r.difference > 0 ? "+" : "−"} ${money(Math.abs(r.difference))}` : "–"}
+                      </span>
+                      <span className="flex justify-center">
+                        {/* only an initial-payment item that went up can be waived - never the rent */}
+                        {r.key !== "rent" && r.difference > 0 ? (
+                          <input
+                            type="checkbox"
+                            aria-label={`Waive the ${r.label.toLowerCase()} difference`}
+                            className="size-4 accent-brand"
+                            checked={waived.includes(r.key)}
+                            onChange={(e) => setWaived((w) => (e.target.checked ? [...w, r.key] : w.filter((k) => k !== r.key)))}
+                          />
+                        ) : null}
+                      </span>
+                    </div>
+                  ))}
+                  <p className="border-t border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                    The rent changes the scheduled rent invoices{basis.data?.hasSchedule ? "" : " - set up the rent terms on Payments first"}.
+                    {rows.some((r) => r.key !== "rent" && r.difference < 0) ? " A lower deposit is not paid back now: what is held comes back at checkout." : ""}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Nothing to compare until something changes.</p>
+              )}
+              {/* what is held now, line by line - so the Now column can be checked (Dani, 5 Oct 2026) */}
+              {basis.data?.held.length ? (
+                <details className="group rounded-lg border border-border text-sm">
+                  <summary className="cursor-pointer list-none px-3 py-2 text-xs font-medium text-muted-foreground">
+                    Deposits held · {money(basis.data.held.reduce((n, d) => n + d.amount, 0))} <span className="group-open:hidden">· show lines</span>
+                  </summary>
+                  {basis.data.held.map((d, i) => (
+                    <div key={i} className="flex items-center justify-between gap-2 border-t border-border px-3 py-1.5">
+                      <span className="min-w-0">
+                        {d.label} <span className="text-xs text-muted-foreground">· {d.invoiceNumber}</span>
+                      </span>
+                      <span className="tabular-nums">{money(d.amount)}</span>
+                    </div>
+                  ))}
+                </details>
+              ) : null}
+            </Step>
+          </div>
+
+          {/* the summary: now against new, always in view */}
+          <aside className="min-h-0 overflow-y-auto border-t border-border bg-muted/30 px-5 py-5 lg:border-l lg:border-t-0">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Summary</p>
+            <p className="mt-1 text-base font-semibold text-brand-deep">{kind || "No change yet"}</p>
+            <dl className="mt-4 space-y-3 text-sm">
+              <Compare label="Room" from={bedLabel(placed)} to={moved ? bedLabel(target) : ""} />
+              {moved ? <Compare label="Moves on" from="" to={fmtDate(effective)} /> : null}
+              <Compare label="End date" from={oldEnd ? fmtDate(oldEnd) : "—"} to={end !== oldEnd ? fmtDate(end) : ""} />
+              <Compare label="Rent a month" from={money(oldRent)} to={Math.abs(newRent - oldRent) > 0.005 ? money(newRent) : ""} />
+            </dl>
+            {changed ? (
+              <div className="mt-5 space-y-3 border-t border-border pt-4 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">Invoiced now</p>
+                  <p className="font-semibold tabular-nums">{due > 0 ? money(due) : "Nothing"}</p>
+                  {waivedTotal > 0 ? <p className="text-xs text-muted-foreground">{money(waivedTotal)} waived</p> : null}
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Documents made on confirm</p>
+                  <ul className="mt-1 space-y-0.5">
+                    {(documentNames(plan).length ? documentNames(plan) : ["None"]).map((d) => (
+                      <li key={d} className="text-sm">{d}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            ) : null}
+          </aside>
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-border pt-3">
+        <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-3">
+          {moved && !target ? <span className="mr-auto text-xs text-amber-700">Choose the new bed.</span> : null}
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
             Cancel
           </Button>
-          <Button
-            disabled={busy || !changed || !basis.data?.tenancy || !!pending || (moved && !target)}
-            onClick={() => void confirm()}
-          >
+          <Button disabled={busy || !changed || !basis.data?.tenancy || !!pending || (moved && !target)} onClick={() => void confirm()}>
             {busy ? "Saving…" : action}
           </Button>
         </div>
       </DialogContent>
     </Dialog>
   );
+}
+
+/** a numbered step: its title, what the resident has now, then the controls */
+function Step({ n, title, now, children }: { n: number; title: string; now: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline gap-3">
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-deep text-xs font-semibold text-primary-foreground">{n}</span>
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        <span className="min-w-0 truncate text-xs text-muted-foreground">Now: {now}</span>
+      </div>
+      <div className="space-y-3 pl-9">{children}</div>
+    </section>
+  );
+}
+
+/** a choice of a few, one tap each */
+function Segmented({ label, value, options, onChange }: { label: string; value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <div className="inline-flex rounded-lg border border-border bg-background p-0.5">
+        {options.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => onChange(o.value)}
+            className={`h-8 min-w-10 rounded-md px-3 text-sm font-medium transition-colors ${value === o.value ? "bg-brand-deep text-primary-foreground" : "text-foreground hover:bg-muted"}`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** a line of the summary: as it is, and what it becomes - only the new value when it changes */
+function Compare({ label, from, to }: { label: string; from: string; to: string }) {
+  return (
+    <div>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5">
+        {to ? (
+          <span className="flex flex-col">
+            {from ? <span className="text-xs text-muted-foreground line-through">{from}</span> : null}
+            <span className="font-medium text-foreground">{to}</span>
+          </span>
+        ) : (
+          <span className="text-foreground">{from}</span>
+        )}
+      </dd>
+    </div>
+  );
+}
+
+const money2 = (n: number) => `RM ${n.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/** the move month, split on the move date - each part priced by its real days (Dani, 6 Oct 2026) */
+function moveMonthSplit(from: string, oldRent: number, newRent: number) {
+  const [y, m, d] = from.split("-").map(Number) as [number, number, number];
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const iso = (day: number) => `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const mon = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" });
+  const before = d > 1 ? { range: `1–${d - 1} ${mon}`, days: d - 1, amount: rentForDays(iso(1), iso(d - 1), oldRent) } : null;
+  const after = { range: `${d}–${last} ${mon}`, days: last - d + 1, amount: rentForDays(iso(d), iso(last), newRent) };
+  return { month: new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" }), before, after, total: Math.round(((before?.amount ?? 0) + after.amount) * 100) / 100 };
 }
 
 /**

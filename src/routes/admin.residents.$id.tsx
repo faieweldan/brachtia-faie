@@ -41,6 +41,8 @@ import {
 import { TenancyDocs, currentMergeValues } from "@/components/admin/TenancyDocs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { UpdateTenancyDialog, type TenancyChangeResult } from "@/components/admin/UpdateTenancyDialog";
+import { clearPendingMove, getPendingMove } from "@/lib/tenancy-change.functions";
+import { klToday } from "@/lib/kl-date";
 import { tenancyDatesByResident } from "@/lib/rental-schedule.functions";
 import { ResidentPayments } from "@/components/admin/ResidentPayments";
 import { RESIDENT_DOCS, residentDocsFor, residentDocLabel } from "@/lib/resident-documents";
@@ -67,6 +69,7 @@ import {
   updateBed,
   useOps,
   vacateBed,
+  allBeds,
   type BedStatus,
   type Resident,
   type ResidentPatch,
@@ -298,6 +301,27 @@ function ResidentProfilePage() {
     });
   }, [form, hasLocal, dbTenancy, units]);
 
+  /*
+   * The day of a later move has come: the bed moves now, the first time the
+   * resident is opened on or after it (Dani, 6 Oct 2026). Before the page's
+   * early return - hooks run on every render.
+   */
+  const moveNowRef = useRef<((m: { from: string; moveTo: { bedId: string } }) => Promise<void>) | null>(null);
+  const hasTenancy = !!form?.id && tenancies.some((t) => t.residentId === form.id);
+  const pendingMove = useQuery({
+    queryKey: ["pending-move", form?.id],
+    queryFn: () => getPendingMove({ data: { residentId: form!.id } }),
+    enabled: hasTenancy,
+  });
+  const movingRef = useRef(false);
+  useEffect(() => {
+    const m = pendingMove.data;
+    if (!m || movingRef.current || m.from > klToday() || !units.length) return;
+    movingRef.current = true;
+    void moveNowRef.current?.(m).then(() => pendingMove.refetch());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingMove.data, units.length]);
+
   if ((!stored && !isNew) || !form) {
     return (
       <EmptyState
@@ -505,7 +529,10 @@ function ResidentProfilePage() {
    */
   async function tenancyChanged(r: TenancyChangeResult) {
     if (!form || !tenancy) return;
-    if (r.newBed) {
+    if (r.newBed && r.moveOn) {
+      // a move on a later day (Dani, 6 Oct 2026): the new bed is held for them, the current one stays theirs
+      updateBed(r.newBed.bed.id, { status: "held", holdFor: form.fullName, holdUntil: r.moveOn });
+    } else if (r.newBed) {
       const oldBed = placed?.bed;
       const updated = {
         ...form,
@@ -519,6 +546,9 @@ function ResidentProfilePage() {
       if (oldBed) vacateBed(oldBed.id);
       updateBed(r.newBed.bed.id, {
         status: "booked",
+        // a bed held for a later move is theirs now
+        holdFor: undefined,
+        holdUntil: undefined,
         residentId: form.id,
         residentName: form.fullName,
         university: form.university,
@@ -535,6 +565,16 @@ function ResidentProfilePage() {
       refreshMoney(queryClient),
     ]);
   }
+
+  // the move itself, set below once the tenancy is known - the effect above calls it
+  moveNowRef.current = async (m) => {
+    if (!form || !tenancy) return;
+    const target = allBeds(units).find((x) => x.bed.id === m.moveTo.bedId);
+    if (!target) return;
+    await tenancyChanged({ newBed: target, newEnd: tenancy.end, newRent: 0 });
+    await clearPendingMove({ data: { residentId: form.id } });
+    toast.success(`Moved to ${target.unit.unitNo} · Room ${target.room.letter}`, { description: `The move date, ${fmtDate(m.from)}, has come.` });
+  };
 
   async function deleteForever() {
     if (!form) return;
