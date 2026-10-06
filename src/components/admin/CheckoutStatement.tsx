@@ -530,7 +530,7 @@ export function CheckoutStatement({
 }
 
 /** Pay the refund: how, when, and its proof. */
-function RefundForm({ residentId, net, onDone }: { residentId: string; net: number; onDone: () => void }) {
+export function RefundForm({ residentId, net, onDone }: { residentId: string; net: number; onDone: () => void }) {
   const [amount, setAmount] = useState(String(Math.abs(net)));
   const [paidOn, setPaidOn] = useState(klToday());
   const [method, setMethod] = useState(METHODS[0]!);

@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { PdfPreviewDialog } from "@/components/admin/PdfPreview";
+import { RefundForm } from "@/components/admin/CheckoutStatement";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { checkoutPdf, listPayables } from "@/lib/checkout.functions";
 import { money } from "@/lib/ops-store";
 
@@ -27,6 +29,9 @@ const TONE: Record<string, string> = {
 function PayablesPage() {
   const q = useQuery({ queryKey: ["payables"], queryFn: () => listPayables() });
   const [pdf, setPdf] = useState<{ url: string; title: string } | null>(null);
+  // the payout recorded here too, not only on the resident's Payments tab (Dani, 6 Oct 2026)
+  const [paying, setPaying] = useState<{ residentId: string; number: string; name: string; amount: number } | null>(null);
+  const qc = useQueryClient();
   const rows = q.data ?? [];
   const toPay = rows.filter((r) => r.status !== "Paid").reduce((n, r) => n + r.amount, 0);
   const paid = rows.filter((r) => r.status === "Paid").reduce((n, r) => n + r.amount, 0);
@@ -96,7 +101,7 @@ function PayablesPage() {
                       {r.code ? <p className="text-xs text-muted-foreground">{r.code}</p> : null}
                     </td>
                     <td className="px-3 py-3">
-                      <span className="mr-1.5 rounded bg-muted px-1.5 py-0.5 text-[11px] font-semibold">CN</span>
+                      <span className="mr-1.5 rounded bg-muted px-1.5 py-0.5 text-[11px] font-semibold">CS</span>
                       Checkout credit note
                     </td>
                     <td className="px-3 py-3 text-right tabular-nums">{money(r.amount)}</td>
@@ -105,9 +110,16 @@ function PayablesPage() {
                       {r.paidOn ? <p className="mt-0.5 text-xs text-muted-foreground">Paid {r.paidOn}</p> : null}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <Button size="sm" variant="outline" onClick={() => void view(r.residentId, r.version, `${r.number} · v${r.version}`)}>
-                        <FileText className="size-4" /> View
-                      </Button>
+                      <span className="inline-flex gap-1.5">
+                        <Button size="sm" variant="outline" onClick={() => void view(r.residentId, r.version, `${r.number} · v${r.version}`)}>
+                          <FileText className="size-4" /> View
+                        </Button>
+                        {r.status === "To pay" ? (
+                          <Button size="sm" onClick={() => setPaying({ residentId: r.residentId, number: r.number, name: r.name, amount: r.amount })}>
+                            Record payment
+                          </Button>
+                        ) : null}
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -116,6 +128,27 @@ function PayablesPage() {
           </div>
         )}
       </section>
+      <Dialog open={!!paying} onOpenChange={(o) => !o && setPaying(null)}>
+        <DialogContent className="admin-ui max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-brand-deep">
+              Record payment · {paying?.number} · {paying?.name}
+            </DialogTitle>
+          </DialogHeader>
+          {paying ? (
+            <RefundForm
+              residentId={paying.residentId}
+              net={paying.amount}
+              onDone={() => {
+                setPaying(null);
+                void q.refetch();
+                void qc.invalidateQueries({ queryKey: ["admin", "work-queue"] });
+                void qc.invalidateQueries({ queryKey: ["checkout", paying.residentId] });
+              }}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
       <PdfPreviewDialog title={pdf?.title ?? ""} fileName={`${(pdf?.title ?? "credit-note").replace(/[/ ·]+/g, "-")}.pdf`} url={pdf?.url ?? null} onClose={() => setPdf(null)} />
     </div>
   );
