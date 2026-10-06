@@ -110,19 +110,41 @@ export function InvoiceMessageCard({
   const [message, setMessage] = useState(() =>
     paymentMessage({ name: studentName, reference, amount, paid, dueDate, isBalance }),
   );
-  const [copied, setCopied] = useState(false);
-  const [open, setOpen] = useState(false);
+  /*
+   * Like the signing message (Dani, 6 Oct 2026): open by itself until it is
+   * copied, closed after. Remembered per invoice and amount on this browser, so
+   * the balance message - a new amount - opens again after the fee is paid.
+   */
+  const key = `brachtia-invoice-msg-${reference}-${amount}`;
+  const wasCopied = () => {
+    try {
+      return !!localStorage.getItem(key);
+    } catch {
+      return false;
+    }
+  };
+  const [copied, setCopied] = useState(wasCopied);
+  const [open, setOpen] = useState(() => !wasCopied());
 
   async function copy() {
     await navigator.clipboard.writeText(message);
-    setCopied(true);
     toast.success("Message copied", { description: "Paste it into WhatsApp." });
+    try {
+      localStorage.setItem(key, new Date().toISOString());
+    } catch {
+      /* not remembered - it opens again next time */
+    }
+    setCopied(true);
+    setOpen(false);
   }
 
   const digits = waDigits(phone);
 
   return (
-    <div id={id} className="scroll-mt-6 rounded-xl border border-border bg-card p-4">
+    <div
+      id={id}
+      className={`scroll-mt-6 rounded-xl border p-4 ${copied ? "border-emerald-200 bg-emerald-50/60" : "border-amber-300 bg-amber-50"}`}
+    >
       <div className="mb-3 flex items-center justify-between gap-2">
         <div>
           <p className="text-sm font-semibold text-brand-deep">
@@ -134,10 +156,14 @@ export function InvoiceMessageCard({
         </div>
         <div className="flex items-center gap-2">
           {copied ? (
-            <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
-              <Check className="size-3.5" /> Copied
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-900">
+              <Check className="size-3" /> Copied
             </span>
-          ) : null}
+          ) : (
+            <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+              Not sent yet
+            </span>
+          )}
           <MessageToggle open={open} onToggle={() => setOpen((v) => !v)} />
         </div>
       </div>
@@ -145,7 +171,7 @@ export function InvoiceMessageCard({
       {open ? (
         <div className="space-y-3">
           {/* editable, so a staff member can add a line before sending */}
-          <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={11} />
+          <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={11} className="bg-background" />
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={() => void copy()}>
               <Copy className="size-4" /> Copy message

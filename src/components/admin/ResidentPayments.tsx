@@ -1,5 +1,5 @@
 import { loadProofFile } from "@/lib/payment-proof";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   CalendarClock,
@@ -85,26 +85,50 @@ export function ResidentPayments({
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const toggle = (k: string) => setOpen((o) => ({ ...o, [k]: !o[k] }));
   // from the Checkout button: open the settlement and bring it into view
+  // Payments is still loading when it opens - the section is looked for until it is there (Dani, 6 Oct 2026)
+  const checkoutAsked = useRef(0);
   useEffect(() => {
-    if (!openCheckout) return;
+    if (!openCheckout || isLoading || checkoutAsked.current === openCheckout) return;
+    checkoutAsked.current = openCheckout;
     setOpen((o) => ({ ...o, checkout: true }));
-    setTimeout(() => document.getElementById("checkout-settlement")?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
-  }, [openCheckout]);
+    let tries = 0;
+    const find = () => {
+      const el = document.getElementById("checkout-settlement");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      else if (tries++ < 40) window.setTimeout(find, 150);
+    };
+    window.setTimeout(find, 200);
+  }, [openCheckout, isLoading]);
   const [paying, setPaying] = useState<PayableInvoice | null>(null);
   // a new invoice: rent or a charge
   const [raising, setRaising] = useState<{ as: "rental" | "charge"; card?: { label: string; amount: number } } | null>(null);
   // from the Access Card panel: the charge invoice opens, filled at Schedule B's price
-  // the link on the Access Card panel: open every group, then bring the invoice into view
+  /*
+   * Bring one invoice into view, outlined for a moment: from the Access Card
+   * panel's link, or the invoice just generated (Dani, 6 Oct 2026). A new one
+   * appears once the list reloads, so it is looked for a few times.
+   */
+  const [justMade, setJustMade] = useState<string | null>(null);
+  const target = justMade ?? focusInvoice?.number ?? null;
   useEffect(() => {
-    if (!focusInvoice || isLoading) return;
+    if (!target || isLoading) return;
     setOpen((o) => ({ ...o, initial: true, rental: true, charge: true, checkout: true }));
-    setTimeout(() => {
-      const el = document.querySelector(`[data-invoice="${CSS.escape(focusInvoice.number)}"]`);
-      el?.scrollIntoView({ behavior: "smooth", block: "start" });
-      el?.classList.add("ring-2", "ring-amber-400", "rounded-xl");
-      setTimeout(() => el?.classList.remove("ring-2", "ring-amber-400", "rounded-xl"), 2500);
-    }, 300);
-  }, [focusInvoice, isLoading]);
+    let tries = 0;
+    const find = () => {
+      const el = document.querySelector(`[data-invoice="${CSS.escape(target)}"]`);
+      if (!el) {
+        if (tries++ < 40) window.setTimeout(find, 150);
+        return;
+      }
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      // drawn inside the edge, with a tint: an outline outside it was cut off by the group (Dani, 6 Oct 2026)
+      const marks = ["bg-amber-50", "ring-2", "ring-inset", "ring-amber-400", "rounded-xl", "transition-colors", "duration-700"];
+      el.classList.add(...marks);
+      window.setTimeout(() => el.classList.remove("bg-amber-50", "ring-2", "ring-inset", "ring-amber-400"), 3500);
+      setJustMade(null);
+    };
+    window.setTimeout(find, 200);
+  }, [target, isLoading, focusInvoice?.n]);
   // opened once, then let go - else every visit to Payments opened it again (Dani, 4 Oct 2026)
   useEffect(() => {
     if (!cardCharge) return;
@@ -435,7 +459,8 @@ export function ResidentPayments({
             icon={DoorOpen}
             title="Checkout settlement"
             tone="idle"
-            status="Credit note"
+            // what it ends as - a refund or a balance owed - is shown on the statement itself
+            status="Checkout"
             detail={[
               tenancyEnd ? `Ends ${fmtDate(tenancyEnd)}` : null,
               (b?.depositsHeld ?? 0) > 0 ? `${money(b!.depositsHeld)} deposits held` : null,
@@ -471,7 +496,11 @@ export function ResidentPayments({
           details={invoiceDetails}
           lastRentEnd={lastRentEnd}
           onClose={() => setRaising(null)}
-          onCreated={(type) => setOpen((o) => ({ ...o, [type]: true }))}
+          onCreated={(type, number) => {
+            setOpen((o) => ({ ...o, [type]: true }));
+            // straight to the invoice just generated
+            if (number) setJustMade(number);
+          }}
         />
       ) : null}
 

@@ -76,8 +76,8 @@ export function WelcomeMessageCard({
 }) {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  // closed until it is wanted; a card the page points at opens itself
-  const [open, setOpen] = useState(Boolean(highlight));
+  // open by itself until it is sent, like the signing message (Dani, 6 Oct 2026)
+  const [open, setOpen] = useState(Boolean(highlight) || !sent);
   useEffect(() => {
     if (highlight) setOpen(true);
   }, [highlight]);
@@ -125,6 +125,7 @@ export function WelcomeMessageCard({
     await navigator.clipboard.writeText(message);
     toast.success("Message copied", { description: "Paste it into WhatsApp." });
     markSent();
+    setOpen(false);
   }
 
   const digits = waDigits(phone);
@@ -132,25 +133,29 @@ export function WelcomeMessageCard({
   return (
     <div
       id={id}
-      className={`scroll-mt-6 rounded-xl border bg-card p-4 transition-shadow duration-500 ${
-        highlight ? "border-brand-deep/40 ring-2 ring-brand-deep/20" : "border-border"
-      }`}
+      className={`scroll-mt-6 rounded-xl border p-4 transition-shadow duration-500 ${
+        highlight ? "ring-2 ring-brand-deep/20" : ""
+      } ${sent ? "border-emerald-200 bg-emerald-50/60" : "border-amber-300 bg-amber-50"}`}
     >
       <div className="mb-3 flex items-center justify-between gap-2">
         <p className="text-sm font-semibold text-brand-deep">Welcome message</p>
         <div className="flex items-center gap-2">
           {sent ? (
-            <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
-              <Check className="size-3.5" /> Sent
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-900">
+              <Check className="size-3" /> Sent
             </span>
-          ) : null}
+          ) : (
+            <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+              Not sent yet
+            </span>
+          )}
           {message ? <MessageToggle open={open} onToggle={() => setOpen((v) => !v)} /> : null}
         </div>
       </div>
       {message && open ? (
         <div className="space-y-3">
           {/* editable, so a staff member can add a line before sending */}
-          <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={9} />
+          <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={9} className="bg-background" />
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={() => void copy()}>
               <Copy className="size-4" /> Copy message

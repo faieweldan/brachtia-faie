@@ -22,6 +22,11 @@ export const METHOD_RULES: Record<string, MethodRule> = {
     reference: { label: "Reference no.", placeholder: "From the bank slip" },
     proof: { required: true, hint: "A photo of the bank slip, or a PDF" },
   },
+  // cash paid in at the bank: the bank's deposit slip is the proof (Dani, 6 Oct 2026)
+  "Cash Deposit": {
+    reference: { label: "Deposit slip no.", placeholder: "From the bank's deposit slip" },
+    proof: { required: true, hint: "A photo of the bank's deposit slip, or a PDF" },
+  },
   Cheque: {
     reference: { label: "Cheque no.", placeholder: "e.g. 001234 · Maybank" },
     proof: { required: true, hint: "A photo of the cheque" },

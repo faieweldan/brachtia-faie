@@ -149,7 +149,8 @@ export function ResidentInvoiceDialog({
   /** a lost or damaged access card's charge - the line it starts with; the new form waits for it to be paid */
   accessCard?: { label: string; amount: number };
   onClose: () => void;
-  onCreated: (type: "rental" | "charge") => void;
+  /** the new invoice's type, and its number - Payments brings it into view */
+  onCreated: (type: "rental" | "charge", number?: string) => void;
 }) {
   const queryClient = useQueryClient();
   const [kind, setKind] = useState<string>(startAs);
@@ -313,7 +314,7 @@ export function ResidentInvoiceDialog({
       });
       toast.success(`Invoice ${res.number} generated`);
       await refreshMoney(queryClient);
-      onCreated(type);
+      onCreated(type, res.number);
       onClose();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not generate the invoice");

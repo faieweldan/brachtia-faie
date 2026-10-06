@@ -611,7 +611,9 @@ function ResidentProfilePage() {
                     className="bg-amber-600 text-white hover:bg-amber-700"
                     onClick={() => {
                       setTab("payments");
-                      setGoCheckout((n) => n + 1);
+                      setGoCheckout(Date.now());
+                      // once - a later visit to Payments does not jump to checkout again
+                      window.setTimeout(() => setGoCheckout(0), 5000);
                     }}
                   >
                     <DoorOpen className="mr-1 size-3.5" /> Checkout
@@ -865,7 +867,11 @@ function ResidentProfilePage() {
                             const blob = await (await fetch(res.url)).blob();
                             setDocPreview({
                               title: `${label} · ${form.fullName}`,
-                              fileName: doc?.fileName || label,
+                              // a photo is shown as a photo: its name says so, even when the upload had none
+                              fileName:
+                                blob.type.startsWith("image/") && !/\.(jpe?g|png|webp|gif)$/i.test(doc?.fileName || "")
+                                  ? `${doc?.fileName || label}.${blob.type.split("/")[1] === "png" ? "png" : "jpg"}`
+                                  : doc?.fileName || label,
                               url: URL.createObjectURL(blob),
                             });
                           } catch {

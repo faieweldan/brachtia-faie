@@ -2110,7 +2110,8 @@ function BookingDetail() {
             key={paying?.id ?? "none"}
             invoice={paying}
             onClose={() => setPaying(null)}
-            onRecorded={() => goTo("payment")}
+            // the fee in: the welcome message is the next step, and opens there (Dani, 6 Oct 2026)
+            onRecorded={() => goTo("welcome")}
           />
 
 

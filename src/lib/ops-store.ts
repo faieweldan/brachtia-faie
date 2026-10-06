@@ -917,7 +917,9 @@ export function setTaTemplate(fileName: string) {
 
 export { SCHEDULES } from "@/lib/reference-data";
 
-export const PAY_METHODS = ["DuitNow QR Pay", "Bank Transfer", "Cheque", "Cash"];
+// Cash Deposit: cash the student paid in at the bank, or admin banked for them - it has a
+// bank slip, unlike cash handed over (Dani, 6 Oct 2026)
+export const PAY_METHODS = ["DuitNow QR Pay", "Bank Transfer", "Cash Deposit", "Cheque", "Cash"];
 
 export const LEVELS = [
   "Undergraduate (Degree, Diploma, Foundation)",
