@@ -22,6 +22,7 @@ import {
 import { toast } from "sonner";
 
 import {
+  adminOverview,
   listAppointments,
   markAppointmentSeen,
   saveAppointment,
@@ -235,6 +236,9 @@ function AppointmentsPage() {
   const [slots, setSlots] = useState<string[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
 
+  // check-ins with no time yet - the list Tasks shows
+  const { data: overview } = useQuery({ queryKey: ["admin", "overview"], queryFn: () => adminOverview() });
+  const toArrange = ((overview as any)?.checkinsToBook ?? []) as { id: string; full_name: string; remind: boolean }[];
   const { data, isLoading } = useQuery({
     queryKey: ["admin", "appointments"],
     queryFn: () => listAppointments(),
@@ -608,6 +612,28 @@ function AppointmentsPage() {
 
   return (
     <div className="space-y-5">
+      {/*
+        Check-ins with no time yet (Dani, 5 Oct 2026): they are on Tasks, but had
+        no row here - an appointment exists only once a time is picked. The same
+        list as Tasks, so the two never disagree.
+      */}
+      {toArrange.length ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+          <p className="text-sm font-semibold text-amber-900">Check-ins to arrange - no time chosen yet</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {toArrange.map((r) => (
+              <Link
+                key={r.id}
+                to="/admin/residents/$id"
+                params={{ id: r.id }}
+                className="rounded-full border border-amber-300 bg-white px-3 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
+              >
+                {r.full_name || "Resident"} · {r.remind ? "asked to be reminded" : "not chosen"}
+              </Link>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3">
         <div className="inline-flex rounded-lg bg-muted p-1">

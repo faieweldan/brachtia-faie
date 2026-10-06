@@ -161,7 +161,8 @@ export function idLabelFor(nationality: string): string {
  * for an NRIC number is never asked to upload a passport, and the other way round.
  */
 export function idDocLabelFor(nationality: string): string {
-  return nationality === "MYS" ? "MyKad / NRIC copy" : "Passport copy";
+  // the data page only - the page with the photo and details (Dani, 5 Oct 2026)
+  return nationality === "MYS" ? "MyKad / NRIC copy" : "Passport copy (data page only)";
 }
 
 /**

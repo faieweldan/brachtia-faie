@@ -383,6 +383,18 @@ export const submitProfileByToken = createServerFn({ method: "POST" })
       row["checkin_asked_at"] = new Date().toISOString();
     }
 
+    /*
+     * Gender and local/international are settled at booking - the resident ID is
+     * built from them (Dani, 5 Oct 2026). Once set, the link cannot change the
+     * gender, and cannot move a student between Malaysia and another country.
+     */
+    {
+      const { data: now } = await supabase.from("residents").select("gender, nationality").eq("id", found.link.resident_id).maybeSingle();
+      const was = { gender: String((now as any)?.gender ?? ""), nationality: String((now as any)?.nationality ?? "") };
+      if (was.gender && "gender" in row) delete row["gender"];
+      if (was.nationality && "nationality" in row && (was.nationality === "MYS") !== (row["nationality"] === "MYS")) delete row["nationality"];
+    }
+
     if (!Object.keys(row).length) return { ok: true as const };
 
     const { error } = await supabase

@@ -243,6 +243,8 @@ function MyProfilePage() {
     });
   }, [payorMode, values]);
 
+  // gender and local/international as the booking set them - not changed here
+  const [fixed, setFixed] = useState<{ gender: string; nationality: string }>({ gender: "", nationality: "" });
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -259,6 +261,8 @@ function MyProfilePage() {
           if (v["nationality"] === "MYS" && v["id_number"])
             v["id_number"] = formatNric(v["id_number"]);
           setValues(v);
+          // what the booking already settled - the resident ID is built from it (Dani, 5 Oct 2026)
+          setFixed({ gender: String(res.values["gender"] ?? ""), nationality: String(res.values["nationality"] ?? "") });
           setMoveIn(String(res.moveIn ?? ""));
           setResidenceName(String((res as any).residenceName ?? ""));
           setPlaceName(String((res as any).placeName ?? ""));
@@ -760,10 +764,27 @@ function MyProfilePage() {
                           // choosing Other clears the field so they can type
                           onChange={(v) => set(f.key, v === "OTHER" ? "" : v)}
                         />
+                      ) : f.key === "gender" && fixed.gender ? (
+                        // set at booking: the resident ID carries it, so it does not change here
+                        <div>
+                          <Input value={(f.options ?? []).find((o) => o.value === value)?.label ?? value} readOnly disabled />
+                          <p className="mt-1 text-[11px] text-muted-foreground">Set when you booked. Contact Brachtia if it is wrong.</p>
+                        </div>
+                      ) : f.key === "nationality" && fixed.nationality === "MYS" ? (
+                        // a Malaysian stays Malaysian - local or international is part of the resident ID
+                        <div>
+                          <Input value={(f.options ?? []).find((o) => o.value === value)?.label ?? value} readOnly disabled />
+                          <p className="mt-1 text-[11px] text-muted-foreground">Set when you booked. Contact Brachtia if it is wrong.</p>
+                        </div>
                       ) : (
                         <ChoicePicker
                           value={value}
-                          options={f.options ?? []}
+                          // an international student can change country, but not to Malaysia
+                          options={
+                            f.key === "nationality" && fixed.nationality
+                              ? (f.options ?? []).filter((o) => o.value !== "MYS")
+                              : (f.options ?? [])
+                          }
                           onChange={(v) => set(f.key, v)}
                         />
                       )
@@ -827,9 +848,6 @@ function MyProfilePage() {
           className="scroll-mt-6 rounded-2xl border border-border bg-card p-5"
         >
           <h2 className="text-sm font-semibold text-brand-deep">Documents</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            A clear phone photo is fine — we shrink it for you. PDFs work too.
-          </p>
           <div className="mt-4 space-y-2">
             {/* what they are asked for follows the Student or Employed answer
                 above, the same way the fields do - somebody working was being

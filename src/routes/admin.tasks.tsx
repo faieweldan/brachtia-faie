@@ -100,11 +100,16 @@ function TasksPage() {
                   {w.since ? ` · since ${fmtDate(w.since.slice(0, 10))}` : ""}
                 </p>
               </div>
-              <StatusPill status="due" label={w.kind === "refund" ? "Payment" : w.kind === "stamping" ? "To stamp" : "Your turn"} />
+              <StatusPill status="due" label={w.kind === "refund" ? "Payment" : w.kind === "stamping" ? "To stamp" : w.kind === "checkin" ? "Not assigned" : "Your turn"} />
               <Button asChild size="sm" variant="outline">
-                <Link to="/admin/residents/$id" params={{ id: w.residentId }} search={{ tab: w.kind === "refund" ? "payments" : "tenancy" }}>
-                  Open
-                </Link>
+                {w.kind === "checkin" ? (
+                  // taken on the Appointment page, where the staff member is chosen
+                  <Link to="/admin/appointments">Open</Link>
+                ) : (
+                  <Link to="/admin/residents/$id" params={{ id: w.residentId }} search={{ tab: w.kind === "refund" ? "payments" : "tenancy" }}>
+                    Open
+                  </Link>
+                )}
               </Button>
             </div>
           ))}

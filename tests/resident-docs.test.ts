@@ -33,7 +33,7 @@ describe("what a resident is asked to upload", () => {
   test("the ID copy is named after their nationality, as the ID field is", () => {
     // nationality is stored as the ISO-3 code, the way the master list has it
     expect(residentDocLabel("id", "MYS")).toBe("MyKad / NRIC copy");
-    expect(residentDocLabel("id", "IND")).toBe("Passport copy");
+    expect(residentDocLabel("id", "IND")).toBe("Passport copy (data page only)");
     expect(residentDocLabel("employment", "MYS")).toBe("Employment letter");
   });
   test("every document the form can ask for is one the server will accept", () => {

@@ -9,9 +9,11 @@ import { createServerFn } from "@tanstack/react-start";
  *   inventory   a resident sent their Schedule C: answer it, or approve it once signed
  *   refund      Checkout Settlement Payment: signed, and a refund to pay out or a CS invoice to collect
  *   stamping    every document of an agreement is signed: upload the stamping page
+ *   checkin     a student booked a check-in time and nobody has taken it yet. A taken
+ *               (confirmed) one needs nothing until the day, so it is not listed
  */
 export type WorkItem = {
-  kind: "inventory" | "refund" | "stamping";
+  kind: "inventory" | "refund" | "stamping" | "checkin";
   title: string;
   detail: string;
   residentId: string;
@@ -104,6 +106,33 @@ export const adminWorkQueue = createServerFn({ method: "GET" }).handler(async ()
         detail: `Signed by the student · ${rm(s.settled.owed)} owed by the student · record their payment and upload the receipt`,
         residentId: f.name,
         since: s.settled.at,
+      });
+    }
+  }
+
+  // 4. a check-in the student booked, still with nobody to take it (Dani, 5 Oct 2026)
+  {
+    const { data: appts } = await sb
+      .from("appointments")
+      .select("resident_id, starts_at, assigned_staff, status, created_at")
+      .eq("type_slug", "check-in")
+      .in("status", ["new", "pending"])
+      .gte("starts_at", new Date(Date.now() - 86_400_000).toISOString());
+    for (const a of (appts ?? []) as any[]) {
+      if (a.assigned_staff || !a.resident_id) continue;
+      const when = new Date(a.starts_at).toLocaleString("en-GB", {
+        day: "numeric",
+        month: "short",
+        hour: "numeric",
+        minute: "2-digit",
+        timeZone: "Asia/Kuala_Lumpur",
+      });
+      out.push({
+        kind: "checkin",
+        title: `Take the check-in - ${when}`,
+        detail: "Booked by the student · nobody assigned yet",
+        residentId: a.resident_id,
+        since: String(a.created_at ?? a.starts_at),
       });
     }
   }
