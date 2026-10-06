@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { DateInput } from "@/components/ui/date-input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -136,6 +137,13 @@ export function DataReview({
                         />
                         <span className="text-muted-foreground">{ticked(row.r?.value) ? "Ticked" : "Not ticked"}</span>
                       </label>
+                    ) : row.own && /date/i.test(row.key) && toIso(row.r?.value ?? "") !== null ? (
+                      // a date set here: picked from the calendar, printed as "1 Nov 2026" (Dani, 6 Oct 2026)
+                      <DateInput
+                        value={toIso(row.r?.value ?? "") ?? ""}
+                        onChange={(e) => onOverride(row.key, e.target.value ? fromIso(e.target.value) : "")}
+                        className="h-9 w-40"
+                      />
                     ) : row.own ? (
                       <LongField label={row.r?.label ?? row.key} value={row.r?.value ?? ""} onChange={(v) => onOverride(row.key, v)} />
                     ) : (
@@ -166,6 +174,23 @@ export function DataReview({
     </div>
   );
 }
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "1 Nov 2026" (as the document prints it) or "2026-11-01" to yyyy-mm-dd; "" stays ""; anything else is null */
+function toIso(v: string): string | null {
+  const t = v.trim();
+  if (!t) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  const m = /^(\d{1,2}) ([A-Za-z]{3,})\.? (\d{4})$/.exec(t);
+  const mi = m ? MONTHS.findIndex((x) => m[2]!.toLowerCase().startsWith(x.toLowerCase())) : -1;
+  return m && mi >= 0 ? `${m[3]}-${String(mi + 1).padStart(2, "0")}-${m[1]!.padStart(2, "0")}` : null;
+}
+
+const fromIso = (iso: string) => {
+  const [y, m, d] = iso.split("-").map(Number);
+  return `${d} ${MONTHS[(m ?? 1) - 1]} ${y}`;
+};
 
 /**
  * A document's own text - inclusions, exclusions - is long, and the box in the
