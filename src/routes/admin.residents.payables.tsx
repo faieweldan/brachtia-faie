@@ -159,19 +159,24 @@ function PayablesPage() {
                             </span>
                           </div>
                           <div className="overflow-hidden rounded-xl border border-border bg-card">
+                            {/* grouped like a statement: no prefix, the minus once, in the amount (Dani, 6 Oct 2026) */}
+                            <p className="px-4 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Deposits held</p>
                             {r.deposits.map((d, i) => (
-                              <div key={`d${i}`} className="flex justify-between border-b border-border/60 px-4 py-2.5">
+                              <div key={`d${i}`} className="flex justify-between px-4 py-2">
                                 <span className="text-muted-foreground">{d.label}</span>
                                 <span className="tabular-nums">{money(d.amount)}</span>
                               </div>
                             ))}
+                            {r.lines.length ? (
+                              <p className="mt-1 border-t border-border/60 px-4 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Deductions</p>
+                            ) : null}
                             {r.lines.map((l, i) => (
-                              <div key={`l${i}`} className="flex justify-between border-b border-border/60 px-4 py-2.5">
-                                <span className="text-muted-foreground">(-) {l.label}</span>
-                                <span className="tabular-nums">-{money(l.amount)}</span>
+                              <div key={`l${i}`} className="flex justify-between px-4 py-2">
+                                <span className="text-muted-foreground">{l.label}</span>
+                                <span className="whitespace-nowrap tabular-nums text-rose-700">− {money(l.amount)}</span>
                               </div>
                             ))}
-                            <div className="flex justify-between bg-muted/50 px-4 py-2.5 font-semibold">
+                            <div className="mt-2 flex justify-between border-t-2 border-border bg-muted/50 px-4 py-2.5 font-semibold">
                               <span>Refund to the resident</span>
                               <span className="tabular-nums">{money(r.amount)}</span>
                             </div>
