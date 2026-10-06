@@ -131,7 +131,11 @@ export async function nextNumber(sb: any): Promise<string> {
     /* start again at 1 */
   }
   await putFile(sb, path, JSON.stringify({ next: next + 1 }), "application/json");
-  return `CN/${String(next).padStart(5, "0")}`;
+  // CS - checkout settlement, one code for every part of checkout (Dani, 6 Oct 2026): this
+  // statement CS/00016, and the invoice made when the student owes, INV/CS/00051. Neutral,
+  // because the statement ends as a credit note or an invoice. CN/ and CO/ numbers given
+  // before keep theirs.
+  return `CS/${String(next).padStart(5, "0")}`;
 }
 
 export const sha256 = async (b: Uint8Array) =>
@@ -216,7 +220,8 @@ export async function statementPdf(input: StatementPdfInput): Promise<Uint8Array
   text(company.name, M, A4.h - 28, 14, bold, white);
   text(company.tagline, M, A4.h - 41, 8, font, white);
   text(`${company.email}  ·  WhatsApp ${company.phones[0]}`, M, A4.h - 52, 7.5, font, white);
-  right("CREDIT NOTE", A4.w - M, A4.h - 25, 12, bold, white);
+  // what it is follows the balance: a refund is a credit note, a balance owed is an invoice
+  right(v.net >= 0 ? "CREDIT NOTE" : "INVOICE", A4.w - M, A4.h - 25, 12, bold, white);
   right(`CHECKOUT STATEMENT · ${CHECKOUT_TYPE_LABEL[v.type ?? "end_of_tenancy"].toUpperCase()}`, A4.w - M, A4.h - 38, 8, font, white);
   right(`${input.number} · Version ${v.v} · ${day(v.issuedAt)}`, A4.w - M, A4.h - 50, 8, bold, white);
 
@@ -270,25 +275,14 @@ export async function statementPdf(input: StatementPdfInput): Promise<Uint8Array
   const paidIn = v.type === "cancellation";
   section(paidIn ? "PAID SO FAR" : "DEPOSITS HELD");
   if (!v.deposits.length) row(paidIn ? "Nothing paid" : "No refundable deposits on record", rm(0), { color: MUTED });
-  for (const d of v.deposits) row(d.label, rm(d.amount), { sub: d.invoiceNumber ? `Invoice ${d.invoiceNumber}` : undefined });
+  // no sub-lines under the lines - invoice numbers and notes left off (Dani, 6 Oct 2026)
+  for (const d of v.deposits) row(d.label, rm(d.amount));
   row(paidIn ? "Total paid" : "Total deposits held", rm(v.held), { f: bold });
   y -= 6;
 
   section("DEDUCTIONS");
   if (!v.lines.length) row("No deductions", rm(0), { color: MUTED });
-  for (const l of v.lines) {
-    const pics = l.photos.length ? ` · ${l.photos.length} photo${l.photos.length === 1 ? "" : "s"} attached` : "";
-    row(l.label, `- ${rm(l.amount)}`, {
-      sub:
-        l.source === "outstanding"
-          ? `Unpaid on invoice ${l.invoiceNumber ?? ""}${pics}`
-          : l.source === "forfeit"
-            ? `Kept on ${CHECKOUT_TYPE_LABEL[v.type ?? "end_of_tenancy"].toLowerCase()}`
-            : pics
-              ? pics.slice(3)
-              : undefined,
-    });
-  }
+  for (const l of v.lines) row(l.label, `- ${rm(l.amount)}`);
   row("Total deductions", `- ${rm(v.deducted)}`, { f: bold });
   y -= 8;
 

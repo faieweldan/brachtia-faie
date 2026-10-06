@@ -23,7 +23,7 @@ export const CHECKOUT_TYPE_LABEL: Record<CheckoutType, string> = {
 /** what a cancellation always keeps, from the RM500 booking fee */
 export const CANCELLATION_FEE = 150;
 
-/** The kind of checkout the dates say it is - before the start, more than 2 weeks before the end, or near/after it. */
+/** The kind of checkout the dates say it is - before moving in (check-in date, else the start), more than 2 weeks before the end, or near/after it. */
 export function checkoutTypeFor(start: string, end: string, today = klToday()): CheckoutType {
   if (start && today < start) return "cancellation";
   if (end) {

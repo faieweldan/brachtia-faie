@@ -17,6 +17,7 @@ import {
   getCheckout,
   issueCheckout,
   markCheckoutInactive,
+  previewCheckout,
   recordCheckoutRefund,
   refundProofUrl,
   saveCheckoutDraft,
@@ -36,7 +37,7 @@ import { klToday } from "@/lib/kl-date";
  *   Start → edit → Issue (v1) → the resident signs → Record refund
  *   Changed after issuing → Issue again (v2); v1 is kept, v2 is signed
  */
-const METHODS = ["Bank Transfer", "DuitNow QR Pay", "Cash", "Cheque"];
+const METHODS = ["Bank Transfer", "DuitNow QR Pay", "Cash Deposit", "Cash", "Cheque"];
 
 const pdfUrl = (base64: string) =>
   URL.createObjectURL(new Blob([Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))], { type: "application/pdf" }));
@@ -186,7 +187,8 @@ export function CheckoutStatement({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-semibold text-brand-deep">
-          Credit note {s.number}
+          {/* a refund is a credit note, a balance owed is an invoice - it follows the balance (Dani, 5 Oct 2026) */}
+          {net >= 0 ? "Credit note" : "Invoice"} {s.number}
           {latest ? <span className="ml-2 text-xs font-normal text-muted-foreground">Version {latest.v}</span> : null}
         </p>
         <span
@@ -231,9 +233,7 @@ export function CheckoutStatement({
         {deposits.length ? (
           deposits.map((d, i) => (
             <div key={i} className="flex items-center justify-between border-t border-border px-3 py-2 text-sm">
-              <span>
-                {d.label} <span className="text-xs text-muted-foreground">· {d.invoiceNumber}</span>
-              </span>
+              <span>{d.label}</span>
               <span className="tabular-nums">{money(d.amount)}</span>
             </div>
           ))
@@ -291,8 +291,8 @@ export function CheckoutStatement({
                   type="number"
                   value={l.amount}
                   aria-label="Amount"
-                  // what the kind of checkout keeps is the rule's, not typed
-                  disabled={closed || l.source === "forfeit"}
+                  // what is kept can be changed - Brachtia may give some back (Dani, 6 Oct 2026)
+                  disabled={closed}
                   className="h-8 w-28 text-right tabular-nums"
                   onChange={(e) => edit(i, { amount: Math.max(0, Number(e.target.value) || 0) })}
                 />
@@ -314,10 +314,7 @@ export function CheckoutStatement({
                   <Trash2 className="size-4" />
                 </Button>
               </div>
-              {l.source === "outstanding" ? <p className="text-[11px] text-muted-foreground">Unpaid on invoice {l.invoiceNumber}</p> : null}
-              {l.source === "forfeit" ? (
-                <p className="text-[11px] text-muted-foreground">Kept on {CHECKOUT_TYPE_LABEL[type].toLowerCase()}</p>
-              ) : null}
+
               {l.photos.length ? (
                 <div className="flex flex-wrap gap-1.5">
                   {l.photos.map((p) => (
@@ -358,6 +355,24 @@ export function CheckoutStatement({
 
       {closed ? null : (
         <div className="flex flex-wrap justify-end gap-2">
+          {/* the PDF as it would be issued, before anything is saved */}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!!busy}
+            onClick={() =>
+              void (async () => {
+                try {
+                  const { base64 } = await previewCheckout({ data: { residentId, lines, notes } });
+                  setPdf({ url: pdfUrl(base64), title: `${s.number} · Preview` });
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Could not make the preview");
+                }
+              })()
+            }
+          >
+            <FileText className="size-4" /> Preview
+          </Button>
           {/* start over with another kind of checkout - only until the resident signs */}
           {latest?.signed ? null : (
             <Button

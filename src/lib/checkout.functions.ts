@@ -52,7 +52,15 @@ async function moneyNow(residentId: string, type?: CheckoutType) {
   const all = [...b.groups.initial, ...b.groups.rental, ...b.groups.charge, ...b.groups.checkout].filter((i) => !i.scheduled);
   const r2 = (n: number) => Math.round(n * 100) / 100;
   const first = b.groups.initial[0]?.doc as { tenancy_start?: string | null; tenancy_end?: string | null } | undefined;
-  const suggested = checkoutTypeFor(String(first?.tenancy_start ?? "").slice(0, 10), String(first?.tenancy_end ?? "").slice(0, 10));
+  /*
+   * The line between Cancellation and Early termination is moving in (Dani, 6
+   * Oct 2026): the check-in date the student chose on their form, or the
+   * tenancy start when they never chose one.
+   */
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: who } = await (supabaseAdmin as any).from("residents").select("checkin_on").eq("id", residentId).maybeSingle();
+  const moveIn = String(who?.checkin_on ?? "").slice(0, 10) || String(first?.tenancy_start ?? "").slice(0, 10);
+  const suggested = checkoutTypeFor(moveIn, String(first?.tenancy_end ?? "").slice(0, 10));
   const kind = type ?? suggested;
   // the initial payment, paid in full
   const initialPaid = b.groups.initial.length > 0 && b.groups.initial.every((i) => i.outstanding <= 0.005);
@@ -90,9 +98,9 @@ async function moneyNow(residentId: string, type?: CheckoutType) {
       ? initialPaid
         ? [
             forfeit("rent", "One (1) month's rental", b.monthlyRent),
-            forfeit("cancel", "Administration Fee", CANCELLATION_FEE),
+            forfeit("cancel", "Non-refundable administration charges", CANCELLATION_FEE),
           ].filter((f) => f.amount > 0)
-        : [forfeit("cancel", "Non-refundable amount on cancellation", CANCELLATION_FEE)]
+        : [forfeit("cancel", "Non-refundable administration charges", CANCELLATION_FEE)]
       : kind === "early_termination"
         ? // one line each: the deposit paid at move-in and any difference paid since are one deposit (Dani, 5 Oct 2026)
           (["Security", "Utility"] as const)
@@ -123,7 +131,9 @@ export const getCheckout = createServerFn({ method: "GET" })
      * then shows as changed, to be issued again.
      */
     if (s && !s.settled && !s.refund) {
-      const fresh = [...now.outstanding, ...now.forfeits, ...s.draft.lines.filter((l) => l.source === "deduction")];
+      // the kept amounts stay as admin left them - edited or removed, at Brachtia's discretion
+      // (Dani, 6 Oct 2026); they are worked out again only when the kind of checkout changes
+      const fresh = [...now.outstanding, ...s.draft.lines.filter((l) => l.source !== "outstanding")];
       if (JSON.stringify(fresh) !== JSON.stringify(s.draft.lines)) {
         s = { ...s, draft: { ...s.draft, lines: fresh } };
         const { writeStatement } = await import("@/lib/checkout.server");
@@ -284,6 +294,34 @@ export const issueCheckout = createServerFn({ method: "POST" })
     version.pdfSha256 = await sha256(bytes);
     await writeStatement(sb, data.residentId, { ...s, versions: [...s.versions, version] });
     return { v };
+  });
+
+/**
+ * The draft as its PDF would look, before it is issued (Dani, 5 Oct 2026) -
+ * nothing is saved and no version is made.
+ */
+export const previewCheckout = createServerFn({ method: "POST" })
+  .inputValidator((d) => rid.extend({ lines: z.array(lineSchema).max(60), notes: z.string().max(2000) }).parse(d))
+  .handler(async ({ data }) => {
+    const sb = await admin();
+    const { buildStatementPdf, readStatement, totals } = await import("@/lib/checkout.server");
+    const s = await readStatement(sb, data.residentId);
+    if (!s) throw new Error("Start the statement first.");
+    const now = await moneyNow(data.residentId, s.draft.type);
+    const lines = data.lines as import("@/lib/checkout.server").CheckoutLine[];
+    const version = {
+      v: (s.versions.at(-1)?.v ?? 0) + 1,
+      issuedAt: new Date().toISOString(),
+      type: now.type,
+      deposits: now.deposits,
+      lines,
+      notes: data.notes,
+      ...totals(now.deposits, lines),
+      pdfPath: "",
+      pdfSha256: "",
+    };
+    const bytes = await buildStatementPdf(sb, data.residentId, s, version);
+    return { base64: toBase64(bytes) };
   });
 
 /** A version's PDF: as issued, as signed, or - the latest, once paid - with the refund. */
