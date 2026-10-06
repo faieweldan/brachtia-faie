@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { Dropdown } from "@/components/admin/Dropdown";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -325,7 +326,7 @@ function BookingsTable() {
             className="pl-9"
           />
         </div>
-        <select
+        <Dropdown
           value={stageFilter}
           onChange={(e) => setStageFilter(e.target.value)}
           className="h-10 rounded-md border border-input bg-background px-2 text-xs"
@@ -336,8 +337,8 @@ function BookingsTable() {
               {s.label}
             </option>
           ))}
-        </select>
-        <select
+        </Dropdown>
+        <Dropdown
           value={staffFilter}
           onChange={(e) => setStaffFilter(e.target.value)}
           className="h-10 rounded-md border border-input bg-background px-2 text-xs"
@@ -349,8 +350,8 @@ function BookingsTable() {
               {s}
             </option>
           ))}
-        </select>
-        <select
+        </Dropdown>
+        <Dropdown
           value={actionFilter}
           onChange={(e) => setActionFilter(e.target.value)}
           className="h-10 rounded-md border border-input bg-background px-2 text-xs"
@@ -361,7 +362,7 @@ function BookingsTable() {
               {listActionLabel(a.value)}
             </option>
           ))}
-        </select>
+        </Dropdown>
       </div>
 
       {/*

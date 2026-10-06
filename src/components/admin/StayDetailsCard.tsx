@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { Dropdown } from "@/components/admin/Dropdown";
 import { useState, type ReactNode } from "react";
 import { AlertTriangle, Check, Pencil, RefreshCw, X } from "lucide-react";
 import { toast } from "sonner";
@@ -711,7 +712,7 @@ export function StayDetailsCard({
         <div className="grid grid-cols-2 gap-x-4 gap-y-3">
           <div>
             <label className="text-xs text-muted-foreground">Residence</label>
-            <select
+            <Dropdown
               value={draft.residenceSlug}
               onChange={(e) => set({ residenceSlug: e.target.value, unitType: "", roomCode: "" })}
               className={selectClass}
@@ -722,11 +723,11 @@ export function StayDetailsCard({
                   {r.name}
                 </option>
               ))}
-            </select>
+            </Dropdown>
           </div>
           <div>
             <label className="text-xs text-muted-foreground">Unit type</label>
-            <select
+            <Dropdown
               value={draft.unitType}
               onChange={(e) =>
                 set({
@@ -742,11 +743,11 @@ export function StayDetailsCard({
                   {u}
                 </option>
               ))}
-            </select>
+            </Dropdown>
           </div>
           <div>
             <label className="text-xs text-muted-foreground">Room preference</label>
-            <select
+            <Dropdown
               value={draft.roomCode}
               onChange={(e) => set({ roomCode: e.target.value })}
               className={selectClass}
@@ -766,11 +767,11 @@ export function StayDetailsCard({
                   </option>
                 );
               })}
-            </select>
+            </Dropdown>
           </div>
           <div>
             <label className="text-xs text-muted-foreground">Occupancy</label>
-            <select
+            <Dropdown
               value={draft.occupancy}
               onChange={(e) => set({ occupancy: e.target.value, addons: [] })}
               className={selectClass}
@@ -792,7 +793,7 @@ export function StayDetailsCard({
                   </option>
                 );
               })}
-            </select>
+            </Dropdown>
           </div>
           <div>
             <label className="text-xs text-muted-foreground">Move in</label>

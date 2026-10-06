@@ -1,4 +1,5 @@
 import { loadProofFile } from "@/lib/payment-proof";
+import { Dropdown } from "@/components/admin/Dropdown";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -456,7 +457,7 @@ function CollectionsPage() {
             </div>
           </FilterField>
           <FilterField label="Resident">
-            <select
+            <Dropdown
               value={person}
               onChange={(e) => setPerson(e.target.value)}
               aria-label="Resident"
@@ -468,10 +469,10 @@ function CollectionsPage() {
                   {name}
                 </option>
               ))}
-            </select>
+            </Dropdown>
           </FilterField>
           <FilterField label="Category">
-            <select
+            <Dropdown
               value={category}
               onChange={(e) => setCategory(e.target.value as InvoiceCategory | "all")}
               aria-label="Category"
@@ -483,7 +484,7 @@ function CollectionsPage() {
                   {INVOICE_CATEGORIES[key].code} · {INVOICE_CATEGORIES[key].label}
                 </option>
               ))}
-            </select>
+            </Dropdown>
           </FilterField>
           {filtering ? (
             <Button size="sm" variant="ghost" className="h-9" onClick={resetFilters}>
@@ -525,7 +526,7 @@ function CollectionsPage() {
             >
               <ChevronRight className="size-4" />
             </Button>
-            <select
+            <Dropdown
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
               aria-label="Invoices per page"
@@ -536,7 +537,7 @@ function CollectionsPage() {
                   {n} / page
                 </option>
               ))}
-            </select>
+            </Dropdown>
           </div>
         </div>
 

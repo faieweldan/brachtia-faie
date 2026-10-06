@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Dropdown } from "@/components/admin/Dropdown";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -661,7 +662,7 @@ function AppointmentsPage() {
           />
         </div>
 
-        <select
+        <Dropdown
           className={selectClass}
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
@@ -672,9 +673,9 @@ function AppointmentsPage() {
               {t.name}
             </option>
           ))}
-        </select>
+        </Dropdown>
 
-        <select
+        <Dropdown
           className={selectClass}
           value={residenceFilter}
           onChange={(e) => setResidenceFilter(e.target.value)}
@@ -685,9 +686,9 @@ function AppointmentsPage() {
               {r.name}
             </option>
           ))}
-        </select>
+        </Dropdown>
 
-        <select
+        <Dropdown
           className={selectClass}
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
@@ -699,9 +700,9 @@ function AppointmentsPage() {
             </option>
           ))}
           <option value="all">All, including cancelled</option>
-        </select>
+        </Dropdown>
 
-        <select
+        <Dropdown
           className={selectClass}
           value={staffFilter}
           onChange={(e) => setStaffFilter(e.target.value)}
@@ -713,7 +714,7 @@ function AppointmentsPage() {
             </option>
           ))}
           <option value="unassigned">Unassigned</option>
-        </select>
+        </Dropdown>
 
         {view === "list" ? (
           <div className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-input bg-background px-2 py-1">
@@ -1022,7 +1023,7 @@ function AppointmentsPage() {
                             <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                               <FileText className="h-3.5 w-3.5" /> Type
                             </span>
-                            <select
+                            <Dropdown
                               className={`${selectClass} w-full`}
                               value={form.type_slug}
                               onChange={(e) => {
@@ -1043,20 +1044,20 @@ function AppointmentsPage() {
                                   {t.name}
                                 </option>
                               ))}
-                            </select>
+                            </Dropdown>
                           </label>
                           <label className="space-y-1">
                             <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                               <MessageCircle className="h-3.5 w-3.5" /> Mode
                             </span>
-                            <select
+                            <Dropdown
                               className={`${selectClass} w-full`}
                               value={form.mode}
                               onChange={(e) => setField("mode", e.target.value)}
                             >
                               <option value="in_person">In person</option>
                               <option value="virtual">Virtual</option>
-                            </select>
+                            </Dropdown>
                           </label>
 
                           <div className="space-y-1 sm:col-span-2">
@@ -1091,7 +1092,7 @@ function AppointmentsPage() {
                             <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                               <User className="h-3.5 w-3.5" /> Assigned staff
                             </span>
-                            <select
+                            <Dropdown
                               className={`${selectClass} w-full`}
                               value={form.assigned_staff}
                               onChange={(e) => setField("assigned_staff", e.target.value)}
@@ -1102,13 +1103,13 @@ function AppointmentsPage() {
                                   {s}
                                 </option>
                               ))}
-                            </select>
+                            </Dropdown>
                           </label>
                           <label className="space-y-1">
                             <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                               <Flag className="h-3.5 w-3.5" /> Status
                             </span>
-                            <select
+                            <Dropdown
                               className={`${selectClass} w-full`}
                               value={form.status}
                               onChange={(e) => setField("status", e.target.value)}
@@ -1118,7 +1119,7 @@ function AppointmentsPage() {
                                   {STATUS_LABEL[s]}
                                 </option>
                               ))}
-                            </select>
+                            </Dropdown>
                           </label>
 
                           <div className="space-y-1 sm:col-span-2">
@@ -1177,7 +1178,7 @@ function AppointmentsPage() {
                               <div className="grid gap-2 pt-2 sm:grid-cols-2">
                                 <label className="space-y-1 text-xs font-medium text-muted-foreground">
                                   Booking
-                                  <select
+                                  <Dropdown
                                     className={`${selectClass} w-full`}
                                     value={form.enquiry_id}
                                     onChange={(e) => {
@@ -1191,11 +1192,11 @@ function AppointmentsPage() {
                                         {e.reference} · {e.full_name}
                                       </option>
                                     ))}
-                                  </select>
+                                  </Dropdown>
                                 </label>
                                 <label className="space-y-1 text-xs font-medium text-muted-foreground">
                                   Resident
-                                  <select
+                                  <Dropdown
                                     className={`${selectClass} w-full`}
                                     value={form.resident_id}
                                     onChange={(e) => {
@@ -1209,7 +1210,7 @@ function AppointmentsPage() {
                                         {r.id} · {r.fullName}
                                       </option>
                                     ))}
-                                  </select>
+                                  </Dropdown>
                                 </label>
                               </div>
                             ) : null}
@@ -1317,7 +1318,7 @@ function AppointmentsPage() {
                                     : ""}
                               </ReadValue>
                             ) : (
-                              <select
+                              <Dropdown
                                 className={`${selectClass} w-full`}
                                 value={form.current_status}
                                 onChange={(e) => setField("current_status", e.target.value)}
@@ -1325,7 +1326,7 @@ function AppointmentsPage() {
                                 <option value="">—</option>
                                 <option value="student">Student</option>
                                 <option value="employed">Employed / Self-employed</option>
-                              </select>
+                              </Dropdown>
                             )}
                           </Field>
                           {personStatus === "employed" ? (
@@ -1370,7 +1371,7 @@ function AppointmentsPage() {
                                 </ReadValue>
                               ) : (
                                 <div className="space-y-2">
-                                  <select
+                                  <Dropdown
                                     className={`${selectClass} w-full`}
                                     value={
                                       !form.university || UNIVERSITY_VALUES.includes(form.university)
@@ -1385,7 +1386,7 @@ function AppointmentsPage() {
                                         {u.label}
                                       </option>
                                     ))}
-                                  </select>
+                                  </Dropdown>
                                   {form.university &&
                                   (form.university === "Other" ||
                                     !UNIVERSITY_VALUES.includes(form.university)) ? (
@@ -1427,7 +1428,7 @@ function AppointmentsPage() {
                             {readOnly ? (
                               <ReadValue>{form.gender}</ReadValue>
                             ) : (
-                              <select
+                              <Dropdown
                                 className={`${selectClass} w-full`}
                                 value={form.gender}
                                 onChange={(e) => setField("gender", e.target.value)}
@@ -1438,7 +1439,7 @@ function AppointmentsPage() {
                                     {g}
                                   </option>
                                 ))}
-                              </select>
+                              </Dropdown>
                             )}
                           </Field>
                         </div>
@@ -1459,7 +1460,7 @@ function AppointmentsPage() {
                                 form.enquiry_status}
                             </ReadValue>
                           ) : (
-                            <select
+                            <Dropdown
                               className={`${selectClass} w-full`}
                               value={form.enquiry_status}
                               onChange={(e) => setField("enquiry_status", e.target.value)}
@@ -1470,7 +1471,7 @@ function AppointmentsPage() {
                                   {s.label}
                                 </option>
                               ))}
-                            </select>
+                            </Dropdown>
                           )}
                         </Field>
                         <Field label="How did you hear about us?">
@@ -1481,7 +1482,7 @@ function AppointmentsPage() {
                                 .join(" — ")}
                             </ReadValue>
                           ) : (
-                            <select
+                            <Dropdown
                               className={`${selectClass} w-full`}
                               value={form.heard_about}
                               onChange={(e) => setField("heard_about", e.target.value)}
@@ -1492,7 +1493,7 @@ function AppointmentsPage() {
                                   {h}
                                 </option>
                               ))}
-                            </select>
+                            </Dropdown>
                           )}
                         </Field>
                         {!readOnly && form.heard_about === "Other" ? (
@@ -1557,7 +1558,7 @@ function AppointmentsPage() {
                               {SHARING_LABEL[staySharing] || staySharing || "—"}
                             </p>
                           ) : (
-                            <select
+                            <Dropdown
                               className={`${selectClass} w-full`}
                               value={form.sharing_preference}
                               onChange={(e) => setField("sharing_preference", e.target.value)}
@@ -1568,7 +1569,7 @@ function AppointmentsPage() {
                                   {SHARING_LABEL[s.value] ?? s.label}
                                 </option>
                               ))}
-                            </select>
+                            </Dropdown>
                           )}
                         </div>
                       </div>

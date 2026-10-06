@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from "react";
+import { Dropdown } from "@/components/admin/Dropdown";
 import { Check, Eye, FileUp, Loader2, Pencil, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -478,7 +479,7 @@ export function Select({
   return (
     <div className="space-y-1.5">
       <FieldLabel label={label} required={required} filled={!!value} />
-      <select
+      <Dropdown
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus:ring-2 focus:ring-brand/30"
@@ -501,7 +502,7 @@ export function Select({
             </option>
           );
         })}
-      </select>
+      </Dropdown>
     </div>
   );
 }

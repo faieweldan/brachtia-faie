@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Dropdown } from "@/components/admin/Dropdown";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Camera, Check, FileText, Loader2, Plus, Send, Trash2, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -589,11 +590,11 @@ export function RefundForm({ residentId, net, onDone }: { residentId: string; ne
         </label>
         <label className="space-y-1">
           <span className="text-xs text-muted-foreground">Method</span>
-          <select value={method} onChange={(e) => setMethod(e.target.value)} className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm">
+          <Dropdown value={method} onChange={(e) => setMethod(e.target.value)} className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm">
             {METHODS.map((m) => (
               <option key={m}>{m}</option>
             ))}
-          </select>
+          </Dropdown>
         </label>
         <label className="space-y-1">
           <span className="text-xs text-muted-foreground">Reference</span>

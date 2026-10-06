@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Dropdown } from "@/components/admin/Dropdown";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronRight, FileStack, Plus, Stamp, Undo2, Upload } from "lucide-react";
@@ -787,7 +788,7 @@ function UploadExisting({ resident, tenancy, onDone }: { resident: Resident; ten
             </Button>
             <label className="mr-auto flex items-center gap-2 text-xs text-muted-foreground">
               Uploaded by
-              <select
+              <Dropdown
                 value={preparedBy}
                 onChange={(e) => setPreparedBy(e.target.value)}
                 className={`h-8 rounded-md border bg-background px-2 text-xs text-foreground ${preparedBy ? "border-border" : "border-amber-400"}`}
@@ -798,7 +799,7 @@ function UploadExisting({ resident, tenancy, onDone }: { resident: Resident; ten
                     {n}
                   </option>
                 ))}
-              </select>
+              </Dropdown>
             </label>
             <Button size="sm" disabled={busy || !files.agreement || !preparedBy} onClick={() => void save()}>
               {busy ? "Uploading…" : "Upload"}

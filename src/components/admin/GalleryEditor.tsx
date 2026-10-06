@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, Star, Trash2 } from "lucide-react";
+import { Dropdown } from "@/components/admin/Dropdown";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -131,7 +132,7 @@ export function GalleryEditor({
                   className="h-8 text-xs"
                   onChange={(e) => patch(i, { caption: e.target.value })}
                 />
-                <select
+                <Dropdown
                   className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
                   value={item.category ?? "building"}
                   onChange={(e) => patch(i, { category: e.target.value })}
@@ -141,7 +142,7 @@ export function GalleryEditor({
                       {c.label}
                     </option>
                   ))}
-                </select>
+                </Dropdown>
               </div>
             </div>
           ))}
