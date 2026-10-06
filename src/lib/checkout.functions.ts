@@ -356,7 +356,10 @@ export const recordCheckoutRefund = createServerFn({ method: "POST" })
     const paidOn = String(data.get("paidOn") ?? "");
     const method = String(data.get("method") ?? "").trim();
     const reference = String(data.get("reference") ?? "").trim();
+    // who paid it out, as Collections keeps it (Dani, 6 Oct 2026)
+    const recordedBy = String(data.get("recordedBy") ?? "").trim();
     if (!(amount >= 0) || !paidOn || !method) throw new Error("Enter the amount, date and method");
+    if (!recordedBy) throw new Error("Choose who is recording this refund");
     const file = data.get("file");
     let proofPath = "";
     if (file instanceof File && file.size) {
@@ -365,7 +368,7 @@ export const recordCheckoutRefund = createServerFn({ method: "POST" })
       proofPath = `checkout/${residentId}/refund-proof.${ext}`;
       await putFile(sb, proofPath, new Uint8Array(await file.arrayBuffer()), file.type || "application/octet-stream");
     } else if (amount > 0) throw new Error("Attach the proof of the refund");
-    await writeStatement(sb, residentId, { ...s, refund: { amount, paidOn, method, reference, proofPath, recordedAt: new Date().toISOString() } });
+    await writeStatement(sb, residentId, { ...s, refund: { amount, paidOn, method, reference, proofPath, recordedAt: new Date().toISOString(), recordedBy } });
     return { ok: true as const };
   });
 
@@ -642,6 +645,14 @@ export const listPayables = createServerFn({ method: "GET" }).handler(async () =
       amount,
       status: s.refund ? "Paid" : "To pay",
       paidOn: s.refund?.paidOn ?? "",
+      // for View, the way Collections opens an invoice: its lines, then the payment
+      held: v.held,
+      deducted: v.deducted,
+      deposits: v.deposits.map((d) => ({ label: d.label, amount: d.amount })),
+      lines: v.lines.map((l) => ({ label: l.label, amount: l.amount })),
+      refund: s.refund
+        ? { amount: s.refund.amount, paidOn: s.refund.paidOn, method: s.refund.method, reference: s.refund.reference, recordedBy: s.refund.recordedBy ?? "", hasProof: !!s.refund.proofPath }
+        : null,
     });
   }
   return rows.sort((a, b) => b.number.localeCompare(a.number));

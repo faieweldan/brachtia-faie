@@ -1,14 +1,16 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText, Loader2 } from "lucide-react";
+import { Download, Eye, Loader2, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { PdfPreviewDialog } from "@/components/admin/PdfPreview";
 import { RefundForm } from "@/components/admin/CheckoutStatement";
+import { StaffTag } from "@/components/admin/RecordPaymentDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { checkoutPdf, listPayables } from "@/lib/checkout.functions";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { checkoutPdf, listPayables, refundProofUrl } from "@/lib/checkout.functions";
 import { money } from "@/lib/ops-store";
 
 export const Route = createFileRoute("/admin/residents/payables")({
@@ -31,6 +33,8 @@ function PayablesPage() {
   const [pdf, setPdf] = useState<{ url: string; title: string } | null>(null);
   // the payout recorded here too, not only on the resident's Payments tab (Dani, 6 Oct 2026)
   const [paying, setPaying] = useState<{ residentId: string; number: string; name: string; amount: number } | null>(null);
+  // View opens the credit note under its row, as Collections opens an invoice (Dani, 6 Oct 2026)
+  const [open, setOpen] = useState<string | null>(null);
   const qc = useQueryClient();
   const rows = q.data ?? [];
   const toPay = rows.filter((r) => r.status !== "Paid").reduce((n, r) => n + r.amount, 0);
@@ -45,6 +49,11 @@ function PayablesPage() {
       toast.error(e instanceof Error ? e.message : "Could not open the PDF");
     }
   }
+
+  const proof = (residentId: string) =>
+    void refundProofUrl({ data: { residentId } })
+      .then(({ url }) => url && window.open(url, "_blank", "noopener"))
+      .catch(() => toast.error("Could not open the proof"));
 
   return (
     <div className="space-y-5">
@@ -86,7 +95,8 @@ function PayablesPage() {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.number} className="border-b border-border/60 last:border-0">
+                  <Fragment key={r.number}>
+                  <tr className="border-b border-border/60 last:border-0">
                     <td className="px-4 py-3 font-semibold">
                       {r.number}
                       <span className="ml-1.5 text-xs font-normal text-muted-foreground">v{r.version}</span>
@@ -109,19 +119,91 @@ function PayablesPage() {
                       <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold ${TONE[r.status] ?? ""}`}>{r.status}</span>
                       {r.paidOn ? <p className="mt-0.5 text-xs text-muted-foreground">Paid {r.paidOn}</p> : null}
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <span className="inline-flex gap-1.5">
-                        <Button size="sm" variant="outline" onClick={() => void view(r.residentId, r.version, `${r.number} · v${r.version}`)}>
-                          <FileText className="size-4" /> View
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Button size="sm" variant="outline" className="h-8 min-w-[3.75rem]" aria-expanded={open === r.number} onClick={() => setOpen(open === r.number ? null : r.number)}>
+                          {open === r.number ? "Hide" : "View"}
                         </Button>
-                        {r.status === "To pay" ? (
-                          <Button size="sm" onClick={() => setPaying({ residentId: r.residentId, number: r.number, name: r.name, amount: r.amount })}>
-                            Record payment
-                          </Button>
-                        ) : null}
-                      </span>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="icon" variant="outline" className="size-8" aria-label={`More actions for ${r.number}`}>
+                              <MoreHorizontal className="size-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-52">
+                            <DropdownMenuItem onSelect={() => void view(r.residentId, r.version, `${r.number} · v${r.version}`)}>
+                              <Download className="size-4" /> Download PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuItem disabled={r.status !== "To pay"} onSelect={() => setPaying({ residentId: r.residentId, number: r.number, name: r.name, amount: r.amount })}>
+                              <Plus className="size-4" /> Record payment
+                            </DropdownMenuItem>
+                            <DropdownMenuItem disabled={!r.refund?.hasProof} onSelect={() => proof(r.residentId)}>
+                              <Eye className="size-4" /> Proof of payment
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </td>
                   </tr>
+                  {open === r.number ? (
+                    <tr>
+                      <td colSpan={7} className="bg-muted/20 px-4 py-4">
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button type="button" className="inline-flex items-center gap-1.5 font-semibold text-brand-deep hover:underline" onClick={() => void view(r.residentId, r.version, `${r.number} · v${r.version}`)}>
+                              {r.number} <Eye className="size-4" />
+                            </button>
+                            <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${TONE[r.status] ?? ""}`}>{r.status}</span>
+                            <span className="text-xs text-muted-foreground">
+                              Version {r.version} · issued {new Date(r.issuedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                            </span>
+                          </div>
+                          <div className="overflow-hidden rounded-xl border border-border bg-card">
+                            {r.deposits.map((d, i) => (
+                              <div key={`d${i}`} className="flex justify-between border-b border-border/60 px-4 py-2.5">
+                                <span className="text-muted-foreground">{d.label}</span>
+                                <span className="tabular-nums">{money(d.amount)}</span>
+                              </div>
+                            ))}
+                            {r.lines.map((l, i) => (
+                              <div key={`l${i}`} className="flex justify-between border-b border-border/60 px-4 py-2.5">
+                                <span className="text-muted-foreground">Less: {l.label}</span>
+                                <span className="tabular-nums">-{money(l.amount)}</span>
+                              </div>
+                            ))}
+                            <div className="flex justify-between bg-muted/50 px-4 py-2.5 font-semibold">
+                              <span>Refund to the resident</span>
+                              <span className="tabular-nums">{money(r.amount)}</span>
+                            </div>
+                          </div>
+                          {r.refund ? (
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-border bg-card px-4 py-2.5">
+                              <span className="text-muted-foreground">
+                                Refund · {r.refund.paidOn} · {r.refund.method}
+                                {r.refund.reference ? ` · ${r.refund.reference}` : ""}
+                              </span>
+                              <StaffTag name={r.refund.recordedBy} />
+                              <span className="ml-auto flex items-center gap-3">
+                                {r.refund.hasProof ? (
+                                  <button type="button" className="text-sm font-medium text-brand-deep hover:underline" onClick={() => proof(r.residentId)}>
+                                    Proof
+                                  </button>
+                                ) : null}
+                                <span className="font-semibold tabular-nums text-emerald-800">{money(r.refund.amount)}</span>
+                              </span>
+                            </div>
+                          ) : r.status === "To pay" ? (
+                            <div className="flex justify-end">
+                              <Button size="sm" onClick={() => setPaying({ residentId: r.residentId, number: r.number, name: r.name, amount: r.amount })}>
+                                Record payment
+                              </Button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

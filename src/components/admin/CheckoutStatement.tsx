@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/date-input";
 import { Textarea } from "@/components/ui/textarea";
 import { PdfPreviewDialog } from "@/components/admin/PdfPreview";
+import { STAFF } from "@/data/form-options";
+import { StaffTag } from "@/components/admin/RecordPaymentDialog";
 import { ChargeInput } from "@/components/admin/ChargePicker";
 import { ReturnMessage } from "@/components/admin/InventoryReturnMessage";
 import { money } from "@/lib/ops-store";
@@ -473,6 +475,7 @@ export function CheckoutStatement({
           <span>
             {money(s.refund.amount)} {latest && latest.net < 0 ? "received" : "refunded"} {s.refund.paidOn} by {s.refund.method}
             {s.refund.reference ? ` · Ref ${s.refund.reference}` : ""}
+            {s.refund.recordedBy ? <span className="ml-2"><StaffTag name={s.refund.recordedBy} /></span> : null}
           </span>
           {s.refund.proofPath ? (
             <Button
@@ -536,8 +539,10 @@ export function RefundForm({ residentId, net, onDone }: { residentId: string; ne
   const [method, setMethod] = useState(METHODS[0]!);
   const [reference, setReference] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [recordedBy, setRecordedBy] = useState("");
   const [busy, setBusy] = useState(false);
   async function save() {
+    if (!recordedBy) return void toast.error("Choose who is recording this");
     setBusy(true);
     try {
       const fd = new FormData();
@@ -546,6 +551,7 @@ export function RefundForm({ residentId, net, onDone }: { residentId: string; ne
       fd.set("paidOn", paidOn);
       fd.set("method", method);
       fd.set("reference", reference);
+      fd.set("recordedBy", recordedBy);
       if (file) fd.set("file", file);
       await recordCheckoutRefund({ data: fd });
       toast.success("Refund recorded");
@@ -561,6 +567,17 @@ export function RefundForm({ residentId, net, onDone }: { residentId: string; ne
       <p className="text-sm font-semibold text-brand-deep">
         {net >= 0 ? "Signed by the resident - record the refund" : "Signed by the resident - record the balance they paid"}
       </p>
+      {/* the same picker as Collections' Record payment */}
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">Recorded by</p>
+        <div className="grid grid-cols-3 gap-2">
+          {STAFF.map((n) => (
+            <Button key={n} type="button" size="sm" variant={recordedBy === n ? "default" : "outline"} onClick={() => setRecordedBy(n)}>
+              {n}
+            </Button>
+          ))}
+        </div>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="space-y-1">
           <span className="text-xs text-muted-foreground">{net >= 0 ? "Refund paid (RM)" : "Received from resident (RM)"}</span>

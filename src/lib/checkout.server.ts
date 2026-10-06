@@ -76,7 +76,7 @@ export type CheckoutStatement = {
   /** admin made the resident inactive after it was settled */
   inactiveAt?: string;
   versions: CheckoutVersion[];
-  refund?: { amount: number; paidOn: string; method: string; reference: string; proofPath: string; recordedAt: string };
+  refund?: { amount: number; paidOn: string; method: string; reference: string; proofPath: string; recordedAt: string; recordedBy?: string };
   /*
    * Done once the resident signs (Dani, 2 Oct 2026): the deposit is applied to
    * each unpaid invoice first, as a "Deposit applied" payment with its own
