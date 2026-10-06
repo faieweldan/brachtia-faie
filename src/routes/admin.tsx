@@ -12,7 +12,6 @@ import {
   Building2,
   CalendarDays,
   CheckSquare,
-  Globe,
   Inbox,
   LayoutDashboard,
   Lock,
@@ -47,15 +46,15 @@ export const Route = createFileRoute("/admin")({
   component: AdminLayout,
 });
 
-const NAV: { to: string; label: string; icon: typeof Inbox; exact?: boolean }[] = [
+const NAV: { to: string; label: string; icon: typeof Inbox; exact?: boolean; also?: string }[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/admin/bookings", label: "Bookings", icon: Inbox },
   { to: "/admin/homes", label: "Homes", icon: Building2 },
   { to: "/admin/residents", label: "Residents", icon: Users },
   { to: "/admin/tasks", label: "Tasks", icon: CheckSquare },
   { to: "/admin/appointments", label: "Appointment", icon: CalendarDays },
-  { to: "/admin/website", label: "Website", icon: Globe },
-  { to: "/admin/settings", label: "Settings", icon: Settings },
+  // Website sits inside Settings now (Dani, 6 Oct 2026)
+  { to: "/admin/settings", label: "Settings", icon: Settings, also: "/admin/website" },
 ];
 
 function AdminLayout() {
@@ -83,7 +82,7 @@ function AdminLayout() {
         <p className="px-2 text-sm font-bold text-white">Brachtia admin</p>
         <nav className="mt-6 space-y-1">
           {NAV.map((item) => {
-            const active = item.exact ? pathname === item.to : pathname.startsWith(item.to);
+            const active = item.exact ? pathname === item.to : pathname.startsWith(item.to) || (!!item.also && pathname.startsWith(item.also));
             return (
               <Link
                 key={item.to}
@@ -113,7 +112,7 @@ function AdminLayout() {
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <header className="admin-rail flex shrink-0 items-center gap-2 overflow-x-auto px-4 py-2 md:hidden">
           {NAV.map((item) => {
-            const active = item.exact ? pathname === item.to : pathname.startsWith(item.to);
+            const active = item.exact ? pathname === item.to : pathname.startsWith(item.to) || (!!item.also && pathname.startsWith(item.also));
             return (
               <Link
                 key={item.to}
