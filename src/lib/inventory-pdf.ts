@@ -226,7 +226,7 @@ export async function inventoryPdf(input: InventoryPdfInput): Promise<Uint8Array
   // the key to the marks
   const keys: [string, string][] = [
     ["tick", "Present or resolved"],
-    ["circle", "Accepted"],
+    ["circle", "Present with defect"],
     ["dash", "Not provided"],
   ];
   let kx = M;
