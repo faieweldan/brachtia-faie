@@ -175,8 +175,26 @@ export const TEMPLATE_FIELDS: TemplateField[] = [
    * of "Charges" applies follows why the form is made - a first card, or a
    * replacement for a damaged or lost one. Every tick can be changed in the draft.
    */
-  { key: "tick_owner_letter", label: "Tick: authorize letter from the owner (admin ticks)", source: "Other", get: () => "" },
-  { key: "tick_owner_ta", label: "Tick: owner's tenancy agreement copy (admin ticks)", source: "Other", get: () => "" },
+  // section a) ticks itself for a new application (Dani, 6 Oct 2026) - admin can untick in the draft
+  {
+    key: "tick_owner_letter",
+    label: "Tick: authorize letter from the owner (admin ticks)",
+    source: "Other",
+    get: (c) => (!c.cardReason || c.cardReason === "Initial Tenancy" ? "yes" : ""),
+  },
+  {
+    key: "tick_owner_ta",
+    label: "Tick: owner's tenancy agreement copy (admin ticks)",
+    source: "Other",
+    get: (c) => (!c.cardReason || c.cardReason === "Initial Tenancy" ? "yes" : ""),
+  },
+  // section b) "Copy of IC / Passport": its own field, so it is not ticked with section a's
+  {
+    key: "tick_replace_ic",
+    label: "Tick: replacement - IC / passport copy",
+    source: "Other",
+    get: (c) => (c.cardReason && c.cardReason !== "Initial Tenancy" ? "yes" : ""),
+  },
   { key: "tick_new_application", label: "Tick: new application", source: "Other", get: (c) => (!c.cardReason || c.cardReason === "Initial Tenancy" ? "yes" : "") },
   {
     key: "tick_replace_damage",

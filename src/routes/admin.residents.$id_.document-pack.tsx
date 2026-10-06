@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { tenancyDatesByResident } from "@/lib/rental-schedule.functions";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Check, Loader2, ClipboardCheck, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { toast } from "sonner";
@@ -13,6 +14,7 @@ import {
   type AgreementDocType,
 } from "@/lib/tenancy-docs";
 import { generateDocumentPack } from "@/lib/tenancy-docs.functions";
+import { STAFF } from "@/data/form-options";
 import { createCardFromDraft } from "@/lib/access-card.functions";
 import { fillPackDocx, getPackTemplates, listRetiredPackDocs, previewPackPdf } from "@/lib/templates.functions";
 import { isDocumentOwn, isTickResult, renderTemplate, type MappingResult } from "@/lib/template-fields";
@@ -59,6 +61,10 @@ function DocumentPackPage() {
   const { residents, units, tenancies } = useOps();
   const resident = residents.find((r) => r.id === id);
   const tenancy = tenancies.find((t) => t.residentId === id);
+  // the stay's dates as the tenancies table has them - the browser copy said end = start,
+  // and packs made from it read "21 Oct 2026 - 21 Oct 2026" (Dani, 5 Oct 2026)
+  const savedDates = useQuery({ queryKey: ["tenancy-dates"], queryFn: () => tenancyDatesByResident() });
+  const saved = savedDates.data?.[id];
   const placed = resident ? findBed(units, resident.bedId || "") : undefined;
 
   const [selected, setSelected] = useState<DocKey>(card ? "access_card" : "agreement");
@@ -92,12 +98,14 @@ function DocumentPackPage() {
   const attachments = files.filter((d) => attach[d.key]).map((d) => d.path!);
   useEffect(() => setSeen((s) => (s.has(selected) ? s : new Set([...s, selected]))), [selected]);
   const [generating, setGenerating] = useState(false);
+  // who is making the pack - required, shown small (Dani, 6 Oct 2026)
+  const [preparedBy, setPreparedBy] = useState("");
 
   const defaults = useMemo<Record<string, string>>(() => {
     if (!resident) return {};
     const today = new Date().toISOString().slice(0, 10);
-    const start = tenancy?.start || resident.moveIn || "";
-    const end = tenancy?.end || "";
+    const start = saved?.start || tenancy?.start || resident.moveIn || "";
+    const end = saved?.end || placed?.bed.tenancyEnd || tenancy?.end || "";
     const rent = tenancy?.rent || placed?.bed.rent || placed?.room.rent || 0;
     return {
       agreement_date: today,
@@ -113,7 +121,7 @@ function DocumentPackPage() {
       payment_schedule: resident.paySchedule,
       deposit: "",
     };
-  }, [resident, tenancy, placed]);
+  }, [resident, tenancy, placed, saved]);
 
   const [values, setValues] = useState<Record<string, string> | null>(null);
   const vals = values ?? defaults;
@@ -258,6 +266,7 @@ function DocumentPackPage() {
           periodStart: vals["tenancy_start"],
           periodEnd: vals["tenancy_end"],
           cardAttachments: attachments,
+          preparedBy,
         },
       });
       toast.success(`Document pack generated — ${res.agreementNo}`);
@@ -459,9 +468,26 @@ function DocumentPackPage() {
                   Open each document and check its data first: {unseen.map((i) => i.label).join(", ")}.
                 </p>
               ) : null}
+              {card ? null : (
+                <label className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  Prepared by
+                  <select
+                    value={preparedBy}
+                    onChange={(e) => setPreparedBy(e.target.value)}
+                    className={`h-8 rounded-md border bg-background px-2 text-xs text-foreground ${preparedBy ? "border-border" : "border-amber-400"}`}
+                  >
+                    <option value="">Choose…</option>
+                    {STAFF.map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <Button
                 className="w-full"
-                disabled={generating || !pack.data || noFile.length > 0 || unseen.length > 0}
+                disabled={generating || !pack.data || noFile.length > 0 || unseen.length > 0 || (!card && !preparedBy)}
                 onClick={() => void generate()}
               >
                 {generating ? "Generating…" : "Confirm and proceed"}

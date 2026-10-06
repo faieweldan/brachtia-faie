@@ -3,6 +3,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronRight, FileStack, Plus, Stamp, Undo2, Upload } from "lucide-react";
 import { SigningMessageCard } from "@/components/admin/SigningMessageCard";
+import { STAFF } from "@/data/form-options";
 import { InventoryActions, InventoryPill } from "@/components/admin/InventoryReview";
 import { toast } from "sonner";
 
@@ -173,7 +174,8 @@ function DocumentRow({
               <span className="w-3.5" />
             ) : null}
             <span className={depth ? "text-sm text-foreground" : "text-sm font-medium text-foreground"}>
-              {DOC_TYPE_LABELS[doc.docType]}
+              {/* a paper agreement, uploaded whole: it is the full agreement, not only the General Terms */}
+              {doc.mergeValues["source"] === "uploaded" && doc.docType === "agreement" ? "Tenancy Agreement (uploaded, all pages)" : DOC_TYPE_LABELS[doc.docType]}
               {doc.version > 1 ? (
                 <span className="ml-1.5 text-xs text-muted-foreground">v{doc.version}</span>
               ) : null}
@@ -303,6 +305,15 @@ function AgreementBlock({
       {parent && DONE.includes(parent.status) ? <StampUpload doc={parent} onChanged={onChanged} /> : null}
       {agreement.kind === "renewal" ? (
         <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Renewal</span>
+      ) : null}
+      {/* who made it - kept quiet, beside the number (Dani, 6 Oct 2026) */}
+      {parent?.mergeValues["prepared_by"] ? (
+        <span
+          className="text-[11px] text-muted-foreground"
+          title={parent.mergeValues["prepared_at"] ? `on ${new Date(parent.mergeValues["prepared_at"]).toLocaleString("en-GB", { timeZone: "Asia/Kuala_Lumpur" })}` : undefined}
+        >
+          by {parent.mergeValues["prepared_by"]}
+        </span>
       ) : null}
       <button type="button" onClick={() => setExpanded(!expanded)} aria-label="Show or hide documents" className="flex min-w-0 flex-1 justify-end py-3 pr-1">
         {parent ? <StatusPill status={parent.status} label={docLabel(parent.status)} /> : null}
@@ -563,8 +574,8 @@ function AccessCardTable({
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-brand-deep">New Access Card Form</DialogTitle>
             <DialogDescription>
-              The card in use is marked Lost or Damaged at once. Then the invoice opens at the Schedule B price - lost RM60,
-              damaged RM30. The new form is made when that invoice is paid.
+              The invoice opens at the Schedule B price - lost RM60, damaged RM30. The new form is made when that invoice is
+              paid.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
@@ -582,8 +593,12 @@ function AccessCardTable({
               </ChoiceContent>
             </Choice>
           </div>
+          {/* what generating does to the card in use - small, in the warning red (Dani, 5 Oct 2026) */}
+          <p className="text-xs text-amber-800">
+            This marks the access card in use as {reason === "Damaged Card" ? "Damaged" : "Lost"}.
+          </p>
           <Button disabled={!reason || busy || !!waiting?.invoiceId} onClick={() => void startReplacement()}>
-            {busy ? "Saving…" : "Mark the card and open the invoice"}
+            {busy ? "Saving…" : "Generate invoice"}
           </Button>
           {waiting?.invoiceId ? <p className="text-xs text-amber-800">A replacement is already waiting for payment.</p> : null}
         </DialogContent>
@@ -707,6 +722,8 @@ export function TenancyDocs({
 function UploadExisting({ resident, tenancy, onDone }: { resident: Resident; tenancy?: Tenancy | undefined; onDone: () => void }) {
   const [open, setOpen] = useState(false);
   const [files, setFiles] = useState<Partial<Record<AgreementDocType, File>>>({});
+  // who is uploading it - required (Dani, 6 Oct 2026)
+  const [preparedBy, setPreparedBy] = useState("");
   const [start, setStart] = useState(tenancy?.start ?? "");
   const [end, setEnd] = useState(tenancy?.end ?? "");
   const [busy, setBusy] = useState(false);
@@ -717,6 +734,7 @@ function UploadExisting({ resident, tenancy, onDone }: { resident: Resident; ten
       fd.set("residentId", resident.id);
       fd.set("periodStart", start);
       fd.set("periodEnd", end);
+      fd.set("preparedBy", preparedBy);
       for (const [k, f] of Object.entries(files)) if (f) fd.set(k, f);
       const { agreementNo } = await uploadExistingAgreement({ data: fd });
       toast.success(`${agreementNo} recorded`, { description: "Uploaded as signed." });
@@ -737,23 +755,21 @@ function UploadExisting({ resident, tenancy, onDone }: { resident: Resident; ten
         <DialogContent className="admin-ui max-w-md">
           <DialogHeader>
             <DialogTitle>Upload existing agreement</DialogTitle>
-            <DialogDescription>For a resident who signed on paper. Each file is a PDF, or a photo of a one-page document.</DialogDescription>
+            <DialogDescription>For a resident who signed on paper. Upload the whole agreement as one PDF.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            {DOC_ORDER.map((t) => (
-              <label key={t} className="block space-y-1">
-                <span className="text-xs font-medium text-foreground">
-                  {DOC_TYPE_LABELS[t]}
-                  {t === "agreement" ? <span className="text-red-600"> *</span> : <span className="text-muted-foreground"> (if any)</span>}
-                </span>
-                <Input
-                  type="file"
-                  accept="application/pdf,image/jpeg,image/png"
-                  onChange={(e) => setFiles((m) => ({ ...m, [t]: e.target.files?.[0] }))}
-                  className="h-9 text-xs"
-                />
-              </label>
-            ))}
+            {/* the paper agreement is one document - one file, every page (Dani, 5 Oct 2026) */}
+            <label className="block space-y-1">
+              <span className="text-xs font-medium text-foreground">
+                Signed tenancy agreement, all pages<span className="text-red-600"> *</span>
+              </span>
+              <Input
+                type="file"
+                accept="application/pdf,image/jpeg,image/png"
+                onChange={(e) => { const f = e.target.files?.[0]; setFiles(f ? { agreement: f } : {}); }}
+                className="h-9 text-xs"
+              />
+            </label>
             <div className="grid grid-cols-2 gap-2">
               <label className="space-y-1">
                 <span className="text-xs text-muted-foreground">Tenancy start</span>
@@ -769,7 +785,22 @@ function UploadExisting({ resident, tenancy, onDone }: { resident: Resident; ten
             <Button variant="ghost" size="sm" disabled={busy} onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button size="sm" disabled={busy || !files.agreement} onClick={() => void save()}>
+            <label className="mr-auto flex items-center gap-2 text-xs text-muted-foreground">
+              Uploaded by
+              <select
+                value={preparedBy}
+                onChange={(e) => setPreparedBy(e.target.value)}
+                className={`h-8 rounded-md border bg-background px-2 text-xs text-foreground ${preparedBy ? "border-border" : "border-amber-400"}`}
+              >
+                <option value="">Choose…</option>
+                {STAFF.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Button size="sm" disabled={busy || !files.agreement || !preparedBy} onClick={() => void save()}>
               {busy ? "Uploading…" : "Upload"}
             </Button>
           </div>

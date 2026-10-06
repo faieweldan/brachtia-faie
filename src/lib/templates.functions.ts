@@ -548,7 +548,28 @@ export async function renderGeneratedPdf(
    */
   const { readCardExtras, withAttachments } = await import("@/lib/access-card.functions");
   const extras = await readCardExtras(db, id);
-  const r = await renderDocumentPdf(db, kind, id, { ...(extras?.values ?? {}), ...extra }, extraImages);
+  /*
+   * Which part of "Charges" is ticked follows why the form was made (Dani, 6 Oct
+   * 2026): a first card ticks section a), a lost or damaged one section b). A
+   * replacement made after its invoice is paid has no values of its own, so the
+   * pack's - a new application's - are turned round here.
+   */
+  const { data: cardRow } = await db.from("access_card_forms").select("reason").eq("id", id).maybeSingle();
+  const reason = String(cardRow?.reason ?? "Initial Tenancy");
+  const replacement = reason !== "Initial Tenancy";
+  const ticks: Record<string, string> = replacement
+    ? {
+        tick_new_application: "",
+        tick_owner_letter: "",
+        tick_owner_ta: "",
+        has_id: "",
+        has_photo: "",
+        tick_replace_ic: "yes",
+        tick_replace_damage: reason === "Damaged Card" || reason === "Unit Change" ? "yes" : "",
+        tick_replace_loss: reason === "Lost Card" ? "yes" : "",
+      }
+    : { tick_replace_ic: "", tick_replace_damage: "", tick_replace_loss: "" };
+  const r = await renderDocumentPdf(db, kind, id, { ...ticks, ...(extras?.values ?? {}), ...extra }, extraImages);
   if (!r.ok || !extras?.attachments.length) return r;
   return { ...r, bytes: await withAttachments(db, r.bytes, extras.attachments) };
 }

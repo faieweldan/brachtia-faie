@@ -76,6 +76,10 @@ export const uploadExistingAgreement = createServerFn({ method: "POST" })
       if (f instanceof File && f.size) files[t] = f;
     }
     if (!files.agreement) throw new Error("Attach the signed Tenancy Agreement");
+    // who uploaded it - required (Dani, 6 Oct 2026)
+    const preparedBy = String(data.get("preparedBy") ?? "");
+    const { STAFF } = await import("@/data/form-options");
+    if (!STAFF.includes(preparedBy)) throw new Error("Choose who is uploading this agreement");
     const pdfs: [string, Uint8Array][] = [];
     for (const t of ORDER) if (files[t]) pdfs.push([t, await asPdf(files[t]!)]);
 
@@ -105,7 +109,7 @@ export const uploadExistingAgreement = createServerFn({ method: "POST" })
         period_start: periodStart,
         period_end: periodEnd,
         // marks it as a scan uploaded, not made from a template
-        merge_values: { source: "uploaded" },
+        merge_values: { source: "uploaded", prepared_by: preparedBy, prepared_at: new Date().toISOString() },
         template_version_id: null,
         generated_pdf_path: path,
       });

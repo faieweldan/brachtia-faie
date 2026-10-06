@@ -195,10 +195,14 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
       periodEnd?: string | undefined;
       /** the resident's files to merge after the access card form - IC copy, photo */
       cardAttachments?: string[] | undefined;
+      /** who made the pack - required, kept with every document (Dani, 6 Oct 2026) */
+      preparedBy: string;
     }) => data,
   )
   .handler(async ({ data }) => {
     const db = await admin();
+    const { STAFF } = await import("@/data/form-options");
+    if (!STAFF.includes(String(data.preparedBy ?? ""))) throw new Error("Choose who is preparing this pack");
 
     const { data: existing } = await db
       .from("tenancy_agreements")
@@ -240,7 +244,8 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
         effective_date: today,
         period_start: data.periodStart || null,
         period_end: data.periodEnd || null,
-        merge_values: data.mergeValues,
+        // who made it, and when - the audit trail, beside the values it was made from
+        merge_values: { ...data.mergeValues, prepared_by: data.preparedBy, prepared_at: new Date().toISOString() },
         template_version_id: tv[t] || null,
       })),
     );
