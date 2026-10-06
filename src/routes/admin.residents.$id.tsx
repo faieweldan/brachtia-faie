@@ -957,35 +957,6 @@ function ResidentProfilePage() {
                 setCardCharge({ ...line, n: Date.now() });
                 setTab("payments");
               }}
-              checklist={
-                <Panel title="Pre-check-in checklist" description="Prepare for move-in day.">
-                  <div className="space-y-2">
-                    {tenancy.checklist.map((c) => (
-                      <label key={c.key} className="flex items-center gap-2 text-sm">
-                        <Checkbox
-                          checked={c.done}
-                          onCheckedChange={(v) =>
-                            saveTenancy({
-                              ...tenancy,
-                              checklist: tenancy.checklist.map((x) =>
-                                x.key === c.key
-                                  ? { ...x, done: !!v, date: v ? new Date().toISOString() : undefined }
-                                  : x,
-                              ),
-                            })
-                          }
-                        />
-                        <span className={c.done ? "text-muted-foreground line-through" : ""}>
-                          {c.label}
-                        </span>
-                        {c.done && c.date ? (
-                          <span className="text-xs text-muted-foreground">{fmtDate(c.date)}</span>
-                        ) : null}
-                      </label>
-                    ))}
-                  </div>
-                </Panel>
-              }
             />
           ) : (
             <Panel title="Tenancy" description="Agreement lifecycle and documents.">

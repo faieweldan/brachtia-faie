@@ -2,7 +2,10 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { readableValue } from "@/lib/signatory";
 import { isDocumentOwn, isTickResult, type MappingResult } from "@/lib/template-fields";
 
@@ -134,12 +137,7 @@ export function DataReview({
                         <span className="text-muted-foreground">{ticked(row.r?.value) ? "Ticked" : "Not ticked"}</span>
                       </label>
                     ) : row.own ? (
-                      <Input
-                        className="h-7 text-xs"
-                        aria-label={row.key}
-                        value={row.r?.value ?? ""}
-                        onChange={(e) => onOverride(row.key, e.target.value)}
-                      />
+                      <LongField label={row.r?.label ?? row.key} value={row.r?.value ?? ""} onChange={(v) => onOverride(row.key, v)} />
                     ) : (
                       <span
                         className={`break-words ${
@@ -166,5 +164,40 @@ export function DataReview({
       {/* always in reach, however long the list */}
       <div className="border-t border-border p-4">{footer}</div>
     </div>
+  );
+}
+
+/**
+ * A document's own text - inclusions, exclusions - is long, and the box in the
+ * list showed a few words of it (Dani, 6 Oct 2026). Clicking it opens a big box
+ * to read and edit the whole of it.
+ */
+function LongField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Input
+        className="h-7 cursor-pointer text-xs"
+        aria-label={label}
+        value={value}
+        readOnly
+        onClick={() => setOpen(true)}
+        onFocus={() => setOpen(true)}
+        title="Click to read and edit in full"
+      />
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="admin-ui max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-brand-deep">{label}</DialogTitle>
+          </DialogHeader>
+          <Textarea autoFocus value={value} onChange={(e) => onChange(e.target.value)} rows={14} className="text-sm leading-relaxed" />
+          <div className="flex justify-end">
+            <Button size="sm" onClick={() => setOpen(false)}>
+              Done
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
