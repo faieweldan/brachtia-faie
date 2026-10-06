@@ -28,7 +28,12 @@ export function PdfPageViewer({
   /** called once the last page has been shown - the declaration waits for it */
   onLastPage?: () => void;
 }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  /*
+   * Every page drawn, one under the other, to scroll through (Dani, 6 Oct 2026).
+   * It drew one page at a time, and the arrows were the only way on. The arrows
+   * now jump to a page; the page number follows the scrolling.
+   */
+  const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
   const frameRef = useRef<HTMLDivElement>(null);
   const [pdf, setPdf] = useState<LoadedPdf | null>(null);
   const [page, setPage] = useState(1);
@@ -47,49 +52,78 @@ export function PdfPageViewer({
    * full screen, which an iPhone does not give to a page.
    */
   const [full, setFull] = useState(false);
+  // every page drawn at its real height - until then the last page looks "in view" at once
+  const [drawn, setDrawn] = useState(false);
 
   useEffect(() => {
     let live = true;
     void import("pdfjs-dist").then(async (pdfjs) => {
       pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
       const loaded = await pdfjs.getDocument({ url, ...PDFJS_OPTIONS }).promise;
-      // a redrawn document keeps the page being read, not back to page 1
-      if (live) { setPdf(loaded as LoadedPdf); setPage((p) => Math.min(Math.max(1, p), loaded.numPages)); setError(""); }
+      if (live) { setPdf(loaded as unknown as LoadedPdf); setError(""); }
     }).catch(() => live && setError("Could not open this PDF preview."));
     return () => { live = false; };
   }, [url]);
 
+  // every page, at the same scale - drawn again when the zoom or the window changes
   useEffect(() => {
-    if (!pdf || !canvasRef.current || !frameRef.current) return;
+    if (!pdf || !frameRef.current) return;
     let cancelled = false;
-    void pdf.getPage(page).then(async (pdfPage) => {
-      const base = pdfPage.getViewport({ scale: 1 });
-      const available = Math.max(320, frameRef.current?.clientWidth ?? base.width) - 32;
-      const tall = Math.max(240, (frameRef.current?.clientHeight ?? base.height) - 32);
-      const scale =
-        fit === "width"
-          ? Math.min(1.6, available / base.width)
-          : fit === "page"
-            ? Math.min(available / base.width, tall / base.height)
-            : zoom;
-      const viewport = pdfPage.getViewport({ scale });
-      const canvas = canvasRef.current;
-      if (!canvas || cancelled) return;
-      const ratio = window.devicePixelRatio || 1;
-      canvas.width = Math.floor(viewport.width * ratio);
-      canvas.height = Math.floor(viewport.height * ratio);
-      canvas.style.width = `${viewport.width}px`;
-      canvas.style.height = `${viewport.height}px`;
-      const context = canvas.getContext("2d");
-      if (!context) return;
-      await pdfPage.render({ canvas, canvasContext: context, viewport, transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0] }).promise;
-    });
+    setDrawn(false);
+    void (async () => {
+      for (let n = 1; n <= pdf.numPages; n++) {
+        const pdfPage = await pdf.getPage(n);
+        if (cancelled) return;
+        const base = pdfPage.getViewport({ scale: 1 });
+        const available = Math.max(320, frameRef.current?.clientWidth ?? base.width) - 32;
+        const tall = Math.max(240, (frameRef.current?.clientHeight ?? base.height) - 32);
+        const scale =
+          fit === "width"
+            ? Math.min(1.6, available / base.width)
+            : fit === "page"
+              ? Math.min(available / base.width, tall / base.height)
+              : zoom;
+        const viewport = pdfPage.getViewport({ scale });
+        const canvas = canvasRefs.current[n - 1];
+        if (!canvas) continue;
+        const ratio = window.devicePixelRatio || 1;
+        canvas.width = Math.floor(viewport.width * ratio);
+        canvas.height = Math.floor(viewport.height * ratio);
+        canvas.style.width = `${viewport.width}px`;
+        canvas.style.height = `${viewport.height}px`;
+        const context = canvas.getContext("2d");
+        if (!context) continue;
+        await pdfPage.render({ canvas, canvasContext: context, viewport, transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0] }).promise;
+      }
+      if (!cancelled) setDrawn(true);
+    })();
     return () => { cancelled = true; };
-  }, [pdf, page, zoom, fit, full]);
+  }, [pdf, zoom, fit, full]);
 
+  // the page in view, as the reader scrolls; the last page seen counts as read to the end
   useEffect(() => {
-    if (pdf && page === pdf.numPages) onLastPage?.();
-  }, [pdf, page, onLastPage]);
+    const frame = frameRef.current;
+    if (!frame || !pdf || !drawn) return;
+    const onScroll = () => {
+      const top = frame.getBoundingClientRect().top;
+      const middle = top + frame.clientHeight / 3;
+      let current = 1;
+      canvasRefs.current.forEach((c, i) => {
+        if (c && c.getBoundingClientRect().top <= middle) current = i + 1;
+      });
+      setPage(current);
+      const last = canvasRefs.current[pdf.numPages - 1];
+      if (last && last.getBoundingClientRect().top < top + frame.clientHeight - 40) onLastPage?.();
+    };
+    onScroll();
+    frame.addEventListener("scroll", onScroll, { passive: true });
+    return () => frame.removeEventListener("scroll", onScroll);
+  }, [pdf, drawn, onLastPage, full, fill]);
+
+  const goTo = (n: number) => {
+    const c = canvasRefs.current[n - 1];
+    if (c && frameRef.current) frameRef.current.scrollTo({ top: c.offsetTop - 16, behavior: "smooth" });
+  };
 
   const total = pdf?.numPages ?? 1;
   const changeZoom = (next: number) => { setFit(null); setZoom(Math.min(2, Math.max(0.5, next))); };
@@ -105,9 +139,9 @@ export function PdfPageViewer({
       }
     >
       <div className="flex min-h-11 flex-wrap items-center justify-center gap-1 border-b border-border bg-card px-2 py-1.5">
-        <Button type="button" size="icon" variant="ghost" disabled={page <= 1} onClick={() => setPage((value) => value - 1)} title="Previous page"><ChevronLeft className="size-4" /></Button>
+        <Button type="button" size="icon" variant="ghost" disabled={page <= 1} onClick={() => goTo(page - 1)} title="Previous page"><ChevronLeft className="size-4" /></Button>
         <span className="min-w-24 text-center text-xs text-muted-foreground">Page {page} of {total}</span>
-        <Button type="button" size="icon" variant="ghost" disabled={page >= total} onClick={() => setPage((value) => value + 1)} title="Next page"><ChevronRight className="size-4" /></Button>
+        <Button type="button" size="icon" variant="ghost" disabled={page >= total} onClick={() => goTo(page + 1)} title="Next page"><ChevronRight className="size-4" /></Button>
         <span className="mx-1 h-5 w-px bg-border" />
         <Button type="button" size="icon" variant="ghost" onClick={() => changeZoom(zoom - 0.1)} title="Zoom out"><Minus className="size-4" /></Button>
         <span className="min-w-12 text-center text-xs text-muted-foreground">{fit === "width" ? "Width" : fit === "page" ? "Page" : `${Math.round(zoom * 100)}%`}</span>
@@ -126,10 +160,24 @@ export function PdfPageViewer({
           </a>
         </Button>
       </div>
-      <div ref={frameRef} className={full || fill ? "min-h-0 flex-1 overflow-auto bg-muted p-4" : "h-[68vh] min-h-[520px] overflow-auto bg-muted p-4"}>
+      <div
+        ref={frameRef}
+        className={`relative ${full || fill ? "min-h-0 flex-1 overflow-auto bg-muted p-4" : "h-[68vh] min-h-[520px] overflow-auto bg-muted p-4"}`}
+      >
         {error ? <p className="py-20 text-center text-sm text-destructive">{error}</p> : null}
         {!pdf && !error ? <p className="py-20 text-center text-sm text-muted-foreground">Preparing pages…</p> : null}
-        <canvas ref={canvasRef} className="mx-auto bg-background shadow-card" aria-label={`PDF page ${page}`} />
+        <div className="space-y-4">
+          {Array.from({ length: pdf?.numPages ?? 0 }, (_, i) => (
+            <canvas
+              key={i}
+              ref={(el) => {
+                canvasRefs.current[i] = el;
+              }}
+              className="mx-auto block bg-background shadow-card"
+              aria-label={`PDF page ${i + 1}`}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
