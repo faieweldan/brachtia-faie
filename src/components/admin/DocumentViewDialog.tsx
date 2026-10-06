@@ -91,7 +91,7 @@ export function DocumentViewDialog({
           </DialogTitle>
         </DialogHeader>
         {exact || (pdf.isLoading && !pdf.data) ? (
-          <DocumentView pdf={pdf.data} pdfLoading={pdf.isLoading} />
+          <DocumentView pdf={pdf.data} pdfLoading={pdf.isLoading} fileName={`${title}.pdf`} />
         ) : q.isLoading ? (
           <p className="py-16 text-center text-sm text-muted-foreground">Loading document…</p>
         ) : q.isError ? (

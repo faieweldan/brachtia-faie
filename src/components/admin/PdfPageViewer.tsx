@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Maximize2, Minus, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Expand, Maximize2, Minimize2, Minus, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -16,9 +16,15 @@ export function PdfPageViewer({
   url,
   className = "",
   onLastPage,
+  fileName = "document.pdf",
+  fill = false,
 }: {
   url: string;
   className?: string;
+  /** fills the window it sits in - a preview window - rather than a fixed height */
+  fill?: boolean;
+  /** the name a download is saved under */
+  fileName?: string;
   /** called once the last page has been shown - the declaration waits for it */
   onLastPage?: () => void;
 }) {
@@ -35,6 +41,12 @@ export function PdfPageViewer({
    */
   const [fit, setFit] = useState<"width" | "page" | null>("width");
   const [error, setError] = useState("");
+  /*
+   * The whole screen, for a phone (Dani, 5 Oct 2026): the page in its box was
+   * too small to read. A layer over the page rather than the browser's own
+   * full screen, which an iPhone does not give to a page.
+   */
+  const [full, setFull] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -73,7 +85,7 @@ export function PdfPageViewer({
       await pdfPage.render({ canvas, canvasContext: context, viewport, transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0] }).promise;
     });
     return () => { cancelled = true; };
-  }, [pdf, page, zoom, fit]);
+  }, [pdf, page, zoom, fit, full]);
 
   useEffect(() => {
     if (pdf && page === pdf.numPages) onLastPage?.();
@@ -83,7 +95,15 @@ export function PdfPageViewer({
   const changeZoom = (next: number) => { setFit(null); setZoom(Math.min(2, Math.max(0.5, next))); };
 
   return (
-    <div className={`overflow-hidden rounded-md border border-border bg-muted ${className}`}>
+    <div
+      className={
+        full
+          ? "fixed inset-0 z-[100] flex flex-col bg-muted"
+          : fill
+            ? `flex min-h-0 flex-1 flex-col overflow-hidden bg-muted ${className}`
+            : `overflow-hidden rounded-md border border-border bg-muted ${className}`
+      }
+    >
       <div className="flex min-h-11 flex-wrap items-center justify-center gap-1 border-b border-border bg-card px-2 py-1.5">
         <Button type="button" size="icon" variant="ghost" disabled={page <= 1} onClick={() => setPage((value) => value - 1)} title="Previous page"><ChevronLeft className="size-4" /></Button>
         <span className="min-w-24 text-center text-xs text-muted-foreground">Page {page} of {total}</span>
@@ -94,13 +114,87 @@ export function PdfPageViewer({
         <Button type="button" size="icon" variant="ghost" onClick={() => changeZoom(zoom + 0.1)} title="Zoom in"><Plus className="size-4" /></Button>
         {/* says what it will do next: the whole page, or back to the width */}
         <Button type="button" size="sm" variant="ghost" onClick={() => setFit(fit === "page" ? "width" : "page")}>
-          <Maximize2 className="mr-1 size-3.5" /> {fit === "page" ? "Fit width" : "Fit page"}
+          <Maximize2 className="mr-1 size-3.5" /> {fit === "page" ? "Fit width" : "Fit to screen"}
+        </Button>
+        <span className="mx-1 h-5 w-px bg-border" />
+        <Button type="button" size="sm" variant="ghost" onClick={() => setFull((f) => !f)}>
+          {full ? <Minimize2 className="mr-1 size-3.5" /> : <Expand className="mr-1 size-3.5" />} {full ? "Close full screen" : "Full screen"}
+        </Button>
+        <Button asChild type="button" size="sm" variant="ghost">
+          <a href={url} download={fileName}>
+            <Download className="mr-1 size-3.5" /> Download
+          </a>
         </Button>
       </div>
-      <div ref={frameRef} className="h-[68vh] min-h-[520px] overflow-auto bg-muted p-4">
+      <div ref={frameRef} className={full || fill ? "min-h-0 flex-1 overflow-auto bg-muted p-4" : "h-[68vh] min-h-[520px] overflow-auto bg-muted p-4"}>
         {error ? <p className="py-20 text-center text-sm text-destructive">{error}</p> : null}
         {!pdf && !error ? <p className="py-20 text-center text-sm text-muted-foreground">Preparing pages…</p> : null}
         <canvas ref={canvasRef} className="mx-auto bg-background shadow-card" aria-label={`PDF page ${page}`} />
+      </div>
+    </div>
+  );
+}
+/**
+ * A photo, with the same controls as a PDF (Dani, 6 Oct 2026): zoom out and in,
+ * fit to the window, full screen, download.
+ */
+export function ImageViewer({
+  url,
+  alt,
+  fileName,
+  fill = false,
+  hideDownload = false,
+}: {
+  url: string;
+  alt: string;
+  fileName: string;
+  fill?: boolean;
+  /** the window around it has its own Download */
+  hideDownload?: boolean;
+}) {
+  const [zoom, setZoom] = useState(1);
+  const [fit, setFit] = useState(true);
+  const [full, setFull] = useState(false);
+  const change = (next: number) => {
+    setFit(false);
+    setZoom(Math.min(4, Math.max(0.25, next)));
+  };
+  return (
+    <div
+      className={
+        full
+          ? "fixed inset-0 z-[100] flex flex-col bg-muted"
+          : fill
+            ? "flex min-h-0 flex-1 flex-col overflow-hidden bg-muted"
+            : "overflow-hidden rounded-md border border-border bg-muted"
+      }
+    >
+      <div className="flex min-h-11 flex-wrap items-center justify-center gap-1 border-b border-border bg-card px-2 py-1.5">
+        <Button type="button" size="icon" variant="ghost" onClick={() => change(zoom - 0.25)} title="Zoom out"><Minus className="size-4" /></Button>
+        <span className="min-w-12 text-center text-xs text-muted-foreground">{fit ? "Fit" : `${Math.round(zoom * 100)}%`}</span>
+        <Button type="button" size="icon" variant="ghost" onClick={() => change(zoom + 0.25)} title="Zoom in"><Plus className="size-4" /></Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => { setFit(true); setZoom(1); }}>
+          <Maximize2 className="mr-1 size-3.5" /> Fit to screen
+        </Button>
+        <span className="mx-1 h-5 w-px bg-border" />
+        <Button type="button" size="sm" variant="ghost" onClick={() => setFull((f) => !f)}>
+          {full ? <Minimize2 className="mr-1 size-3.5" /> : <Expand className="mr-1 size-3.5" />} {full ? "Close full screen" : "Full screen"}
+        </Button>
+        {hideDownload ? null : (
+          <Button asChild type="button" size="sm" variant="ghost">
+            <a href={url} download={fileName}>
+              <Download className="mr-1 size-3.5" /> Download
+            </a>
+          </Button>
+        )}
+      </div>
+      <div className={`min-h-0 flex-1 overflow-auto p-4 ${fit ? "flex items-center justify-center" : ""} ${full || fill ? "" : "h-[68vh]"}`}>
+        <img
+          src={url}
+          alt={alt}
+          className={fit ? "max-h-full max-w-full object-contain shadow-card" : "mx-auto max-w-none shadow-card"}
+          style={fit ? undefined : { width: `${zoom * 100}%` }}
+        />
       </div>
     </div>
   );

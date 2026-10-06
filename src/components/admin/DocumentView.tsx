@@ -19,8 +19,11 @@ export function DocumentView({
   pdfLoading,
   docxBase64,
   onLastPage,
+  fileName,
 }: {
   pdf: PdfResult;
+  /** the name a download is saved under */
+  fileName?: string | undefined;
   pdfLoading: boolean;
   docxBase64?: string | undefined;
   /** once the reader has reached the last page */
@@ -45,7 +48,7 @@ export function DocumentView({
     return () => URL.revokeObjectURL(made);
   }, [base64]);
 
-  if (url) return <PdfPageViewer url={url} {...(onLastPage ? { onLastPage } : {})} />;
+  if (url) return <PdfPageViewer url={url} {...(onLastPage ? { onLastPage } : {})} {...(fileName ? { fileName } : {})} />;
   if (pdfLoading && !pdf) {
     return <p className="py-24 text-center text-sm text-muted-foreground">Laying out the pages…</p>;
   }

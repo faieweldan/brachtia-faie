@@ -3,6 +3,7 @@ import { Check, ChevronDown, Download } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { ImageViewer, PdfPageViewer } from "@/components/admin/PdfPageViewer";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -103,14 +104,7 @@ export function PdfPreviewDialog({
             <p className="shrink-0 text-xs text-muted-foreground">{downloadHint}</p>
           ) : null}
         </div>
-        {url ? (
-          <iframe
-            // no page strip, page fitted to the width - the text reads at a glance
-            src={`${url}#navpanes=0&view=FitH`}
-            title={title}
-            className="min-h-0 w-full flex-1 bg-muted"
-          />
-        ) : null}
+        {url ? <PreviewBody url={url} title={title} fileName={fileName} /> : null}
       </DialogContent>
     </Dialog>
   );
@@ -309,15 +303,21 @@ export function PdfPreviewButton({
               <p className="shrink-0 text-xs text-muted-foreground">{downloadHint}</p>
             ) : null}
           </div>
-          {url ? (
-            <iframe
-              src={`${url}#navpanes=0&view=FitH`}
-              title={title}
-              className="min-h-0 w-full flex-1 bg-muted"
-            />
-          ) : null}
+          {url ? <PreviewBody url={url} title={title} fileName={downloadName} /> : null}
         </DialogContent>
       </Dialog>
     </>
   );
+}
+
+/*
+ * Every preview with the same controls (Dani, 6 Oct 2026): - and +, fit to
+ * screen, full screen, download - a photo as a photo, a PDF page by page. The
+ * browser's own PDF frame had its own buttons, different in every browser and
+ * missing on a phone.
+ */
+function PreviewBody({ url, title, fileName }: { url: string; title: string; fileName: string }) {
+  // the window's own Download, at the top, is the one: an invoice's records the version sent
+  if (/\.(jpe?g|png|webp|gif)$/i.test(fileName)) return <ImageViewer url={url} alt={title} fileName={fileName} fill hideDownload />;
+  return <PdfPageViewer url={url} fileName={fileName} fill className="[&_a[download]]:hidden" />;
 }
