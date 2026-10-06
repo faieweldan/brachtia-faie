@@ -365,6 +365,9 @@ export const submitProfileByToken = createServerFn({ method: "POST" })
     // whitelist: anything the browser sends that is not a profile field is dropped
     const row: Record<string, unknown> = {};
     for (const key of EDITABLE) {
+      // staff-only (Dani, 6 Oct 2026): the student never sees these two, and a form
+      // opened before admin set one saved it back as empty
+      if (key === "pay_method" || key === "pay_schedule") continue;
       const v = data.values[key];
       if (typeof v === "string") row[key] = v.trim();
     }
