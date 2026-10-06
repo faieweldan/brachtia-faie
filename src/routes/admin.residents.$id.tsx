@@ -15,7 +15,7 @@ import {
 import { getResidentCheckIn } from "@/lib/admin.functions";
 import { refreshMoney } from "@/lib/billing-client";
 
-import { idLabelFor } from "@/lib/reference-data";
+import { RELATIONSHIP_OPTIONS, idLabelFor } from "@/lib/reference-data";
 import { getDeclarationForResident } from "@/lib/declaration.functions";
 import {
   RESIDENT_GROUPS,
@@ -1132,7 +1132,10 @@ function AdminField({
         ? PAY_METHODS.map((m) => ({ value: m, label: m }))
         : f.key === "pay_schedule"
           ? SCHEDULES.map((s) => ({ value: s.value, label: s.label }))
-          : (f.options ?? []);
+          : // "Self" is what the student's "Myself" saves, so admin can choose it too
+            f.key === "payer_relationship"
+            ? RELATIONSHIP_OPTIONS
+            : (f.options ?? []);
     return (
       <div className={wide}>
         {f.normalise ? (

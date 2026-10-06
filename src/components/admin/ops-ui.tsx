@@ -1,5 +1,6 @@
 import { useRef, useState, type ReactNode } from "react";
 import { Dropdown } from "@/components/admin/Dropdown";
+import { ChoicePicker } from "@/components/site/ChoicePicker";
 import { Check, Eye, FileUp, Loader2, Pencil, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -415,38 +416,45 @@ export function Combo({
   normalise?: (v: string) => { value: string; matched: boolean };
   display?: string;
 }) {
-  const listId = `combo-${label.replace(/\W+/g, "-").toLowerCase()}`;
+  /*
+   * The same searchable dropdown the student uses on their form (Dani, 6 Oct
+   * 2026) - it was the browser's own type-ahead list, which looked nothing like
+   * it. "Other" is kept for a value off the list: admin types it underneath.
+   */
   const known = options.some((o) => o.value === value);
+  const [other, setOther] = useState(!!value && !known);
   if (readOnly) {
     return <ReadOnlyField label={label} value={display ?? labelFor(options, value)} />;
   }
   return (
     <div className="space-y-1.5">
       <Label className="text-xs text-muted-foreground">{label}</Label>
-      <Input
-        list={listId}
-        value={value}
-        placeholder={placeholder ?? "Choose or type"}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={(e) => {
-          if (!normalise) return;
-          const r = normalise(e.target.value);
-          if (r.value !== e.target.value) onChange(r.value);
+      <ChoicePicker
+        value={other ? OTHER : value}
+        options={[...options, { value: OTHER, label: "Other (type it)" }]}
+        onChange={(v) => {
+          setOther(v === OTHER);
+          onChange(v === OTHER ? (known ? "" : value) : v);
         }}
       />
-      <datalist id={listId}>
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </datalist>
-      {value && !known ? (
-        <p className="text-[11px] text-amber-600">Not in the standard list - saved as typed.</p>
+      {other ? (
+        <Input
+          value={value}
+          placeholder={placeholder ?? "Type it"}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={(e) => {
+            if (!normalise) return;
+            const r = normalise(e.target.value);
+            if (r.value !== e.target.value) onChange(r.value);
+            if (r.matched) setOther(false);
+          }}
+        />
       ) : null}
     </div>
   );
 }
+
+const OTHER = "__other__";
 
 /** The friendly label for a stored code, or the code itself if it is not one. */
 function labelFor(options: { value: string; label: string }[], value: string) {
