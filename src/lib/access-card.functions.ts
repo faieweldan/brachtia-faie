@@ -235,13 +235,18 @@ export async function makeCardForm(sb: any, residentId: string, reason: string, 
     .select("id")
     .single();
   if (error) throw new Error(error.message);
-  // the IC copy and photo go with the new form, as on the one it replaces
-  let attachments: string[] = [];
-  for (const id of before.length ? before : all.map((c) => c.id)) {
-    const extras = await readCardExtras(sb, id);
-    if (extras?.attachments.length) attachments = extras.attachments;
-  }
-  await writeCardExtras(sb, card.id, { attachments: ownFiles(residentId, attachments) });
+  await writeCardExtras(sb, card.id, { attachments: await replacementAttachments(sb, residentId) });
+}
+
+/**
+ * A replacement's section b) asks for one thing: a copy of the IC / passport
+ * (Dani, 6 Oct 2026). It is attached by itself, from what the resident
+ * uploaded - not the photo, and not only when an earlier form had it.
+ */
+export async function replacementAttachments(sb: any, residentId: string): Promise<string[]> {
+  const { data: r } = await sb.from("residents").select("docs").eq("id", residentId).maybeSingle();
+  const id = ((Array.isArray(r?.docs) ? r.docs : []) as { key?: string; path?: string }[]).find((d) => d.key === "id" && d.path);
+  return ownFiles(residentId, id?.path ? [id.path] : []);
 }
 
 /**
