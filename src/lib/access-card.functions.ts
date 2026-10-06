@@ -73,7 +73,7 @@ export type ReplacementRequest = {
 const requestPath = (residentId: string) => `access-card/_request-${residentId}.json`;
 
 export async function readReplacement(sb: any, residentId: string): Promise<ReplacementRequest | null> {
-  const { data } = await sb.storage.from(BUCKET).download(requestPath(residentId));
+  const { data } = await sb.storage.from(BUCKET).download(requestPath(residentId), { cacheNonce: Date.now() });
   if (!data) return null;
   try {
     return JSON.parse(await data.text()) as ReplacementRequest;
@@ -94,7 +94,7 @@ async function writeReplacement(sb: any, residentId: string, r: ReplacementReque
 }
 
 export async function readCardExtras(sb: any, cardId: string): Promise<CardExtras | null> {
-  const { data } = await sb.storage.from(BUCKET).download(extrasPath(cardId));
+  const { data } = await sb.storage.from(BUCKET).download(extrasPath(cardId), { cacheNonce: Date.now() });
   if (!data) return null;
   try {
     return JSON.parse(await data.text()) as CardExtras;
@@ -122,7 +122,7 @@ export async function withAttachments(sb: any, form: Uint8Array, attachments: st
   const { PDFDocument } = await import("pdf-lib");
   const out = await PDFDocument.load(form);
   for (const path of attachments) {
-    const { data } = await sb.storage.from(BUCKET).download(path);
+    const { data } = await sb.storage.from(BUCKET).download(path, { cacheNonce: Date.now() });
     if (!data) continue;
     const bytes = new Uint8Array(await data.arrayBuffer());
     try {

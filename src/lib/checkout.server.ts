@@ -97,8 +97,14 @@ export type CheckoutStatement = {
 
 export const base = (residentId: string) => `checkout/${residentId}`;
 
+/*
+ * Every read asks storage for a fresh copy (cacheNonce). These records are
+ * overwritten in place; on Vercel a read could get the copy cached before the
+ * last write, so a reissued version did not show and two statements got the
+ * same number, CS/00026 (Dani, 6 Oct 2026).
+ */
 export async function readStatement(sb: any, residentId: string): Promise<CheckoutStatement | null> {
-  const { data } = await sb.storage.from(BUCKET).download(`${base(residentId)}/statement.json`);
+  const { data } = await sb.storage.from(BUCKET).download(`${base(residentId)}/statement.json`, { cacheNonce: Date.now() });
   if (!data) return null;
   try {
     return JSON.parse(await data.text()) as CheckoutStatement;
@@ -116,7 +122,7 @@ export const writeStatement = (sb: any, residentId: string, s: CheckoutStatement
   putFile(sb, `${base(residentId)}/statement.json`, JSON.stringify(s, null, 2), "application/json");
 
 export async function getFile(sb: any, path: string): Promise<Uint8Array | null> {
-  const { data } = await sb.storage.from(BUCKET).download(path);
+  const { data } = await sb.storage.from(BUCKET).download(path, { cacheNonce: Date.now() });
   return data ? new Uint8Array(await data.arrayBuffer()) : null;
 }
 

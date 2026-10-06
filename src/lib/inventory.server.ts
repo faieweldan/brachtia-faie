@@ -71,7 +71,7 @@ export async function removePhotos(sb: any, residentId: string, docId: string) {
 }
 
 export async function readInventory(sb: any, residentId: string, docId: string, mode: InventoryMode): Promise<InventoryFile | null> {
-  const { data } = await sb.storage.from(BUCKET).download(`${inventoryBase(residentId, docId, mode)}.json`);
+  const { data } = await sb.storage.from(BUCKET).download(`${inventoryBase(residentId, docId, mode)}.json`, { cacheNonce: Date.now() });
   if (!data) return null;
   try {
     return JSON.parse(await data.text()) as InventoryFile;
@@ -100,7 +100,7 @@ export async function putFile(sb: any, path: string, body: Uint8Array, type: str
 }
 
 export async function getFile(sb: any, path: string): Promise<Uint8Array | null> {
-  const { data } = await sb.storage.from(BUCKET).download(path);
+  const { data } = await sb.storage.from(BUCKET).download(path, { cacheNonce: Date.now() });
   return data ? new Uint8Array(await data.arrayBuffer()) : null;
 }
 

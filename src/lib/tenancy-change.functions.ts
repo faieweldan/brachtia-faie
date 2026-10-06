@@ -46,7 +46,7 @@ export type PendingChange = {
 const pendingPath = (residentId: string) => `tenancy-change/${residentId}/pending.json`;
 
 async function readJson<T>(sb: any, path: string): Promise<T | null> {
-  const { data } = await sb.storage.from(BUCKET).download(path);
+  const { data } = await sb.storage.from(BUCKET).download(path, { cacheNonce: Date.now() });
   if (!data) return null;
   try {
     return JSON.parse(await data.text()) as T;

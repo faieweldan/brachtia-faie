@@ -11,7 +11,7 @@ const BUCKET = "document-templates";
 const CURRENT = "signatory/current.json";
 
 export async function loadSignatory(db: any): Promise<Signatory | null> {
-  const { data: file } = await db.storage.from(BUCKET).download(CURRENT);
+  const { data: file } = await db.storage.from(BUCKET).download(CURRENT, { cacheNonce: Date.now() });
   if (!file) return null;
   try {
     const j = JSON.parse(await file.text());

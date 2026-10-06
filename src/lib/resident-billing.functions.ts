@@ -749,7 +749,7 @@ type ProofChange = { at: string; reason: string; removedPath: string; newPath: s
 const historyPath = (paymentId: string) => `proof-history/${paymentId}.json`;
 
 async function readProofHistory(supabase: any, paymentId: string): Promise<ProofChange[]> {
-  const { data } = await supabase.storage.from(DOC_BUCKET).download(historyPath(paymentId));
+  const { data } = await supabase.storage.from(DOC_BUCKET).download(historyPath(paymentId), { cacheNonce: Date.now() });
   if (!data) return [];
   try {
     return JSON.parse(await data.text()) as ProofChange[];
