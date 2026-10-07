@@ -43,7 +43,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { UpdateTenancyDialog, type TenancyChangeResult } from "@/components/admin/UpdateTenancyDialog";
 import { getTenancyEvents } from "@/lib/tenancy-change.functions";
 import { TenancyEvents } from "@/components/admin/TenancyEvents";
-import { klToday } from "@/lib/kl-date";
+import { shiftDate } from "@/lib/rental-schedule";
 import { getResidentRent, tenancyDatesByResident } from "@/lib/rental-schedule.functions";
 import { ResidentPayments } from "@/components/admin/ResidentPayments";
 import { RESIDENT_DOCS, residentDocsFor, residentDocLabel } from "@/lib/resident-documents";
@@ -314,7 +314,7 @@ function ResidentProfilePage() {
     queryFn: () => getTenancyEvents({ data: { residentId: form!.id } }),
     enabled: hasTenancy,
   });
-  const lastEffective = (tenancyEvents.data ?? []).find((e) => e.state === "effective");
+  const lastEffective = (tenancyEvents.data?.events ?? []).find((e) => e.state === "effective");
   useEffect(() => {
     if (!lastEffective || !form) return;
     void refreshUnits();
@@ -431,9 +431,26 @@ function ResidentProfilePage() {
 
   // the stay summary: the tenancy record if there is one, otherwise whatever the
   // bed placement and the profile already know
+  /*
+   * The tenancy as it stands, and what an event not yet effective will make of
+   * it (Dani, 7 Oct 2026): the original end date stays on the tenancy until the
+   * event's day; the new one is shown beside it, marked Scheduled or Settled.
+   */
+  const pendingEvents = (tenancyEvents.data?.events ?? []).filter((e) => e.state === "scheduled" || e.state === "settled").sort((a, b) => a.date.localeCompare(b.date));
+  const roomEvent = pendingEvents.find((e) => e.moveToBed);
+  const coming = {
+    room: roomEvent ?? null,
+    bed: roomEvent ? (allBeds(units).find((b) => b.bed.id === roomEvent.moveToBed) ?? null) : null,
+    end: pendingEvents.filter((e) => e.dateChange !== "none").at(-1) ?? null,
+    rent: pendingEvents.filter((e) => Math.abs(e.rent - e.rentBefore) > 0.005)[0] ?? null,
+  };
+  // the last date change that took effect - the end it replaced is the day before it
+  const lastDated = (tenancyEvents.data?.events ?? []).find((e) => e.state === "effective" && e.dateChange !== "none") ?? null;
+
   const stay = {
     ...stayDates(tenancy, placed, form, saved),
-    rent: tenancy?.rent || placed?.bed.rent || placed?.room.rent || 0,
+    // the rent terms' rent in force today wins - the page's own copy can be stale (7 Oct 2026)
+    rent: tenancyEvents.data?.rentToday || tenancy?.rent || placed?.bed.rent || placed?.room.rent || 0,
     status: (placed?.bed.status ?? "vacant") as BedStatus,
     get duration(): string {
       return monthsBetween(this.start, this.end);
@@ -704,19 +721,48 @@ function ResidentProfilePage() {
         <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-border pt-4 sm:grid-cols-4 lg:grid-cols-7">
           {[
             { label: "Residence", value: placed?.unit.residenceName },
-            { label: "Unit number", value: placed?.unit.unitNo },
+            { label: "Unit number", value: placed?.unit.unitNo, next: coming.bed ? { text: `→ ${coming.bed.unit.unitNo}`, ev: coming.room! } : null },
             {
               label: "Room / bed",
               value: placed ? `Room ${placed.room.letter} · ${placed.bed.label}` : undefined,
+              next: coming.bed ? { text: `→ Room ${coming.bed.room.letter} · ${coming.bed.bed.label}`, ev: coming.room! } : null,
             },
-            { label: "Monthly rent", value: stay.rent ? money(stay.rent) : undefined },
+            {
+              label: "Monthly rent",
+              value: stay.rent ? money(stay.rent) : undefined,
+              next: coming.rent ? { text: `→ ${money(coming.rent.rent)}`, ev: coming.rent } : null,
+            },
             { label: "Tenancy start", value: stay.start ? fmtDate(stay.start) : undefined },
-            { label: "Tenancy end", value: stay.end ? fmtDate(stay.end) : undefined },
+            {
+              label: "Tenancy end",
+              value: stay.end ? fmtDate(stay.end) : undefined,
+              next: coming.end ? { text: `→ ${fmtDate(coming.end.periodEnd)}`, ev: coming.end } : null,
+              was: !coming.end && lastDated ? `${lastDated.dateChange === "renewal" ? "Renewed" : "Extended"} · was ${fmtDate(shiftDate(lastDated.date, { days: -1 }))}` : "",
+            },
             { label: "Duration", value: stay.duration },
           ].map((f) => (
             <div key={f.label} className="min-w-0">
               <p className="text-xs text-muted-foreground">{f.label}</p>
               <p className="truncate text-sm font-medium text-foreground">{f.value || "—"}</p>
+              {/* an Update Tenancy event not yet effective: what it brings, and when (Dani, 7 Oct 2026) */}
+              {"next" in f && f.next ? (
+                <button
+                  type="button"
+                  onClick={() => setTab("tenancy")}
+                  title={`${f.next.ev.name} on ${fmtDate(f.next.ev.date)} - ${f.next.ev.state === "settled" ? "paid, takes effect on the day" : "waiting for its IP"}`}
+                  className="mt-1 block max-w-full text-left"
+                >
+                  <span className="block truncate text-xs font-semibold text-brand-deep">{f.next.text}</span>
+                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <span className={`size-1.5 shrink-0 rounded-full ${f.next.ev.state === "settled" ? "bg-sky-600" : "bg-amber-500"}`} />
+                    <span className="truncate">
+                      {f.next.ev.state === "settled" ? "Settled" : "Scheduled"} · from {fmtDate(f.next.ev.date)}
+                    </span>
+                  </span>
+                </button>
+              ) : "was" in f && f.was ? (
+                <p className="mt-1 truncate text-[11px] text-muted-foreground">{f.was}</p>
+              ) : null}
             </div>
           ))}
         </div>
@@ -951,7 +997,9 @@ function ResidentProfilePage() {
         </TabsContent>
 
         <TabsContent value="tenancy" className="mt-4 space-y-4">
-          {tenancyEvents.data?.length ? <TenancyEvents events={tenancyEvents.data} /> : null}
+          {tenancyEvents.data?.events.length ? (
+            <TenancyEvents events={tenancyEvents.data.events} residentId={form.id} onChanged={() => void tenancyChanged()} />
+          ) : null}
           {tenancy ? (
             <TenancyDocs
               resident={form}

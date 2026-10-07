@@ -37,7 +37,7 @@ async function admin(): Promise<any> {
 const day = (v: unknown) => String(v ?? "").slice(0, 10);
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-type Allowance = { key: string; amount: number; eventId: string; at: string };
+type Allowance = { key: string; amount: number; eventId: string; at: string; cancelledAt?: string };
 
 const allowancePath = (residentId: string) => `tenancy-change/${residentId}/allowances.json`;
 
@@ -68,7 +68,7 @@ async function heldNow(sb: any, residentId: string) {
   const { settledDepositLines } = await import("@/lib/tenancy-events.server");
   const out = depositsOf(moneyOf(await settledDepositLines(sb, residentId)));
   for (const r of await reclassifiedDeposits(sb, residentId)) if (r.depositKey && r.depositKey in out) (out as any)[r.depositKey] = r2((out as any)[r.depositKey] - r.amount);
-  for (const a of (await readJson<Allowance[]>(sb, allowancePath(residentId))) ?? []) if (a.key in out) (out as any)[a.key] = r2((out as any)[a.key] + a.amount);
+  for (const a of (await readJson<Allowance[]>(sb, allowancePath(residentId))) ?? []) if (a.key in out && !a.cancelledAt) (out as any)[a.key] = r2((out as any)[a.key] + a.amount);
   return out;
 }
 
@@ -276,7 +276,12 @@ export const getTenancyEvents = createServerFn({ method: "GET" })
     const paid = new Map<string, number>();
     for (const p of (pays ?? []) as any[]) paid.set(p.invoice_id, (paid.get(p.invoice_id) ?? 0) + Number(p.amount || 0));
     const { documentNames } = await import("@/lib/tenancy-change");
-    return list
+    // the rent in force today, from the rent terms and their changes - the page's own copy goes stale
+    const { data: t } = await sb.from("tenancies").select("id").eq("resident_id", data.residentId).order("start_date", { ascending: false, nullsFirst: false }).limit(1).maybeSingle();
+    const { data: sched } = t ? await sb.from("rental_schedules").select("monthly_rent").eq("tenancy_id", t.id).maybeSingle() : { data: null };
+    const { readRentSteps, rentOn } = await import("@/lib/rent-schedule.server");
+    const rentToday = sched ? rentOn(t ? (await readRentSteps(sb, data.residentId, String(t.id))).steps : [], klToday(), Number(sched.monthly_rent ?? 0)) : 0;
+    const events = list
       .slice()
       .reverse()
       .map((e) => {
@@ -288,23 +293,46 @@ export const getTenancyEvents = createServerFn({ method: "GET" })
           rentBefore: e.rentBefore,
           rent: e.rent,
           periodEnd: e.periodEnd,
+          /** extension / renewal / none - the header shows the end date it brings */
+          dateChange: e.flags.date,
+          /** the bed it moves to - the header shows it before the day */
+          moveToBed: e.moveTo?.bedId ?? "",
           ip: e.invoiceId
             ? { number: String(i?.number ?? "").startsWith("SCH-") ? "" : String(i?.number ?? ""), total: Number(i?.total ?? e.ipTotal), paid: r2(paid.get(e.invoiceId) ?? 0), billOn: e.billOn ?? "" }
             : null,
           documents: documentNames(e.plan),
-          state: e.effectiveAt ? ("effective" as const) : e.settledAt ? ("settled" as const) : ("scheduled" as const),
+          state: e.cancelled ? ("cancelled" as const) : e.effectiveAt ? ("effective" as const) : e.settledAt ? ("settled" as const) : ("scheduled" as const),
+          cancelled: e.cancelled ?? null,
           waitingFor: e.waitingFor ?? "",
           adjustment: e.adjustment ?? "",
           credit: e.credit ?? 0,
         };
       });
+    return { events, rentToday };
+  });
+
+/**
+ * Cancel an event before its date (Dani's cancellation rule, 7 Oct 2026). A
+ * reason and the staff member approving it are required; the rest is in
+ * tenancy-events.server.ts cancelEvent.
+ */
+export const cancelTenancyEvent = createServerFn({ method: "POST" })
+  .inputValidator((d) =>
+    z.object({ residentId: z.string().uuid(), eventId: z.string().min(1).max(20), reason: z.string().trim().min(5).max(300), approvedBy: z.string().min(1).max(80) }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const sb = await admin();
+    const { STAFF } = await import("@/data/form-options");
+    if (!STAFF.includes(data.approvedBy)) throw new Error("Choose who approved the cancellation.");
+    const { cancelEvent } = await import("@/lib/tenancy-events.server");
+    return cancelEvent(sb, data.residentId, data.eventId, data.reason.trim(), data.approvedBy);
   });
 
 /** From Record payment or account credit: an IP settled, so its event moves on. */
 export async function tenancyChangeAfterPayment(sb: any, invoiceId: string) {
   const { data: inv } = await sb.from("invoices").select("resident_id").eq("id", invoiceId).maybeSingle();
   const residentId = String(inv?.resident_id ?? "");
-  if (!residentId) return;
+  if (!residentId) return [];
   const { processResident } = await import("@/lib/tenancy-events.server");
-  await processResident(sb, residentId);
+  return processResident(sb, residentId);
 }

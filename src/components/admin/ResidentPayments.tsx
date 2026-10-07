@@ -313,7 +313,7 @@ export function ResidentPayments({
             open={!!open["initial"]}
             onToggle={initial.length || scheduledIp.length ? () => toggle("initial") : undefined}
           >
-            {[...initial, ...scheduledIp].map((inv) => (
+            {[...initial, ...scheduledIp, ...(b?.voided ?? [])].map((inv) => (
               <InvoiceDetail key={inv.id} invoice={inv} onPay={() => pay(inv)} />
             ))}
           </Row>
@@ -661,7 +661,7 @@ export function InvoiceDetail({ invoice, onPay }: { invoice: BillingInvoice; onP
     <div className="scroll-mt-24 space-y-3 p-5" data-invoice={invoice.number}>
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-sm font-medium text-brand-deep">
-          {invoice.scheduled ? "Not billed yet" : invoiceRef(invoice.number, invoice.type)}
+          {invoice.number.startsWith("SCH-") || invoice.scheduled ? (invoice.type === "initial" ? "IP · not billed" : "Not billed yet") : invoiceRef(invoice.number, invoice.type)}
         </p>
         <PdfPreviewButton
           size="icon"
@@ -685,13 +685,14 @@ export function InvoiceDetail({ invoice, onPay }: { invoice: BillingInvoice; onP
           <span className="text-xs text-muted-foreground">Issued {fmtDate(invoice.issuedAt)}</span>
         ) : null}
         {/* an IP can be paid before its billing day; rent cannot (agreed 7 Oct 2026) */}
-        {invoice.outstanding > 0 && (!invoice.scheduled || invoice.type === "initial") ? (
+        {invoice.outstanding > 0 && !invoice.cancelled && (!invoice.scheduled || invoice.type === "initial") ? (
           <Button size="sm" variant="outline" className="ml-auto" onClick={onPay}>
             Record payment
           </Button>
         ) : null}
       </div>
 
+      {invoice.voidNote ? <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">Void · {invoice.voidNote.replace(/^Cancelled: /, "Reason: ")}</p> : null}
       <ul className="divide-y divide-border rounded-xl border border-border bg-card">
         {invoice.items.map((item, i) => (
           <li

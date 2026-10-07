@@ -23,6 +23,7 @@ import { STAFF } from "@/data/form-options";
 import { paymentProofHistory, paymentProofUrl, replacePaymentProof } from "@/lib/resident-billing.functions";
 import { Textarea } from "@/components/ui/textarea";
 import { klToday } from "@/lib/kl-date";
+import { toastTenancyOutcomes } from "@/lib/tenancy-change-toast";
 
 export type PayableInvoice = {
   id: string;
@@ -142,6 +143,12 @@ export function RecordPaymentDialog({
         },
       });
       await afterPaymentRecorded(queryClient, res);
+      // an Update Tenancy IP paid in full: what it set going (Dani, 7 Oct 2026)
+      toastTenancyOutcomes(res.tenancyChange);
+      if (res.tenancyChange?.length) {
+        void queryClient.invalidateQueries({ queryKey: ["tenancy-events"] });
+        void queryClient.invalidateQueries({ queryKey: ["tenancy-docs"] });
+      }
       onClose();
       onRecorded?.();
     } catch (err) {

@@ -117,18 +117,24 @@ function cardLabel(status: string) {
   );
 }
 
-/** the latest version of each document type in an agreement */
+/**
+ * Newest first - but a version a cancelled Update Tenancy made is never the
+ * current one (7 Oct 2026): the version before it stands again, and the
+ * cancelled one is listed below with the older ones.
+ */
+const byCurrent = (a: AgreementDoc, b: AgreementDoc) =>
+  Number(a.status === "cancelled") - Number(b.status === "cancelled") || b.version - a.version;
+
+/** the current version of each document type in an agreement */
 function latestDocs(agreement: TenancyAgreement): AgreementDoc[] {
   return DOC_ORDER.map((t) => {
     const versions = agreement.documents.filter((d) => d.docType === t);
-    return versions.sort((a, b) => b.version - a.version)[0];
+    return versions.sort(byCurrent)[0];
   }).filter(Boolean) as AgreementDoc[];
 }
 
 function versionsOf(agreement: TenancyAgreement, docType: AgreementDocType): AgreementDoc[] {
-  return agreement.documents
-    .filter((d) => d.docType === docType)
-    .sort((a, b) => b.version - a.version);
+  return agreement.documents.filter((d) => d.docType === docType).sort(byCurrent);
 }
 
 function DocumentRow({
@@ -224,7 +230,7 @@ function DocumentRow({
         ? versions.slice(1).map((v) => (
             <tr key={v.id} className="border-t border-border/50 bg-muted/40">
               <td className="py-2 pr-3 text-xs text-muted-foreground" style={{ paddingLeft: "3rem" }}>
-                {DOC_TYPE_LABELS[v.docType]} · v{v.version} (superseded)
+                {DOC_TYPE_LABELS[v.docType]} · v{v.version} ({v.status === "cancelled" ? "cancelled" : "superseded"})
               </td>
               <td className="py-2 pr-3 text-xs text-muted-foreground">{agreement.agreementNo}</td>
               <td className="py-2 pr-3 text-xs text-muted-foreground">{fmtDate(v.effectiveDate)}</td>
@@ -309,6 +315,9 @@ function AgreementBlock({
       {parent && DONE.includes(parent.status) ? <StampUpload doc={parent} onChanged={onChanged} /> : null}
       {agreement.kind === "renewal" ? (
         <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Renewal</span>
+      ) : null}
+      {agreement.documents.length && agreement.documents.every((d) => d.status === "cancelled") ? (
+        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Cancelled</span>
       ) : null}
       {/* who made it - kept quiet, beside the number (Dani, 6 Oct 2026) */}
       {parent?.mergeValues["prepared_by"] ? (

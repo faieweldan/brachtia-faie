@@ -1651,6 +1651,7 @@ export const recordPayment = createServerFn({ method: "POST" })
       } as any)
       .eq("id", data.invoiceId);
 
+    let tenancyChange: import("@/lib/tenancy-events.server").EventOutcome[] = [];
     // a replacement access card waits for its invoice to be paid (Dani, 2 Oct 2026)
     if (balance <= 0.005) {
       try {
@@ -1659,10 +1660,10 @@ export const recordPayment = createServerFn({ method: "POST" })
       } catch (err) {
         console.warn(`access card after payment: ${err instanceof Error ? err.message : String(err)}`);
       }
-      // and an Update Tenancy's documents wait for its difference to be paid (Dani, 3 Oct 2026)
+      // and an Update Tenancy event waits for its IP to be paid - what it did is said to admin (Dani, 7 Oct 2026)
       try {
         const { tenancyChangeAfterPayment } = await import("@/lib/tenancy-change.functions");
-        await tenancyChangeAfterPayment(supabase, data.invoiceId);
+        tenancyChange = await tenancyChangeAfterPayment(supabase, data.invoiceId);
       } catch (err) {
         console.warn(`tenancy change after payment: ${err instanceof Error ? err.message : String(err)}`);
       }
@@ -1735,7 +1736,7 @@ export const recordPayment = createServerFn({ method: "POST" })
       }
     }
 
-    return { receipt, balance, residentId, residentCode, residentCreated };
+    return { receipt, balance, residentId, residentCode, residentCreated, tenancyChange };
   });
 
 /** Whether a booking's bed may be released, and the invoice that goes with it. See booking-lifecycle.ts. */

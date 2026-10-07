@@ -65,9 +65,21 @@ export type TenancyEvent = {
   /** settling, step by step - a failure part-way is picked up where it stopped, never done twice */
   rentApplied?: boolean;
   docsMade?: boolean;
+  /** the rent schedule's end before and after settling - lengthened or shortened */
+  scheduleEnd?: { from: string; to: string };
   /** what settling did to rent already billed */
   adjustment?: string;
   credit?: number;
+  /** cancelled before its date - kept, never deleted (cancellation rule, 7 Oct 2026) */
+  cancelled?: {
+    at: string;
+    reason: string;
+    approvedBy: string;
+    /** money paid on its IP (or RP adjustment), moved to account credit */
+    toCredit: number;
+    /** cancelled because an earlier event of the same request was */
+    withEvent?: string;
+  };
 };
 
 const eventsPath = (residentId: string) => `tenancy-change/${residentId}/events.json`;
@@ -96,7 +108,7 @@ export async function readEvents(sb: any, residentId: string): Promise<TenancyEv
 async function writeEvents(sb: any, residentId: string, list: TenancyEvent[]) {
   await writeJson(sb, eventsPath(residentId), list);
   const index = (await readJson<string[]>(sb, INDEX)) ?? [];
-  const open = list.some((e) => !e.effectiveAt);
+  const open = list.some((e) => !e.effectiveAt && !e.cancelled);
   if (open && !index.includes(residentId)) await writeJson(sb, INDEX, [...index, residentId]);
   if (!open && index.includes(residentId)) await writeJson(sb, INDEX, index.filter((i) => i !== residentId));
 }
@@ -105,7 +117,7 @@ export async function addEvents(sb: any, residentId: string, events: TenancyEven
   await writeEvents(sb, residentId, [...(await readEvents(sb, residentId)), ...events]);
 }
 
-export const isOpen = (e: TenancyEvent) => !e.effectiveAt;
+export const isOpen = (e: TenancyEvent) => !e.effectiveAt && !e.cancelled;
 
 export async function settled(sb: any, invoiceId: string) {
   const { data: inv } = await sb.from("invoices").select("total, status").eq("id", invoiceId).maybeSingle();
@@ -118,18 +130,38 @@ export async function settled(sb: any, invoiceId: string) {
 // one resident at a time: settling rebuilds rent, which reads billing, which runs this again
 const running = new Set<string>();
 
-/** Move every event of the resident on as far as it can go. */
-export async function processResident(sb: any, residentId: string) {
-  if (running.has(residentId)) return;
+/** what moving the events on did - said to admin after a payment (Dani, 7 Oct 2026) */
+export type EventOutcome = {
+  name: string;
+  date: string;
+  /** settled now: documents made, rent changed from its date */
+  settled: boolean;
+  /** effective now: bed moved, end date changed */
+  effective: boolean;
+  documents: string[];
+  scheduleEnd?: { from: string; to: string };
+  rentBefore: number;
+  rent: number;
+};
+
+/** Move every event of the resident on as far as it can go; says what moved. */
+export async function processResident(sb: any, residentId: string): Promise<EventOutcome[]> {
+  if (running.has(residentId)) return [];
   running.add(residentId);
+  const outcomes: EventOutcome[] = [];
+  const say = async (ev: TenancyEvent, settled: boolean, effective: boolean) => {
+    const { documentNames } = await import("@/lib/tenancy-change");
+    outcomes.push({ name: ev.name, date: ev.date, settled, effective, documents: documentNames(ev.plan), ...(ev.scheduleEnd ? { scheduleEnd: ev.scheduleEnd } : {}), rentBefore: ev.rentBefore, rent: ev.rent });
+  };
   try {
     const list = await readEvents(sb, residentId);
-    if (!list.some(isOpen)) return;
+    if (!list.some(isOpen)) return [];
     const today = klToday();
     let changed = false;
     for (const [i, ev] of list.entries()) {
+      if (ev.cancelled) continue;
       // the event before it in the same request settles first
-      const before = list.slice(0, i).filter((e) => e.requestId === ev.requestId);
+      const before = list.slice(0, i).filter((e) => e.requestId === ev.requestId && !e.cancelled);
       if (!ev.settledAt) {
         if (before.some((e) => !e.settledAt)) continue;
         if (ev.invoiceId && !(await settled(sb, ev.invoiceId))) continue;
@@ -140,12 +172,21 @@ export async function processResident(sb: any, residentId: string) {
           await writeEvents(sb, residentId, list);
         }
         changed = true;
+        await say(ev, true, false);
       }
       if (ev.settledAt && !ev.effectiveAt && ev.date <= today && !before.some((e) => !e.effectiveAt)) {
-        if (await makeEffective(sb, residentId, ev)) changed = true;
+        if (await makeEffective(sb, residentId, ev)) {
+          changed = true;
+          if (ev.effectiveAt) {
+            const o = outcomes.find((x) => x.date === ev.date && x.name === ev.name);
+            if (o) o.effective = true;
+            else await say(ev, false, true);
+          }
+        }
       }
     }
     if (changed) await writeEvents(sb, residentId, list);
+    return outcomes;
   } finally {
     running.delete(residentId);
   }
@@ -232,6 +273,7 @@ async function applyRent(sb: any, residentId: string, ev: TenancyEvent) {
   if (s) {
     const last = [...steps].sort((a, b) => a.from.localeCompare(b.from)).at(-1);
     const end = day(s.tenancy_end) > ev.periodEnd ? day(s.tenancy_end) : ev.periodEnd;
+    if (end !== day(s.tenancy_end)) ev.scheduleEnd = { from: day(s.tenancy_end), to: end };
     const { error } = await sb
       .from("rental_schedules")
       .update({ tenancy_end: end, ...(last ? { monthly_rent: last.newRent } : {}), updated_at: new Date().toISOString() })
@@ -472,4 +514,121 @@ export async function settledDepositLines(sb: any, residentId: string) {
       amount: r2(Number(i.amount || 0) * Number(i.quantity ?? 1)),
       invoiceNumber: (number.get(i.invoice_id) ?? "").startsWith("SCH-") ? "IP paid in advance" : (number.get(i.invoice_id) ?? ""),
     }));
+}
+
+/* ------------------------------------------------------------------ cancel */
+
+/**
+ * Cancel an event before its date (Dani's cancellation rule, 7 Oct 2026).
+ * Nothing is deleted - statuses change, and the record says why and who:
+ *   - its IP is voided; what was paid on it in money becomes account credit
+ *     (never a cash refund here - that is done by hand, separately); account
+ *     credit used on it is free again
+ *   - credit the event gave (a lower deposit, cheaper rent already billed) is
+ *     taken back, and a waived difference no longer counts
+ *   - settled already: its rent change is undone, its RP adjustment voided
+ *     (anything paid on it to credit) and its documents marked cancelled
+ *   - the later events of the same request are cancelled with it: they were
+ *     priced from it
+ * An event already effective cannot be cancelled - that is a new Update Tenancy.
+ */
+export async function cancelEvent(sb: any, residentId: string, eventId: string, reason: string, approvedBy: string) {
+  const list = await readEvents(sb, residentId);
+  const ev = list.find((e) => e.eventId === eventId);
+  if (!ev) throw new Error("Event not found.");
+  if (ev.cancelled) throw new Error("This event is already cancelled.");
+  if (ev.effectiveAt) throw new Error("This change has taken effect. Make a new Update Tenancy instead.");
+  const at = new Date().toISOString();
+  const stamp = new Date(at).toLocaleString("en-GB", { timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
+  const later = list.filter((e) => e.requestId === ev.requestId && e.date >= ev.date && e.eventId !== ev.eventId && !e.cancelled);
+  if (later.some((e) => e.effectiveAt)) throw new Error("A later part of this request has taken effect. Make a new Update Tenancy instead.");
+  const targets = [ev, ...later];
+  const { addCredit, reverseCredit, CREDIT_METHOD } = await import("@/lib/account-credit.server");
+
+  /** void an invoice, keep it, and move money paid on it to credit */
+  const voidInvoice = async (invoiceId: string, what: string) => {
+    const { data: inv } = await sb.from("invoices").select("id, number, notes, status").eq("id", invoiceId).maybeSingle();
+    if (!inv || inv.status === "void") return 0;
+    const { data: pays } = await sb.from("payments").select("amount, method").eq("invoice_id", invoiceId);
+    const cash = r2(((pays ?? []) as any[]).filter((p) => p.method !== CREDIT_METHOD).reduce((n, p) => n + Number(p.amount || 0), 0));
+    const note = `Cancelled: ${reason} · Approved by ${approvedBy} · ${stamp}${cash ? ` · RM ${cash.toFixed(2)} moved to account credit` : ""}`;
+    const { error } = await sb
+      .from("invoices")
+      .update({ status: "void", notes: [String(inv.notes ?? ""), note].filter(Boolean).join(" | "), updated_at: at })
+      .eq("id", invoiceId);
+    if (error) throw new Error(error.message);
+    if (cash > 0)
+      await addCredit(sb, residentId, [{ amount: cash, kind: "cancel", reason: `Paid on ${what} ${String(inv.number).startsWith("SCH-") ? "(not billed yet)" : inv.number} - ${ev.name.toLowerCase()} cancelled`, eventId: ev.eventId }]);
+    return cash;
+  };
+
+  for (const t of targets) {
+    let toCredit = 0;
+    if (t.invoiceId) toCredit += await voidInvoice(t.invoiceId, "IP");
+    if (t.adjustment) {
+      const { data: adj } = await sb.from("invoices").select("id").eq("resident_id", residentId).eq("number", t.adjustment).maybeSingle();
+      if (adj) toCredit += await voidInvoice(adj.id, "RP adjustment");
+    }
+    if (t.docsMade) await cancelDocuments(sb, residentId, t);
+    t.cancelled = { at, reason, approvedBy, toCredit, ...(t !== ev ? { withEvent: ev.eventId } : {}) };
+  }
+  const ids = targets.map((t) => t.eventId);
+  await reverseCredit(sb, residentId, ids, `${ev.name} cancelled: ${reason}`);
+
+  // a waived deposit difference of a cancelled event no longer counts as held
+  const allowPath = `tenancy-change/${residentId}/allowances.json`;
+  const allowances = (await readJson<{ eventId: string; cancelledAt?: string }[]>(sb, allowPath)) ?? [];
+  if (allowances.some((a) => ids.includes(a.eventId))) await writeJson(sb, allowPath, allowances.map((a) => (ids.includes(a.eventId) ? { ...a, cancelledAt: at } : a)));
+
+  // settled already: the rent goes back to what it was
+  let scheduleEnd: { from: string; to: string } | null = null;
+  if (targets.some((t) => t.rentApplied)) {
+    const { data: before } = await sb.from("rental_schedules").select("tenancy_end").eq("tenancy_id", ev.tenancyId).maybeSingle();
+    const rs = await import("@/lib/rent-schedule.server");
+    const saved = await rs.readRentSteps(sb, residentId, ev.tenancyId);
+    const steps = saved.steps.filter((x) => !ids.includes(x.id));
+    await rs.writeRentSteps(sb, residentId, ev.tenancyId, { steps });
+    const { data: t } = await sb.from("tenancies").select("end_date").eq("id", ev.tenancyId).maybeSingle();
+    const last = [...steps].sort((a, b) => a.from.localeCompare(b.from)).at(-1);
+    await sb
+      .from("rental_schedules")
+      .update({ tenancy_end: day(t?.end_date), monthly_rent: last ? last.newRent : ev.rentBefore, updated_at: at })
+      .eq("tenancy_id", ev.tenancyId);
+    // scheduled RPs past the old end were made for the cancelled renewal
+    await sb.from("invoices").delete().eq("tenancy_id", ev.tenancyId).eq("invoice_type", "rental").eq("status", "scheduled").eq("auto_scheduled", true).gt("period_start", day(t?.end_date));
+    await rs.syncScheduledRent(sb, ev.tenancyId);
+    if (before && day(before.tenancy_end) !== day(t?.end_date)) scheduleEnd = { from: day(before.tenancy_end), to: day(t?.end_date) };
+  }
+
+  await writeEvents(sb, residentId, list);
+  await writeJson(sb, `tenancy-change/${residentId}/cancel-${at.replace(/[:.]/g, "-")}.json`, {
+    event: ev.eventId,
+    with: later.map((e) => e.eventId),
+    reason,
+    approvedBy,
+    at,
+    ips: targets.map((t) => t.invoiceId).filter(Boolean),
+    toCredit: targets.reduce((n, t) => n + (t.cancelled?.toCredit ?? 0), 0),
+    bedReleased: targets.find((t) => t.moveTo)?.moveTo?.bedId ?? null,
+  });
+  return {
+    cancelled: targets.map((t) => t.name),
+    toCredit: r2(targets.reduce((n, t) => n + (t.cancelled?.toCredit ?? 0), 0)),
+    scheduleEnd,
+    documentsCancelled: targets.some((t) => t.docsMade),
+  };
+}
+
+/** the documents an event made, marked cancelled - kept, and the version before is current again */
+async function cancelDocuments(sb: any, residentId: string, ev: TenancyEvent) {
+  const from = ev.settledAt ? new Date(new Date(ev.settledAt).getTime() - 10 * 60_000).toISOString() : ev.at;
+  if (ev.plan.newAgreement) {
+    const { data: ags } = await sb.from("tenancy_agreements").select("id").eq("resident_id", residentId).eq("kind", "renewal").gte("created_at", ev.at);
+    const ids = ((ags ?? []) as any[]).map((a) => a.id);
+    if (ids.length) await sb.from("agreement_documents").update({ status: "cancelled" }).in("agreement_id", ids);
+  } else if (ev.agreementId) {
+    const types = [...(ev.plan.scheduleA ? ["sched_a"] : []), ...(ev.plan.scheduleC ? ["sched_c"] : [])];
+    if (types.length) await sb.from("agreement_documents").update({ status: "cancelled" }).eq("agreement_id", ev.agreementId).in("doc_type", types).gt("version", 1).gte("created_at", from);
+  }
+  if (ev.plan.accessCard) await sb.from("access_card_forms").update({ status: "cancelled" }).eq("resident_id", residentId).gte("created_at", from).neq("status", "returned");
 }

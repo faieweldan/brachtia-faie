@@ -29,12 +29,15 @@ export type CreditEntry = {
   amount: number;
   /** "Security deposit reduced - room change 11 Nov 2026" */
   reason: string;
-  kind: "deposit" | "rent";
+  kind: "deposit" | "rent" | "cancel";
   /** a deposit reclassified: which one - checkout takes it off what is held */
   depositKey?: string;
   depositLabel?: string;
   /** the Update Tenancy event it came from */
   eventId?: string;
+  /** the event was cancelled: the credit is taken back, kept here for the record */
+  reversedAt?: string;
+  reversedReason?: string;
 };
 
 const path = (residentId: string) => `account-credit/${residentId}.json`;
@@ -72,18 +75,39 @@ export async function addCredit(sb: any, residentId: string, entries: Omit<Credi
   if (!index.includes(residentId)) await writeJson(sb, INDEX, [...index, residentId]);
 }
 
-/** given, used, and what is left */
+/**
+ * Given, used, and what is left. Credit used on an invoice later voided - a
+ * cancelled event's IP - is the resident's again.
+ */
 export async function creditBalance(sb: any, residentId: string) {
-  const given = r2((await creditEntries(sb, residentId)).reduce((n, e) => n + e.amount, 0));
+  const given = r2((await creditEntries(sb, residentId)).filter((e) => !e.reversedAt).reduce((n, e) => n + e.amount, 0));
   if (!given) return { given: 0, used: 0, balance: 0 };
-  const { data } = await sb.from("payments").select("amount").eq("resident_id", residentId).eq("method", CREDIT_METHOD);
-  const used = r2(((data ?? []) as any[]).reduce((n, p) => n + Number(p.amount || 0), 0));
+  const { data } = await sb.from("payments").select("amount, invoice_id").eq("resident_id", residentId).eq("method", CREDIT_METHOD);
+  const rows = (data ?? []) as any[];
+  const { data: voided } = rows.length
+    ? await sb.from("invoices").select("id").in("id", [...new Set(rows.map((p) => p.invoice_id))]).eq("status", "void")
+    : { data: [] };
+  const off = new Set(((voided ?? []) as any[]).map((v) => v.id));
+  const used = r2(rows.filter((p) => !off.has(p.invoice_id)).reduce((n, p) => n + Number(p.amount || 0), 0));
   return { given, used, balance: r2(Math.max(0, given - used)) };
 }
 
 /** the deposits reclassified as credit, by deposit - checkout holds that much less */
 export async function reclassifiedDeposits(sb: any, residentId: string) {
-  return (await creditEntries(sb, residentId)).filter((e) => e.kind === "deposit");
+  return (await creditEntries(sb, residentId)).filter((e) => e.kind === "deposit" && !e.reversedAt);
+}
+
+/** a cancelled event's credit, taken back - marked, never removed */
+export async function reverseCredit(sb: any, residentId: string, eventIds: string[], reason: string) {
+  const list = await creditEntries(sb, residentId);
+  const at = new Date().toISOString();
+  let n = 0;
+  for (const e of list) if (e.eventId && eventIds.includes(e.eventId) && e.kind !== "cancel" && !e.reversedAt) {
+    e.reversedAt = at;
+    e.reversedReason = reason;
+    n++;
+  }
+  if (n) await writeJson(sb, path(residentId), list);
 }
 
 /**

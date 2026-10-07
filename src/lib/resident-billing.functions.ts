@@ -28,6 +28,10 @@ export type BillingInvoice = {
   status: string;
   /** rent made ahead: listed, not owed, no number until it is billed */
   scheduled: boolean;
+  /** void - a cancelled Update Tenancy IP, kept for the record */
+  cancelled?: boolean;
+  /** "Cancelled: reason · Approved by X · 10 Nov 2026, 3:30 pm" */
+  voidNote?: string;
   /** the day a scheduled invoice is billed */
   billOn: string;
   /** a scheduled invoice admin has changed - the schedule leaves it as it is */
@@ -87,6 +91,8 @@ export type ResidentBilling = {
   };
   /** rent invoices not billed yet, soonest first - in no total */
   scheduled: BillingInvoice[];
+  /** IPs of cancelled Update Tenancy events - void, kept in the history with why and who */
+  voided: BillingInvoice[];
   /** account credit from Update Tenancy: given, used on invoices, left */
   accountCredit: { given: number; used: number; balance: number };
 };
@@ -143,6 +149,7 @@ export const getResidentBilling = createServerFn({ method: "GET" })
       groups: { initial: [], rental: [], charge: [], checkout: [] },
       scheduled: [],
       accountCredit: { given: 0, used: 0, balance: 0 },
+      voided: [],
     };
 
     // billing may be filed under either id, depending on when it was raised
@@ -220,6 +227,21 @@ export const getResidentBilling = createServerFn({ method: "GET" })
       .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
     out.nextDue = unpaid[0]?.dueDate ?? "";
     out.scheduled.sort((a, b) => a.periodStart.localeCompare(b.periodStart));
+
+    // a cancelled event's IP: void, in no total, still shown (cancellation rule, 7 Oct 2026)
+    const { data: gone } = await supabase.from("invoices").select("*").eq("status", "void").in("resident_id", ids).like("notes", "%Cancelled:%");
+    if (gone?.length) {
+      const goneIds = (gone as any[]).map((g) => g.id);
+      const [gi, gp] = await Promise.all([
+        supabase.from("invoice_items").select("*").in("invoice_id", goneIds).order("sort_order"),
+        supabase.from("payments").select("*").in("invoice_id", goneIds).order("paid_on"),
+      ]);
+      out.voided = (gone as any[]).map((raw) => ({
+        ...toBillingInvoice(raw, ((gi.data ?? []) as any[]).filter((x) => x.invoice_id === raw.id), ((gp.data ?? []) as any[]).filter((x) => x.invoice_id === raw.id), [], residentCode),
+        cancelled: true,
+        voidNote: String(raw.notes ?? "").split(" | ").find((n: string) => n.startsWith("Cancelled:")) ?? "",
+      }));
+    }
 
     return out;
   });
