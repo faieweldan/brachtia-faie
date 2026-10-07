@@ -62,6 +62,13 @@ export type TenancyEvent = {
   effectiveAt?: string;
   /** effective date passed, but the bed is still someone else's */
   waitingFor?: string;
+  /** the target bed held for this event on confirm - released if it is cancelled */
+  reservedBed?: string;
+  /** the effective date came while the IP was unpaid (7 Oct 2026 rule) */
+  overdue?: boolean;
+  /** paid after its date: nothing is backdated - admin confirms a new effective date first */
+  needsDate?: boolean;
+  dateConfirmedAt?: string;
   /** settling, step by step - a failure part-way is picked up where it stopped, never done twice */
   rentApplied?: boolean;
   docsMade?: boolean;
@@ -164,7 +171,23 @@ export async function processResident(sb: any, residentId: string): Promise<Even
       const before = list.slice(0, i).filter((e) => e.requestId === ev.requestId && !e.cancelled);
       if (!ev.settledAt) {
         if (before.some((e) => !e.settledAt)) continue;
-        if (ev.invoiceId && !(await settled(sb, ev.invoiceId))) continue;
+        const paid = !ev.invoiceId || (await settled(sb, ev.invoiceId));
+        // the date came and the IP is not fully paid: nothing moves, nothing is backdated
+        if (!paid) {
+          if (ev.date <= today && !ev.overdue) {
+            ev.overdue = true;
+            changed = true;
+          }
+          continue;
+        }
+        // paid after its date: admin confirms a new effective date before anything happens
+        if (ev.overdue && !ev.dateConfirmedAt) {
+          if (!ev.needsDate) {
+            ev.needsDate = true;
+            changed = true;
+          }
+          continue;
+        }
         try {
           await settle(sb, residentId, ev);
         } finally {
@@ -570,6 +593,7 @@ export async function cancelEvent(sb: any, residentId: string, eventId: string, 
       if (adj) toCredit += await voidInvoice(adj.id, "RP adjustment");
     }
     if (t.docsMade) await cancelDocuments(sb, residentId, t);
+    if (t.reservedBed) await releaseBed(sb, t.reservedBed, residentId);
     t.cancelled = { at, reason, approvedBy, toCredit, ...(t !== ev ? { withEvent: ev.eventId } : {}) };
   }
   const ids = targets.map((t) => t.eventId);
@@ -631,4 +655,62 @@ async function cancelDocuments(sb: any, residentId: string, ev: TenancyEvent) {
     if (types.length) await sb.from("agreement_documents").update({ status: "cancelled" }).eq("agreement_id", ev.agreementId).in("doc_type", types).gt("version", 1).gte("created_at", from);
   }
   if (ev.plan.accessCard) await sb.from("access_card_forms").update({ status: "cancelled" }).eq("resident_id", residentId).gte("created_at", from).neq("status", "returned");
+}
+
+/* ------------------------------------------------------------- reservation */
+
+/** what a reserved bed says on Homes and in the room lists */
+export const reservedLabel = (name: string, date: string) => `${name} - room change from ${date}`;
+
+/**
+ * Hold the target bed for the event (7 Oct 2026 rule): a vacant bed becomes
+ * "held" for the resident from the effective date, so nobody else can pick it.
+ * A bed still occupied until then is not touched - the event itself keeps it,
+ * and the room list leaves it out for anyone else.
+ */
+export async function reserveBed(sb: any, residentId: string, bedId: string, date: string) {
+  const { data: bed } = await sb.from("beds").select("id, status, resident_id").eq("id", bedId).maybeSingle();
+  if (!bed || bed.status !== "vacant" || bed.resident_id) return false;
+  const { data: r } = await sb.from("residents").select("full_name").eq("id", residentId).maybeSingle();
+  const { error } = await sb.from("beds").update({ status: "held", hold_for: reservedLabel(String(r?.full_name ?? "Resident"), date), hold_until: null }).eq("id", bedId);
+  if (error) throw new Error(error.message);
+  return true;
+}
+
+/** a cancelled event's hold, let go - only while it is still that hold */
+async function releaseBed(sb: any, bedId: string, residentId: string) {
+  const { data: bed } = await sb.from("beds").select("status, hold_for, resident_id").eq("id", bedId).maybeSingle();
+  if (bed?.status === "held" && !bed.resident_id && String(bed.hold_for ?? "").includes(" - room change from ")) {
+    await sb.from("beds").update({ status: "vacant", hold_for: null, hold_until: null }).eq("id", bedId);
+  }
+  void residentId;
+}
+
+/** every bed an open event has claimed - the room lists leave them out for anyone else */
+export async function claimedBeds(sb: any) {
+  const index = (await readJson<string[]>(sb, INDEX)) ?? [];
+  const out: { bedId: string; residentId: string; date: string }[] = [];
+  for (const id of index) for (const e of (await readEvents(sb, id)).filter(isOpen)) if (e.moveTo) out.push({ bedId: e.moveTo.bedId, residentId: id, date: e.date });
+  return out;
+}
+
+/**
+ * Paid after its date (7 Oct 2026 rule): admin confirms the new effective date,
+ * and only then do the documents, the rent (pro-rated from the new date) and
+ * the move follow. A move is from today on; a date change keeps its start.
+ */
+export async function confirmEffectiveDate(sb: any, residentId: string, eventId: string, date: string) {
+  const list = await readEvents(sb, residentId);
+  const ev = list.find((e) => e.eventId === eventId);
+  if (!ev) throw new Error("Event not found.");
+  if (!ev.needsDate) throw new Error("This event does not need a new date.");
+  const moves = ev.flags.room || ev.flags.occupancy;
+  if (moves && date < klToday()) throw new Error("Choose a date from today on.");
+  if (!moves && date !== ev.date) throw new Error("An extension or renewal starts the day after the tenancy ends.");
+  if (date > ev.periodEnd) throw new Error("The date is after the tenancy ends.");
+  ev.date = date;
+  ev.needsDate = false;
+  ev.dateConfirmedAt = new Date().toISOString();
+  await writeEvents(sb, residentId, list);
+  return processResident(sb, residentId);
 }

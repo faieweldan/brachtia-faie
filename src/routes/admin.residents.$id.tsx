@@ -435,7 +435,7 @@ function ResidentProfilePage() {
    * it (Dani, 7 Oct 2026): the original end date stays on the tenancy until the
    * event's day; the new one is shown beside it, marked Scheduled or Settled.
    */
-  const pendingEvents = (tenancyEvents.data?.events ?? []).filter((e) => e.state === "scheduled" || e.state === "settled").sort((a, b) => a.date.localeCompare(b.date));
+  const pendingEvents = (tenancyEvents.data?.events ?? []).filter((e) => e.state !== "effective" && e.state !== "cancelled").sort((a, b) => a.date.localeCompare(b.date));
 
   const stay = {
     ...stayDates(tenancy, placed, form, saved),

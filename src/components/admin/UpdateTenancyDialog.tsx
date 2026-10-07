@@ -125,6 +125,8 @@ export function UpdateTenancyDialog({
   const [picking, setPicking] = useState(false);
   const [newEnd, setNewEnd] = useState("");
   const [moveOn, setMoveOn] = useState(today);
+  // both picked: the room changes with the renewal / extension unless admin asks for its own date (7 Oct 2026)
+  const [ownDate, setOwnDate] = useState(false);
   // admin's own figures, per event - behind "Adjust amounts"
   const [rentTyped, setRentTyped] = useState<Record<number, string>>({});
   const [requiredTyped, setRequiredTyped] = useState<Record<string, string>>({});
@@ -145,25 +147,34 @@ export function UpdateTenancyDialog({
     setBedId("");
     setNewEnd("");
     setMoveOn(klToday());
+    setOwnDate(false);
     resetMoney();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, placed?.bed.id]);
 
+  const claimedIds = new Set((basis.data?.claimed ?? []).map((c) => c.bedId));
   const free = useMemo(
     () =>
       allBeds(units).filter(
         ({ unit, bed }) =>
           // vacant now, or someone else's whose tenancy ends before ours does - the move then waits for it (Dani, 7 Oct 2026)
           bed.id !== placed?.bed.id &&
+          // reserved for another resident's room change
+          !claimedIds.has(bed.id) &&
           (bed.status === "vacant" || (!!bed.residentId && !!bed.tenancyEnd && bed.tenancyEnd.slice(0, 10) < (tenancy.end || "9999"))) &&
           bedOccupancy(bed.label) === occ &&
           // men and women never share a unit - the same rule as a booking's room list
           unitAccepts(unit, residents, gender),
       ),
-    [units, occ, placed?.bed.id, residents, gender, tenancy.end],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [units, occ, placed?.bed.id, residents, gender, tenancy.end, basis.data?.claimed],
   );
   const target = wantRoom ? (free.find((b) => b.bed.id === bedId) ?? null) : null;
   const end = wantDate && newEnd ? newEnd : oldEnd;
+  // the renewal / extension start: the day after the tenancy ends
+  const dateStart = oldEnd ? nextDay(oldEnd) : "";
+  const together = wantRoom && wantDate && end > oldEnd && !ownDate;
+  const effectiveMove = together ? dateStart : moveOn;
   // the bed is someone else's until their tenancy ends: the move can only be after it
   const occupiedUntil = target?.bed.residentId ? (target.bed.tenancyEnd ?? "").slice(0, 10) : "";
 
@@ -192,7 +203,7 @@ export function UpdateTenancyDialog({
     let held: Deposits = held0;
     let bed: BedRow | null = placed ?? null;
     let credit = basis.data?.accountCredit ?? 0;
-    return planEvents(flags, moveOn, oldEnd).map((p, i) => {
+    return planEvents(flags, effectiveMove, oldEnd).map((p, i) => {
       const bedBefore = bed;
       if (isMove(p.flags) && target) bed = target;
       // a new room: its Website rate; a renewal: the Website rate of the room then; an extension: the rent it has
@@ -233,11 +244,11 @@ export function UpdateTenancyDialog({
       return ev;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [basis.data, flags.room, flags.unit, flags.occupancy, flags.date, moveOn, oldEnd, end, target, placed, oldRent, rentTyped, requiredTyped, waived, today]);
+  }, [basis.data, flags.room, flags.unit, flags.occupancy, flags.date, effectiveMove, oldEnd, end, target, placed, oldRent, rentTyped, requiredTyped, waived, today]);
 
   const openEvents = basis.data?.open ?? [];
-  const tooEarly = !!occupiedUntil && moveOn <= occupiedUntil;
-  const moveAfterEnd = moved && moveOn > end;
+  const tooEarly = !!occupiedUntil && effectiveMove <= occupiedUntil;
+  const moveAfterEnd = moved && effectiveMove > end;
   // what stops each step going on - said where the Next button is
   const stop =
     step === 1
@@ -257,7 +268,8 @@ export function UpdateTenancyDialog({
                   ? "Nothing has changed."
                   : ""
         : "";
-  const action = flags.date === "renewal" ? "Initiate Renewal" : flags.date === "extension" ? "Initiate Extension" : "Confirm and proceed";
+  const dateWord = flags.date === "renewal" ? "Renewal" : flags.date === "extension" ? "Extension" : "";
+  const action = dateWord && moved ? `Initiate ${dateWord} + Room Change` : dateWord ? `Initiate ${dateWord}` : "Initiate Room Change";
 
   async function confirm() {
     if (!basis.data?.tenancy) return;
@@ -277,7 +289,7 @@ export function UpdateTenancyDialog({
             oldEnd,
             newEnd: end,
           },
-          moveOn: moved ? moveOn : "",
+          moveOn: moved ? effectiveMove : "",
           moveTo: moved && target ? { bedId: target.bed.id, roomId: target.room.id, unitId: target.unit.id, occupancy: target.room.occupancy } : null,
           events: events.map((e) => ({
             date: e.date,
@@ -310,7 +322,7 @@ export function UpdateTenancyDialog({
   }
 
   const occLabel = (o: string) => OCCUPANCY_LABEL[o] ?? o;
-  const bedLabel = (b: BedRow | null | undefined) => (b ? `${b.unit.unitNo} · Room ${b.room.letter} · ${b.bed.label}` : "—");
+  const bedLabel = (b: BedRow | null | undefined) => (b ? `${b.unit.residenceName} · ${b.unit.unitNo} · Room ${b.room.letter} · ${b.bed.label}` : "—");
 
   return (
     <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>
@@ -394,20 +406,51 @@ export function UpdateTenancyDialog({
                       {target ? "Change" : "Choose room"}
                     </Button>
                   </div>
-                  <label className="flex flex-wrap items-center gap-3">
-                    <span className="w-24 text-xs text-muted-foreground">Effective date</span>
-                    <DateInput
-                      min={occupiedUntil ? shiftDate(occupiedUntil, { days: 1 }) : today}
-                      max={end}
-                      value={moveOn}
-                      onChange={(e) => setMoveOn(e.target.value)}
-                      className="h-9 w-44"
-                    />
-                  </label>
-                  {occupiedUntil ? (
-                    <p className={`text-xs ${tooEarly ? "font-medium text-rose-700" : "text-muted-foreground"}`}>
-                      Occupied until {fmtDate(occupiedUntil)} - free from {fmtDate(shiftDate(occupiedUntil, { days: 1 }))}.
-                    </p>
+                  {together ? (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="w-24 text-xs text-muted-foreground">Effective date</span>
+                      <span className="text-sm">
+                        Room change and {dateWord.toLowerCase()} happen together on <span className="font-medium">{fmtDate(dateStart)}</span>.
+                      </span>
+                      <button type="button" className="text-xs text-brand-deep underline underline-offset-2" onClick={() => setOwnDate(true)}>
+                        Use a different room-change date
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-wrap items-center gap-3">
+                      <span className="w-24 text-xs text-muted-foreground">Effective date</span>
+                      <DateInput
+                        min={occupiedUntil ? shiftDate(occupiedUntil, { days: 1 }) : today}
+                        max={end}
+                        value={moveOn}
+                        onChange={(e) => setMoveOn(e.target.value)}
+                        className="h-9 w-44"
+                      />
+                      {wantDate && ownDate ? (
+                        <button type="button" className="text-xs text-brand-deep underline underline-offset-2" onClick={() => setOwnDate(false)}>
+                          Move with the {dateWord.toLowerCase() || "date change"} instead
+                        </button>
+                      ) : null}
+                    </label>
+                  )}
+                  {/* the bed is not free on the date: never moved silently - admin chooses */}
+                  {occupiedUntil && tooEarly ? (
+                    <div className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800">
+                      This bed is free from {fmtDate(shiftDate(occupiedUntil, { days: 1 }))}, not {fmtDate(effectiveMove)}. Choose another room, or{" "}
+                      <button
+                        type="button"
+                        className="font-medium underline underline-offset-2"
+                        onClick={() => {
+                          setOwnDate(true);
+                          setMoveOn(shiftDate(occupiedUntil, { days: 1 }));
+                        }}
+                      >
+                        move on {fmtDate(shiftDate(occupiedUntil, { days: 1 }))}
+                      </button>
+                      {wantDate ? " (a separate event)." : "."}
+                    </div>
+                  ) : occupiedUntil ? (
+                    <p className="text-xs text-muted-foreground">Occupied until {fmtDate(occupiedUntil)} - free from {fmtDate(shiftDate(occupiedUntil, { days: 1 }))}.</p>
                   ) : null}
                 </section>
               ) : null}
@@ -455,6 +498,7 @@ export function UpdateTenancyDialog({
                   onRent={(v) => setRentTyped((t) => ({ ...t, [e.i]: v }))}
                   requiredValue={(k) => requiredTyped[`${e.i}:${k}`]}
                   onRequired={(k, v) => setRequiredTyped((t) => ({ ...t, [`${e.i}:${k}`]: v }))}
+                  position={basis.data ? { cash: basis.data.heldCash, waived: basis.data.waivedHeld } : null}
                 />
               ))}
               {basis.data && !basis.data.hasSchedule ? <p className="text-xs text-amber-700">Set up the rent schedule on Payments first.</p> : null}
@@ -477,11 +521,11 @@ export function UpdateTenancyDialog({
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">On confirm</p>
                 <ul className="space-y-1.5 text-sm">
                   {[
-                    "Each IP is created now as scheduled, and billed 14 days before its event.",
-                    "Payment can be recorded early. Account credit is applied by itself.",
-                    "Documents are made once that event's IP is fully settled.",
-                    "Rental Payments change from the effective date.",
-                    "The bed and end date change on the effective date.",
+                    ...(moved ? ["The room change will not take effect until its IP is fully paid. The new bed is reserved now; the resident stays in the current one."] : []),
+                    "Each IP is created now as scheduled, and billed 14 days before its event. It can be paid early; account credit counts.",
+                    "Until the IP is fully paid: no new agreement, no Schedule A or C, no access card form - room, rent and end date stay as they are.",
+                    "Once paid: the documents are made, and the event is Paid · Scheduled.",
+                    "On the effective date: the room, rent and tenancy end change. Paid late: a new effective date is set - nothing is backdated.",
                     "Earlier document versions are kept as Superseded.",
                   ].map((t) => (
                     <li key={t} className="flex gap-2">
@@ -520,6 +564,7 @@ export function UpdateTenancyDialog({
         rows={free}
         residents={residents}
         picked={bedId}
+        homeResidence={placed?.unit.residenceId ?? ""}
         occupancy={occLabel(occ)}
         rateOf={websiteRate}
         onPick={(b) => {
@@ -527,7 +572,7 @@ export function UpdateTenancyDialog({
           resetMoney();
           // someone else's bed: the move starts the day after their tenancy ends
           const until = b.bed.residentId ? (b.bed.tenancyEnd ?? "").slice(0, 10) : "";
-          setMoveOn(until ? shiftDate(until, { days: 1 }) : today);
+          if (!together) setMoveOn(until ? shiftDate(until, { days: 1 }) : today);
           setPicking(false);
         }}
       />
@@ -571,7 +616,9 @@ function EventCard({
   onRent,
   requiredValue,
   onRequired,
+  position,
 }: {
+  position: { cash: Record<string, number>; waived: Record<string, number> } | null;
   e: PricedEvent;
   numbered: boolean;
   today: string;
@@ -584,6 +631,9 @@ function EventCard({
   onRequired: (k: string, v: string) => void;
 }) {
   const [show, setShow] = useState<"" | "calc" | "adjust">("");
+  // the first event starts from what is held now: cash and earlier waivers apart; a later one from the first's requirement
+  const cashOf = (k: string, covered: number) => (e.i === 0 && position ? (position.cash as Record<string, number>)[k] ?? covered : covered);
+  const waivedOf = (k: string) => (e.i === 0 && position ? (position.waived as Record<string, number>)[k] ?? 0 : 0);
   const moves = isMove(e.flags);
   const split = moves && Math.abs(e.rent - e.rentBefore) > 0.005 ? moveMonthSplit(e.date, e.rentBefore, e.rent) : null;
   const rentLabel = e.flags.date === "renewal" ? "Renewal rate" : e.flags.date === "extension" ? "Extension rate" : "New rental";
@@ -598,6 +648,9 @@ function EventCard({
       </header>
       <dl className="space-y-1.5 px-4 py-3 text-sm">
         {moves ? <Row label="Room" value={`${bedLabel(e.bedBefore)} → ${bedLabel(e.bed)}`} /> : null}
+        {moves && e.bed && e.bedBefore && e.bed.unit.residenceName !== e.bedBefore.unit.residenceName ? (
+          <Row label="Residence" value={`${e.bedBefore.unit.residenceName} → ${e.bed.unit.residenceName}`} />
+        ) : null}
         <Row label="Rental" value={Math.abs(e.rent - e.rentBefore) > 0.005 ? `${money(e.rentBefore)} → ${money(e.rent)} a month` : `${money(e.rent)} a month, unchanged`} />
         <Row
           label="IP payable"
@@ -625,7 +678,8 @@ function EventCard({
             <thead className="text-muted-foreground">
               <tr>
                 <th className="py-1 text-left font-medium">Deposit</th>
-                <th className="py-1 text-right font-medium">Held</th>
+                <th className="py-1 text-right font-medium">Cash held</th>
+                <th className="py-1 text-right font-medium">Waived</th>
                 <th className="py-1 text-right font-medium">Required</th>
                 <th className="py-1 text-right font-medium">Difference</th>
               </tr>
@@ -634,7 +688,8 @@ function EventCard({
               {e.deposits.rows.map((r) => (
                 <tr key={r.key}>
                   <td className="py-0.5">{r.label}</td>
-                  <td className="py-0.5 text-right">{money(r.held)}</td>
+                  <td className="py-0.5 text-right">{money(cashOf(r.key, r.held))}</td>
+                  <td className="py-0.5 text-right text-muted-foreground">{waivedOf(r.key) ? money(waivedOf(r.key)) : "–"}</td>
                   <td className="py-0.5 text-right">{money(r.required)}</td>
                   <td className={`py-0.5 text-right ${r.difference > 0 ? "text-rose-700" : r.difference < 0 ? "text-emerald-700" : "text-muted-foreground"}`}>
                     {r.difference ? `${r.difference > 0 ? "+" : "−"} ${money(Math.abs(r.difference))}` : "–"}
@@ -643,6 +698,9 @@ function EventCard({
               ))}
             </tbody>
           </table>
+          {e.deposits.rows.some((r) => waivedOf(r.key)) ? (
+            <p className="text-muted-foreground">A waived difference counts towards the requirement but is not money: only cash held is refundable at checkout.</p>
+          ) : null}
           <div className="space-y-0.5">
             <p className="font-medium text-foreground">IP</p>
             {e.ip.lines.map((l) => (
@@ -738,7 +796,9 @@ function RoomPicker({
   occupancy,
   rateOf,
   onPick,
+  homeResidence,
 }: {
+  homeResidence: string;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   rows: BedRow[];
@@ -750,8 +810,13 @@ function RoomPicker({
 }) {
   const [q, setQ] = useState("");
   const [letter, setLetter] = useState("");
-  const letters = [...new Set(rows.map((b) => b.room.letter))].sort();
-  const shown = rows.filter((b) => (!letter || b.room.letter === letter) && (!q || b.unit.unitNo.toLowerCase().includes(q.toLowerCase())));
+  const letters = [...new Set(rows.filter((b) => b.unit.residenceId === homeResidence).map((b) => b.room.letter))].sort();
+  const residences = [...new Map(rows.map((b) => [b.unit.residenceId, b.unit.residenceName])).entries()];
+  const [residence, setResidence] = useState(homeResidence);
+  const inResidence = rows.filter((b) => !residence || b.unit.residenceId === residence);
+  const shown = inResidence.filter((b) => (!letter || b.room.letter === letter) && (!q || b.unit.unitNo.toLowerCase().includes(q.toLowerCase())));
+  // another residence: not yet - its agreement and access card templates are not set up (7 Oct 2026)
+  const elsewhere = residence && residence !== homeResidence;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="admin-ui flex max-h-[85vh] max-w-3xl flex-col gap-3 overflow-hidden">
@@ -768,7 +833,15 @@ function RoomPicker({
             <Segmented label="Room" value={letter} options={[{ value: "", label: "All" }, ...letters.map((l) => ({ value: l, label: l === "Unit" ? "Whole unit" : l }))]} onChange={setLetter} />
           ) : null}
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        {residences.length > 1 ? (
+          <Segmented label="Residence" value={residence} options={residences.map(([id, name]) => ({ value: id, label: name }))} onChange={setResidence} />
+        ) : null}
+        {elsewhere ? (
+          <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
+            Unavailable - {residences.find(([id]) => id === residence)?.[1]} tenancy agreement and access-card templates are not configured yet. Room and unit changes within the same residence still work.
+          </p>
+        ) : null}
+        <div className={`min-h-0 flex-1 overflow-y-auto ${elsewhere ? "pointer-events-none opacity-50" : ""}`}>
           <RoomList rows={shown} residents={residents} current="" picked={picked} rateOf={rateOf} onPick={(id) => onPick(rows.find((b) => b.bed.id === id)!)} />
         </div>
       </DialogContent>

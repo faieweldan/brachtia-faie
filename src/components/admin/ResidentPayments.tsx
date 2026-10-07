@@ -228,6 +228,8 @@ export function ResidentPayments({
   const scheduledRent = (b?.scheduled ?? []).filter((i) => i.type === "rental").filter(forTenancy);
   // Update Tenancy IPs made ahead - listed with the initial payment, owed on their billing day
   const scheduledIp = (b?.scheduled ?? []).filter((i) => i.type === "initial");
+  // an Update Tenancy IP not yet billed, or billed and not fully paid - the section is not Completed (voided ones do not count)
+  const ipOpen = [...scheduledIp, ...initial].filter((i) => i.outstanding > 0.005);
   const lastIssuedEnd =
     issuedRent
       .map((i) => i.periodEnd.slice(0, 10))
@@ -293,19 +295,25 @@ export function ResidentPayments({
           <Row
             icon={Wallet}
             title="Initial payment"
-            tone={initial.length === 0 ? "idle" : initialDue > 0 ? "due" : "done"}
+            tone={initial.length === 0 ? "idle" : initialDue > 0 ? "due" : ipOpen.length ? "due" : "done"}
             status={
               initial.length === 0
                 ? "Not raised"
                 : initialDue > 0
                   ? `${money(initialDue)} due`
-                  : "Completed"
+                  : ipOpen.length
+                    ? "Payment pending"
+                    : "Completed"
             }
             detail={
               initial.length
-                ? `${money(sumBy(initial, "total"))} billed · ${money(sumBy(initial, "paid"))} collected${
-                    initialCredit > 0 ? ` · ${money(initialCredit)} credit` : ""
-                  }${scheduledIp.length ? ` · ${scheduledIp.length} scheduled` : ""}`
+                ? [
+                    `${initial.filter((i) => i.outstanding <= 0.005).length + scheduledIp.filter((i) => i.outstanding <= 0.005).length} completed`,
+                    ...(scheduledIp.filter((i) => i.outstanding > 0.005).length ? [`${scheduledIp.filter((i) => i.outstanding > 0.005).length} scheduled`] : []),
+                    ...(initial.filter((i) => i.outstanding > 0.005).length ? [`${initial.filter((i) => i.outstanding > 0.005).length} awaiting payment`] : []),
+                    `${money(sumBy(initial, "total"))} billed · ${money(sumBy(initial, "paid"))} collected`,
+                    ...(initialCredit > 0 ? [`${money(initialCredit)} credit`] : []),
+                  ].join(" · ")
                 : scheduledIp.length
                   ? `${scheduledIp.length} scheduled`
                   : ""
@@ -679,7 +687,7 @@ export function InvoiceDetail({ invoice, onPay }: { invoice: BillingInvoice; onP
         <TonePill tone={state.tone}>{state.status}</TonePill>
         {invoice.scheduled ? (
           <span className="text-xs text-muted-foreground">
-            Bills {fmtDate(invoice.billOn)} · Due {fmtDate(invoice.dueDate)}
+            {invoice.type === "initial" && invoice.outstanding > 0.005 ? `Scheduled - bills on ${fmtDate(invoice.billOn)}` : `Bills ${fmtDate(invoice.billOn)}`} · Due {fmtDate(invoice.dueDate)}
           </span>
         ) : invoice.issuedAt ? (
           <span className="text-xs text-muted-foreground">Issued {fmtDate(invoice.issuedAt)}</span>

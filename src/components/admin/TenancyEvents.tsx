@@ -8,7 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { fmtDate, money } from "@/lib/ops-store";
-import { cancelTenancyEvent } from "@/lib/tenancy-change.functions";
+import { cancelTenancyEvent, confirmEventDate } from "@/lib/tenancy-change.functions";
+import { DateInput } from "@/components/ui/date-input";
+import { klToday } from "@/lib/kl-date";
+import { toastTenancyOutcomes } from "@/lib/tenancy-change-toast";
 import { scheduleChange } from "@/lib/tenancy-change-toast";
 
 type EventRow = {
@@ -20,7 +23,8 @@ type EventRow = {
   periodEnd: string;
   ip: { number: string; total: number; paid: number; billOn: string } | null;
   documents: string[];
-  state: "scheduled" | "settled" | "effective" | "cancelled";
+  state: "scheduled" | "overdue" | "needs_date" | "settled" | "effective" | "cancelled";
+  moves?: boolean;
   cancelled: { at: string; reason: string; approvedBy: string; toCredit: number; withEvent?: string } | null;
   waitingFor: string;
   adjustment: string;
@@ -29,11 +33,16 @@ type EventRow = {
 
 /**
  * One set of words for an event, used on the profile, the payment notice and
- * the tenancy history (Dani, 7 Oct 2026): Scheduled (IP not paid), Paid ·
- * Scheduled (waiting for its effective date), Effective, Cancelled.
+ * the tenancy history (Dani, 7 Oct 2026): Awaiting payment (IP not fully
+ * paid - nothing happens yet), Payment overdue (its date came first), Paid ·
+ * New date needed (paid late - nothing is backdated), Paid · Scheduled
+ * (documents made, waiting for its date), Effective, Cancelled.
  */
+export const OPEN_STATES = ["scheduled", "overdue", "needs_date", "settled"] as const;
 export const EVENT_STATE = {
-  scheduled: { label: "Scheduled", tone: "bg-amber-50 text-amber-800" },
+  scheduled: { label: "Awaiting payment", tone: "bg-amber-50 text-amber-800" },
+  overdue: { label: "Payment overdue", tone: "bg-rose-50 text-rose-800" },
+  needs_date: { label: "Paid · New date needed", tone: "bg-violet-50 text-violet-800" },
   settled: { label: "Paid · Scheduled", tone: "bg-sky-50 text-sky-800" },
   effective: { label: "Effective", tone: "bg-emerald-50 text-emerald-800" },
   cancelled: { label: "Cancelled", tone: "bg-muted text-muted-foreground" },
@@ -56,7 +65,7 @@ const stamp = (iso: string) =>
  */
 export function TenancyEvents({ events, residentId, onChanged }: { events: EventRow[]; residentId: string; onChanged: () => void }) {
   const [cancelling, setCancelling] = useState<EventRow | null>(null);
-  const open = events.filter((e) => e.state === "scheduled" || e.state === "settled").sort((a, b) => a.date.localeCompare(b.date));
+  const open = events.filter((e) => (OPEN_STATES as readonly string[]).includes(e.state)).sort((a, b) => a.date.localeCompare(b.date));
   // every change, the ones still to come first, then the rest newest first
   const shown = [...open, ...events.filter((e) => !open.includes(e))];
   const later = (e: EventRow) => open.filter((o) => o.date > e.date && o.eventId !== e.eventId);
@@ -76,7 +85,7 @@ export function TenancyEvents({ events, residentId, onChanged }: { events: Event
                   {fmtDate(e.date)} · {e.name}
                 </span>
                 <EventStatusPill state={e.state} />
-                {e.state === "scheduled" || e.state === "settled" ? (
+                {(OPEN_STATES as readonly string[]).includes(e.state) ? (
                   <Button size="sm" variant="ghost" className="ml-auto h-7 text-xs text-rose-700" onClick={() => setCancelling(e)}>
                     Cancel event
                   </Button>
@@ -123,10 +132,14 @@ export function TenancyEvents({ events, residentId, onChanged }: { events: Event
                   </div>
                   <div>
                     <dt className="inline">Documents </dt>
-                    <dd className="inline text-foreground">{e.state === "scheduled" ? "after the IP is paid" : e.documents.length ? "made" : "none"}</dd>
+                    <dd className="inline text-foreground">{e.state === "settled" ? (e.documents.length ? "made" : "none") : "after the IP is fully paid"}</dd>
                   </div>
                 </dl>
               )}
+              {e.state === "overdue" ? (
+                <p className="mt-1 text-xs text-rose-700">The effective date passed before the IP was paid. Nothing has moved; once paid, a new effective date is set.</p>
+              ) : null}
+              {e.state === "needs_date" ? <NewDate event={e} residentId={residentId} onDone={onChanged} /> : null}
               {e.waitingFor ? <p className="mt-1 text-xs text-amber-700">The new bed is still {e.waitingFor}'s - the move waits for their checkout.</p> : null}
               {e.adjustment && !e.cancelled ? <p className="mt-1 text-xs text-muted-foreground">RP adjustment {e.adjustment} for rent already billed.</p> : null}
               {e.credit && !e.cancelled ? <p className="mt-1 text-xs text-emerald-800">{money(e.credit)} account credit for rent already billed.</p> : null}
@@ -220,5 +233,36 @@ function CancelEvent({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Paid after its effective date (7 Oct 2026 rule): nothing is backdated. Admin
+ * sets the new date; the rent is pro-rated from it. A renewal or extension keeps
+ * its start - the day after the tenancy ended - and is only confirmed.
+ */
+function NewDate({ event: e, residentId, onDone }: { event: EventRow; residentId: string; onDone: () => void }) {
+  const [date, setDate] = useState(e.moves ? klToday() : e.date);
+  const [busy, setBusy] = useState(false);
+  async function go() {
+    setBusy(true);
+    try {
+      const res = await confirmEventDate({ data: { residentId, eventId: e.eventId, date } });
+      toastTenancyOutcomes(res);
+      onDone();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not set the date");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md bg-violet-50/60 px-2.5 py-2 text-xs">
+      <span className="text-violet-900">Paid after {fmtDate(e.date)}. {e.moves ? "New effective date" : "Confirm the start date"}</span>
+      {e.moves ? <DateInput min={klToday()} value={date} onChange={(x) => setDate(x.target.value)} className="h-8 w-40" /> : <span className="font-medium">{fmtDate(e.date)}</span>}
+      <Button size="sm" className="h-8" disabled={busy || !date} onClick={() => void go()}>
+        {busy ? "Saving…" : "Confirm date"}
+      </Button>
+    </div>
   );
 }
