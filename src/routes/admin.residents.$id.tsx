@@ -43,7 +43,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { UpdateTenancyDialog, type TenancyChangeResult } from "@/components/admin/UpdateTenancyDialog";
 import { clearPendingMove, getPendingMove } from "@/lib/tenancy-change.functions";
 import { klToday } from "@/lib/kl-date";
-import { tenancyDatesByResident } from "@/lib/rental-schedule.functions";
+import { getResidentRent, tenancyDatesByResident } from "@/lib/rental-schedule.functions";
 import { ResidentPayments } from "@/components/admin/ResidentPayments";
 import { RESIDENT_DOCS, residentDocsFor, residentDocLabel } from "@/lib/resident-documents";
 import { compressImage } from "@/lib/compress";
@@ -1146,6 +1146,36 @@ function addressLine(fields: ResidentField[], form: Resident) {
     .join(", ");
 }
 
+/**
+ * The payment frequency the rent invoices are made with. It was a field of its
+ * own on the profile, copied from the booking once - changing it changed no
+ * invoice (Dani and Rina, 7 Oct 2026). The booking keeps the quote's; the rent
+ * schedule on Payments is the one place to change it.
+ */
+function PayScheduleField({ residentId, saved }: { residentId: string; saved: string }) {
+  const { data: rent } = useQuery({
+    queryKey: ["resident-rent", residentId],
+    queryFn: () => getResidentRent({ data: { residentId } }),
+    enabled: !!residentId,
+  });
+  const value = rent?.schedule?.frequency || saved;
+  const label = SCHEDULES.find((s) => s.value === value)?.label ?? value;
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs text-muted-foreground">Payment frequency</p>
+      <p className="flex h-9 items-center truncate text-sm text-foreground">{label || "—"}</p>
+      <Link
+        to="/admin/residents/$id"
+        params={{ id: residentId }}
+        search={{ tab: "payments" } as never}
+        className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+      >
+        {rent?.schedule ? "Change it in Payments → Rent schedule" : "Set up the rent schedule in Payments"}
+      </Link>
+    </div>
+  );
+}
+
 function AdminField({
   field: f,
   readOnly,
@@ -1161,6 +1191,9 @@ function AdminField({
   const onChange = (v: string) => set({ [f.camel]: v } as ResidentPatch);
   const label = f.kind === "id" ? idLabelFor(form.nationality) : f.label;
   const wide = f.wide ? "sm:col-span-2 lg:col-span-3" : "";
+
+  // how they pay is what the rent invoices use - read from the rent schedule, changed only there (Dani, 7 Oct 2026)
+  if (f.key === "pay_schedule") return <PayScheduleField residentId={form.id} saved={value} />;
 
   if (f.kind === "long") {
     return (
@@ -1179,12 +1212,10 @@ function AdminField({
     const options =
       f.key === "pay_method"
         ? PAY_METHODS.map((m) => ({ value: m, label: m }))
-        : f.key === "pay_schedule"
-          ? SCHEDULES.map((s) => ({ value: s.value, label: s.label }))
-          : // "Self" is what the student's "Myself" saves, so admin can choose it too
-            f.key === "payer_relationship"
-            ? RELATIONSHIP_OPTIONS
-            : (f.options ?? []);
+        : // "Self" is what the student's "Myself" saves, so admin can choose it too
+          f.key === "payer_relationship"
+          ? RELATIONSHIP_OPTIONS
+          : (f.options ?? []);
     return (
       <div className={wide}>
         {f.normalise ? (
