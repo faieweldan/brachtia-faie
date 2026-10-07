@@ -996,7 +996,7 @@ function ResidentProfilePage() {
         </TabsContent>
 
         <TabsContent value="tenancy" className="mt-4 space-y-4">
-          {tenancyEvents.data?.events.length ? (
+          {tenancyEvents.data?.events?.length ? (
             <TenancyEvents events={tenancyEvents.data.events} residentId={form.id} onChanged={() => void tenancyChanged()} />
           ) : null}
           {tenancy ? (
