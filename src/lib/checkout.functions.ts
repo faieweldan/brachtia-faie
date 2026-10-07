@@ -69,6 +69,18 @@ async function moneyNow(residentId: string, type?: CheckoutType) {
     const lines = typed.length ? typed : inv.items.filter((i) => /deposit/i.test(i.kind) || /deposit/i.test(i.label));
     return lines.map((i) => ({ label: i.label, amount: r2(i.amount * i.quantity), invoiceNumber: inv.number }));
   });
+  /*
+   * Update Tenancy's account credit (agreed 7 Oct 2026): a deposit lowered
+   * became credit, so it is held no more - and credit not used yet is the
+   * resident's, so it comes back with the deposits.
+   */
+  {
+    const { creditBalance, reclassifiedDeposits } = await import("@/lib/account-credit.server");
+    for (const r of await reclassifiedDeposits(supabaseAdmin, residentId))
+      depositLines.push({ label: `${r.depositLabel ?? "Deposit"} - to account credit`, amount: -r2(r.amount), invoiceNumber: "" });
+    const { balance } = await creditBalance(supabaseAdmin, residentId);
+    if (balance > 0.005) depositLines.push({ label: "Account credit not used", amount: r2(balance), invoiceNumber: "" });
+  }
   // a cancellation: what was paid on the initial invoice is held, and that invoice is cancelled, not chased
   const deposits =
     kind === "cancellation"

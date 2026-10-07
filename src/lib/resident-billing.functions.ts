@@ -87,6 +87,8 @@ export type ResidentBilling = {
   };
   /** rent invoices not billed yet, soonest first - in no total */
   scheduled: BillingInvoice[];
+  /** account credit from Update Tenancy: given, used on invoices, left */
+  accountCredit: { given: number; used: number; balance: number };
 };
 
 const num = (v: unknown) => Number(v ?? 0) || 0;
@@ -140,6 +142,7 @@ export const getResidentBilling = createServerFn({ method: "GET" })
       depositsHeld: 0,
       groups: { initial: [], rental: [], charge: [], checkout: [] },
       scheduled: [],
+      accountCredit: { given: 0, used: 0, balance: 0 },
     };
 
     // billing may be filed under either id, depending on when it was raised
@@ -148,6 +151,10 @@ export const getResidentBilling = createServerFn({ method: "GET" })
 
     // rent whose billing day has come is owed from today
     await billDueInvoices(supabase);
+    // and any account credit is used on it (agreed 7 Oct 2026)
+    const { applyAccountCredit, creditBalance } = await import("@/lib/account-credit.server");
+    await applyAccountCredit(supabase, data.residentId);
+    const accountCredit = await creditBalance(supabase, data.residentId);
     const residentCode = await residentCodeFor(supabase, data.residentId);
     const { data: invoices, error } = await supabase
       .from("invoices")
@@ -178,6 +185,7 @@ export const getResidentBilling = createServerFn({ method: "GET" })
       ...empty,
       groups: { initial: [], rental: [], charge: [], checkout: [] },
       scheduled: [],
+      accountCredit,
     } as ResidentBilling;
 
     for (const raw of invoices as any[]) {
@@ -259,6 +267,8 @@ export const listBillingLedger = createServerFn({ method: "GET" }).handler(
   async (): Promise<LedgerInvoice[]> => {
     const supabase = await admin();
     await billDueInvoices(supabase);
+    // credit is used on what was just billed, so Collections does not chase it
+    await (await import("@/lib/account-credit.server")).applyAllAccountCredit(supabase);
     const [invoicesRes, paymentsRes] = await Promise.all([
       // scheduled invoices too - marked, so the page can keep them out of what is owed
       /*

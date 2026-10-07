@@ -5,7 +5,7 @@ import {
   buildPeriods,
   dueFor,
   firstRentPeriod,
-  splitAtStep,
+  splitAtSteps,
   type RentStep,
   type ScheduleTerms,
 } from "@/lib/rental-schedule";
@@ -76,20 +76,45 @@ export async function initialInvoiceFor(supabase: any, tenancy: Tenancy) {
 }
 
 /**
- * A room change with a move date (Dani, 6 Oct 2026), kept beside the
- * resident's documents so nothing new is needed on either database. The rent
- * terms hold the new rent; this says from which day.
+ * The tenancy's rent changes, each from its own day (Dani, 6 Oct 2026; more
+ * than one since 7 Oct - a room change on 11 Nov, then a renewal on 1 Dec).
+ * Kept beside the resident's documents so nothing new is needed on either
+ * database. The rent terms hold the last rent; these say from which day each
+ * rent applies. `moveTo` is the bed a later move goes to.
  */
 export const rentStepPath = (residentId: string, tenancyId: string) => `tenancy-change/${residentId}/rent-step-${tenancyId}.json`;
 
-export async function readRentStep(supabase: any, residentId: string, tenancyId: string): Promise<RentStep | null> {
+export type MoveTo = { bedId: string; roomId: string; unitId: string; occupancy: string; from?: string };
+export type RentSteps = { steps: RentStep[]; moveTo?: MoveTo };
+
+export async function readRentSteps(supabase: any, residentId: string, tenancyId: string): Promise<RentSteps> {
   const { data } = await supabase.storage.from("resident-documents").download(rentStepPath(residentId, tenancyId), { cacheNonce: Date.now() });
-  if (!data) return null;
+  if (!data) return { steps: [] };
   try {
-    return JSON.parse(await data.text()) as RentStep;
+    const raw = JSON.parse(await data.text());
+    // the file before 7 Oct 2026 held one step, with the move beside it
+    if (Array.isArray(raw?.steps)) return raw as RentSteps;
+    const { moveTo, ...step } = raw ?? {};
+    return { steps: step?.from ? [step as RentStep] : [], ...(moveTo ? { moveTo: { ...moveTo, from: step.from } } : {}) };
   } catch {
-    return null;
+    return { steps: [] };
   }
+}
+
+export async function writeRentSteps(supabase: any, residentId: string, tenancyId: string, value: RentSteps) {
+  const { error } = await supabase.storage
+    .from("resident-documents")
+    .upload(rentStepPath(residentId, tenancyId), new Blob([JSON.stringify(value, null, 2)], { type: "application/json" }), {
+      upsert: true,
+      contentType: "application/json",
+    });
+  if (error) throw new Error(`Could not save the rent change: ${error.message}`);
+}
+
+/** the rent on a day, by the changes - `base` before the first */
+export function rentOn(steps: RentStep[], day: string, base: number) {
+  const s = [...steps].sort((a, b) => a.from.localeCompare(b.from)).filter((x) => x.from <= day).at(-1);
+  return s ? s.newRent : (steps.length ? [...steps].sort((a, b) => a.from.localeCompare(b.from))[0]!.oldRent : base);
 }
 
 async function tenancyById(supabase: any, tenancyId: string): Promise<Tenancy | null> {
@@ -235,32 +260,32 @@ export async function syncScheduledRent(supabase: any, tenancyId: string) {
     Number(inv.discount_value) > 0 && Number(inv.monthly_rent) === terms.monthlyRent;
 
   /*
-   * A room change on a set day: the period holding it is split there, the
-   * days before at the old rent (Dani, 6 Oct 2026). A cheaper room moved
-   * into during a period already billed: the difference comes off the next
-   * rent invoice, once - the invoice carries the change's id in its notes.
+   * The rent changes on their own days: a period holding one is split there,
+   * each part at its own rent (Dani, 6 Oct 2026; several since 7 Oct). A
+   * cheaper room in a period already billed is account credit now; a step
+   * saved before 7 Oct still carries its credit, taken off the next invoice once.
    */
-  const step = await readRentStep(supabase, tenancy.resident_id, tenancyId);
+  const { steps } = await readRentSteps(supabase, tenancy.resident_id, tenancyId);
   const room = (r: number) => `RM ${r.toLocaleString("en-MY", { maximumFractionDigits: 2 })} a month`;
-  let credit = step?.credit && !billed.some((r) => String(r.notes ?? "").includes(step.id)) ? step.credit : 0;
+  const legacy = steps.find((x) => x.credit && !billed.some((r) => String(r.notes ?? "").includes(x.id)));
+  let credit = legacy?.credit ?? 0;
   const made = periods.map((p) => {
     const lines: { label: string; amount: number }[] = [];
     let amount = p.amount;
     let notes = "";
-    const split = step && step.oldRent !== step.newRent ? splitAtStep(p, step) : null;
-    if (split?.before) {
+    const split = splitAtSteps(p, steps, terms.monthlyRent);
+    if (split) {
       amount = split.amount;
-      lines.push({ label: `Rent ${label(split.before.start)} – ${label(split.before.end)} · previous room (${room(step!.oldRent)})`, amount: split.before.amount });
-      if (split.after) lines.push({ label: `Rent ${label(split.after.start)} – ${label(split.after.end)} · new room (${room(step!.newRent)})`, amount: split.after.amount });
+      for (const x of split.segments) lines.push({ label: `Rent ${label(x.start)} – ${label(x.end)} · ${x.label} (${room(x.rent)})`, amount: x.amount });
     } else {
       lines.push({ label: `Rent ${label(p.start)} – ${label(p.end)}${p.prorated !== null ? " (pro-rated)" : ""}`, amount: p.amount });
     }
-    if (credit > 0) {
+    if (credit > 0 && legacy) {
       const off = Math.min(credit, amount);
-      lines.push({ label: `Room change credit - cheaper room from ${label(step!.from)}`, amount: -off });
+      lines.push({ label: `Room change credit - cheaper room from ${label(legacy.from)}`, amount: -off });
       amount = Math.round((amount - off) * 100) / 100;
       credit = 0;
-      notes = `Room change credit ${step!.id}`;
+      notes = `Room change credit ${legacy.id}`;
     }
     return { id: crypto.randomUUID(), period: { ...p, amount }, lines, notes };
   });

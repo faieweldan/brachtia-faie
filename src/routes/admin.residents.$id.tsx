@@ -735,7 +735,7 @@ function ResidentProfilePage() {
               residents={residents}
               gender={form.gender}
               mergeValuesFor={(r) =>
-                currentMergeValues(form, { ...tenancy, end: r.newEnd, rent: r.newRent || tenancy.rent }, r.newBed ?? placed)
+                currentMergeValues(form, { ...tenancy, ...(r.newStart ? { start: r.newStart } : {}), end: r.newEnd, rent: r.newRent || tenancy.rent }, r.newBed ?? placed)
               }
               onApplied={tenancyChanged}
               invoiceFor={{ fullName: form.fullName, email: form.email, phone: form.mobile, residentCode: form.residentCode, university: form.university, nationality: form.nationality }}

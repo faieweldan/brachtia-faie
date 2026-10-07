@@ -225,7 +225,9 @@ export function ResidentPayments({
   const tenancyId = rent?.tenancy?.id ?? "";
   const forTenancy = (i: BillingInvoice) => !i.tenancyId || !tenancyId || i.tenancyId === tenancyId;
   const issuedRent = rental.filter(forTenancy);
-  const scheduledRent = (b?.scheduled ?? []).filter(forTenancy);
+  const scheduledRent = (b?.scheduled ?? []).filter((i) => i.type === "rental").filter(forTenancy);
+  // Update Tenancy IPs made ahead - listed with the initial payment, owed on their billing day
+  const scheduledIp = (b?.scheduled ?? []).filter((i) => i.type === "initial");
   const lastIssuedEnd =
     issuedRent
       .map((i) => i.periodEnd.slice(0, 10))
@@ -273,6 +275,11 @@ export function ResidentPayments({
             .join(" · ") || "No billing yet"}
         </CollectedBar>
 
+        {(b?.accountCredit?.given ?? 0) > 0 ? (
+          <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+            Account credit {money(b!.accountCredit.balance)} available · {money(b!.accountCredit.used)} applied to invoices
+          </p>
+        ) : null}
         {(b?.credit ?? 0) > 0 ? (
           <p className="mt-3 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-900">
             {money(b!.credit)} in credit
@@ -298,13 +305,15 @@ export function ResidentPayments({
               initial.length
                 ? `${money(sumBy(initial, "total"))} billed · ${money(sumBy(initial, "paid"))} collected${
                     initialCredit > 0 ? ` · ${money(initialCredit)} credit` : ""
-                  }`
-                : ""
+                  }${scheduledIp.length ? ` · ${scheduledIp.length} scheduled` : ""}`
+                : scheduledIp.length
+                  ? `${scheduledIp.length} scheduled`
+                  : ""
             }
             open={!!open["initial"]}
-            onToggle={initial.length ? () => toggle("initial") : undefined}
+            onToggle={initial.length || scheduledIp.length ? () => toggle("initial") : undefined}
           >
-            {initial.map((inv) => (
+            {[...initial, ...scheduledIp].map((inv) => (
               <InvoiceDetail key={inv.id} invoice={inv} onPay={() => pay(inv)} />
             ))}
           </Row>
@@ -675,7 +684,8 @@ export function InvoiceDetail({ invoice, onPay }: { invoice: BillingInvoice; onP
         ) : invoice.issuedAt ? (
           <span className="text-xs text-muted-foreground">Issued {fmtDate(invoice.issuedAt)}</span>
         ) : null}
-        {invoice.outstanding > 0 && !invoice.scheduled ? (
+        {/* an IP can be paid before its billing day; rent cannot (agreed 7 Oct 2026) */}
+        {invoice.outstanding > 0 && (!invoice.scheduled || invoice.type === "initial") ? (
           <Button size="sm" variant="outline" className="ml-auto" onClick={onPay}>
             Record payment
           </Button>

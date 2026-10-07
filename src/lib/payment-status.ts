@@ -25,7 +25,7 @@ import type { Tone } from "@/lib/billing-tone";
 export const COMING_DUE_DAYS = 7;
 
 export type PaymentStatus =
-  "Cancelled" | "Scheduled" | "Invoiced" | "Coming Due" | "Partially paid" | "Past Due" | "Paid";
+  "Cancelled" | "Scheduled" | "Paid in advance" | "Invoiced" | "Coming Due" | "Partially paid" | "Past Due" | "Paid";
 
 export type PaymentState = {
   status: PaymentStatus;
@@ -70,7 +70,11 @@ export function paymentStateOf(
   if (invoice.cancelled) return { status: "Cancelled", tone: "idle", ...none };
 
   // no invoice yet, so nobody owes anything
-  if (invoice.scheduled) return { status: "Scheduled", tone: "idle", ...none };
+  if (invoice.scheduled) {
+    // an Update Tenancy IP paid before its billing day (agreed 7 Oct 2026)
+    if ((invoice.paid ?? 0) > 0 && invoice.outstanding <= 0) return { status: "Paid in advance", tone: "done", ...none };
+    return { status: "Scheduled", tone: "idle", ...none };
+  }
 
   // settled - whenever it was settled
   if (invoice.outstanding <= 0) return { status: "Paid", tone: "done", ...none };

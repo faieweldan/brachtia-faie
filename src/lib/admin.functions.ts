@@ -1573,7 +1573,9 @@ export const recordPayment = createServerFn({ method: "POST" })
     if ((invoice as any).status === "void") {
       throw new Error("This invoice was cancelled");
     }
-    if ((invoice as any).status === "scheduled") {
+    // an Update Tenancy IP can be paid before its billing day (agreed 7 Oct 2026); rent cannot
+    const inAdvance = (invoice as any).status === "scheduled";
+    if (inAdvance && (invoice as any).invoice_type !== "initial") {
       throw new Error("This invoice is not billed yet");
     }
     // the same rule the form shows: what this way of paying needs (1 Oct 2026)
@@ -1643,7 +1645,8 @@ export const recordPayment = createServerFn({ method: "POST" })
     await supabase
       .from("invoices")
       .update({
-        status: balance <= 0 ? "paid" : "part_paid",
+        // paid in advance: it stays scheduled, and is billed on its day already paid
+        status: inAdvance ? "scheduled" : balance <= 0 ? "paid" : "part_paid",
         updated_at: new Date().toISOString(),
       } as any)
       .eq("id", data.invoiceId);

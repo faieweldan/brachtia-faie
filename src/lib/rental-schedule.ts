@@ -217,8 +217,10 @@ export type RentStep = {
   from: string;
   oldRent: number;
   newRent: number;
-  /** a cheaper room, the move falling in a period already billed: off the next rent invoice */
+  /** older steps only (before 7 Oct 2026): a cheaper room in a billed period, off the next rent invoice */
   credit?: number;
+  /** what changed the rent - it names the invoice line: "new room", "renewal rate" */
+  kind?: "room" | "renewal" | "extension";
 };
 
 const daysInMonth = (d: string) => {
@@ -273,4 +275,46 @@ export function billedDifference(p: { start: string; end: string }, step: RentSt
   if (!step.from || step.from > p.end) return 0;
   const from = step.from > p.start ? step.from : p.start;
   return round2(rentForDays(from, p.end, step.newRent) - rentForDays(from, p.end, step.oldRent));
+}
+
+/* ------------------------------------------- several rent changes, one tenancy */
+
+export type StepSegment = { start: string; end: string; amount: number; rent: number; label: string };
+
+const segmentLabel = (s: RentStep | null, first: RentStep | undefined) =>
+  s ? (s.kind === "renewal" ? "renewal rate" : s.kind === "extension" ? "extension" : "new room") : first?.kind === "room" || !first?.kind ? "previous room" : "current rate";
+
+/**
+ * A rent period, as built at the final rent, split at every rent change
+ * inside it (agreed 7 Oct 2026: a room change on 11 Nov and a renewal on
+ * 1 Dec are two changes). Each part is priced by its real days; the part at
+ * the final rent keeps what is left of the period's own amount, so any
+ * advance-rent credit on it stays.
+ * No change inside the period, and the period at the final rent: null.
+ */
+export function splitAtSteps(p: { start: string; end: string; amount: number }, steps: RentStep[], finalRent: number): { segments: StepSegment[]; amount: number } | null {
+  const sorted = [...steps].filter((s) => s.from).sort((a, b) => a.from.localeCompare(b.from));
+  if (!sorted.length) return null;
+  const rentOn = (d: string) => {
+    const s = sorted.filter((x) => x.from <= d).at(-1) ?? null;
+    return { step: s, rent: s ? s.newRent : sorted[0]!.oldRent };
+  };
+  const cuts = sorted.map((s) => s.from).filter((d) => d > p.start && d <= p.end);
+  const starts = [p.start, ...cuts];
+  const parts = starts.map((start, i) => {
+    const end = i + 1 < starts.length ? shiftDate(starts[i + 1]!, { days: -1 }) : p.end;
+    const { step, rent } = rentOn(start);
+    return { start, end, rent, label: segmentLabel(step, sorted[0]) };
+  });
+  if (parts.every((x) => Math.abs(x.rent - finalRent) < 0.005)) return null;
+  let amount = p.amount;
+  for (const x of parts) if (Math.abs(x.rent - finalRent) >= 0.005) amount += rentForDays(x.start, x.end, x.rent) - rentForDays(x.start, x.end, finalRent);
+  amount = Math.max(0, round2(amount));
+  // the parts at other rents by their days; the rest of the amount to the last part at the final rent
+  const atFinal = parts.map((x, i) => (Math.abs(x.rent - finalRent) < 0.005 ? i : -1)).filter((i) => i >= 0);
+  const lastFinal = atFinal.at(-1) ?? -1;
+  const segments = parts.map((x, i) => ({ ...x, amount: i === lastFinal ? 0 : rentForDays(x.start, x.end, x.rent) }));
+  if (lastFinal >= 0) segments[lastFinal]!.amount = round2(amount - segments.reduce((n, x, i) => (i === lastFinal ? n : n + x.amount), 0));
+  else amount = round2(segments.reduce((n, x) => n + x.amount, 0));
+  return { segments, amount };
 }

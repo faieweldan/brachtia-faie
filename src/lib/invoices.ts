@@ -28,6 +28,24 @@ export function liveInvoices(supabase: any, columns = "*") {
 export async function billDueInvoices(supabase: any) {
   const { error } = await supabase.rpc("bill_due_invoices");
   if (error) console.warn(`bill_due_invoices: ${error.message}`);
+  /*
+   * An Update Tenancy IP can be paid before its billing day (agreed 7 Oct
+   * 2026). The billing gives it its number as "issued"; it is paid already,
+   * so it is marked so here.
+   */
+  const { data: issued } = await supabase
+    .from("invoices")
+    .select("id, total")
+    .eq("status", "issued")
+    .eq("invoice_type", "initial")
+    .like("notes", "Initial payment difference%");
+  const ids = ((issued ?? []) as any[]).map((i) => i.id);
+  if (!ids.length) return;
+  const { data: pays } = await supabase.from("payments").select("invoice_id, amount").in("invoice_id", ids);
+  const paid = new Map<string, number>();
+  for (const p of (pays ?? []) as any[]) paid.set(p.invoice_id, (paid.get(p.invoice_id) ?? 0) + Number(p.amount || 0));
+  const done = ((issued ?? []) as any[]).filter((i) => (paid.get(i.id) ?? 0) + 0.005 >= Number(i.total || 0)).map((i) => i.id);
+  if (done.length) await supabase.from("invoices").update({ status: "paid" }).in("id", done);
 }
 
 /**
