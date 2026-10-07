@@ -280,23 +280,7 @@ export function UpdateTenancyDialog({
                   <p className="text-xs text-muted-foreground">No free {occLabel(occ).toLowerCase()} beds.</p>
                 )}
               </div>
-              {letter ? (
-                <RoomList
-                  rows={beds}
-                  residents={residents}
-                  current={placed?.bed.id ?? ""}
-                  picked={bedId}
-                  onPick={(id) => {
-                    setBedId(id);
-                    setRentTyped(null);
-                    setNextTyped({});
-                    // someone else's bed: the move starts the day after their tenancy ends
-                    const b = beds.find((x) => x.bed.id === id);
-                    const until = b && b.bed.residentId && b.bed.id !== placed?.bed.id ? (b.bed.tenancyEnd ?? "").slice(0, 10) : "";
-                    setEffective(until ? shiftDate(until, { days: 1 }) : klToday());
-                  }}
-                />
-              ) : null}
+              {/* the move date first, above the long room list, where it is seen (Rina and Dani, 7 Oct 2026) */}
               {moved ? (
                 <div className="space-y-2 rounded-lg bg-muted/40 p-3">
                   <label className="flex flex-wrap items-center gap-3 text-sm">
@@ -337,6 +321,23 @@ export function UpdateTenancyDialog({
                     </div>
                   ) : null}
                 </div>
+              ) : null}
+              {letter ? (
+                <RoomList
+                  rows={beds}
+                  residents={residents}
+                  current={placed?.bed.id ?? ""}
+                  picked={bedId}
+                  onPick={(id) => {
+                    setBedId(id);
+                    setRentTyped(null);
+                    setNextTyped({});
+                    // someone else's bed: the move starts the day after their tenancy ends
+                    const b = beds.find((x) => x.bed.id === id);
+                    const until = b && b.bed.residentId && b.bed.id !== placed?.bed.id ? (b.bed.tenancyEnd ?? "").slice(0, 10) : "";
+                    setEffective(until ? shiftDate(until, { days: 1 }) : klToday());
+                  }}
+                />
               ) : null}
               {flags.unit ? <p className="text-xs text-sky-800">Another unit - a new access card form is made.</p> : null}
             </Step>
