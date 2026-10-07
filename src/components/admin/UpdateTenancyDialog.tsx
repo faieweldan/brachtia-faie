@@ -9,9 +9,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { costBreakdown, getProperty } from "@/data/properties";
 import { allBeds, fmtDate, money, unitAccepts, unitGender, type BedRow, type Resident, type Unit } from "@/lib/ops-store";
 import { GenderMark } from "@/components/admin/GenderMark";
-import { Dropdown } from "@/components/admin/Dropdown";
 import { PdfPreviewButton } from "@/components/admin/PdfPreview";
-import { CHARGES } from "@/lib/charge-list";
+import { ChargeInput } from "@/components/admin/ChargePicker";
+import { Eye, Plus, Trash2 } from "lucide-react";
 import {
   MONEY_ITEMS,
   anyChange,
@@ -374,7 +374,7 @@ export function UpdateTenancyDialog({
 
             <Step n={3} title="Rent, deposits & charges" now={`Rent ${money(oldRent)} a month`}>
               {changed && rows.length ? (
-                <div className="overflow-hidden rounded-lg border border-border">
+                <div className="overflow-hidden rounded-xl border border-border">
                   <div className="grid grid-cols-[1fr_6rem_7rem_6rem_3.5rem] gap-2 bg-muted/50 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                     <span>Item</span>
                     <span className="text-right">Now</span>
@@ -417,140 +417,131 @@ export function UpdateTenancyDialog({
               ) : (
                 <p className="text-xs text-muted-foreground">Nothing to compare until something changes.</p>
               )}
-              {moved || removed.length ? (
-                <div className="overflow-hidden rounded-lg border border-border">
-                  <div className="bg-muted/50 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Charges · Schedule B</div>
-                  {charges.map((c) => (
-                    <div key={c.key} className="grid grid-cols-[1fr_7rem_2rem] items-center gap-2 border-t border-border px-3 py-1.5 text-sm">
-                      <span>{c.label}</span>
-                      <Input
-                        type="number"
-                        aria-label={`${c.label} amount`}
-                        value={feeTyped[c.key] ?? String(c.amount)}
-                        onChange={(e) => setFeeTyped((t) => ({ ...t, [c.key]: e.target.value }))}
-                        className="h-8 text-right tabular-nums"
-                      />
-                      <button
-                        type="button"
-                        title="Remove this charge"
-                        aria-label={`Remove ${c.label}`}
-                        onClick={() => setRemoved((r) => [...r, c.key])}
-                        className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+              {/*
+                The invoice laid out as the invoice editor lays it out (Dani, 7 Oct 2026):
+                one list of items - the deposits that went up, Schedule B's charges
+                filled in by the change, and any line admin adds - then the total.
+              */}
+              {changed && (invoiceLines.length || moved) ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">Invoice items</p>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setExtras((xs) => [...xs, { id: crypto.randomUUID(), label: "", amount: "" }])}
                       >
-                        ×
-                      </button>
+                        <Plus className="size-4" /> Add line
+                      </Button>
+                      <PdfPreviewButton
+                        size="icon"
+                        variant="ghost"
+                        className="size-8"
+                        aria-label="Preview the invoice"
+                        title="Invoice preview"
+                        disabled={!invoiceLines.length}
+                        fileName="Brachtia-invoice-preview.pdf"
+                        downloadable={false}
+                        downloadHint="Confirm to raise the invoice, then download it"
+                        build={async () =>
+                          (await import("@/lib/invoice-pdf")).invoicePdfUrl({
+                            number: "INV-Draft",
+                            issued_at: new Date().toISOString(),
+                            invoice_date: klToday(),
+                            payment_terms: "NET7",
+                            full_name: invoiceFor?.fullName ?? "",
+                            resident_code: invoiceFor?.residentCode ?? "",
+                            email: invoiceFor?.email ?? "",
+                            phone: invoiceFor?.phone ?? "",
+                            university: invoiceFor?.university ?? "",
+                            nationality: invoiceFor?.nationality ?? "",
+                            residence_name: (target ?? placed)?.unit.residenceName ?? "",
+                            room_name: (target ?? placed) ? `${(target ?? placed)!.unit.unitNo} · Room ${(target ?? placed)!.room.letter}` : "",
+                            occupancy: occLabel(occ),
+                            tenancy_start: basis.data?.tenancy?.start ?? null,
+                            tenancy_end: end,
+                            monthly_rent: newRent,
+                            payment_frequency: "",
+                            kind: "charge",
+                            heading: "Tenancy change",
+                            total: due,
+                            deposits_total: invoiceLines.filter((l) => l.kind === "refundable").reduce((n, l) => n + l.amount, 0),
+                            notes: "Initial payment difference - tenancy updated",
+                            items: invoiceLines,
+                          })
+                        }
+                      >
+                        <Eye className="size-4" />
+                      </PdfPreviewButton>
                     </div>
-                  ))}
+                  </div>
+                  <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+                    <div className="flex items-center gap-2 bg-muted/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      <span className="flex-1">Item</span>
+                      <span className="w-24 text-right">Amount (RM)</span>
+                      <span className="size-8 shrink-0" aria-hidden />
+                    </div>
+                    {/* the deposits that went up - waived in the table above, not here */}
+                    {topUpLines(rows, waived).map((l) => (
+                      <div key={l.label} className="flex items-center gap-2 px-3 py-2 text-sm">
+                        <span className="flex-1">{l.label}</span>
+                        <span className="w-24 text-right tabular-nums">{money2(l.amount)}</span>
+                        <span className="size-8 shrink-0" aria-hidden />
+                      </div>
+                    ))}
+                    {/* Schedule B's charges for the change - the amount editable, removed at Brachtia's discretion */}
+                    {charges.map((c) => (
+                      <div key={c.key} className="flex items-center gap-2 px-3 py-2">
+                        <span className="flex-1 text-sm">{c.label}</span>
+                        <Input
+                          type="number"
+                          aria-label={`${c.label} amount`}
+                          value={feeTyped[c.key] ?? String(c.amount)}
+                          onChange={(e) => setFeeTyped((t) => ({ ...t, [c.key]: e.target.value }))}
+                          className="h-8 w-24 text-right tabular-nums"
+                        />
+                        <Button size="icon" variant="ghost" className="size-8 shrink-0 text-muted-foreground" aria-label={`Remove ${c.label}`} onClick={() => setRemoved((r) => [...r, c.key])}>
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    {/* lines admin adds - Schedule B's list is each box's own dropdown */}
+                    {extras.map((x) => (
+                      <div key={x.id} className="flex items-center gap-2 px-3 py-2">
+                        <ChargeInput
+                          value={x.label}
+                          onChange={(label) => setExtras((xs) => xs.map((y) => (y.id === x.id ? { ...y, label } : y)))}
+                          onPick={(label, amount) =>
+                            setExtras((xs) => xs.map((y) => (y.id === x.id ? { ...y, label, ...(amount != null ? { amount: String(amount) } : {}) } : y)))
+                          }
+                        />
+                        <Input
+                          type="number"
+                          aria-label="Amount"
+                          value={x.amount}
+                          onChange={(e) => setExtras((xs) => xs.map((y) => (y.id === x.id ? { ...y, amount: e.target.value } : y)))}
+                          className="h-8 w-24 text-right tabular-nums"
+                        />
+                        <Button size="icon" variant="ghost" className="size-8 shrink-0 text-muted-foreground" aria-label="Remove line" onClick={() => setExtras((xs) => xs.filter((y) => y.id !== x.id))}>
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    {!invoiceLines.length && !extras.length ? <p className="px-3 py-2 text-xs text-muted-foreground">Nothing to invoice.</p> : null}
+                    <div className="flex items-center justify-between bg-muted px-3 py-2 text-sm font-medium">
+                      <span>Total, due in 7 days</span>
+                      <span className="tabular-nums">{money2(due)}</span>
+                    </div>
+                  </div>
                   {removed.length ? (
-                    <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
-                      {removed.length} removed at Brachtia's discretion ·{" "}
+                    <p className="text-xs text-muted-foreground">
+                      {removed.length} charge{removed.length === 1 ? "" : "s"} removed at Brachtia's discretion ·{" "}
                       <button type="button" className="underline underline-offset-2" onClick={() => setRemoved([])}>
                         put back
                       </button>
                     </p>
                   ) : null}
-                  {extras.map((x) => (
-                    <div key={x.id} className="grid grid-cols-[1fr_7rem_2rem] items-center gap-2 border-t border-border px-3 py-1.5 text-sm">
-                      <Input
-                        aria-label="Charge description"
-                        value={x.label}
-                        onChange={(e) => setExtras((xs) => xs.map((y) => (y.id === x.id ? { ...y, label: e.target.value } : y)))}
-                        className="h-8"
-                      />
-                      <Input
-                        type="number"
-                        aria-label={`${x.label} amount`}
-                        placeholder="RM"
-                        value={x.amount}
-                        onChange={(e) => setExtras((xs) => xs.map((y) => (y.id === x.id ? { ...y, amount: e.target.value } : y)))}
-                        className="h-8 text-right tabular-nums"
-                      />
-                      <button
-                        type="button"
-                        title="Remove this charge"
-                        aria-label={`Remove ${x.label}`}
-                        onClick={() => setExtras((xs) => xs.filter((y) => y.id !== x.id))}
-                        className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                  <div className="border-t border-border px-3 py-2">
-                    <Dropdown
-                      value=""
-                      aria-label="Add a charge"
-                      onChange={(e) => {
-                        const c = CHARGES[Number(e.target.value)];
-                        if (c) setExtras((xs) => [...xs, { id: crypto.randomUUID(), label: c.label, amount: c.amount != null ? String(c.amount) : "" }]);
-                      }}
-                      className="h-8 text-xs"
-                    >
-                      <option value="">+ Add charge (Schedule B)</option>
-                      {CHARGES.map((c, i) => (
-                        <option key={c.label} value={String(i)}>
-                          {c.label}
-                          {c.amount != null ? ` · RM${c.amount}` : " · amount typed"}
-                        </option>
-                      ))}
-                    </Dropdown>
-                  </div>
-                </div>
-              ) : null}
-              {/* the invoice as it will be raised, line by line, before confirming (Dani, 7 Oct 2026) */}
-              {changed && invoiceLines.length ? (
-                <div className="overflow-hidden rounded-lg border border-border">
-                  <div className="flex items-center justify-between bg-muted/50 px-3 py-1.5">
-                    <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Invoice on confirm</span>
-                    <PdfPreviewButton
-                      title="Invoice preview"
-                      fileName="Brachtia-invoice-preview.pdf"
-                      downloadable={false}
-                      downloadHint="Confirm to raise the invoice, then download it"
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2 text-xs"
-                      build={async () =>
-                        (await import("@/lib/invoice-pdf")).invoicePdfUrl({
-                          number: "INV-Draft",
-                          issued_at: new Date().toISOString(),
-                          invoice_date: klToday(),
-                          payment_terms: "NET7",
-                          full_name: invoiceFor?.fullName ?? "",
-                          resident_code: invoiceFor?.residentCode ?? "",
-                          email: invoiceFor?.email ?? "",
-                          phone: invoiceFor?.phone ?? "",
-                          university: invoiceFor?.university ?? "",
-                          nationality: invoiceFor?.nationality ?? "",
-                          residence_name: (target ?? placed)?.unit.residenceName ?? "",
-                          room_name: (target ?? placed) ? `${(target ?? placed)!.unit.unitNo} · Room ${(target ?? placed)!.room.letter}` : "",
-                          occupancy: occLabel(occ),
-                          tenancy_start: basis.data?.tenancy?.start ?? null,
-                          tenancy_end: end,
-                          monthly_rent: newRent,
-                          payment_frequency: "",
-                          kind: "charge",
-                          heading: "Tenancy change",
-                          total: due,
-                          deposits_total: invoiceLines.filter((l) => l.kind === "refundable").reduce((n, l) => n + l.amount, 0),
-                          notes: "Initial payment difference - tenancy updated",
-                          items: invoiceLines,
-                        })
-                      }
-                    >
-                      Preview PDF
-                    </PdfPreviewButton>
-                  </div>
-                  {invoiceLines.map((l, i) => (
-                    <div key={i} className="flex justify-between gap-3 border-t border-border px-3 py-1.5 text-sm">
-                      <span className="min-w-0">{l.label}</span>
-                      <span className="tabular-nums">{money2(l.amount)}</span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between border-t-2 border-border bg-muted/40 px-3 py-2 text-sm font-semibold">
-                    <span>Total, due in 7 days</span>
-                    <span className="tabular-nums">{money2(due)}</span>
-                  </div>
                 </div>
               ) : null}
               {/* what is held now, line by line - so the Now column can be checked (Dani, 5 Oct 2026) */}
