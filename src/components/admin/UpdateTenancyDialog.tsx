@@ -356,7 +356,7 @@ export function UpdateTenancyDialog({
               </div>
             </Step>
 
-            <Step n={3} title="Rent & deposits" now={`Rent ${money(oldRent)} a month`}>
+            <Step n={3} title="Rent, deposits & charges" now={`Rent ${money(oldRent)} a month`}>
               {changed && rows.length ? (
                 <div className="overflow-hidden rounded-lg border border-border">
                   <div className="grid grid-cols-[1fr_6rem_7rem_6rem_3.5rem] gap-2 bg-muted/50 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
