@@ -199,7 +199,6 @@ export const fullAgreementPdf = createServerFn({ method: "POST" })
     pages.forEach((p, i) => {
       const label = `Page ${i + 1} of ${pages.length}`;
       p.drawText(label, { x: p.getWidth() / 2 - font.widthOfTextAtSize(label, 8) / 2, y: 14, size: 8, font, color: rgb(0.4, 0.4, 0.4) });
-      if (data.draft) p.drawText("DRAFT - not signed", { x: 24, y: p.getHeight() - 16, size: 9, font, color: rgb(0.75, 0.2, 0.2) });
     });
     const bytes = await out.save();
     let bin = "";
