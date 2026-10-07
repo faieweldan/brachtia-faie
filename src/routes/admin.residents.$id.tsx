@@ -41,7 +41,8 @@ import {
 import { TenancyDocs, currentMergeValues } from "@/components/admin/TenancyDocs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { UpdateTenancyDialog, type TenancyChangeResult } from "@/components/admin/UpdateTenancyDialog";
-import { clearPendingMove, getPendingMove } from "@/lib/tenancy-change.functions";
+import { getTenancyEvents } from "@/lib/tenancy-change.functions";
+import { TenancyEvents } from "@/components/admin/TenancyEvents";
 import { klToday } from "@/lib/kl-date";
 import { getResidentRent, tenancyDatesByResident } from "@/lib/rental-schedule.functions";
 import { ResidentPayments } from "@/components/admin/ResidentPayments";
@@ -302,25 +303,26 @@ function ResidentProfilePage() {
   }, [form, hasLocal, dbTenancy, units]);
 
   /*
-   * The day of a later move has come: the bed moves now, the first time the
-   * resident is opened on or after it (Dani, 6 Oct 2026). Before the page's
-   * early return - hooks run on every render.
+   * Update Tenancy's events (7 Oct 2026): each moves on by itself on the server -
+   * settled when its IP is, effective on its day (the daily job moves the bed).
+   * Read here for the Tenancy tab; once one has taken effect, the page's own
+   * copy of the beds and the rent is brought up to date.
    */
-  const moveNowRef = useRef<((m: { from: string; moveTo: { bedId: string } }) => Promise<void>) | null>(null);
   const hasTenancy = !!form?.id && tenancies.some((t) => t.residentId === form.id);
-  const pendingMove = useQuery({
-    queryKey: ["pending-move", form?.id],
-    queryFn: () => getPendingMove({ data: { residentId: form!.id } }),
+  const tenancyEvents = useQuery({
+    queryKey: ["tenancy-events", form?.id],
+    queryFn: () => getTenancyEvents({ data: { residentId: form!.id } }),
     enabled: hasTenancy,
   });
-  const movingRef = useRef(false);
+  const lastEffective = (tenancyEvents.data ?? []).find((e) => e.state === "effective");
   useEffect(() => {
-    const m = pendingMove.data;
-    if (!m || movingRef.current || m.from > klToday() || !units.length) return;
-    movingRef.current = true;
-    void moveNowRef.current?.(m).then(() => pendingMove.refetch());
+    if (!lastEffective || !form) return;
+    void refreshUnits();
+    void queryClient.invalidateQueries({ queryKey: ["tenancy-dates"] });
+    const local = tenancies.find((t) => t.residentId === form.id);
+    if (local && lastEffective.rent && Math.abs(local.rent - lastEffective.rent) > 0.005) saveTenancy({ ...local, rent: lastEffective.rent });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingMove.data, units.length]);
+  }, [lastEffective?.eventId]);
 
   if ((!stored && !isNew) || !form) {
     return (
@@ -527,62 +529,18 @@ function ResidentProfilePage() {
    * Update Tenancy saved on the server: the bed moves here, as Room Change
    * did, and the resident card shows the new end date and rent.
    */
-  async function tenancyChanged(r: TenancyChangeResult) {
-    if (!form || !tenancy) return;
-    if (r.newBed && r.moveOn) {
-      // a move on a later day (Dani, 6 Oct 2026): the new bed is held for them, the current one stays theirs.
-      // A bed someone is still in is left to them - it is theirs until their tenancy ends (Dani, 7 Oct 2026)
-      if (r.newBed.bed.status === "vacant") updateBed(r.newBed.bed.id, { status: "held", holdFor: form.fullName, holdUntil: r.moveOn });
-    } else if (r.newBed) {
-      const oldBed = placed?.bed;
-      const updated = {
-        ...form,
-        bedId: r.newBed.bed.id,
-        roomId: r.newBed.room.id,
-        unitId: r.newBed.unit.id,
-        occupancy: r.newBed.room.occupancy,
-      } as Resident;
-      await saveResidentRecord(updated);
-      setForm(updated);
-      if (oldBed) vacateBed(oldBed.id);
-      updateBed(r.newBed.bed.id, {
-        status: "booked",
-        // a bed held for a later move is theirs now
-        holdFor: undefined,
-        holdUntil: undefined,
-        residentId: form.id,
-        residentName: form.fullName,
-        university: form.university,
-        nationality: form.nationality,
-        gender: form.gender,
-        studentId: form.studentId,
-      });
-    }
-    saveTenancy({ ...tenancy, end: r.newEnd, rent: r.newRent || tenancy.rent });
+  // confirmed: the events are scheduled on the server - nothing on the page changes until they take effect
+  async function tenancyChanged() {
+    if (!form) return;
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["tenancy-docs", form.id] }),
       queryClient.invalidateQueries({ queryKey: ["tenancy-change", form.id] }),
+      queryClient.invalidateQueries({ queryKey: ["tenancy-events", form.id] }),
       queryClient.invalidateQueries({ queryKey: ["tenancy-dates"] }),
       refreshMoney(queryClient),
     ]);
+    setTab("tenancy");
   }
-
-  // the move itself, set below once the tenancy is known - the effect above calls it
-  moveNowRef.current = async (m) => {
-    if (!form || !tenancy) return;
-    const target = allBeds(units).find((x) => x.bed.id === m.moveTo.bedId);
-    if (!target) return;
-    // the person before them has not left yet: wait, and say so
-    if (target.bed.residentId && target.bed.residentId !== form.id) {
-      toast.warning(`Not moved yet: ${target.bed.residentName || "someone"} is still in ${target.unit.unitNo} · Room ${target.room.letter}`, {
-        description: "Check them out first; the move happens the next time this page is opened.",
-      });
-      return;
-    }
-    await tenancyChanged({ newBed: target, newEnd: tenancy.end, newRent: 0 });
-    await clearPendingMove({ data: { residentId: form.id } });
-    toast.success(`Moved to ${target.unit.unitNo} · Room ${target.room.letter}`, { description: `The move date, ${fmtDate(m.from)}, has come.` });
-  };
 
   async function deleteForever() {
     if (!form) return;
@@ -993,6 +951,7 @@ function ResidentProfilePage() {
         </TabsContent>
 
         <TabsContent value="tenancy" className="mt-4 space-y-4">
+          {tenancyEvents.data?.length ? <TenancyEvents events={tenancyEvents.data} /> : null}
           {tenancy ? (
             <TenancyDocs
               resident={form}

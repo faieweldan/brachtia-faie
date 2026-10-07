@@ -92,7 +92,7 @@ export async function reclassifiedDeposits(sb: any, residentId: string) {
  * billed yet is left alone - it is made again whenever the schedule changes -
  * and takes the credit on the day it is billed.
  */
-export async function applyAccountCredit(sb: any, residentId: string, first?: string) {
+export async function applyAccountCredit(sb: any, residentId: string, first?: string, only = false) {
   let { balance } = await creditBalance(sb, residentId);
   if (balance <= 0.005) return [] as { invoiceId: string; amount: number }[];
   const { data: rows } = await sb
@@ -105,7 +105,8 @@ export async function applyAccountCredit(sb: any, residentId: string, first?: st
   const all = (rows ?? []) as any[];
   const targets = [
     ...all.filter((r) => r.id === first),
-    ...all.filter((r) => r.id !== first && r.status !== "scheduled"),
+    // only: Update Tenancy's confirm, which uses credit on its own IPs, as its preview showed
+    ...(only ? [] : all.filter((r) => r.id !== first && r.status !== "scheduled")),
   ];
   if (!targets.length) return [];
   const { data: pays } = await sb.from("payments").select("invoice_id, amount").in("invoice_id", targets.map((t) => t.id));

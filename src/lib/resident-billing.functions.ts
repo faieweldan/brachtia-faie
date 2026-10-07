@@ -154,6 +154,8 @@ export const getResidentBilling = createServerFn({ method: "GET" })
     // and any account credit is used on it (agreed 7 Oct 2026)
     const { applyAccountCredit, creditBalance } = await import("@/lib/account-credit.server");
     await applyAccountCredit(supabase, data.residentId);
+    // and an Update Tenancy event whose IP is settled, or whose day has come, moves on
+    await (await import("@/lib/tenancy-events.server")).processResident(supabase, data.residentId);
     const accountCredit = await creditBalance(supabase, data.residentId);
     const residentCode = await residentCodeFor(supabase, data.residentId);
     const { data: invoices, error } = await supabase
@@ -269,6 +271,7 @@ export const listBillingLedger = createServerFn({ method: "GET" }).handler(
     await billDueInvoices(supabase);
     // credit is used on what was just billed, so Collections does not chase it
     await (await import("@/lib/account-credit.server")).applyAllAccountCredit(supabase);
+    await (await import("@/lib/tenancy-events.server")).processAllEvents(supabase);
     const [invoicesRes, paymentsRes] = await Promise.all([
       // scheduled invoices too - marked, so the page can keep them out of what is owed
       /*

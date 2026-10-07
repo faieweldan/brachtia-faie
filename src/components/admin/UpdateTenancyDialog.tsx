@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Eye, Trash2 } from "lucide-react";
+import { ArrowRight, BedDouble, CalendarDays, Check, ChevronDown, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { costBreakdown, getProperty } from "@/data/properties";
 import { allBeds, fmtDate, money, unitAccepts, unitGender, type BedRow, type Resident, type Unit } from "@/lib/ops-store";
 import { GenderMark } from "@/components/admin/GenderMark";
-import { PdfPreviewButton } from "@/components/admin/PdfPreview";
 import { bedRent, type SiteRoomType } from "@/lib/room-types";
 import {
   DEPOSIT_KEYS,
@@ -29,7 +28,7 @@ import {
   moneyOf,
   nextDay,
   planEvents,
-  type DepositKey,
+  type ChangeFlags,
   type Deposits,
 } from "@/lib/tenancy-change";
 import { klToday } from "@/lib/kl-date";
@@ -37,13 +36,19 @@ import { rentForDays, shiftDate } from "@/lib/rental-schedule";
 import { applyTenancyChange, getTenancyChangeBasis } from "@/lib/tenancy-change.functions";
 
 /**
- * Update Tenancy (Dani, 3 Oct 2026; events since 7 Oct) - one window for a
- * room, occupancy or date change. Admin picks what the resident asked for;
- * the request becomes one or two EVENTS, each with its own date, rent,
- * deposits, Initial Payment (IP) and documents. The rules are in
- * tenancy-change.ts.
+ * Update Tenancy (Dani, 3 Oct 2026; four steps since the 7 Oct review):
+ *   1 What is changing   room / occupancy, the end date, or both
+ *   2 Details            only the fields for what was picked - the room list
+ *                        opens on "Choose room"
+ *   3 Review             the events: one card each, with its IP, billing day
+ *                        and documents. The calculation and any overrides are
+ *                        folded away
+ *   4 Confirm            what will happen, said once
+ * The rules are in tenancy-change.ts; after confirm the events live on the
+ * server (tenancy-events.server.ts) and show on the Tenancy tab.
  */
 const OCCUPANCY_LABEL: Record<string, string> = { single: "Single", twin: "Twin", unit: "Whole unit" };
+const STEPS = ["What is changing", "Details", "Review", "Confirm"] as const;
 
 export type TenancyChangeResult = {
   /** the bed they move to - null when they stay where they are */
@@ -51,10 +56,25 @@ export type TenancyChangeResult = {
   newEnd: string;
   /** a renewal's new agreement starts on its own day, not the old start */
   newStart?: string;
-  /** the rent in force today */
   newRent: number;
-  /** the move is on a later day: the new bed is held until then, the current one kept */
-  moveOn?: string;
+};
+
+type PricedEvent = {
+  i: number;
+  date: string;
+  flags: ChangeFlags;
+  name: string;
+  rentBefore: number;
+  rent: number;
+  proposed: number;
+  bedBefore: BedRow | null;
+  bed: BedRow | null;
+  periodEnd: string;
+  deposits: ReturnType<typeof eventDeposits>;
+  fees: { key: string; label: string; amount: number; waived: boolean }[];
+  ip: ReturnType<typeof eventInvoice>;
+  billOn: string;
+  docs: string[];
 };
 
 export function UpdateTenancyDialog({
@@ -68,7 +88,6 @@ export function UpdateTenancyDialog({
   gender,
   mergeValuesFor,
   onApplied,
-  invoiceFor,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -82,10 +101,10 @@ export function UpdateTenancyDialog({
   gender: string;
   /** the documents' values, with the bed, end date and rent of one event */
   mergeValuesFor: (r: TenancyChangeResult) => Record<string, string>;
-  /** moves the bed and updates the resident card once the server has saved it */
-  onApplied: (r: TenancyChangeResult) => Promise<void>;
-  /** who the invoice is for, for its preview */
-  invoiceFor?: { fullName: string; email: string; phone: string; residentCode: string; university: string; nationality: string };
+  /** once the server has scheduled the events */
+  onApplied: () => Promise<void>;
+  /** kept for the caller; the IP preview moved to Payments once it exists */
+  invoiceFor?: unknown;
 }) {
   const basis = useQuery({
     queryKey: ["tenancy-change", residentId],
@@ -98,35 +117,35 @@ export function UpdateTenancyDialog({
   const roomTypes = (basis.data?.roomTypes ?? []) as SiteRoomType[];
   const today = klToday();
 
+  const [step, setStep] = useState(1);
+  const [wantRoom, setWantRoom] = useState(false);
+  const [wantDate, setWantDate] = useState(false);
   const [occ, setOcc] = useState(oldOcc);
-  // the room the resident asks for - A, B, C or D - then only those are listed (Dani, 4 Oct 2026)
-  const [letter, setLetter] = useState(placed?.room.letter ?? "");
-  const [bedId, setBedId] = useState(placed?.bed.id ?? "");
+  const [bedId, setBedId] = useState("");
+  const [picking, setPicking] = useState(false);
   const [newEnd, setNewEnd] = useState("");
   const [moveOn, setMoveOn] = useState(today);
-  // admin's own figures, per event: the rent, a required deposit, a charge - and what is waived or removed
+  // admin's own figures, per event - behind "Adjust amounts"
   const [rentTyped, setRentTyped] = useState<Record<number, string>>({});
   const [requiredTyped, setRequiredTyped] = useState<Record<string, string>>({});
   const [waived, setWaived] = useState<string[]>([]);
-  const [feeTyped, setFeeTyped] = useState<Record<string, string>>({});
-  const [removed, setRemoved] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const resetMoney = () => {
     setRentTyped({});
     setRequiredTyped({});
     setWaived([]);
   };
-  // each opening starts from what the resident has now - the page may not have had the bed when this first drew
+  // each opening starts from what the resident has now
   useEffect(() => {
     if (!open) return;
+    setStep(1);
+    setWantRoom(false);
+    setWantDate(false);
     setOcc(oldOcc);
-    setLetter(placed?.room.letter ?? "");
-    setBedId(placed?.bed.id ?? "");
+    setBedId("");
     setNewEnd("");
     setMoveOn(klToday());
     resetMoney();
-    setFeeTyped({});
-    setRemoved([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, placed?.bed.id]);
 
@@ -135,19 +154,18 @@ export function UpdateTenancyDialog({
       allBeds(units).filter(
         ({ unit, bed }) =>
           // vacant now, or someone else's whose tenancy ends before ours does - the move then waits for it (Dani, 7 Oct 2026)
-          (bed.status === "vacant" || bed.id === placed?.bed.id || (!!bed.residentId && !!bed.tenancyEnd && bed.tenancyEnd.slice(0, 10) < (tenancy.end || "9999"))) &&
+          bed.id !== placed?.bed.id &&
+          (bed.status === "vacant" || (!!bed.residentId && !!bed.tenancyEnd && bed.tenancyEnd.slice(0, 10) < (tenancy.end || "9999"))) &&
           bedOccupancy(bed.label) === occ &&
           // men and women never share a unit - the same rule as a booking's room list
           unitAccepts(unit, residents, gender),
       ),
     [units, occ, placed?.bed.id, residents, gender, tenancy.end],
   );
-  const letters = [...new Set(free.map((b) => b.room.letter))].sort();
-  const beds = free.filter((b) => b.room.letter === letter);
-  const target = beds.find((b) => b.bed.id === bedId) ?? null;
-  const end = newEnd || oldEnd;
+  const target = wantRoom ? (free.find((b) => b.bed.id === bedId) ?? null) : null;
+  const end = wantDate && newEnd ? newEnd : oldEnd;
   // the bed is someone else's until their tenancy ends: the move can only be after it
-  const occupiedUntil = target && target.bed.id !== placed?.bed.id && target.bed.residentId ? (target.bed.tenancyEnd ?? "").slice(0, 10) : "";
+  const occupiedUntil = target?.bed.residentId ? (target.bed.tenancyEnd ?? "").slice(0, 10) : "";
 
   const flags = changeFlags({
     oldUnitId: placed?.unit.id ?? "",
@@ -155,7 +173,7 @@ export function UpdateTenancyDialog({
     oldRoomId: placed?.room.id ?? "",
     newRoomId: target?.room.id ?? placed?.room.id ?? "",
     oldOccupancy: oldOcc,
-    newOccupancy: occ,
+    newOccupancy: target ? occ : oldOcc,
     oldEnd,
     newEnd: end,
   });
@@ -164,19 +182,21 @@ export function UpdateTenancyDialog({
 
   /*
    * The events, each priced from the state the one before leaves (agreed 7 Oct
-   * 2026): the rent, the deposits it requires, the IP and its billing day.
+   * 2026), with the account credit already there applied in order - IP 1
+   * first, then IP 2 - exactly as confirm applies it.
    */
-  const events = useMemo(() => {
+  const events: PricedEvent[] = useMemo(() => {
     const held0 = basis.data?.held ?? null;
     if (!held0) return [];
     let rent = oldRent;
     let held: Deposits = held0;
     let bed: BedRow | null = placed ?? null;
+    let credit = basis.data?.accountCredit ?? 0;
     return planEvents(flags, moveOn, oldEnd).map((p, i) => {
-      const movesHere = isMove(p.flags);
-      if (movesHere && target) bed = target;
+      const bedBefore = bed;
+      if (isMove(p.flags) && target) bed = target;
       // a new room: its Website rate; a renewal: the Website rate of the room then; an extension: the rent it has
-      const proposed = movesHere || p.flags.date === "renewal" ? (bed ? websiteRate(bed) : rent) : rent;
+      const proposed = isMove(p.flags) || p.flags.date === "renewal" ? (bed ? websiteRate(bed) : rent) : rent;
       const r = rentTyped[i] != null ? Number(rentTyped[i]) || 0 : proposed;
       // the required deposit follows the rent, never the length of the tenancy
       const property = getProperty(bed?.unit.residenceSlug ?? "");
@@ -184,12 +204,13 @@ export function UpdateTenancyDialog({
       const required = Object.fromEntries(
         DEPOSIT_KEYS.map((k) => [k, k === "card_deposit" ? held.card_deposit : requiredTyped[`${i}:${k}`] != null ? Number(requiredTyped[`${i}:${k}`]) || 0 : byFormula[k]]),
       ) as Deposits;
-      const d = eventDeposits(held, required, waived.filter((w) => w.startsWith(`${i}:`)).map((w) => w.slice(2)));
-      const charges = fixedCharges(p.flags)
-        .filter((c) => !removed.includes(`${i}:${c.key}`))
-        .map((c) => ({ ...c, amount: feeTyped[`${i}:${c.key}`] != null ? Number(feeTyped[`${i}:${c.key}`]) || 0 : c.amount }));
-      const ip = eventInvoice(d.ipLines, charges, d.credit);
-      const ev = {
+      const d = eventDeposits(held, required, waived.filter((w) => w.startsWith(`${i}:dep:`)).map((w) => w.split(":")[2]!));
+      // RM100 and RM20 are fixed; an exception is an explicit waiver
+      const fees = fixedCharges(p.flags).map((c) => ({ ...c, waived: waived.includes(`${i}:fee:${c.key}`) }));
+      credit += d.credit;
+      const ip = eventInvoice(d.ipLines, fees.filter((f) => !f.waived), credit);
+      credit = ip.creditLeft;
+      const ev: PricedEvent = {
         i,
         date: p.date,
         flags: p.flags,
@@ -197,12 +218,12 @@ export function UpdateTenancyDialog({
         rentBefore: rent,
         rent: r,
         proposed,
+        bedBefore,
         bed,
         // a room event before a renewal ends with the tenancy as it was
         periodEnd: p.flags.date !== "none" ? end : oldEnd,
         deposits: d,
-        charges,
-        allCharges: fixedCharges(p.flags),
+        fees,
         ip,
         billOn: ip.total > 0 ? ipBillOn(p.date, today) : "",
         docs: documentNames(documentsFor(p.flags)),
@@ -212,23 +233,36 @@ export function UpdateTenancyDialog({
       return ev;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [basis.data, flags.room, flags.unit, flags.occupancy, flags.date, moveOn, oldEnd, end, target, placed, oldRent, rentTyped, requiredTyped, waived, removed, feeTyped, today]);
+  }, [basis.data, flags.room, flags.unit, flags.occupancy, flags.date, moveOn, oldEnd, end, target, placed, oldRent, rentTyped, requiredTyped, waived, today]);
 
-  const changed = anyChange(flags);
-  const pending = basis.data?.pending ?? [];
-  const pendingMove = basis.data?.pendingMove ?? null;
+  const openEvents = basis.data?.open ?? [];
   const tooEarly = !!occupiedUntil && moveOn <= occupiedUntil;
   const moveAfterEnd = moved && moveOn > end;
-  const lastRent = events.at(-1)?.rent ?? oldRent;
-  const rentToday = events.filter((e) => e.date <= today).at(-1)?.rent ?? oldRent;
-  const blocked = busy || !changed || !basis.data?.tenancy || !!pending.length || !!pendingMove || (moved && !target) || tooEarly || moveAfterEnd;
+  // what stops each step going on - said where the Next button is
+  const stop =
+    step === 1
+      ? !wantRoom && !wantDate
+        ? "Pick what is changing."
+        : ""
+      : step === 2
+        ? wantRoom && !target
+          ? "Choose the new room."
+          : tooEarly
+            ? "The effective date is before the bed is free."
+            : moveAfterEnd
+              ? "The effective date is after the tenancy ends."
+              : wantDate && flags.date === "none"
+                ? "Choose an end date after the current one."
+                : !anyChange(flags)
+                  ? "Nothing has changed."
+                  : ""
+        : "";
   const action = flags.date === "renewal" ? "Initiate Renewal" : flags.date === "extension" ? "Initiate Extension" : "Confirm and proceed";
 
   async function confirm() {
     if (!basis.data?.tenancy) return;
     setBusy(true);
     try {
-      const later = moved && !!target && moveOn > today;
       const res = await applyTenancyChange({
         data: {
           residentId,
@@ -239,18 +273,18 @@ export function UpdateTenancyDialog({
             oldRoomId: placed?.room.id ?? "",
             newRoomId: target?.room.id ?? placed?.room.id ?? "",
             oldOccupancy: oldOcc,
-            newOccupancy: occ,
+            newOccupancy: target ? occ : oldOcc,
             oldEnd,
             newEnd: end,
           },
           moveOn: moved ? moveOn : "",
-          moveTo: later && target ? { bedId: target.bed.id, roomId: target.room.id, unitId: target.unit.id, occupancy: target.room.occupancy } : null,
+          moveTo: moved && target ? { bedId: target.bed.id, roomId: target.room.id, unitId: target.unit.id, occupancy: target.room.occupancy } : null,
           events: events.map((e) => ({
             date: e.date,
             rent: e.rent,
             required: { security: e.deposits.rows[0]!.required, utility: e.deposits.rows[1]!.required, card_deposit: e.deposits.rows[2]!.required },
-            waived: waived.filter((w) => w.startsWith(`${e.i}:`)).map((w) => w.slice(2)),
-            charges: e.charges.map((c) => ({ label: c.label, amount: c.amount })),
+            waived: waived.filter((w) => w.startsWith(`${e.i}:dep:`)).map((w) => w.split(":")[2]!),
+            waivedFees: e.fees.filter((f) => f.waived).map((f) => f.key),
             mergeValues: mergeValuesFor({
               newBed: e.bed && e.bed.bed.id !== placed?.bed.id ? e.bed : null,
               newEnd: e.periodEnd,
@@ -263,21 +297,9 @@ export function UpdateTenancyDialog({
           })),
         },
       });
-      await onApplied({ newBed: moved ? target : null, newEnd: end, newRent: rentToday, ...(later ? { moveOn } : {}) });
-      toast.success("Tenancy updated", {
-        description: res.events
-          .map((e) =>
-            [
-              `${e.name}, ${fmtDate(e.date)}:`,
-              e.total > 0 ? (e.invoiceNumber ? `IP ${e.invoiceNumber} billed.` : `IP scheduled, billed ${fmtDate(e.billOn)}.`) : "no IP.",
-              e.adjustment ? `RP adjustment ${e.adjustment}.` : "",
-              e.credit ? `${money2(e.credit)} account credit.` : "",
-              e.documents === "made" ? "Documents made." : "Documents once the IP is settled.",
-            ]
-              .filter(Boolean)
-              .join(" "),
-          )
-          .join("\n"),
+      await onApplied();
+      toast.success(res.events.length > 1 ? "2 events scheduled" : "Tenancy change scheduled", {
+        description: "Follow it on the Tenancy tab. The IP is on Payments.",
       });
       onOpenChange(false);
     } catch (e) {
@@ -289,63 +311,91 @@ export function UpdateTenancyDialog({
 
   const occLabel = (o: string) => OCCUPANCY_LABEL[o] ?? o;
   const bedLabel = (b: BedRow | null | undefined) => (b ? `${b.unit.unitNo} · Room ${b.room.letter} · ${b.bed.label}` : "—");
-  const moveEvent = events.find((e) => isMove(e.flags));
-  const split = moveEvent && Math.abs(moveEvent.rent - moveEvent.rentBefore) > 0.005 ? moveMonthSplit(moveEvent.date, moveEvent.rentBefore, moveEvent.rent) : null;
-  const dateEvent = events.find((e) => e.flags.date !== "none");
-  const kind = events.map((e) => e.name).join(", then ");
 
   return (
     <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>
-      <DialogContent className="admin-ui flex max-h-[92vh] max-w-5xl flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b border-border px-6 py-4">
-          <DialogTitle className="text-lg font-bold text-brand-deep">Update Tenancy</DialogTitle>
-          <DialogDescription>Change only what the resident asked for. A shorter tenancy is a checkout (Early termination).</DialogDescription>
+      <DialogContent className="admin-ui flex max-h-[92vh] max-w-2xl flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="space-y-3 border-b border-border px-6 py-4">
+          <div>
+            <DialogTitle className="text-lg font-bold text-brand-deep">Update Tenancy</DialogTitle>
+            <DialogDescription>A shorter tenancy is a checkout (Early termination).</DialogDescription>
+          </div>
+          <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+            {STEPS.map((label, i) => {
+              const n = i + 1;
+              return (
+                <li key={label} className="flex items-center gap-1.5">
+                  <span
+                    className={`flex size-5 items-center justify-center rounded-full text-[11px] font-semibold ${
+                      n < step ? "bg-brand-deep text-primary-foreground" : n === step ? "bg-brand-tint text-brand-deep ring-1 ring-brand-deep" : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {n < step ? <Check className="size-3" /> : n}
+                  </span>
+                  <span className={n === step ? "font-medium text-foreground" : "text-muted-foreground"}>{label}</span>
+                  {n < STEPS.length ? <span className="mx-1 h-px w-4 bg-border" aria-hidden /> : null}
+                </li>
+              );
+            })}
+          </ol>
         </DialogHeader>
 
-        <div className="grid min-h-0 flex-1 overflow-hidden lg:grid-cols-[1fr_320px]">
-          <div className="min-h-0 space-y-6 overflow-y-auto px-6 py-5 [scrollbar-gutter:stable]">
-            {pending.length || pendingMove ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                {pending.length
-                  ? `An earlier change is in progress: ${pending.map((p) => `${p.name}, ${fmtDate(p.date)}${p.invoiceNumber ? ` (${p.invoiceNumber})` : ""}`).join("; ")}. Its documents are made once its IP is settled.`
-                  : `An earlier move is due on ${fmtDate(pendingMove!.from ?? "")}.`}{" "}
-                A new change can be made after it.
-              </div>
-            ) : null}
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
+          {openEvents.length ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              Still scheduled: {openEvents.map((o) => `${o.name}, ${fmtDate(o.date)}`).join("; ")}. A new change can be made once it is effective.
+            </div>
+          ) : null}
 
-            <Step n={1} title="Room" now={`${occLabel(oldOcc)} · ${bedLabel(placed)}`}>
-              <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-                <Segmented
-                  label="Occupancy"
-                  value={occ}
-                  options={["single", "twin"].map((o) => ({ value: o, label: occLabel(o) }))}
-                  onChange={(v) => {
-                    setOcc(v);
-                    setLetter(v === oldOcc ? (placed?.room.letter ?? "") : "");
-                    setBedId(v === oldOcc ? (placed?.bed.id ?? "") : "");
-                    resetMoney();
-                  }}
-                />
-                {letters.length ? (
+          {step === 1 ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ChoiceCard
+                icon={BedDouble}
+                title="Room / occupancy"
+                now={`${occLabel(oldOcc)} · ${bedLabel(placed)}`}
+                on={wantRoom}
+                onToggle={() => {
+                  setWantRoom((v) => !v);
+                  resetMoney();
+                }}
+              />
+              <ChoiceCard
+                icon={CalendarDays}
+                title="Tenancy end date"
+                now={oldEnd ? `Ends ${fmtDate(oldEnd)}` : "—"}
+                on={wantDate}
+                onToggle={() => {
+                  setWantDate((v) => !v);
+                  resetMoney();
+                }}
+              />
+            </div>
+          ) : null}
+
+          {step === 2 ? (
+            <div className="space-y-4">
+              {wantRoom ? (
+                <section className="space-y-3 rounded-xl border border-border p-4">
+                  <p className="text-sm font-semibold text-foreground">Room / occupancy</p>
                   <Segmented
-                    label="Room"
-                    value={letter}
-                    options={letters.map((l) => ({ value: l, label: l === "Unit" ? "Whole unit" : l }))}
-                    onChange={(l) => {
-                      setLetter(l);
-                      setBedId(l === placed?.room.letter && occ === oldOcc ? (placed?.bed.id ?? "") : "");
+                    label="Occupancy"
+                    value={occ}
+                    options={["single", "twin"].map((o) => ({ value: o, label: occLabel(o) }))}
+                    onChange={(v) => {
+                      setOcc(v);
+                      setBedId("");
                       resetMoney();
                     }}
                   />
-                ) : (
-                  <p className="text-xs text-muted-foreground">No free {occLabel(occ).toLowerCase()} beds.</p>
-                )}
-              </div>
-              {/* the move date first, above the long room list, where it is seen (Rina and Dani, 7 Oct 2026) */}
-              {moved ? (
-                <div className="space-y-2 rounded-lg bg-muted/40 p-3">
-                  <label className="flex flex-wrap items-center gap-3 text-sm">
-                    <span className="font-medium">Effective date</span>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="w-24 text-xs text-muted-foreground">New room</span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{target ? `${bedLabel(target)} · ${money(websiteRate(target))}` : "None chosen"}</span>
+                    <Button size="sm" variant="outline" onClick={() => setPicking(true)}>
+                      {target ? "Change" : "Choose room"}
+                    </Button>
+                  </div>
+                  <label className="flex flex-wrap items-center gap-3">
+                    <span className="w-24 text-xs text-muted-foreground">Effective date</span>
                     <DateInput
                       min={occupiedUntil ? shiftDate(occupiedUntil, { days: 1 }) : today}
                       max={end}
@@ -353,403 +403,376 @@ export function UpdateTenancyDialog({
                       onChange={(e) => setMoveOn(e.target.value)}
                       className="h-9 w-44"
                     />
-                    {moveOn > today ? <span className="text-xs text-muted-foreground">The current bed stays theirs until then.</span> : null}
                   </label>
                   {occupiedUntil ? (
                     <p className={`text-xs ${tooEarly ? "font-medium text-rose-700" : "text-muted-foreground"}`}>
-                      {target?.bed.residentName || "Someone"} is in this bed until {fmtDate(occupiedUntil)}: the move can be from {fmtDate(shiftDate(occupiedUntil, { days: 1 }))}.
+                      Occupied until {fmtDate(occupiedUntil)} - free from {fmtDate(shiftDate(occupiedUntil, { days: 1 }))}.
                     </p>
                   ) : null}
-                  {split ? (
-                    <div className="text-xs">
-                      <p className="mb-1 font-medium text-foreground">{split.month} rental, pro-rated by day</p>
-                      <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-0.5 tabular-nums text-muted-foreground">
-                        {split.before ? (
-                          <>
-                            <span>{split.before.range} · previous room ({split.before.days} days at {money(moveEvent!.rentBefore)})</span>
-                            <span className="text-right">{money2(split.before.amount)}</span>
-                          </>
-                        ) : null}
-                        <span>{split.after.range} · new room ({split.after.days} days at {money(moveEvent!.rent)})</span>
-                        <span className="text-right">{money2(split.after.amount)}</span>
-                        <span className="border-t border-border pt-0.5 font-medium text-foreground">{split.month}</span>
-                        <span className="border-t border-border pt-0.5 text-right font-medium text-foreground">{money2(split.total)}</span>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
+                </section>
               ) : null}
-              {letter ? (
-                <RoomList
-                  rows={beds}
-                  residents={residents}
-                  current={placed?.bed.id ?? ""}
-                  picked={bedId}
-                  rateOf={(b) => (b.bed.id === placed?.bed.id ? oldRent : websiteRate(b))}
-                  onPick={(id) => {
-                    setBedId(id);
-                    resetMoney();
-                    // someone else's bed: the move starts the day after their tenancy ends
-                    const b = beds.find((x) => x.bed.id === id);
-                    const until = b && b.bed.residentId && b.bed.id !== placed?.bed.id ? (b.bed.tenancyEnd ?? "").slice(0, 10) : "";
-                    setMoveOn(until ? shiftDate(until, { days: 1 }) : today);
-                  }}
+              {wantDate ? (
+                <section className="space-y-3 rounded-xl border border-border p-4">
+                  <p className="text-sm font-semibold text-foreground">Tenancy end date</p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="w-24 text-xs text-muted-foreground">Current</span>
+                    <span className="text-sm">{oldEnd ? fmtDate(oldEnd) : "—"}</span>
+                  </div>
+                  <label className="flex flex-wrap items-center gap-3">
+                    <span className="w-24 text-xs text-muted-foreground">New end date</span>
+                    <DateInput min={oldEnd} value={newEnd || oldEnd} onChange={(e) => setNewEnd(e.target.value)} className="h-9 w-44" />
+                  </label>
+                  {flags.date !== "none" ? (
+                    <p className="rounded-lg bg-brand-tint px-3 py-2 text-xs text-brand-deep">
+                      <span className="font-semibold">{flags.date === "renewal" ? "Renewal" : "Extension"}</span> from {fmtDate(nextDay(oldEnd))} ·{" "}
+                      {flags.date === "renewal" ? "6 months or more · Website rate · new agreement" : "under 6 months · same agreed rent · Schedule A"}
+                    </p>
+                  ) : null}
+                </section>
+              ) : null}
+            </div>
+          ) : null}
+
+          {step === 3 ? (
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                {events.length > 1
+                  ? "Two dates, two events - each with its own IP and documents. One effective date makes one event."
+                  : wantRoom && wantDate
+                    ? "One effective date - one combined event, one IP, one document set."
+                    : "One event."}
+              </p>
+              {events.map((e) => (
+                <EventCard
+                  key={e.i}
+                  e={e}
+                  numbered={events.length > 1}
+                  today={today}
+                  bedLabel={bedLabel}
+                  waived={waived}
+                  onWaive={(key, on) => setWaived((w) => (on ? [...w, `${e.i}:${key}`] : w.filter((x) => x !== `${e.i}:${key}`)))}
+                  rentValue={rentTyped[e.i] ?? String(e.proposed)}
+                  onRent={(v) => setRentTyped((t) => ({ ...t, [e.i]: v }))}
+                  requiredValue={(k) => requiredTyped[`${e.i}:${k}`]}
+                  onRequired={(k, v) => setRequiredTyped((t) => ({ ...t, [`${e.i}:${k}`]: v }))}
                 />
-              ) : null}
-            </Step>
+              ))}
+              {basis.data && !basis.data.hasSchedule ? <p className="text-xs text-amber-700">Set up the rent schedule on Payments first.</p> : null}
+            </div>
+          ) : null}
 
-            <Step n={2} title="End date" now={oldEnd ? fmtDate(oldEnd) : "—"}>
-              <div className="flex flex-wrap items-center gap-3">
-                <DateInput min={oldEnd} value={end} onChange={(e) => setNewEnd(e.target.value)} className="h-9 w-44" />
-                {flags.date !== "none" ? (
-                  <span className="rounded-full bg-brand-tint px-2.5 py-0.5 text-xs font-medium text-brand-deep">
-                    {flags.date === "renewal" ? "Renewal" : "Extension"} from {fmtDate(nextDay(oldEnd))}
-                  </span>
-                ) : (
-                  <span className="text-xs text-muted-foreground">Unchanged</span>
-                )}
-              </div>
-              {flags.date !== "none" ? (
-                <p className="text-xs text-muted-foreground">
-                  {flags.date === "renewal" ? "6 months or more: new agreement, Website rate." : "Under 6 months: same agreement, same rent."}
-                </p>
-              ) : null}
-              {moved && dateEvent && events.length === 2 ? (
-                <p className="text-xs text-sky-800">
-                  Two events: {events.map((e) => `${e.name.toLowerCase()} on ${fmtDate(e.date)}`).join(" and ")}. Set the effective date to {fmtDate(dateEvent.date)} to make one event.
-                </p>
-              ) : null}
-            </Step>
-
-            <Step n={3} title="Financial adjustment" now={`Rental ${money(oldRent)} a month`}>
-              {changed && events.length ? (
-                <div className="space-y-4">
-                  {events.map((e) => (
-                    <EventMoney
-                      key={e.i}
-                      e={e}
-                      numbered={events.length > 1}
-                      rentValue={rentTyped[e.i] ?? String(e.proposed)}
-                      onRent={(v) => setRentTyped((t) => ({ ...t, [e.i]: v }))}
-                      requiredValue={(k) => requiredTyped[`${e.i}:${k}`]}
-                      onRequired={(k, v) => setRequiredTyped((t) => ({ ...t, [`${e.i}:${k}`]: v }))}
-                      waived={waived}
-                      onWaive={(k, on) => setWaived((w) => (on ? [...w, `${e.i}:${k}`] : w.filter((x) => x !== `${e.i}:${k}`)))}
-                      feeValue={(k) => feeTyped[`${e.i}:${k}`]}
-                      onFee={(k, v) => setFeeTyped((t) => ({ ...t, [`${e.i}:${k}`]: v }))}
-                      onRemove={(k) => setRemoved((r) => [...r, `${e.i}:${k}`])}
-                      removedCount={removed.filter((r) => r.startsWith(`${e.i}:`)).length}
-                      onPutBack={() => setRemoved((r) => r.filter((x) => !x.startsWith(`${e.i}:`)))}
-                      preview={() =>
-                        import("@/lib/invoice-pdf").then((m) =>
-                          m.invoicePdfUrl({
-                            number: "INV-Draft",
-                            issued_at: new Date().toISOString(),
-                            invoice_date: e.billOn || today,
-                            payment_terms: "NET7",
-                            full_name: invoiceFor?.fullName ?? "",
-                            resident_code: invoiceFor?.residentCode ?? "",
-                            email: invoiceFor?.email ?? "",
-                            phone: invoiceFor?.phone ?? "",
-                            university: invoiceFor?.university ?? "",
-                            nationality: invoiceFor?.nationality ?? "",
-                            residence_name: e.bed?.unit.residenceName ?? "",
-                            room_name: e.bed ? `${e.bed.unit.unitNo} · Room ${e.bed.room.letter}` : "",
-                            occupancy: occLabel(e.bed ? bedOccupancy(e.bed.bed.label) : occ),
-                            tenancy_start: basis.data?.tenancy?.start ?? null,
-                            tenancy_end: e.periodEnd,
-                            monthly_rent: e.rent,
-                            payment_frequency: "",
-                            kind: "charge",
-                            heading: "Initial Payment",
-                            total: e.ip.total,
-                            deposits_total: e.ip.lines.filter((l) => l.kind === "refundable").reduce((n, l) => n + l.amount, 0),
-                            notes: `Initial payment difference - ${e.name} ${fmtDate(e.date)}`,
-                            items: e.ip.lines,
-                          }),
-                        )
-                      }
-                    />
-                  ))}
-                  <p className="text-xs text-muted-foreground">
-                    {basis.data?.hasSchedule ? "" : "Set up the rent schedule on Payments first. "}
-                    A billed Rental Payment (RP) is never changed: a higher rent is an RP adjustment, a lower one account credit. Old-room inspection charges go on Payments → Add charge.
-                  </p>
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">Nothing to compare until something changes.</p>
-              )}
-              {/* what is held now, line by line - so Held can be checked (Dani, 5 Oct 2026) */}
-              {basis.data?.heldLines.length ? (
-                <details className="group rounded-lg border border-border text-sm">
-                  <summary className="cursor-pointer list-none px-3 py-2 text-xs font-medium text-muted-foreground">
-                    Deposits held · {money(basis.data.heldLines.reduce((n, d) => n + d.amount, 0))}
-                    {basis.data.accountCredit ? ` · Account credit ${money2(basis.data.accountCredit)}` : ""} <span className="group-open:hidden">· show lines</span>
-                  </summary>
-                  {basis.data.heldLines.map((d, i) => (
-                    <div key={i} className="flex items-center justify-between gap-2 border-t border-border px-3 py-1.5">
-                      <span className="min-w-0">
-                        {d.label} {d.invoiceNumber ? <span className="text-xs text-muted-foreground">· {d.invoiceNumber}</span> : null}
-                      </span>
-                      <span className="tabular-nums">{money2(d.amount)}</span>
-                    </div>
-                  ))}
-                </details>
-              ) : null}
-            </Step>
-          </div>
-
-          {/* the summary: now against new, then each event - always in view */}
-          <aside className="min-h-0 overflow-y-auto border-t border-border bg-muted/30 px-5 py-5 lg:border-l lg:border-t-0">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Summary</p>
-            <p className="mt-1 text-base font-semibold text-brand-deep">{kind || "No change yet"}</p>
-            <dl className="mt-4 space-y-3 text-sm">
-              <Compare label="Room" from={bedLabel(placed)} to={moved ? bedLabel(target) : ""} />
-              <Compare label="End date" from={oldEnd ? fmtDate(oldEnd) : "—"} to={end !== oldEnd ? fmtDate(end) : ""} />
-              <Compare label="Rental a month" from={money(oldRent)} to={Math.abs(lastRent - oldRent) > 0.005 ? money(lastRent) : ""} />
-            </dl>
-            {changed ? (
-              <ol className="mt-5 space-y-4 border-t border-border pt-4 text-sm">
+          {step === 4 ? (
+            <div className="space-y-4">
+              <ul className="divide-y divide-border rounded-xl border border-border">
                 {events.map((e) => (
-                  <li key={e.i} className="space-y-1">
-                    <p className="font-medium text-foreground">
-                      {fmtDate(e.date)} · {e.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      IP{" "}
-                      {e.ip.total > 0
-                        ? `${money2(e.ip.payable)}${e.ip.creditApplied ? ` (after ${money2(e.ip.creditApplied)} credit)` : ""} · ${e.billOn <= today ? "billed today" : `billed ${fmtDate(e.billOn)}`}`
-                        : "none"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{e.docs.length ? e.docs.join(", ") : "No documents"}</p>
+                  <li key={e.i} className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-2.5 text-sm">
+                    <span>
+                      <span className="font-medium">{fmtDate(e.date)}</span> · {e.name}
+                    </span>
+                    <span className="tabular-nums text-muted-foreground">IP {e.ip.total > 0 ? money2(e.ip.payable) : "none"}</span>
                   </li>
                 ))}
-                <li className="text-xs text-muted-foreground">Each event's documents are made once its IP is settled.</li>
-              </ol>
-            ) : null}
-          </aside>
+              </ul>
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">On confirm</p>
+                <ul className="space-y-1.5 text-sm">
+                  {[
+                    "Each IP is created now as scheduled, and billed 14 days before its event.",
+                    "Payment can be recorded early. Account credit is applied by itself.",
+                    "Documents are made once that event's IP is fully settled.",
+                    "Rental Payments change from the effective date.",
+                    "The bed and end date change on the effective date.",
+                    "Earlier document versions are kept as Superseded.",
+                  ].map((t) => (
+                    <li key={t} className="flex gap-2">
+                      <Check className="mt-0.5 size-4 shrink-0 text-brand-deep" />
+                      <span>{t}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <p className="text-xs text-muted-foreground">Old-room inspection charges are added later on Payments → Add charge.</p>
+            </div>
+          ) : null}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-3">
-          {moved && !target ? (
-            <span className="mr-auto text-xs text-amber-700">Choose the new bed.</span>
-          ) : tooEarly ? (
-            <span className="mr-auto text-xs text-rose-700">The effective date is before the bed is free.</span>
-          ) : moveAfterEnd ? (
-            <span className="mr-auto text-xs text-rose-700">The effective date is after the tenancy ends.</span>
-          ) : null}
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
-            Cancel
+        <div className="flex items-center gap-2 border-t border-border px-6 py-3">
+          {stop ? <span className="mr-auto text-xs text-amber-700">{stop}</span> : <span className="mr-auto" />}
+          <Button variant="ghost" onClick={() => (step > 1 ? setStep(step - 1) : onOpenChange(false))} disabled={busy}>
+            {step > 1 ? "Back" : "Cancel"}
           </Button>
-          <Button disabled={blocked} onClick={() => void confirm()}>
-            {busy ? "Saving…" : action}
-          </Button>
+          {step < 4 ? (
+            <Button disabled={!!stop || !basis.data?.tenancy || (step === 3 && !events.length)} onClick={() => setStep(step + 1)}>
+              Next <ArrowRight className="ml-1 size-4" />
+            </Button>
+          ) : (
+            <Button disabled={busy || !!openEvents.length || !events.length} onClick={() => void confirm()}>
+              {busy ? "Saving…" : action}
+            </Button>
+          )}
         </div>
       </DialogContent>
+
+      {/* the room list, only when asked for */}
+      <RoomPicker
+        open={picking}
+        onOpenChange={setPicking}
+        rows={free}
+        residents={residents}
+        picked={bedId}
+        occupancy={occLabel(occ)}
+        rateOf={websiteRate}
+        onPick={(b) => {
+          setBedId(b.bed.id);
+          resetMoney();
+          // someone else's bed: the move starts the day after their tenancy ends
+          const until = b.bed.residentId ? (b.bed.tenancyEnd ?? "").slice(0, 10) : "";
+          setMoveOn(until ? shiftDate(until, { days: 1 }) : today);
+          setPicking(false);
+        }}
+      />
     </Dialog>
   );
 }
 
-type PricedEvent = {
-  i: number;
-  date: string;
-  name: string;
-  rentBefore: number;
-  rent: number;
-  flags: { date: string };
-  deposits: ReturnType<typeof eventDeposits>;
-  charges: { key: string; label: string; amount: number }[];
-  ip: ReturnType<typeof eventInvoice>;
-  billOn: string;
-};
+/** step 1: one thing that can change, picked or not */
+function ChoiceCard({ icon: Icon, title, now, on, onToggle }: { icon: typeof BedDouble; title: string; now: string; on: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={on}
+      className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-colors ${on ? "border-brand-deep bg-brand-tint" : "border-border hover:bg-muted/50"}`}
+    >
+      <Icon className={`mt-0.5 size-5 shrink-0 ${on ? "text-brand-deep" : "text-muted-foreground"}`} />
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-foreground">{title}</span>
+        <span className="mt-0.5 block truncate text-xs text-muted-foreground">{now}</span>
+      </span>
+      <span className={`flex size-5 shrink-0 items-center justify-center rounded border ${on ? "border-brand-deep bg-brand-deep text-primary-foreground" : "border-border"}`}>
+        {on ? <Check className="size-3.5" /> : null}
+      </span>
+    </button>
+  );
+}
 
 /**
- * One event's money (agreed 7 Oct 2026): the rental from its day, the
- * deposits held against required, and its Initial Payment (IP) laid out as
- * the invoice editor lays it out.
+ * Step 3: one event, compact - date, room, rental, IP, documents. The
+ * calculation and the overrides are folded away (7 Oct 2026 review).
  */
-function EventMoney({
+function EventCard({
   e,
   numbered,
+  today,
+  bedLabel,
+  waived,
+  onWaive,
   rentValue,
   onRent,
   requiredValue,
   onRequired,
-  waived,
-  onWaive,
-  feeValue,
-  onFee,
-  onRemove,
-  removedCount,
-  onPutBack,
-  preview,
 }: {
   e: PricedEvent;
   numbered: boolean;
+  today: string;
+  bedLabel: (b: BedRow | null | undefined) => string;
+  waived: string[];
+  onWaive: (key: string, on: boolean) => void;
   rentValue: string;
   onRent: (v: string) => void;
-  requiredValue: (k: DepositKey) => string | undefined;
-  onRequired: (k: DepositKey, v: string) => void;
-  waived: string[];
-  onWaive: (k: DepositKey, on: boolean) => void;
-  feeValue: (k: string) => string | undefined;
-  onFee: (k: string, v: string) => void;
-  onRemove: (k: string) => void;
-  removedCount: number;
-  onPutBack: () => void;
-  preview: () => Promise<string>;
+  requiredValue: (k: string) => string | undefined;
+  onRequired: (k: string, v: string) => void;
 }) {
-  const today = klToday();
+  const [show, setShow] = useState<"" | "calc" | "adjust">("");
+  const moves = isMove(e.flags);
+  const split = moves && Math.abs(e.rent - e.rentBefore) > 0.005 ? moveMonthSplit(e.date, e.rentBefore, e.rent) : null;
   const rentLabel = e.flags.date === "renewal" ? "Renewal rate" : e.flags.date === "extension" ? "Extension rate" : "New rental";
   return (
     <section className="overflow-hidden rounded-xl border border-border">
-      <header className="flex flex-wrap items-baseline justify-between gap-2 bg-muted/50 px-3 py-2">
+      <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border bg-muted/40 px-4 py-2.5">
         <p className="text-sm font-semibold text-foreground">
           {numbered ? `Event ${e.i + 1} · ` : ""}
           {e.name}
         </p>
         <p className="text-xs text-muted-foreground">Effective {fmtDate(e.date)}</p>
       </header>
-
-      {/* rental charges: from the event's day, never before it */}
-      <div className="flex flex-wrap items-center gap-3 border-t border-border px-3 py-2 text-sm">
-        <span className="w-28 text-xs text-muted-foreground">Rental charges</span>
-        <span className="tabular-nums text-muted-foreground">{money(e.rentBefore)}</span>
-        <span className="text-muted-foreground">→</span>
-        <Input type="number" aria-label={rentLabel} value={rentValue} onChange={(x) => onRent(x.target.value)} className="h-8 w-28 text-right tabular-nums" />
-        <span className="text-xs text-muted-foreground">a month · {rentLabel.toLowerCase()}</span>
+      <dl className="space-y-1.5 px-4 py-3 text-sm">
+        {moves ? <Row label="Room" value={`${bedLabel(e.bedBefore)} → ${bedLabel(e.bed)}`} /> : null}
+        <Row label="Rental" value={Math.abs(e.rent - e.rentBefore) > 0.005 ? `${money(e.rentBefore)} → ${money(e.rent)} a month` : `${money(e.rent)} a month, unchanged`} />
+        <Row
+          label="IP payable"
+          value={
+            e.ip.total > 0
+              ? `${money2(e.ip.payable)}${e.ip.creditApplied ? ` (after ${money2(e.ip.creditApplied)} account credit)` : ""} · ${e.billOn <= today ? "billed today" : `billed ${fmtDate(e.billOn)}`}`
+              : "None"
+          }
+          strong
+        />
+        <Row label="Documents" value={e.docs.join(", ") || "None"} />
+      </dl>
+      <div className="flex gap-1 border-t border-border px-2 py-1">
+        {(["calc", "adjust"] as const).map((k) => (
+          <Button key={k} size="sm" variant="ghost" className="text-xs" onClick={() => setShow(show === k ? "" : k)}>
+            {k === "calc" ? "View calculation" : "Adjust amounts"}
+            <ChevronDown className={`ml-1 size-3.5 transition-transform ${show === k ? "rotate-180" : ""}`} />
+          </Button>
+        ))}
       </div>
 
-      {/* deposits: held against required */}
-      <div className="border-t border-border">
-        <div className="grid grid-cols-[1fr_5.5rem_6.5rem_5.5rem_3rem] gap-2 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          <span>Deposit</span>
-          <span className="text-right">Held</span>
-          <span className="text-right">Required</span>
-          <span className="text-right">Difference</span>
-          <span className="text-center">Waive</span>
+      {show === "calc" ? (
+        <div className="space-y-3 border-t border-border bg-muted/20 px-4 py-3 text-xs">
+          <table className="w-full tabular-nums">
+            <thead className="text-muted-foreground">
+              <tr>
+                <th className="py-1 text-left font-medium">Deposit</th>
+                <th className="py-1 text-right font-medium">Held</th>
+                <th className="py-1 text-right font-medium">Required</th>
+                <th className="py-1 text-right font-medium">Difference</th>
+              </tr>
+            </thead>
+            <tbody>
+              {e.deposits.rows.map((r) => (
+                <tr key={r.key}>
+                  <td className="py-0.5">{r.label}</td>
+                  <td className="py-0.5 text-right">{money(r.held)}</td>
+                  <td className="py-0.5 text-right">{money(r.required)}</td>
+                  <td className={`py-0.5 text-right ${r.difference > 0 ? "text-rose-700" : r.difference < 0 ? "text-emerald-700" : "text-muted-foreground"}`}>
+                    {r.difference ? `${r.difference > 0 ? "+" : "−"} ${money(Math.abs(r.difference))}` : "–"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="space-y-0.5">
+            <p className="font-medium text-foreground">IP</p>
+            {e.ip.lines.map((l) => (
+              <Line key={l.label} label={l.label} amount={money2(l.amount)} />
+            ))}
+            {e.fees.filter((f) => f.waived).map((f) => (
+              <Line key={f.key} label={`${f.label} - waived`} amount={money2(0)} muted />
+            ))}
+            {e.ip.creditApplied ? <Line label="Less account credit" amount={`− ${money2(e.ip.creditApplied)}`} /> : null}
+            <Line label="Payable" amount={money2(e.ip.payable)} strong />
+            {e.deposits.credit ? <p className="pt-1 text-emerald-800">{money2(e.deposits.credit)} of deposit becomes account credit.</p> : null}
+            {e.ip.creditLeft ? <p className="text-emerald-800">{money2(e.ip.creditLeft)} account credit carried to the next invoice.</p> : null}
+          </div>
+          {split ? (
+            <div className="space-y-0.5">
+              <p className="font-medium text-foreground">{split.month} rental, pro-rated by day</p>
+              {split.before ? <Line label={`${split.before.range} · previous room (${split.before.days} days)`} amount={money2(split.before.amount)} /> : null}
+              <Line label={`${split.after.range} · new room (${split.after.days} days)`} amount={money2(split.after.amount)} />
+              <Line label={split.month} amount={money2(split.total)} strong />
+            </div>
+          ) : null}
+          <p className="text-muted-foreground">A billed Rental Payment is never changed: higher rent becomes an RP adjustment, lower rent account credit.</p>
         </div>
-        {e.deposits.rows.map((r) => (
-          <div key={r.key} className="grid grid-cols-[1fr_5.5rem_6.5rem_5.5rem_3rem] items-center gap-2 px-3 py-1 text-sm">
-            <span>{r.label}</span>
-            <span className="text-right tabular-nums text-muted-foreground">{money(r.held)}</span>
-            {r.key === "card_deposit" ? (
-              <span className="text-right tabular-nums text-muted-foreground">{money(r.required)}</span>
-            ) : (
-              <Input
-                type="number"
-                aria-label={`${r.label} required`}
-                value={requiredValue(r.key) ?? String(r.required)}
-                onChange={(x) => onRequired(r.key, x.target.value)}
-                className="h-8 text-right tabular-nums"
-              />
-            )}
-            <span className={`text-right tabular-nums ${r.difference > 0 ? "font-medium text-rose-700" : r.difference < 0 ? "text-emerald-700" : "text-muted-foreground"}`}>
-              {r.difference ? `${r.difference > 0 ? "+" : "−"} ${money(Math.abs(r.difference))}` : "–"}
-            </span>
-            <span className="flex justify-center">
-              {r.difference > 0 ? (
-                <input
-                  type="checkbox"
-                  aria-label={`Waive the ${r.label.toLowerCase()} difference`}
-                  className="size-4 accent-brand"
-                  checked={waived.includes(`${e.i}:${r.key}`)}
-                  onChange={(x) => onWaive(r.key, x.target.checked)}
+      ) : null}
+
+      {show === "adjust" ? (
+        <div className="space-y-3 border-t border-border bg-muted/20 px-4 py-3 text-sm">
+          <label className="flex items-center gap-3">
+            <span className="w-36 text-xs text-muted-foreground">{rentLabel}</span>
+            <Input type="number" value={rentValue} onChange={(x) => onRent(x.target.value)} className="h-8 w-28 text-right tabular-nums" />
+            <span className="text-xs text-muted-foreground">a month</span>
+          </label>
+          {e.deposits.rows
+            .filter((r) => r.key !== "card_deposit")
+            .map((r) => (
+              <div key={r.key} className="flex flex-wrap items-center gap-3">
+                <span className="w-36 text-xs text-muted-foreground">{r.label} required</span>
+                <Input
+                  type="number"
+                  value={requiredValue(r.key) ?? String(r.required)}
+                  onChange={(x) => onRequired(r.key, x.target.value)}
+                  className="h-8 w-28 text-right tabular-nums"
                 />
-              ) : null}
-            </span>
-          </div>
-        ))}
-        {e.deposits.credit > 0 ? (
-          <p className="px-3 pb-2 text-xs text-emerald-800">{money2(e.deposits.credit)} lower deposit becomes account credit.</p>
-        ) : null}
-      </div>
-
-      {/* the Initial Payment, as the invoice editor lays it out */}
-      <div className="border-t border-border">
-        <div className="flex items-center justify-between px-3 py-1.5">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Initial Payment (IP)</span>
-          <PdfPreviewButton
-            size="icon"
-            variant="ghost"
-            className="size-7"
-            aria-label="Preview the IP"
-            title="IP preview"
-            disabled={!e.ip.lines.length}
-            fileName="Brachtia-IP-preview.pdf"
-            downloadable={false}
-            downloadHint="Confirm to make the IP, then download it"
-            build={preview}
-          >
-            <Eye className="size-4" />
-          </PdfPreviewButton>
+                {r.difference > 0 ? (
+                  <label className="flex items-center gap-1.5 text-xs">
+                    <input type="checkbox" className="size-4 accent-brand" checked={waived.includes(`${e.i}:dep:${r.key}`)} onChange={(x) => onWaive(`dep:${r.key}`, x.target.checked)} />
+                    Waive difference
+                  </label>
+                ) : null}
+              </div>
+            ))}
+          {e.fees.map((f) => (
+            <label key={f.key} className="flex items-center gap-3 text-xs">
+              <span className="w-36 text-muted-foreground">{f.label}</span>
+              <span className="w-28 text-right tabular-nums">{money2(f.amount)}</span>
+              <span className="flex items-center gap-1.5">
+                <input type="checkbox" className="size-4 accent-brand" checked={f.waived} onChange={(x) => onWaive(`fee:${f.key}`, x.target.checked)} />
+                Waive fee
+              </span>
+            </label>
+          ))}
         </div>
-        {e.deposits.ipLines.map((l) => (
-          <div key={l.label} className="flex items-center gap-2 px-3 py-1.5 text-sm">
-            <span className="flex-1">{l.label}</span>
-            <span className="w-24 text-right tabular-nums">{money2(l.amount)}</span>
-            <span className="size-8 shrink-0" aria-hidden />
-          </div>
-        ))}
-        {/* Schedule B's fixed charges - the amount editable, removed at Brachtia's discretion */}
-        {e.charges.map((c) => (
-          <div key={c.key} className="flex items-center gap-2 px-3 py-1">
-            <span className="flex-1 text-sm">{c.label}</span>
-            <Input
-              type="number"
-              aria-label={`${c.label} amount`}
-              value={feeValue(c.key) ?? String(c.amount)}
-              onChange={(x) => onFee(c.key, x.target.value)}
-              className="h-8 w-24 text-right tabular-nums"
-            />
-            <Button size="icon" variant="ghost" className="size-8 shrink-0 text-muted-foreground" aria-label={`Remove ${c.label}`} onClick={() => onRemove(c.key)}>
-              <Trash2 className="size-4" />
-            </Button>
-          </div>
-        ))}
-        {!e.ip.lines.length ? <p className="px-3 py-1.5 text-xs text-muted-foreground">No IP for this event.</p> : null}
-        {e.ip.creditApplied > 0 ? (
-          <div className="flex items-center gap-2 px-3 py-1.5 text-sm text-emerald-800">
-            <span className="flex-1">Less account credit</span>
-            <span className="w-24 text-right tabular-nums">− {money2(e.ip.creditApplied)}</span>
-            <span className="size-8 shrink-0" aria-hidden />
-          </div>
-        ) : null}
-        <div className="flex items-center gap-2 bg-muted px-3 py-2 text-sm font-medium">
-          <span className="flex-1">
-            Payable
-            <span className="ml-2 text-xs font-normal text-muted-foreground">
-              {e.ip.total > 0 ? (e.billOn <= today ? "billed today, due in 7 days" : `scheduled, billed ${fmtDate(e.billOn)}`) : ""}
-            </span>
-          </span>
-          <span className="w-24 text-right tabular-nums">{money2(e.ip.payable)}</span>
-          <span className="size-8 shrink-0" aria-hidden />
-        </div>
-        {e.ip.creditLeft > 0 ? <p className="px-3 py-1.5 text-xs text-emerald-800">{money2(e.ip.creditLeft)} account credit left for the next RP.</p> : null}
-        {removedCount ? (
-          <p className="px-3 py-1.5 text-xs text-muted-foreground">
-            {removedCount} charge{removedCount === 1 ? "" : "s"} removed ·{" "}
-            <button type="button" className="underline underline-offset-2" onClick={onPutBack}>
-              put back
-            </button>
-          </p>
-        ) : null}
-      </div>
+      ) : null}
     </section>
   );
 }
 
-/** a numbered step: its title, what the resident has now, then the controls */
-function Step({ n, title, now, children }: { n: number; title: string; now: string; children: React.ReactNode }) {
+function Row({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
   return (
-    <section className="space-y-3">
-      <div className="flex items-baseline gap-3">
-        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-deep text-xs font-semibold text-primary-foreground">{n}</span>
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        <span className="min-w-0 truncate text-xs text-muted-foreground">Now: {now}</span>
-      </div>
-      <div className="space-y-3 pl-9">{children}</div>
-    </section>
+    <div className="flex gap-3">
+      <dt className="w-24 shrink-0 text-xs leading-5 text-muted-foreground">{label}</dt>
+      <dd className={`min-w-0 ${strong ? "font-semibold text-foreground" : "text-foreground"}`}>{value}</dd>
+    </div>
+  );
+}
+
+function Line({ label, amount, strong = false, muted = false }: { label: string; amount: string; strong?: boolean; muted?: boolean }) {
+  return (
+    <div className={`flex justify-between gap-3 tabular-nums ${strong ? "font-medium text-foreground" : muted ? "text-muted-foreground" : ""}`}>
+      <span>{label}</span>
+      <span>{amount}</span>
+    </div>
+  );
+}
+
+/** the room list, in its own window - searchable by unit, then by room letter */
+function RoomPicker({
+  open,
+  onOpenChange,
+  rows,
+  residents,
+  picked,
+  occupancy,
+  rateOf,
+  onPick,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  rows: BedRow[];
+  residents: Resident[];
+  picked: string;
+  occupancy: string;
+  rateOf: (b: BedRow) => number;
+  onPick: (b: BedRow) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [letter, setLetter] = useState("");
+  const letters = [...new Set(rows.map((b) => b.room.letter))].sort();
+  const shown = rows.filter((b) => (!letter || b.room.letter === letter) && (!q || b.unit.unitNo.toLowerCase().includes(q.toLowerCase())));
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="admin-ui flex max-h-[85vh] max-w-3xl flex-col gap-3 overflow-hidden">
+        <DialogHeader>
+          <DialogTitle className="text-base font-bold text-brand-deep">Choose room · {occupancy}</DialogTitle>
+          <DialogDescription>Website rate shown. Beds whose tenant leaves first show the day they are free.</DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative min-w-48 flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search unit, e.g. B-08" className="h-9 pl-8" />
+          </div>
+          {letters.length > 1 ? (
+            <Segmented label="Room" value={letter} options={[{ value: "", label: "All" }, ...letters.map((l) => ({ value: l, label: l === "Unit" ? "Whole unit" : l }))]} onChange={setLetter} />
+          ) : null}
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <RoomList rows={shown} residents={residents} current="" picked={picked} rateOf={rateOf} onPick={(id) => onPick(rows.find((b) => b.bed.id === id)!)} />
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -770,25 +793,6 @@ function Segmented({ label, value, options, onChange }: { label: string; value: 
           </button>
         ))}
       </div>
-    </div>
-  );
-}
-
-/** a line of the summary: as it is, and what it becomes - only the new value when it changes */
-function Compare({ label, from, to }: { label: string; from: string; to: string }) {
-  return (
-    <div>
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5">
-        {to ? (
-          <span className="flex flex-col">
-            {from ? <span className="text-xs text-muted-foreground line-through">{from}</span> : null}
-            <span className="font-medium text-foreground">{to}</span>
-          </span>
-        ) : (
-          <span className="text-foreground">{from}</span>
-        )}
-      </dd>
     </div>
   );
 }

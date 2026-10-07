@@ -42,6 +42,7 @@ import { Route as AdminResidentsPayablesRouteImport } from './routes/admin.resid
 import { Route as AdminResidentsPaymentsRouteImport } from './routes/admin.residents.payments'
 import { Route as AdminResidentsTenanciesRouteImport } from './routes/admin.residents.tenancies'
 import { Route as AdminWebsiteIndexRouteImport } from './routes/admin.website.index'
+import { Route as ApiCronTenancyEventsRouteImport } from './routes/api/cron/tenancy-events'
 import { Route as PropertiesSlugIndexRouteImport } from './routes/properties.$slug.index'
 import { Route as AdminBookingsIdInvoiceRouteImport } from './routes/admin.bookings.$id_.invoice'
 import { Route as AdminResidentsIdDocumentPackRouteImport } from './routes/admin.residents.$id_.document-pack'
@@ -216,6 +217,11 @@ const AdminWebsiteIndexRoute = AdminWebsiteIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminWebsiteRoute,
 } as any)
+const ApiCronTenancyEventsRoute = ApiCronTenancyEventsRouteImport.update({
+  id: '/api/cron/tenancy-events',
+  path: '/api/cron/tenancy-events',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PropertiesSlugIndexRoute = PropertiesSlugIndexRouteImport.update({
   id: '/properties/$slug/',
   path: '/properties/$slug/',
@@ -285,6 +291,7 @@ export interface FileRoutesByFullPath {
   '/admin/residents/payables': typeof AdminResidentsPayablesRoute
   '/admin/residents/payments': typeof AdminResidentsPaymentsRoute
   '/admin/residents/tenancies': typeof AdminResidentsTenanciesRoute
+  '/api/cron/tenancy-events': typeof ApiCronTenancyEventsRoute
   '/admin/appointments/': typeof AdminAppointmentsIndexRoute
   '/admin/bookings/': typeof AdminBookingsIndexRoute
   '/admin/homes/': typeof AdminHomesIndexRoute
@@ -321,6 +328,7 @@ export interface FileRoutesByTo {
   '/admin/residents/payables': typeof AdminResidentsPayablesRoute
   '/admin/residents/payments': typeof AdminResidentsPaymentsRoute
   '/admin/residents/tenancies': typeof AdminResidentsTenanciesRoute
+  '/api/cron/tenancy-events': typeof ApiCronTenancyEventsRoute
   '/admin/appointments': typeof AdminAppointmentsIndexRoute
   '/admin/bookings': typeof AdminBookingsIndexRoute
   '/admin/homes': typeof AdminHomesIndexRoute
@@ -364,6 +372,7 @@ export interface FileRoutesById {
   '/admin/residents/payables': typeof AdminResidentsPayablesRoute
   '/admin/residents/payments': typeof AdminResidentsPaymentsRoute
   '/admin/residents/tenancies': typeof AdminResidentsTenanciesRoute
+  '/api/cron/tenancy-events': typeof ApiCronTenancyEventsRoute
   '/admin/appointments/': typeof AdminAppointmentsIndexRoute
   '/admin/bookings/': typeof AdminBookingsIndexRoute
   '/admin/homes/': typeof AdminHomesIndexRoute
@@ -408,6 +417,7 @@ export interface FileRouteTypes {
     | '/admin/residents/payables'
     | '/admin/residents/payments'
     | '/admin/residents/tenancies'
+    | '/api/cron/tenancy-events'
     | '/admin/appointments/'
     | '/admin/bookings/'
     | '/admin/homes/'
@@ -444,6 +454,7 @@ export interface FileRouteTypes {
     | '/admin/residents/payables'
     | '/admin/residents/payments'
     | '/admin/residents/tenancies'
+    | '/api/cron/tenancy-events'
     | '/admin/appointments'
     | '/admin/bookings'
     | '/admin/homes'
@@ -486,6 +497,7 @@ export interface FileRouteTypes {
     | '/admin/residents/payables'
     | '/admin/residents/payments'
     | '/admin/residents/tenancies'
+    | '/api/cron/tenancy-events'
     | '/admin/appointments/'
     | '/admin/bookings/'
     | '/admin/homes/'
@@ -514,6 +526,7 @@ export interface RootRouteChildren {
   SignTokenRoute: typeof SignTokenRoute
   ViewingTokenRoute: typeof ViewingTokenRoute
   PropertiesIndexRoute: typeof PropertiesIndexRoute
+  ApiCronTenancyEventsRoute: typeof ApiCronTenancyEventsRoute
   PropertiesSlugIndexRoute: typeof PropertiesSlugIndexRoute
   ApiPublicPhotoSplatRoute: typeof ApiPublicPhotoSplatRoute
 }
@@ -751,6 +764,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminWebsiteIndexRouteImport
       parentRoute: typeof AdminWebsiteRoute
     }
+    '/api/cron/tenancy-events': {
+      id: '/api/cron/tenancy-events'
+      path: '/api/cron/tenancy-events'
+      fullPath: '/api/cron/tenancy-events'
+      preLoaderRoute: typeof ApiCronTenancyEventsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/properties/$slug/': {
       id: '/properties/$slug/'
       path: '/properties/$slug'
@@ -924,6 +944,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignTokenRoute: SignTokenRoute,
   ViewingTokenRoute: ViewingTokenRoute,
   PropertiesIndexRoute: PropertiesIndexRoute,
+  ApiCronTenancyEventsRoute: ApiCronTenancyEventsRoute,
   PropertiesSlugIndexRoute: PropertiesSlugIndexRoute,
   ApiPublicPhotoSplatRoute: ApiPublicPhotoSplatRoute,
 }
