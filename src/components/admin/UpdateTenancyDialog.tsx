@@ -140,7 +140,8 @@ export function UpdateTenancyDialog({
   });
   const moved = flags.room || flags.occupancy;
   // a new room is priced at its own rent; a date change at the rate admin types (prevailing)
-  const listRent = moved && target ? (target.bed.rent ?? target.room.rent) : oldRent;
+  // the room type's price - a bed's own rent is what its current occupant agreed to, not ours (Dani, 7 Oct 2026)
+  const listRent = moved && target ? priceOf(target, placed?.bed.id ?? "") : oldRent;
   const newRent = rentTyped != null ? Number(rentTyped) || 0 : listRent;
 
   // the initial payment at the new rent, as the booking quote would price it
@@ -552,6 +553,14 @@ function Compare({ label, from, to }: { label: string; from: string; to: string 
   );
 }
 
+/**
+ * What a bed costs the resident moving in: its room type's price. The rent kept
+ * on a bed is the deal of whoever is (or was) in it - A-16-08 showed RM1,100,
+ * its occupant's, against Room A's RM1,050 (Dani, 7 Oct 2026). The resident's
+ * own bed keeps their rent.
+ */
+const priceOf = (b: BedRow, current: string) => (b.bed.id === current ? (b.bed.rent ?? b.room.rent) : b.room.rent) ?? 0;
+
 const money2 = (n: number) => `RM ${n.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 /** the move month, split on the move date - each part priced by its real days (Dani, 6 Oct 2026) */
@@ -626,7 +635,7 @@ function RoomList({
                   <span className="block text-[11px] text-amber-700">free from {fmtDate(shiftDate(b.bed.tenancyEnd.slice(0, 10), { days: 1 }))}</span>
                 ) : null}
               </span>
-              <span className="text-right tabular-nums">{money(b.bed.rent ?? b.room.rent)}</span>
+              <span className="text-right tabular-nums">{money(priceOf(b, current))}</span>
               <Button size="sm" variant={mine ? "default" : "ghost"} className="w-16" onClick={() => onPick(b.bed.id)}>
                 {b.bed.id === current ? "Current" : mine ? "Chosen" : "Select"}
               </Button>
