@@ -530,8 +530,9 @@ function ResidentProfilePage() {
   async function tenancyChanged(r: TenancyChangeResult) {
     if (!form || !tenancy) return;
     if (r.newBed && r.moveOn) {
-      // a move on a later day (Dani, 6 Oct 2026): the new bed is held for them, the current one stays theirs
-      updateBed(r.newBed.bed.id, { status: "held", holdFor: form.fullName, holdUntil: r.moveOn });
+      // a move on a later day (Dani, 6 Oct 2026): the new bed is held for them, the current one stays theirs.
+      // A bed someone is still in is left to them - it is theirs until their tenancy ends (Dani, 7 Oct 2026)
+      if (r.newBed.bed.status === "vacant") updateBed(r.newBed.bed.id, { status: "held", holdFor: form.fullName, holdUntil: r.moveOn });
     } else if (r.newBed) {
       const oldBed = placed?.bed;
       const updated = {
@@ -571,6 +572,13 @@ function ResidentProfilePage() {
     if (!form || !tenancy) return;
     const target = allBeds(units).find((x) => x.bed.id === m.moveTo.bedId);
     if (!target) return;
+    // the person before them has not left yet: wait, and say so
+    if (target.bed.residentId && target.bed.residentId !== form.id) {
+      toast.warning(`Not moved yet: ${target.bed.residentName || "someone"} is still in ${target.unit.unitNo} · Room ${target.room.letter}`, {
+        description: "Check them out first; the move happens the next time this page is opened.",
+      });
+      return;
+    }
     await tenancyChanged({ newBed: target, newEnd: tenancy.end, newRent: 0 });
     await clearPendingMove({ data: { residentId: form.id } });
     toast.success(`Moved to ${target.unit.unitNo} · Room ${target.room.letter}`, { description: `The move date, ${fmtDate(m.from)}, has come.` });

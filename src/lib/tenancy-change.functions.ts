@@ -113,6 +113,11 @@ export const applyTenancyChange = createServerFn({ method: "POST" })
         waived: z.array(z.string().max(20)).max(10),
         effectiveDate: z.string().max(10),
         mergeValues: z.record(z.string().max(80), z.string().max(2000)),
+        /**
+         * Schedule B's charges for the change (Dani, 7 Oct 2026): the RM100 room/unit change fee
+         * and the RM20 card after a unit change - filled in, then edited or removed by admin
+         */
+        charges: z.array(z.object({ label: z.string().min(1).max(160), amount: z.number().min(0).max(100_000) })).max(6).optional(),
         /** the bed they move to, when they move on a later day - held until then (Dani, 6 Oct 2026) */
         moveTo: z
           .object({ bedId: z.string().max(80), roomId: z.string().max(80), unitId: z.string().max(80), occupancy: z.string().max(20) })
@@ -200,9 +205,12 @@ export const applyTenancyChange = createServerFn({ method: "POST" })
 
     // 2. the difference on the initial payment
     const rows = compareMoney(basis, { ...basis, ...(data.next as any) }, { original: rentBefore, next: data.newRent || rentBefore });
-    const due = topUpTotal(rows, data.waived);
+    // the deposits that went up, then Schedule B's charges admin kept - on one invoice
+    const charges = (data.charges ?? []).filter((c) => c.amount > 0).map((c) => ({ label: c.label, amount: Math.round(c.amount * 100) / 100, kind: "onetime" }));
+    const lines = [...topUpLines(rows, data.waived), ...charges];
+    const due = Math.round((topUpTotal(rows, data.waived) + charges.reduce((n, c) => n + c.amount, 0)) * 100) / 100;
     let invoice: { id: string; number: string } | null = null;
-    if (due > 0) invoice = await raiseTopUp(sb, data.residentId, data.tenancyId, topUpLines(rows, data.waived));
+    if (due > 0) invoice = await raiseTopUp(sb, data.residentId, data.tenancyId, lines);
 
     // 3. the documents - now, or once the difference is paid
     const docs = documentsFor(flags);
@@ -220,6 +228,7 @@ export const applyTenancyChange = createServerFn({ method: "POST" })
       flags,
       rows,
       waived: rows.filter((r) => data.waived.includes(r.key) && r.difference > 0).map((r) => ({ item: r.label, amount: r.difference })),
+      charges,
       newRent: data.newRent,
     });
     // made now, on Confirm and proceed (Dani, 4 Oct 2026) - the difference invoice is paid alongside

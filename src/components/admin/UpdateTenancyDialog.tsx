@@ -22,7 +22,7 @@ import {
   type MoneyKey,
 } from "@/lib/tenancy-change";
 import { klToday } from "@/lib/kl-date";
-import { rentForDays } from "@/lib/rental-schedule";
+import { rentForDays, shiftDate } from "@/lib/rental-schedule";
 import { applyTenancyChange, cancelPendingChange, getTenancyChangeBasis } from "@/lib/tenancy-change.functions";
 
 /**
@@ -90,6 +90,9 @@ export function UpdateTenancyDialog({
   // the items waived, each on its own (Dani, 5 Oct 2026)
   const [waived, setWaived] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  // Schedule B's charges, filled in by what changes - each editable or removed (Dani, 7 Oct 2026)
+  const [feeTyped, setFeeTyped] = useState<Record<string, string>>({});
+  const [removed, setRemoved] = useState<string[]>([]);
   // each opening starts from what the resident has now - the page may not have had the bed when this first drew
   useEffect(() => {
     if (!open) return;
@@ -101,6 +104,8 @@ export function UpdateTenancyDialog({
     setRentTyped(null);
     setNextTyped({});
     setWaived([]);
+    setFeeTyped({});
+    setRemoved([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, placed?.bed.id]);
 
@@ -108,17 +113,20 @@ export function UpdateTenancyDialog({
     () =>
       allBeds(units).filter(
         ({ unit, bed }) =>
-          (bed.status === "vacant" || bed.id === placed?.bed.id) &&
+          // vacant now, or someone else's whose tenancy ends before ours does - the move then waits for it (Dani, 7 Oct 2026)
+          (bed.status === "vacant" || bed.id === placed?.bed.id || (!!bed.residentId && !!bed.tenancyEnd && bed.tenancyEnd.slice(0, 10) < (tenancy.end || "9999"))) &&
           bedOccupancy(bed.label) === occ &&
           // men and women never share a unit - the same rule as a booking's room list
           unitAccepts(unit, residents, gender),
       ),
-    [units, occ, placed?.bed.id, residents, gender],
+    [units, occ, placed?.bed.id, residents, gender, tenancy.end],
   );
   const letters = [...new Set(free.map((b) => b.room.letter))].sort();
   const beds = free.filter((b) => b.room.letter === letter);
   const target = beds.find((b) => b.bed.id === bedId) ?? null;
   const end = newEnd || oldEnd;
+  // the bed is someone else's until their tenancy ends: the move can only be after it
+  const occupiedUntil = target && target.bed.id !== placed?.bed.id && target.bed.residentId ? (target.bed.tenancyEnd ?? "").slice(0, 10) : "";
 
   const flags = changeFlags({
     oldUnitId: placed?.unit.id ?? "",
@@ -148,8 +156,15 @@ export function UpdateTenancyDialog({
       ) as Record<MoneyKey, number>)
     : null;
   const rows = original && next ? compareMoney(original, next, { original: oldRent, next: newRent }) : [];
-  const due = topUpTotal(rows, waived);
-  const waivedTotal = Math.round((topUpTotal(rows) - due) * 100) / 100;
+  const charges = [
+    ...(moved ? [{ key: "change_fee", label: "Resident-requested room/unit change", amount: 100 }] : []),
+    ...(flags.unit ? [{ key: "card_change", label: "Additional access card following room/unit change", amount: 20 }] : []),
+  ]
+    .filter((c) => !removed.includes(c.key))
+    .map((c) => ({ ...c, amount: feeTyped[c.key] != null ? Number(feeTyped[c.key]) || 0 : c.amount }));
+  const chargesTotal = charges.reduce((n, c) => n + c.amount, 0);
+  const due = Math.round((topUpTotal(rows, waived) + chargesTotal) * 100) / 100;
+  const waivedTotal = Math.round((topUpTotal(rows) - topUpTotal(rows, waived)) * 100) / 100;
   const plan = documentsFor(flags);
   const changed = anyChange(flags) || Math.abs(newRent - oldRent) > 0.005;
   const pending = basis.data?.pending ?? null;
@@ -181,6 +196,7 @@ export function UpdateTenancyDialog({
           next: next ?? {},
           waived,
           effectiveDate: moved ? effective : basis.data.tenancy.start,
+          charges: charges.map((c) => ({ label: c.label, amount: c.amount })),
           mergeValues: mergeValuesFor(result),
           moveTo: later && target ? { bedId: target.bed.id, roomId: target.room.id, unitId: target.unit.id, occupancy: target.room.occupancy } : null,
         },
@@ -206,6 +222,7 @@ export function UpdateTenancyDialog({
 
   // the move month split at the move date, shown as it will be invoiced (Dani, 6 Oct 2026)
   const later = moved && effective > klToday();
+  const tooEarly = !!occupiedUntil && effective <= occupiedUntil;
   const rentMoves = moved && Math.abs(newRent - oldRent) > 0.005 && !!effective;
   const split = rentMoves ? moveMonthSplit(effective, oldRent, newRent) : null;
   const kind =
@@ -273,6 +290,10 @@ export function UpdateTenancyDialog({
                     setBedId(id);
                     setRentTyped(null);
                     setNextTyped({});
+                    // someone else's bed: the move starts the day after their tenancy ends
+                    const b = beds.find((x) => x.bed.id === id);
+                    const until = b && b.bed.residentId && b.bed.id !== placed?.bed.id ? (b.bed.tenancyEnd ?? "").slice(0, 10) : "";
+                    setEffective(until ? shiftDate(until, { days: 1 }) : klToday());
                   }}
                 />
               ) : null}
@@ -280,9 +301,19 @@ export function UpdateTenancyDialog({
                 <div className="space-y-2 rounded-lg bg-muted/40 p-3">
                   <label className="flex flex-wrap items-center gap-3 text-sm">
                     <span className="font-medium">Moves on</span>
-                    <DateInput min={klToday()} value={effective} onChange={(e) => setEffective(e.target.value)} className="h-9 w-44" />
-                    {later ? <span className="text-xs text-muted-foreground">The current bed stays theirs until then; the new one is held.</span> : null}
+                    <DateInput
+                      min={occupiedUntil ? shiftDate(occupiedUntil, { days: 1 }) : klToday()}
+                      value={effective}
+                      onChange={(e) => setEffective(e.target.value)}
+                      className="h-9 w-44"
+                    />
+                    {later ? <span className="text-xs text-muted-foreground">The current bed stays theirs until then.</span> : null}
                   </label>
+                  {occupiedUntil ? (
+                    <p className={`text-xs ${tooEarly ? "font-medium text-rose-700" : "text-muted-foreground"}`}>
+                      {target?.bed.residentName || "Someone"} is in this bed until {fmtDate(occupiedUntil)}: the move can be from {fmtDate(shiftDate(occupiedUntil, { days: 1 }))}.
+                    </p>
+                  ) : null}
                   {split ? (
                     <div className="text-xs">
                       <p className="mb-1 font-medium text-foreground">{split.month} rent, split on the move date</p>
@@ -368,6 +399,41 @@ export function UpdateTenancyDialog({
               ) : (
                 <p className="text-xs text-muted-foreground">Nothing to compare until something changes.</p>
               )}
+              {moved || removed.length ? (
+                <div className="overflow-hidden rounded-lg border border-border">
+                  <div className="bg-muted/50 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Charges · Schedule B</div>
+                  {charges.map((c) => (
+                    <div key={c.key} className="grid grid-cols-[1fr_7rem_2rem] items-center gap-2 border-t border-border px-3 py-1.5 text-sm">
+                      <span>{c.label}</span>
+                      <Input
+                        type="number"
+                        aria-label={`${c.label} amount`}
+                        value={feeTyped[c.key] ?? String(c.amount)}
+                        onChange={(e) => setFeeTyped((t) => ({ ...t, [c.key]: e.target.value }))}
+                        className="h-8 text-right tabular-nums"
+                      />
+                      <button
+                        type="button"
+                        title="Remove this charge"
+                        aria-label={`Remove ${c.label}`}
+                        onClick={() => setRemoved((r) => [...r, c.key])}
+                        className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  {removed.length ? (
+                    <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
+                      {removed.length} removed at Brachtia's discretion ·{" "}
+                      <button type="button" className="underline underline-offset-2" onClick={() => setRemoved([])}>
+                        put back
+                      </button>
+                    </p>
+                  ) : null}
+                  {!charges.length && !removed.length ? <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground">None.</p> : null}
+                </div>
+              ) : null}
               {/* what is held now, line by line - so the Now column can be checked (Dani, 5 Oct 2026) */}
               {basis.data?.held.length ? (
                 <details className="group rounded-lg border border-border text-sm">
@@ -418,11 +484,11 @@ export function UpdateTenancyDialog({
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-3">
-          {moved && !target ? <span className="mr-auto text-xs text-amber-700">Choose the new bed.</span> : null}
+          {moved && !target ? <span className="mr-auto text-xs text-amber-700">Choose the new bed.</span> : tooEarly ? <span className="mr-auto text-xs text-rose-700">Move date is before the bed is free.</span> : null}
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
             Cancel
           </Button>
-          <Button disabled={busy || !changed || !basis.data?.tenancy || !!pending || (moved && !target)} onClick={() => void confirm()}>
+          <Button disabled={busy || !changed || !basis.data?.tenancy || !!pending || (moved && !target) || tooEarly} onClick={() => void confirm()}>
             {busy ? "Saving…" : action}
           </Button>
         </div>
@@ -552,7 +618,13 @@ function RoomList({
                 <span aria-hidden />
               )}
               <span>Room {b.room.letter}</span>
-              <span className="text-muted-foreground">{b.bed.label}</span>
+              <span className="text-muted-foreground">
+                {b.bed.label}
+                {/* someone else's now - free the day after their tenancy ends */}
+                {b.bed.residentId && b.bed.id !== current && b.bed.tenancyEnd ? (
+                  <span className="block text-[11px] text-amber-700">free from {fmtDate(shiftDate(b.bed.tenancyEnd.slice(0, 10), { days: 1 }))}</span>
+                ) : null}
+              </span>
               <span className="text-right tabular-nums">{money(b.bed.rent ?? b.room.rent)}</span>
               <Button size="sm" variant={mine ? "default" : "ghost"} className="w-16" onClick={() => onPick(b.bed.id)}>
                 {b.bed.id === current ? "Current" : mine ? "Chosen" : "Select"}
