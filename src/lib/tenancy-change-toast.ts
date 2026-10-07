@@ -15,7 +15,7 @@ type Outcome = {
 
 /** "lengthened from 30 Sept 2027 to 14 Oct 2028" */
 export function scheduleChange(s: { from: string; to: string }) {
-  return `Rent schedule ${s.to > s.from ? "lengthened" : "shortened"}: ${fmtDate(s.from)} → ${fmtDate(s.to)}.`;
+  return `Rental schedule ${s.to > s.from ? "lengthened" : "shortened"}: tenancy end ${fmtDate(s.from)} → new end date ${fmtDate(s.to)}.`;
 }
 
 /**
@@ -29,8 +29,8 @@ export function toastTenancyOutcomes(outcomes: Outcome[] | undefined) {
       o.settled && o.documents.length ? `${o.documents.join(", ")} ${o.documents.length === 1 ? "was" : "were"} made again - on the Tenancy tab.` : "",
       o.scheduleEnd ? scheduleChange(o.scheduleEnd) : "",
       o.settled && Math.abs(o.rent - o.rentBefore) > 0.005 ? `Rental ${money(o.rentBefore)} → ${money(o.rent)} a month from ${fmtDate(o.date)}.` : "",
-      o.effective ? "It has taken effect: the room and end date are updated." : `It takes effect on ${fmtDate(o.date)}.`,
+      o.effective ? "Effective: the room and tenancy end are updated." : `Paid · Scheduled - effective date ${fmtDate(o.date)}.`,
     ].filter(Boolean);
-    toast.success(`${o.name} settled · ${fmtDate(o.date)}`, { description: lines.join(" "), duration: 12_000 });
+    toast.success(`${o.name} · ${o.effective ? "Effective" : "Paid · Scheduled"}`, { description: lines.join(" "), duration: 12_000 });
   }
 }

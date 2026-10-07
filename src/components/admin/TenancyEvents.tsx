@@ -27,12 +27,22 @@ type EventRow = {
   credit: number;
 };
 
-const STATE = {
+/**
+ * One set of words for an event, used on the profile, the payment notice and
+ * the tenancy history (Dani, 7 Oct 2026): Scheduled (IP not paid), Paid ·
+ * Scheduled (waiting for its effective date), Effective, Cancelled.
+ */
+export const EVENT_STATE = {
   scheduled: { label: "Scheduled", tone: "bg-amber-50 text-amber-800" },
-  settled: { label: "Settled · takes effect on its date", tone: "bg-sky-50 text-sky-800" },
+  settled: { label: "Paid · Scheduled", tone: "bg-sky-50 text-sky-800" },
   effective: { label: "Effective", tone: "bg-emerald-50 text-emerald-800" },
   cancelled: { label: "Cancelled", tone: "bg-muted text-muted-foreground" },
 } as const;
+const STATE = EVENT_STATE;
+
+export function EventStatusPill({ state }: { state: keyof typeof EVENT_STATE }) {
+  return <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${EVENT_STATE[state].tone}`}>{EVENT_STATE[state].label}</span>;
+}
 
 const stamp = (iso: string) =>
   new Date(iso).toLocaleString("en-GB", { timeZone: "Asia/Kuala_Lumpur", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
@@ -47,14 +57,14 @@ const stamp = (iso: string) =>
 export function TenancyEvents({ events, residentId, onChanged }: { events: EventRow[]; residentId: string; onChanged: () => void }) {
   const [cancelling, setCancelling] = useState<EventRow | null>(null);
   const open = events.filter((e) => e.state === "scheduled" || e.state === "settled").sort((a, b) => a.date.localeCompare(b.date));
-  // the open ones; else the latest change, whatever became of it
-  const shown = open.length ? open : events.slice(0, 1);
+  // every change, the ones still to come first, then the rest newest first
+  const shown = [...open, ...events.filter((e) => !open.includes(e))];
   const later = (e: EventRow) => open.filter((o) => o.date > e.date && o.eventId !== e.eventId);
   return (
     <Panel>
       <div className="mb-3 flex items-center gap-2">
         <CalendarClock className="size-4 text-brand-deep" />
-        <p className="text-sm font-semibold text-brand-deep">Tenancy changes</p>
+        <p className="text-sm font-semibold text-brand-deep">Tenancy change history</p>
       </div>
       <ul className="space-y-2">
         {shown.map((e) => {
@@ -65,7 +75,7 @@ export function TenancyEvents({ events, residentId, onChanged }: { events: Event
                 <span className={`text-sm font-medium ${e.state === "cancelled" ? "text-muted-foreground line-through" : "text-foreground"}`}>
                   {fmtDate(e.date)} · {e.name}
                 </span>
-                <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATE[e.state].tone}`}>{STATE[e.state].label}</span>
+                <EventStatusPill state={e.state} />
                 {e.state === "scheduled" || e.state === "settled" ? (
                   <Button size="sm" variant="ghost" className="ml-auto h-7 text-xs text-rose-700" onClick={() => setCancelling(e)}>
                     Cancel event
@@ -113,7 +123,7 @@ export function TenancyEvents({ events, residentId, onChanged }: { events: Event
                   </div>
                   <div>
                     <dt className="inline">Documents </dt>
-                    <dd className="inline text-foreground">{e.state === "scheduled" ? "after the IP is settled" : e.documents.length ? "made" : "none"}</dd>
+                    <dd className="inline text-foreground">{e.state === "scheduled" ? "after the IP is paid" : e.documents.length ? "made" : "none"}</dd>
                   </div>
                 </dl>
               )}

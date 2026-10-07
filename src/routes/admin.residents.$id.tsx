@@ -42,8 +42,7 @@ import { TenancyDocs, currentMergeValues } from "@/components/admin/TenancyDocs"
 import { Checkbox } from "@/components/ui/checkbox";
 import { UpdateTenancyDialog, type TenancyChangeResult } from "@/components/admin/UpdateTenancyDialog";
 import { getTenancyEvents } from "@/lib/tenancy-change.functions";
-import { TenancyEvents } from "@/components/admin/TenancyEvents";
-import { shiftDate } from "@/lib/rental-schedule";
+import { EventStatusPill, TenancyEvents } from "@/components/admin/TenancyEvents";
 import { getResidentRent, tenancyDatesByResident } from "@/lib/rental-schedule.functions";
 import { ResidentPayments } from "@/components/admin/ResidentPayments";
 import { RESIDENT_DOCS, residentDocsFor, residentDocLabel } from "@/lib/resident-documents";
@@ -437,15 +436,6 @@ function ResidentProfilePage() {
    * event's day; the new one is shown beside it, marked Scheduled or Settled.
    */
   const pendingEvents = (tenancyEvents.data?.events ?? []).filter((e) => e.state === "scheduled" || e.state === "settled").sort((a, b) => a.date.localeCompare(b.date));
-  const roomEvent = pendingEvents.find((e) => e.moveToBed);
-  const coming = {
-    room: roomEvent ?? null,
-    bed: roomEvent ? (allBeds(units).find((b) => b.bed.id === roomEvent.moveToBed) ?? null) : null,
-    end: pendingEvents.filter((e) => e.dateChange !== "none").at(-1) ?? null,
-    rent: pendingEvents.filter((e) => Math.abs(e.rent - e.rentBefore) > 0.005)[0] ?? null,
-  };
-  // the last date change that took effect - the end it replaced is the day before it
-  const lastDated = (tenancyEvents.data?.events ?? []).find((e) => e.state === "effective" && e.dateChange !== "none") ?? null;
 
   const stay = {
     ...stayDates(tenancy, placed, form, saved),
@@ -721,51 +711,60 @@ function ResidentProfilePage() {
         <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-border pt-4 sm:grid-cols-4 lg:grid-cols-7">
           {[
             { label: "Residence", value: placed?.unit.residenceName },
-            { label: "Unit number", value: placed?.unit.unitNo, next: coming.bed ? { text: `→ ${coming.bed.unit.unitNo}`, ev: coming.room! } : null },
+            { label: "Unit number", value: placed?.unit.unitNo },
             {
               label: "Room / bed",
               value: placed ? `Room ${placed.room.letter} · ${placed.bed.label}` : undefined,
-              next: coming.bed ? { text: `→ Room ${coming.bed.room.letter} · ${coming.bed.bed.label}`, ev: coming.room! } : null,
             },
-            {
-              label: "Monthly rent",
-              value: stay.rent ? money(stay.rent) : undefined,
-              next: coming.rent ? { text: `→ ${money(coming.rent.rent)}`, ev: coming.rent } : null,
-            },
+            { label: "Monthly rent", value: stay.rent ? money(stay.rent) : undefined },
             { label: "Tenancy start", value: stay.start ? fmtDate(stay.start) : undefined },
-            {
-              label: "Tenancy end",
-              value: stay.end ? fmtDate(stay.end) : undefined,
-              next: coming.end ? { text: `→ ${fmtDate(coming.end.periodEnd)}`, ev: coming.end } : null,
-              was: !coming.end && lastDated ? `${lastDated.dateChange === "renewal" ? "Renewed" : "Extended"} · was ${fmtDate(shiftDate(lastDated.date, { days: -1 }))}` : "",
-            },
+            { label: "Tenancy end", value: stay.end ? fmtDate(stay.end) : undefined },
             { label: "Duration", value: stay.duration },
           ].map((f) => (
             <div key={f.label} className="min-w-0">
               <p className="text-xs text-muted-foreground">{f.label}</p>
               <p className="truncate text-sm font-medium text-foreground">{f.value || "—"}</p>
-              {/* an Update Tenancy event not yet effective: what it brings, and when (Dani, 7 Oct 2026) */}
-              {"next" in f && f.next ? (
-                <button
-                  type="button"
-                  onClick={() => setTab("tenancy")}
-                  title={`${f.next.ev.name} on ${fmtDate(f.next.ev.date)} - ${f.next.ev.state === "settled" ? "paid, takes effect on the day" : "waiting for its IP"}`}
-                  className="mt-1 block max-w-full text-left"
-                >
-                  <span className="block truncate text-xs font-semibold text-brand-deep">{f.next.text}</span>
-                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                    <span className={`size-1.5 shrink-0 rounded-full ${f.next.ev.state === "settled" ? "bg-sky-600" : "bg-amber-500"}`} />
-                    <span className="truncate">
-                      {f.next.ev.state === "settled" ? "Settled" : "Scheduled"} · from {fmtDate(f.next.ev.date)}
-                    </span>
-                  </span>
-                </button>
-              ) : "was" in f && f.was ? (
-                <p className="mt-1 truncate text-[11px] text-muted-foreground">{f.was}</p>
-              ) : null}
             </div>
           ))}
         </div>
+        {/* an Update Tenancy event not yet effective, said once under the details - gone on its day (Dani, 7 Oct 2026) */}
+        {pendingEvents.length ? (
+          <div className="mt-4 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Upcoming tenancy change</p>
+            <ul className="space-y-1.5">
+              {pendingEvents.map((e) => {
+                const bed = e.moveToBed ? allBeds(units).find((b) => b.bed.id === e.moveToBed) : null;
+                return (
+                  <li key={e.eventId} className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                    <span className="font-semibold text-foreground">{e.name}</span>
+                    <EventStatusPill state={e.state} />
+                    <span className="text-xs text-muted-foreground">
+                      Effective date <span className="font-medium text-foreground">{fmtDate(e.date)}</span>
+                    </span>
+                    {e.dateChange !== "none" ? (
+                      <span className="text-xs text-muted-foreground">
+                        New end date <span className="font-medium text-foreground">{fmtDate(e.periodEnd)}</span>
+                      </span>
+                    ) : null}
+                    {bed ? (
+                      <span className="text-xs text-muted-foreground">
+                        New room <span className="font-medium text-foreground">{bed.unit.unitNo} · Room {bed.room.letter}</span>
+                      </span>
+                    ) : null}
+                    {Math.abs(e.rent - e.rentBefore) > 0.005 ? (
+                      <span className="text-xs text-muted-foreground">
+                        New monthly rent <span className="font-medium text-foreground">{money(e.rent)}</span>
+                      </span>
+                    ) : null}
+                    <button type="button" className="ml-auto text-xs text-brand-deep underline-offset-2 hover:underline" onClick={() => setTab("tenancy")}>
+                      Details
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
         {/* on the card every tab shares: a resident without a tenancy yet
             still has an arrival to arrange (Dani, 30 Sep 2026) */}
         {!isNew && form.id ? <CheckInLine residentId={form.id} /> : null}
