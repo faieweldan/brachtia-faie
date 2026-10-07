@@ -143,7 +143,8 @@ export const uploadStampPage = createServerFn({ method: "POST" })
  * the foot of every page.
  */
 export const fullAgreementPdf = createServerFn({ method: "POST" })
-  .inputValidator((d: { agreementId: string }) => d)
+  // draft: before every document is signed - each as it stands, marked DRAFT (Dani, 7 Oct 2026)
+  .inputValidator((d: { agreementId: string; draft?: boolean }) => d)
   .handler(async ({ data }) => {
     const db = await admin();
     const { data: ag } = await db.from("tenancy_agreements").select("id, resident_id").eq("id", data.agreementId).maybeSingle();
@@ -152,7 +153,8 @@ export const fullAgreementPdf = createServerFn({ method: "POST" })
     const latest = new Map<string, any>();
     for (const r of (rows ?? []) as any[]) if (!latest.has(r.doc_type) || latest.get(r.doc_type).version < r.version) latest.set(r.doc_type, r);
     const docs = ORDER.map((t) => latest.get(t)).filter(Boolean);
-    if (!docs.length || docs.some((d) => !DONE.has(d.status) || !d.generated_pdf_path)) throw new Error("Every document has to be signed first");
+    if (!data.draft && (!docs.length || docs.some((d) => !DONE.has(d.status) || !d.generated_pdf_path))) throw new Error("Every document has to be signed first");
+    if (data.draft && !docs.some((d) => d.generated_pdf_path)) throw new Error("No document has been made yet");
 
     const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
     const out = await PDFDocument.create();
@@ -164,13 +166,15 @@ export const fullAgreementPdf = createServerFn({ method: "POST" })
     };
     for (const d of docs) {
       if (d.status === "stamped") await add(stampPath(String(ag.resident_id), d.id));
-      await add(d.generated_pdf_path);
+      // a draft: a document not made into a PDF yet (Schedule C before its check) is left out
+      if (d.generated_pdf_path) await add(d.generated_pdf_path);
     }
     const font = await out.embedFont(StandardFonts.Helvetica);
     const pages = out.getPages();
     pages.forEach((p, i) => {
       const label = `Page ${i + 1} of ${pages.length}`;
       p.drawText(label, { x: p.getWidth() / 2 - font.widthOfTextAtSize(label, 8) / 2, y: 14, size: 8, font, color: rgb(0.4, 0.4, 0.4) });
+      if (data.draft) p.drawText("DRAFT - not signed", { x: 24, y: p.getHeight() - 16, size: 9, font, color: rgb(0.75, 0.2, 0.2) });
     });
     const bytes = await out.save();
     let bin = "";

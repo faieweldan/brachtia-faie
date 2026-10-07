@@ -271,7 +271,8 @@ function AgreementBlock({
   async function openFull() {
     setOpening(true);
     try {
-      const { base64 } = await fullAgreementPdf({ data: { agreementId: agreement.id } });
+      // before every document is signed: the agreement draft (Dani, 7 Oct 2026)
+      const { base64 } = await fullAgreementPdf({ data: { agreementId: agreement.id, draft: !complete } });
       setFull(pdfUrl(base64));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not open the agreement");
@@ -321,12 +322,17 @@ function AgreementBlock({
       <button type="button" onClick={() => setExpanded(!expanded)} aria-label="Show or hide documents" className="flex min-w-0 flex-1 justify-end py-3 pr-1">
         {parent ? <StatusPill status={parent.status} label={docLabel(parent.status)} /> : null}
       </button>
-      {complete ? (
+      {docs.length ? (
         <Button type="button" size="sm" variant="outline" className="h-7 shrink-0 px-2 text-xs" disabled={opening} onClick={() => void openFull()}>
-          <FileStack className="mr-1 size-3.5" /> {opening ? "Opening…" : "Full agreement"}
+          <FileStack className="mr-1 size-3.5" /> {opening ? "Opening…" : complete ? "Full agreement" : "Agreement draft"}
         </Button>
       ) : null}
-      <PdfPreviewDialog title={`${agreement.agreementNo} – Full agreement`} fileName={`${agreement.agreementNo}.pdf`} url={full} onClose={() => setFull(null)} />
+      <PdfPreviewDialog
+        title={`${agreement.agreementNo} – ${complete ? "Full agreement" : "Agreement draft"}`}
+        fileName={complete ? `${agreement.agreementNo}.pdf` : `${agreement.agreementNo} DRAFT - not signed.pdf`}
+        url={full}
+        onClose={() => setFull(null)}
+      />
       {untouched ? (
         <Button type="button" size="sm" variant="ghost" className="h-7 shrink-0 px-2 text-xs text-muted-foreground" onClick={() => setUndoing(true)}>
           <Undo2 className="mr-1 size-3.5" /> Reset

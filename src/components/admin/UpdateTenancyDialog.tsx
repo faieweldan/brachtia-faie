@@ -9,6 +9,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { costBreakdown, getProperty } from "@/data/properties";
 import { allBeds, fmtDate, money, unitAccepts, unitGender, type BedRow, type Resident, type Unit } from "@/lib/ops-store";
 import { GenderMark } from "@/components/admin/GenderMark";
+import { Dropdown } from "@/components/admin/Dropdown";
+import { PdfPreviewButton } from "@/components/admin/PdfPreview";
+import { CHARGES } from "@/lib/charge-list";
 import {
   MONEY_ITEMS,
   anyChange,
@@ -18,6 +21,7 @@ import {
   documentNames,
   documentsFor,
   moneyOf,
+  topUpLines,
   topUpTotal,
   type MoneyKey,
 } from "@/lib/tenancy-change";
@@ -53,6 +57,7 @@ export function UpdateTenancyDialog({
   gender,
   mergeValuesFor,
   onApplied,
+  invoiceFor,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -68,6 +73,8 @@ export function UpdateTenancyDialog({
   mergeValuesFor: (r: TenancyChangeResult) => Record<string, string>;
   /** moves the bed and updates the resident card once the server has saved it */
   onApplied: (r: TenancyChangeResult) => Promise<void>;
+  /** who the invoice is for, for its preview */
+  invoiceFor?: { fullName: string; email: string; phone: string; residentCode: string; university: string; nationality: string };
 }) {
   const basis = useQuery({
     queryKey: ["tenancy-change", residentId],
@@ -93,6 +100,8 @@ export function UpdateTenancyDialog({
   // Schedule B's charges, filled in by what changes - each editable or removed (Dani, 7 Oct 2026)
   const [feeTyped, setFeeTyped] = useState<Record<string, string>>({});
   const [removed, setRemoved] = useState<string[]>([]);
+  // more of Schedule B, for the room they leave - a key, a clean, damage (Dani, 7 Oct 2026)
+  const [extras, setExtras] = useState<{ id: string; label: string; amount: string }[]>([]);
   // each opening starts from what the resident has now - the page may not have had the bed when this first drew
   useEffect(() => {
     if (!open) return;
@@ -106,6 +115,7 @@ export function UpdateTenancyDialog({
     setWaived([]);
     setFeeTyped({});
     setRemoved([]);
+    setExtras([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, placed?.bed.id]);
 
@@ -163,7 +173,13 @@ export function UpdateTenancyDialog({
   ]
     .filter((c) => !removed.includes(c.key))
     .map((c) => ({ ...c, amount: feeTyped[c.key] != null ? Number(feeTyped[c.key]) || 0 : c.amount }));
-  const chargesTotal = charges.reduce((n, c) => n + c.amount, 0);
+  const extraCharges = extras.filter((x) => x.label.trim() && Number(x.amount) > 0).map((x) => ({ label: x.label.trim(), amount: Number(x.amount) }));
+  const chargesTotal = charges.reduce((n, c) => n + c.amount, 0) + extraCharges.reduce((n, c) => n + c.amount, 0);
+  // the invoice as it will be raised: the deposits that went up, then the charges
+  const invoiceLines = [
+    ...topUpLines(rows, waived).map((l) => ({ label: l.label, amount: l.amount, kind: l.kind })),
+    ...[...charges, ...extraCharges].filter((c) => c.amount > 0).map((c) => ({ label: c.label, amount: c.amount, kind: "onetime" })),
+  ];
   const due = Math.round((topUpTotal(rows, waived) + chargesTotal) * 100) / 100;
   const waivedTotal = Math.round((topUpTotal(rows) - topUpTotal(rows, waived)) * 100) / 100;
   const plan = documentsFor(flags);
@@ -197,7 +213,7 @@ export function UpdateTenancyDialog({
           next: next ?? {},
           waived,
           effectiveDate: moved ? effective : basis.data.tenancy.start,
-          charges: charges.map((c) => ({ label: c.label, amount: c.amount })),
+          charges: [...charges, ...extraCharges].map((c) => ({ label: c.label, amount: c.amount })),
           mergeValues: mergeValuesFor(result),
           moveTo: later && target ? { bedId: target.bed.id, roomId: target.room.id, unitId: target.unit.id, occupancy: target.room.occupancy } : null,
         },
@@ -433,7 +449,108 @@ export function UpdateTenancyDialog({
                       </button>
                     </p>
                   ) : null}
-                  {!charges.length && !removed.length ? <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground">None.</p> : null}
+                  {extras.map((x) => (
+                    <div key={x.id} className="grid grid-cols-[1fr_7rem_2rem] items-center gap-2 border-t border-border px-3 py-1.5 text-sm">
+                      <Input
+                        aria-label="Charge description"
+                        value={x.label}
+                        onChange={(e) => setExtras((xs) => xs.map((y) => (y.id === x.id ? { ...y, label: e.target.value } : y)))}
+                        className="h-8"
+                      />
+                      <Input
+                        type="number"
+                        aria-label={`${x.label} amount`}
+                        placeholder="RM"
+                        value={x.amount}
+                        onChange={(e) => setExtras((xs) => xs.map((y) => (y.id === x.id ? { ...y, amount: e.target.value } : y)))}
+                        className="h-8 text-right tabular-nums"
+                      />
+                      <button
+                        type="button"
+                        title="Remove this charge"
+                        aria-label={`Remove ${x.label}`}
+                        onClick={() => setExtras((xs) => xs.filter((y) => y.id !== x.id))}
+                        className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <div className="border-t border-border px-3 py-2">
+                    <Dropdown
+                      value=""
+                      aria-label="Add a charge"
+                      onChange={(e) => {
+                        const c = CHARGES[Number(e.target.value)];
+                        if (c) setExtras((xs) => [...xs, { id: crypto.randomUUID(), label: c.label, amount: c.amount != null ? String(c.amount) : "" }]);
+                      }}
+                      className="h-8 text-xs"
+                    >
+                      <option value="">+ Add charge (Schedule B)</option>
+                      {CHARGES.map((c, i) => (
+                        <option key={c.label} value={String(i)}>
+                          {c.label}
+                          {c.amount != null ? ` · RM${c.amount}` : " · amount typed"}
+                        </option>
+                      ))}
+                    </Dropdown>
+                  </div>
+                </div>
+              ) : null}
+              {/* the invoice as it will be raised, line by line, before confirming (Dani, 7 Oct 2026) */}
+              {changed && invoiceLines.length ? (
+                <div className="overflow-hidden rounded-lg border border-border">
+                  <div className="flex items-center justify-between bg-muted/50 px-3 py-1.5">
+                    <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Invoice on confirm</span>
+                    <PdfPreviewButton
+                      title="Invoice preview"
+                      fileName="Brachtia-invoice-preview.pdf"
+                      downloadable={false}
+                      downloadHint="Confirm to raise the invoice, then download it"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      build={async () =>
+                        (await import("@/lib/invoice-pdf")).invoicePdfUrl({
+                          number: "INV-Draft",
+                          issued_at: new Date().toISOString(),
+                          invoice_date: klToday(),
+                          payment_terms: "NET7",
+                          full_name: invoiceFor?.fullName ?? "",
+                          resident_code: invoiceFor?.residentCode ?? "",
+                          email: invoiceFor?.email ?? "",
+                          phone: invoiceFor?.phone ?? "",
+                          university: invoiceFor?.university ?? "",
+                          nationality: invoiceFor?.nationality ?? "",
+                          residence_name: (target ?? placed)?.unit.residenceName ?? "",
+                          room_name: (target ?? placed) ? `${(target ?? placed)!.unit.unitNo} · Room ${(target ?? placed)!.room.letter}` : "",
+                          occupancy: occLabel(occ),
+                          tenancy_start: basis.data?.tenancy?.start ?? null,
+                          tenancy_end: end,
+                          monthly_rent: newRent,
+                          payment_frequency: "",
+                          kind: "charge",
+                          heading: "Tenancy change",
+                          total: due,
+                          deposits_total: invoiceLines.filter((l) => l.kind === "refundable").reduce((n, l) => n + l.amount, 0),
+                          notes: "Initial payment difference - tenancy updated",
+                          items: invoiceLines,
+                        })
+                      }
+                    >
+                      Preview PDF
+                    </PdfPreviewButton>
+                  </div>
+                  {invoiceLines.map((l, i) => (
+                    <div key={i} className="flex justify-between gap-3 border-t border-border px-3 py-1.5 text-sm">
+                      <span className="min-w-0">{l.label}</span>
+                      <span className="tabular-nums">{money2(l.amount)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between border-t-2 border-border bg-muted/40 px-3 py-2 text-sm font-semibold">
+                    <span>Total, due in 7 days</span>
+                    <span className="tabular-nums">{money2(due)}</span>
+                  </div>
                 </div>
               ) : null}
               {/* what is held now, line by line - so the Now column can be checked (Dani, 5 Oct 2026) */}

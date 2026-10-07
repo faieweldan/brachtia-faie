@@ -738,6 +738,7 @@ function ResidentProfilePage() {
                 currentMergeValues(form, { ...tenancy, end: r.newEnd, rent: r.newRent || tenancy.rent }, r.newBed ?? placed)
               }
               onApplied={tenancyChanged}
+              invoiceFor={{ fullName: form.fullName, email: form.email, phone: form.mobile, residentCode: form.residentCode, university: form.university, nationality: form.nationality }}
             />
           ) : null}
         </div>

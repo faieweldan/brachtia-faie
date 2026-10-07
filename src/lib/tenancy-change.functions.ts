@@ -117,7 +117,7 @@ export const applyTenancyChange = createServerFn({ method: "POST" })
          * Schedule B's charges for the change (Dani, 7 Oct 2026): the RM100 room/unit change fee
          * and the RM20 card after a unit change - filled in, then edited or removed by admin
          */
-        charges: z.array(z.object({ label: z.string().min(1).max(160), amount: z.number().min(0).max(100_000) })).max(6).optional(),
+        charges: z.array(z.object({ label: z.string().min(1).max(160), amount: z.number().min(0).max(100_000) })).max(20).optional(),
         /** the bed they move to, when they move on a later day - held until then (Dani, 6 Oct 2026) */
         moveTo: z
           .object({ bedId: z.string().max(80), roomId: z.string().max(80), unitId: z.string().max(80), occupancy: z.string().max(20) })
