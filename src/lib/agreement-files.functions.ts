@@ -154,20 +154,45 @@ export const fullAgreementPdf = createServerFn({ method: "POST" })
     for (const r of (rows ?? []) as any[]) if (!latest.has(r.doc_type) || latest.get(r.doc_type).version < r.version) latest.set(r.doc_type, r);
     const docs = ORDER.map((t) => latest.get(t)).filter(Boolean);
     if (!data.draft && (!docs.length || docs.some((d) => !DONE.has(d.status) || !d.generated_pdf_path))) throw new Error("Every document has to be signed first");
-    if (data.draft && !docs.some((d) => d.generated_pdf_path)) throw new Error("No document has been made yet");
+    if (data.draft && !docs.length) throw new Error("No document has been made yet");
 
     const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
     const out = await PDFDocument.create();
+    const addBytes = async (bytes: Uint8Array) => {
+      const src = await PDFDocument.load(bytes);
+      for (const p of await out.copyPages(src, src.getPageIndices())) out.addPage(p);
+    };
     const add = async (path: string) => {
       const { data: file } = await db.storage.from(BUCKET).download(path);
-      if (!file) return;
-      const src = await PDFDocument.load(new Uint8Array(await file.arrayBuffer()));
-      for (const p of await out.copyPages(src, src.getPageIndices())) out.addPage(p);
+      if (file) await addBytes(new Uint8Array(await file.arrayBuffer()));
     };
     for (const d of docs) {
       if (d.status === "stamped") await add(stampPath(String(ag.resident_id), d.id));
-      // a draft: a document not made into a PDF yet (Schedule C before its check) is left out
-      if (d.generated_pdf_path) await add(d.generated_pdf_path);
+      if (DONE.has(d.status) && d.generated_pdf_path) await add(d.generated_pdf_path);
+      else if (data.draft) {
+        /*
+         * Not signed yet: it has no file of its own - it is drawn from its
+         * template each time it is viewed - so it is drawn here the same way
+         * (Dani, 7 Oct 2026: the draft opened with the signed ones only).
+         */
+        if (d.doc_type === "sched_c") {
+          // Schedule C is the move-in check the app draws itself: as filled in so far, or blank
+          const { buildInventoryPdf, readInventory } = await import("@/lib/inventory.server");
+          const rid = String(ag.resident_id);
+          const f = await readInventory(db, rid, d.id, "in");
+          const record = f?.record ?? { answers: {}, extras: [], meters: { keys: "", water: "", electric: "" }, generalRemarks: "" };
+          try {
+            const { bytes } = await buildInventoryPdf(db, rid, d.id, { ...(f ?? { mode: "in", status: "open" }), record } as any);
+            await addBytes(bytes);
+          } catch {
+            /* left out rather than stopping the whole draft */
+          }
+        } else {
+          const { renderGeneratedPdf } = await import("@/lib/templates.functions");
+          const r = await renderGeneratedPdf(db, "agreement", d.id);
+          if (r.ok) await addBytes(r.bytes);
+        }
+      }
     }
     const font = await out.embedFont(StandardFonts.Helvetica);
     const pages = out.getPages();
