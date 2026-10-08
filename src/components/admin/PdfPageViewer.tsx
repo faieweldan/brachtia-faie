@@ -28,12 +28,7 @@ export function PdfPageViewer({
   /** called once the last page has been shown - the declaration waits for it */
   onLastPage?: () => void;
 }) {
-  /*
-   * Every page, one under the other, so a reader can scroll (Dani, 6 Oct 2026).
-   * The same viewer as before - toolbar, zoom, fit, full screen, download - the
-   * arrows now scroll to the page, and "Page x of y" follows the scroll.
-   */
-  const canvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const [pdf, setPdf] = useState<LoadedPdf | null>(null);
   const [page, setPage] = useState(1);
@@ -65,52 +60,32 @@ export function PdfPageViewer({
   }, [url]);
 
   useEffect(() => {
-    if (!pdf || !frameRef.current) return;
+    if (!pdf || !canvasRef.current || !frameRef.current) return;
     let cancelled = false;
-    void (async () => {
-      for (let n = 1; n <= pdf.numPages && !cancelled; n++) {
-        const pdfPage = await pdf.getPage(n);
-        const base = pdfPage.getViewport({ scale: 1 });
-        const available = Math.max(320, frameRef.current?.clientWidth ?? base.width) - 32;
-        const tall = Math.max(240, (frameRef.current?.clientHeight ?? base.height) - 32);
-        const scale =
-          fit === "width"
-            ? Math.min(1.6, available / base.width)
-            : fit === "page"
-              ? Math.min(available / base.width, tall / base.height)
-              : zoom;
-        const viewport = pdfPage.getViewport({ scale });
-        const canvas = canvasRefs.current[n - 1];
-        if (!canvas || cancelled) return;
-        const ratio = window.devicePixelRatio || 1;
-        canvas.width = Math.floor(viewport.width * ratio);
-        canvas.height = Math.floor(viewport.height * ratio);
-        canvas.style.width = `${viewport.width}px`;
-        canvas.style.height = `${viewport.height}px`;
-        const context = canvas.getContext("2d");
-        if (!context) continue;
-        await pdfPage.render({ canvas, canvasContext: context, viewport, transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0] }).promise;
-      }
-    })();
+    void pdf.getPage(page).then(async (pdfPage) => {
+      const base = pdfPage.getViewport({ scale: 1 });
+      const available = Math.max(320, frameRef.current?.clientWidth ?? base.width) - 32;
+      const tall = Math.max(240, (frameRef.current?.clientHeight ?? base.height) - 32);
+      const scale =
+        fit === "width"
+          ? Math.min(1.6, available / base.width)
+          : fit === "page"
+            ? Math.min(available / base.width, tall / base.height)
+            : zoom;
+      const viewport = pdfPage.getViewport({ scale });
+      const canvas = canvasRef.current;
+      if (!canvas || cancelled) return;
+      const ratio = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(viewport.width * ratio);
+      canvas.height = Math.floor(viewport.height * ratio);
+      canvas.style.width = `${viewport.width}px`;
+      canvas.style.height = `${viewport.height}px`;
+      const context = canvas.getContext("2d");
+      if (!context) return;
+      await pdfPage.render({ canvas, canvasContext: context, viewport, transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0] }).promise;
+    });
     return () => { cancelled = true; };
-  }, [pdf, zoom, fit, full]);
-
-  // the page in view: the last one whose top has passed the middle of the window
-  const onScroll = () => {
-    const frame = frameRef.current;
-    if (!frame || !pdf) return;
-    const mid = frame.scrollTop + frame.clientHeight / 2;
-    let current = 1;
-    canvasRefs.current.forEach((c, i) => { if (c && c.offsetTop <= mid) current = i + 1; });
-    // scrolled to the bottom counts as the last page, however short it is
-    if (frame.scrollTop + frame.clientHeight >= frame.scrollHeight - 4) current = pdf.numPages;
-    setPage(current);
-  };
-  const goTo = (n: number) => {
-    const c = canvasRefs.current[n - 1];
-    if (c && frameRef.current) frameRef.current.scrollTo({ top: c.offsetTop - 16, behavior: "smooth" });
-    setPage(n);
-  };
+  }, [pdf, page, zoom, fit, full]);
 
   useEffect(() => {
     if (pdf && page === pdf.numPages) onLastPage?.();
@@ -130,9 +105,9 @@ export function PdfPageViewer({
       }
     >
       <div className="flex min-h-11 flex-wrap items-center justify-center gap-1 border-b border-border bg-card px-2 py-1.5">
-        <Button type="button" size="icon" variant="ghost" disabled={page <= 1} onClick={() => goTo(page - 1)} title="Previous page"><ChevronLeft className="size-4" /></Button>
+        <Button type="button" size="icon" variant="ghost" disabled={page <= 1} onClick={() => setPage((value) => value - 1)} title="Previous page"><ChevronLeft className="size-4" /></Button>
         <span className="min-w-24 text-center text-xs text-muted-foreground">Page {page} of {total}</span>
-        <Button type="button" size="icon" variant="ghost" disabled={page >= total} onClick={() => goTo(page + 1)} title="Next page"><ChevronRight className="size-4" /></Button>
+        <Button type="button" size="icon" variant="ghost" disabled={page >= total} onClick={() => setPage((value) => value + 1)} title="Next page"><ChevronRight className="size-4" /></Button>
         <span className="mx-1 h-5 w-px bg-border" />
         <Button type="button" size="icon" variant="ghost" onClick={() => changeZoom(zoom - 0.1)} title="Zoom out"><Minus className="size-4" /></Button>
         <span className="min-w-12 text-center text-xs text-muted-foreground">{fit === "width" ? "Width" : fit === "page" ? "Page" : `${Math.round(zoom * 100)}%`}</span>
@@ -151,14 +126,10 @@ export function PdfPageViewer({
           </a>
         </Button>
       </div>
-      <div ref={frameRef} onScroll={onScroll} className={full || fill ? "min-h-0 flex-1 overflow-auto bg-muted p-4" : "h-[68vh] min-h-[520px] overflow-auto bg-muted p-4"}>
+      <div ref={frameRef} className={full || fill ? "min-h-0 flex-1 overflow-auto bg-muted p-4" : "h-[68vh] min-h-[520px] overflow-auto bg-muted p-4"}>
         {error ? <p className="py-20 text-center text-sm text-destructive">{error}</p> : null}
         {!pdf && !error ? <p className="py-20 text-center text-sm text-muted-foreground">Preparing pages…</p> : null}
-        <div className="space-y-4">
-          {Array.from({ length: pdf?.numPages ?? 0 }, (_, i) => (
-            <canvas key={i} ref={(el) => { canvasRefs.current[i] = el; }} className="mx-auto block bg-background shadow-card" aria-label={`PDF page ${i + 1}`} />
-          ))}
-        </div>
+        <canvas ref={canvasRef} className="mx-auto bg-background shadow-card" aria-label={`PDF page ${page}`} />
       </div>
     </div>
   );
