@@ -25,6 +25,15 @@ export type PdfBox = {
   y: number;
   w: number;
   h: number;
+  /**
+   * A typed document rather than a form filled by hand (8 Oct 2026): the
+   * agreement's own text size and black, so a value reads as part of the
+   * page. Without it, the pen look of a scanned form.
+   */
+  size?: number;
+  typed?: boolean;
+  /** a value on a centred line - the cover page's name - is centred in its place */
+  align?: "center";
 };
 
 /** A value that means "tick it". */
@@ -46,6 +55,7 @@ export async function fillPdf(
 ): Promise<Uint8Array> {
   const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
   const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const typedFont = boxes.some((b) => b.typed) ? await pdf.embedFont(StandardFonts.Helvetica) : font;
   const pages = pdf.getPages();
   const ink = rgb(0.05, 0.1, 0.35); // dark blue, like a pen
 
@@ -90,6 +100,14 @@ export async function fillPdf(
 
     const text = String(value ?? "").trim();
     if (!text) continue;
+    if (box.typed) {
+      // the document's own size, shrunk only when the value is wider than its place
+      let size = box.size ?? 10;
+      while (size > 5 && typedFont.widthOfTextAtSize(text, size) > bw) size -= 0.25;
+      const tw = typedFont.widthOfTextAtSize(text, size);
+      page.drawText(text, { x: box.align === "center" ? left + (bw - tw) / 2 : left, y: bottom + bh * 0.22, size, font: typedFont, color: rgb(0, 0, 0) });
+      continue;
+    }
     // as large as the box allows, 7-11pt, shrunk to fit its width
     let size = Math.max(7, Math.min(11, bh * 0.7));
     while (size > 6 && font.widthOfTextAtSize(text, size) > bw - 2) size -= 0.5;
