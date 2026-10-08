@@ -8,7 +8,7 @@ import {
   addTask,
   fmtDate,
   saveTenancy,
-  updateBed,
+  refreshUnits,
   type Tenancy,
   type TenancyStage,
 } from "@/lib/ops-store";
@@ -89,10 +89,23 @@ export function TenancyCard({
             {next ? (
               <Button
                 size="sm"
-                onClick={() => {
+                onClick={async () => {
+                  /*
+                   * Checked in: the bed goes Booked -> Active on the server, which refuses
+                   * while somebody else is still the bed's resident (8 Oct 2026). Never by
+                   * date alone, and the stage only moves once it has said yes.
+                   */
+                  if (next === "checked_in") {
+                    const { activateResidentBed } = await import("@/lib/homes.functions");
+                    const res = await activateResidentBed({ data: { residentId: t.residentId } });
+                    await refreshUnits();
+                    if (!res.ok) {
+                      toast.error(res.error);
+                      return;
+                    }
+                  }
                   patch({ stage: next });
                   if (next === "checked_in") {
-                    updateBed(t.bedId ?? "", { status: "active" });
                     addTask({
                       type: "stamping",
                       title: "Stamp tenancy agreement",

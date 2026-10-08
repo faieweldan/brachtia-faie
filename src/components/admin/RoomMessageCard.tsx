@@ -126,8 +126,9 @@ export function RoomMessageCard({
 }) {
   const [link, setLink] = useState("");
   const [loading, setLoading] = useState(true);
-  // closed until it is wanted, like every message card on the booking
-  const [open, setOpen] = useState(false);
+  // open by itself, like the welcome and signing messages (Dani, 9 Oct 2026);
+  // copying it closes it. Written afresh - and open again - when the room or stay changes
+  const [open, setOpen] = useState(true);
   // staff's own pick; until then it follows the room assignment
   const [picked, setPicked] = useState<Outcome | null>(null);
   const [channel, setChannel] = useState<Channel>("whatsapp");
@@ -174,6 +175,7 @@ export function RoomMessageCard({
     toast.success(channel === "email" ? "Email copied" : "Message copied", {
       description: channel === "email" ? "Paste it into your email." : "Paste it into WhatsApp.",
     });
+    setOpen(false);
   }
 
   return (

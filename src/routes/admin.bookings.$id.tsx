@@ -39,12 +39,11 @@ import {
   refreshResidents,
   refreshUnits,
   useOps,
+  getOpsUnits,
   allBeds,
   updateBed,
   convertRoomOccupancy,
-  bedFreeForPeriod,
   isUnitSlot,
-  unitAccepts,
   unitGender,
   vacateBed,
   fmtDate,
@@ -52,7 +51,11 @@ import {
   roomCountFor,
 } from "@/lib/ops-store";
 
-type Candidate = { row: BedRow; convert: boolean; blocked?: string };
+import { occupiedNote, placementConflict } from "@/lib/placement";
+import { placeStay } from "@/lib/homes.functions";
+import { klToday } from "@/lib/kl-date";
+
+type Candidate = { row: BedRow; convert: boolean; blocked?: string; note?: string };
 
 import {
   STAFF,
@@ -338,7 +341,21 @@ function BookingDetail() {
   });
 
   const beds = useMemo(() => allBeds(ops.units), [ops.units]);
-  const linkedBeds = useMemo(() => beds.filter((b) => b.bed.enquiryId === id), [beds, id]);
+  // the bed held for this booking, or - booked for after somebody else leaves - the bed it has next
+  const linkedBeds = useMemo(
+    () =>
+      beds
+        .filter(
+          (b) => b.bed.enquiryId === id || !!b.bed.upcoming?.some((u) => u.enquiryId === id),
+        )
+        // somebody else is the bed's resident: this booking has it later
+        .map((b) =>
+          b.bed.residentId && b.bed.upcoming?.some((u) => u.enquiryId === id)
+            ? { ...b, upcoming: true }
+            : b,
+        ),
+    [beds, id],
+  );
   const assignedBed = linkedBeds[0];
 
   const viewing = upcomingViewing(appointments, id);
@@ -868,46 +885,70 @@ function BookingDetail() {
   async function assignRoom(c: Candidate) {
     if (needStaff()) return;
     const b = c.row;
-    const hold = {
-      enquiryId: id,
-      status: "held" as const,
-      holdFor: r.full_name,
-      holdUntil: r.move_in ?? undefined,
-      gender: r.gender ?? undefined,
-      university: universityAbbr(r.university) || undefined,
-      nationality: r.nationality || undefined,
-    };
     // a single turned twin gets new beds: the hold goes into that same change and
     // save, or it lands on a bed that no longer exists. The save is waited for, so
     // a room that did not save is never reported reserved and the stage stays put
     if (c.convert) {
       try {
-        await convertRoomOccupancy(b.room.id, "twin", hold);
+        // the room is made twin first (its beds get new ids), then Twin 1 is
+        // placed through the server like any other room
+        await convertRoomOccupancy(b.room.id, "twin");
       } catch (err) {
         toast.error("Could not reserve the room", {
           description: err instanceof Error ? err.message : "The room was not changed",
         });
         return;
       }
-    } else updateBed(b.bed.id, hold);
+      await refreshUnits();
+      const twin1 = allBeds(getOpsUnits()).find((x) => x.room.id === b.room.id)?.bed.id;
+      const placed = twin1
+        ? await placeStay({ data: { enquiryId: id, bedId: twin1, ...(r.move_in ? { holdUntil: r.move_in } : {}) } })
+        : { ok: false as const, error: "The room was changed but could not be reserved.", detail: "" };
+      await refreshUnits();
+      if (!placed.ok) {
+        toast.error(placed.error, placed.detail ? { description: placed.detail } : undefined);
+        return;
+      }
+      void queryClient.invalidateQueries({ queryKey: ["admin"] });
+    } else {
+      /*
+       * Reserved - or moved, for a booking that already has a room - by the
+       * database in one step, with every date, gender and capacity rule checked
+       * again under a lock (8 Oct 2026). A second admin who picked the same room
+       * a moment later is refused, and nothing is said until the write is in.
+       */
+      const res = await placeStay({
+        data: { enquiryId: id, bedId: b.bed.id, ...(r.move_in ? { holdUntil: r.move_in } : {}) },
+      }).catch((err: unknown) => ({
+        ok: false as const,
+        error: err instanceof Error ? err.message : "The room could not be reserved.",
+        detail: "",
+      }));
+      if (!res.ok) {
+        toast.error(res.error, res.detail ? { description: res.detail } : undefined);
+        await refreshUnits();
+        return;
+      }
+      await refreshUnits();
+      void queryClient.invalidateQueries({ queryKey: ["admin"] });
+    }
     const bedId = c.convert ? b.room.id : b.bed.id;
+    const moved = !!assignedBed;
     // the bed is held in the browser, so its audit row is written from here
     void recordBookingEvent({
       data: {
         enquiryId: id,
         kind: "room_reserved",
         ref: bedId,
-        summary: `Room ${b.unit.unitNo} ${b.room.letter} reserved`,
+        summary: `Room ${b.unit.unitNo} ${b.room.letter} ${moved ? "reserved instead" : "reserved"}`,
       },
     })
       .then(() => queryClient.invalidateQueries({ queryKey: ["admin", "activity", id] }))
       .catch(() => undefined);
-    // reserving a room moves a New booking on; a room changed later leaves the stage alone
-    if (r.status === "open") advance.mutate({ to: "room_reserved" });
     toast.success(
       c.convert
         ? `${b.unit.unitNo} · Room ${b.room.letter} reconfigured to Twin — 1 of 2 reserved`
-        : `Room ${b.unit.unitNo} · ${b.room.letter} reserved`,
+        : `${moved ? "Moved to" : "Reserved"} Room ${b.unit.unitNo} · ${b.room.letter}`,
     );
     setShowPicker(false);
     setOpenUnitId(null);
@@ -924,6 +965,12 @@ function BookingDetail() {
     const released = await releaseBookingFor(queryClient, id, paidMessage);
     if (!released) return false;
     const { room } = assignedBed;
+    // booked for after somebody else's stay: the server let go of the booking's
+    // claim, and the bed still belongs to the person living in it
+    if (assignedBed.upcoming) {
+      await refreshUnits();
+      return true;
+    }
     // emptied completely, the same as Release in Homes - clearing only the hold
     // left the student's university, nationality and gender on an empty bed
     vacateBed(assignedBed.bed.id);
@@ -951,23 +998,44 @@ function BookingDetail() {
   // the room types as Website sets them up - which unit type each belongs to
   const siteRooms = ((site as any)?.rooms ?? []) as SiteRoomType[];
   const candidates: Candidate[] = [];
+  const today = klToday();
+  // what this booking asks of a room: its dates and the student's gender. Its
+  // own current room never stands in its way
+  const asking = {
+    start: r.move_in,
+    end: r.move_out,
+    gender: r.gender,
+    enquiryId: id,
+    residentId: r.resident_id || undefined,
+  };
   for (const b of beds) {
-    // men and women never share a unit - not even with "Show all rooms" on
-    if (!unitAccepts(b.unit, ops.residents, r.gender)) continue;
+    const conflict = placementConflict(b.unit, b.room, b.bed, asking, ops.residents);
+    // men and women never share a unit at the same time - not even with "Show all rooms" on
+    if (/\((male|female)\) in this unit|^Kept for/.test(conflict)) continue;
     // a unit is let whole or by room, never both: a whole unit is only for a
     // Whole unit request, through its Unit bed, and nobody asking for a single
     // or a twin is offered any part of it
     const wholeUnit = b.unit.rooms.some((rm) => isUnitSlot(rm));
     const wrongShape = wantedOcc === "unit" ? !isUnitSlot(b.room) : wholeUnit;
     const roomBeds = b.room.beds;
-    const bedFree = bedFreeForPeriod(b.bed, r.move_in, r.move_out);
-    const roomEmpty = roomBeds.every((x) => bedFreeForPeriod(x, r.move_in, r.move_out));
-    const unitEmpty = b.unit.rooms.every((rm) =>
-      rm.beds.every((x) => bedFreeForPeriod(x, r.move_in, r.move_out)),
+    // free for the dates asked, not merely empty today: somebody leaving before
+    // this stay starts does not stand in its way (8 Oct 2026)
+    const bedFree = !conflict;
+    const roomEmpty = roomBeds.every(
+      (x) => !placementConflict(b.unit, b.room, x, asking, ops.residents),
     );
+    const unitEmpty = b.unit.rooms.every((rm) =>
+      rm.beds.every((x) => !placementConflict(b.unit, rm, x, asking, ops.residents)),
+    );
+    const note = bedFree ? occupiedNote(b.bed, today, true) : "";
 
     if (showAllRooms) {
-      if (!bedFree) continue;
+      // a real clash is shown, with who and when, and cannot be picked
+      if (!bedFree) {
+        if (roomBeds[0]?.id !== b.bed.id && b.room.occupancy === "single") continue;
+        candidates.push({ row: b, convert: false, blocked: conflict });
+        continue;
+      }
       if (roomBeds[0]?.id !== b.bed.id && b.room.occupancy === "single") continue;
       // honour the student's sharing preference even in override mode
       let convert = false;
@@ -976,7 +1044,7 @@ function BookingDetail() {
         if (isUnitSlot(b.room)) {
           blocked = "Whole unit";
         } else if (b.room.occupancy === "single") {
-          if (roomEmpty) convert = true;
+          if (roomEmpty && roomBeds.every((x) => x.status === "vacant" && !x.upcoming?.length)) convert = true;
           else blocked = "Single room already occupied";
         }
       } else if (wantedOcc === "single") {
@@ -989,7 +1057,7 @@ function BookingDetail() {
         convert = false;
         blocked = wantedOcc === "unit" ? "Not a whole unit" : "Whole unit";
       }
-      candidates.push({ row: b, convert, ...(blocked ? { blocked } : {}) });
+      candidates.push({ row: b, convert, ...(blocked ? { blocked } : {}), ...(note ? { note } : {}) });
       continue;
     }
 
@@ -1012,17 +1080,20 @@ function BookingDetail() {
     )
       continue;
 
+    const extra = note ? { note } : {};
     if (wantedOcc === "unit") {
       if (!unitEmpty) continue;
-      candidates.push({ row: b, convert: false });
+      candidates.push({ row: b, convert: false, ...extra });
     } else if (wantedOcc === "twin") {
-      if (b.room.occupancy === "twin") candidates.push({ row: b, convert: false });
+      if (b.room.occupancy === "twin") candidates.push({ row: b, convert: false, ...extra });
       // a whole unit is several bedrooms let as one - folding it into a single
       // twin room would lose them, so it is never offered to a twin. To put a
       // student in a whole unit, the sharing preference is changed to Whole unit
-      else if (roomEmpty && !isUnitSlot(b.room)) candidates.push({ row: b, convert: true });
+      // converting rebuilds the room's beds, so only a room nobody is in at all
+      else if (roomEmpty && !isUnitSlot(b.room) && roomBeds.every((x) => x.status === "vacant" && !x.upcoming?.length))
+        candidates.push({ row: b, convert: true });
     } else {
-      if (b.room.occupancy === "single") candidates.push({ row: b, convert: false });
+      if (b.room.occupancy === "single") candidates.push({ row: b, convert: false, ...extra });
     }
   }
 
@@ -1338,9 +1409,21 @@ function BookingDetail() {
                       {assignedBed.room.occupancy === "twin" ? "Twin sharing" : "Single"} ·{" "}
                       {assignedBed.bed.label}
                     </p>
+                    {/* Reserved until the booking fee is in, Booked after */}
                     <span className="inline-flex w-fit items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                      RESERVED
+                      {r.resident_id ? "BOOKED" : "RESERVED"}
                     </span>
+                    {assignedBed.upcoming ? (
+                      // somebody else is still in it - said once, in plain words
+                      <p className="text-xs text-muted-foreground">
+                        {occupiedNote(assignedBed.bed, klToday())} · Available for your stay from{" "}
+                        {fmtDate(
+                          assignedBed.bed.upcoming?.find((u) => u.enquiryId === id)?.start ??
+                            r.move_in ??
+                            undefined,
+                        )}
+                      </p>
+                    ) : null}
                     <p className="text-xs text-muted-foreground">
                       Reserved {row.stage_changed_at ? fullDate(row.stage_changed_at) : "—"} by{" "}
                       {row.assigned_staff || "staff"}
@@ -1348,7 +1431,14 @@ function BookingDetail() {
                   </div>
                   {/* releasing a bed from a closed booking would put a room back
                       in play on the strength of an enquiry nobody is working */}
-                  <Button size="sm" variant="outline" disabled={isClosed} onClick={clearRoom}>
+                  {/* paid: the booking moves to the new room in one step, keeping its
+                      resident, tenancy, payment and receipts - nothing is released first */}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={isClosed}
+                    onClick={() => (r.resident_id ? setShowPicker(true) : void clearRoom())}
+                  >
                     Change room
                   </Button>
                 </div>
@@ -1469,6 +1559,15 @@ function BookingDetail() {
                               {c.blocked ? (
                                 <span className="block text-[10px] text-amber-600">
                                   {c.blocked}
+                                </span>
+                              ) : c.note ? (
+                                // somebody is in it now, but leaves before this stay starts
+                                <span className="block text-[10px] text-muted-foreground">
+                                  {c.note}
+                                  <span className="block text-emerald-700">
+                                    Available for your stay
+                                    {r.move_in ? ` from ${fmtDate(r.move_in)}` : ""}
+                                  </span>
                                 </span>
                               ) : null}
                             </span>

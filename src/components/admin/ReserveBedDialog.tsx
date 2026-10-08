@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { toast } from "sonner";
 
+import { placeStay } from "@/lib/homes.functions";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GenderMark, UnitGenderMark } from "@/components/admin/GenderMark";
@@ -13,13 +15,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  SOLD_AS_SINGLE,
   findBedForResident,
   isUnitSlot,
   money,
+  refreshUnits,
   unitAccepts,
-  updateBed,
-  vacateBed,
   type Bed,
   type Resident,
   type Unit,
@@ -103,57 +103,31 @@ export function ReserveBedDialog({
     return { waiting: waiting.slice(0, 40), placed: placed.slice(0, 20) };
   }, [residents, units, unit, q, bed.id]);
 
-  function reserve(person: Resident, from?: string) {
-    // a move: empty the bed they are leaving, so nobody is in two places
-    const current = findBedForResident(units, person);
-    /*
-     * A move takes the booking with it. Emptying the old bed clears the booking
-     * it was held for, and the new bed was written as a fresh hold - so a paid
-     * student came out the other side attached to nothing: their stage fell
-     * back to Room reserved, and Release stopped recognising them as paid and
-     * swept the bed it had just refused to touch. What the old bed held is
-     * carried over, and the stage is worked out again from the booking.
-     */
-    const carried = current
-      ? {
-          enquiryId: current.bed.enquiryId,
-          // a booked or lived-in bed stays that; only a new placement is a hold
-          status: current.bed.status,
-          tenancyStart: current.bed.tenancyStart,
-          tenancyEnd: current.bed.tenancyEnd,
-        }
-      : null;
-    if (current) vacateBed(current.bed.id);
-    updateBed(bed.id, {
-      status: carried?.status ?? "held",
-      residentId: person.id,
-      residentName: person.fullName,
-      university: person.university || undefined,
-      nationality: person.nationality || undefined,
-      gender: person.gender || undefined,
-      ...(carried?.enquiryId ? { enquiryId: carried.enquiryId } : {}),
-      ...(carried?.tenancyStart ? { tenancyStart: carried.tenancyStart } : {}),
-      ...(carried?.tenancyEnd ? { tenancyEnd: carried.tenancyEnd } : {}),
-    });
-    if (carried?.enquiryId) {
-      const enquiryId = carried.enquiryId;
-      void (async () => {
-        const { syncStageForBooking } = await import("@/lib/homes.functions");
-        await syncStageForBooking({ data: { enquiryId } }).catch(() => {
-          // the stage is worked out again on the next thing that touches the
-          // booking - a move that succeeded must not read as one that failed
-        });
-      })();
-    }
-
+  /**
+   * Placed by the server, the same operation the booking's room picker uses
+   * (9 Oct 2026): it leaves their old bed, checks this one for their dates,
+   * and writes both in one go - or says no, and nothing changes.
+   */
+  async function reserve(person: Resident, from?: string) {
     // let whole: the other bed stops being sellable, because it was sold too
     const whole = asSingle && mode === "single";
-    if (whole) {
-      for (const b of others) {
-        updateBed(b.id, { status: "held", holdFor: SOLD_AS_SINGLE, holdUntil: undefined });
-      }
+    const res = await placeStay({
+      data: {
+        residentId: person.id,
+        ...(person.enquiryId ? { enquiryId: person.enquiryId } : {}),
+        bedId: bed.id,
+        whole,
+      },
+    }).catch((err: unknown) => ({
+      ok: false as const,
+      error: err instanceof Error ? err.message : "The room could not be reserved.",
+      detail: "",
+    }));
+    await refreshUnits();
+    if (!res.ok) {
+      toast.error(res.error, res.detail ? { description: res.detail } : undefined);
+      return;
     }
-
     const what = whole ? `Room ${room.letter}` : bed.label;
     toast.success(
       from
@@ -225,11 +199,11 @@ export function ReserveBedDialog({
             </p>
           ) : (
             <>
-              <Group title="Waiting for a bed" rows={waiting} onPick={reserve} />
+              <Group title="Waiting for a bed" rows={waiting} onPick={(p, f) => void reserve(p, f)} />
               <Group
                 title="Already placed — moving them frees their bed"
                 rows={placed}
-                onPick={reserve}
+                onPick={(p, f) => void reserve(p, f)}
               />
             </>
           )}

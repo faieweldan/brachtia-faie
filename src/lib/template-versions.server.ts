@@ -1,13 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-/** The residence a resident's bed is in, or null while they have no bed. */
+/** The residence a resident is placed in (now, or booked for later), or null while they have no bed. */
 export async function residenceIdOf(db: any, residentId: string): Promise<string | null> {
-  const { data: bed } = await db.from("beds").select("room_id").eq("resident_id", residentId).limit(1).maybeSingle();
-  if (!bed) return null;
-  const { data: room } = await db.from("rooms").select("unit_id").eq("id", bed.room_id).maybeSingle();
-  if (!room) return null;
-  const { data: unit } = await db.from("units").select("residence_id").eq("id", room.unit_id).maybeSingle();
-  return unit?.residence_id ?? null;
+  // their room booked for later counts - its residence's templates are the ones they sign
+  const { placementForResident } = await import("@/lib/placement.server");
+  return (await placementForResident(db, residentId))?.unit?.residence_id ?? null;
 }
 
 /**

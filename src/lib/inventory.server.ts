@@ -137,10 +137,12 @@ export async function buildInventoryPdf(
   const { data: res } = await sb.from("residents").select("full_name").eq("id", residentId).maybeSingle();
   const { data: row } = await sb.from("agreement_documents").select("agreement_id").eq("id", docId).maybeSingle();
   const { data: ag } = row ? await sb.from("tenancy_agreements").select("agreement_no, created_at").eq("id", row.agreement_id).maybeSingle() : { data: null };
-  const { data: bed } = await sb.from("beds").select("label, room_id").eq("resident_id", residentId).limit(1).maybeSingle();
-  const { data: rm } = bed ? await sb.from("rooms").select("letter, unit_id").eq("id", bed.room_id).maybeSingle() : { data: null };
-  const { data: un } = rm ? await sb.from("units").select("unit_no, residence_id").eq("id", rm.unit_id).maybeSingle() : { data: null };
-  const { data: rs } = un ? await sb.from("residences").select("name").eq("id", un.residence_id).maybeSingle() : { data: null };
+  const { placementForResident } = await import("@/lib/placement.server");
+  const placed = await placementForResident(sb, residentId);
+  const bed = placed?.bed ?? null;
+  const rm = placed?.room ?? null;
+  const un = placed?.unit ?? null;
+  const rs = placed?.residence ?? null;
 
   const { loadSignatory, loadSignatureImage } = await import("@/lib/signatory.server");
   const signatory = sign.brachtia ? await loadSignatory(sb) : null;

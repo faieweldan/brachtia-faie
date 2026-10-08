@@ -388,10 +388,14 @@ export async function statementPdf(input: StatementPdfInput): Promise<Uint8Array
 /** What the PDF says about the resident and their stay, read as it is now. */
 export async function residentParticulars(sb: any, residentId: string) {
   const { data: res } = await sb.from("residents").select("full_name, resident_code").eq("id", residentId).maybeSingle();
-  const { data: bed } = await sb.from("beds").select("label, room_id").eq("resident_id", residentId).limit(1).maybeSingle();
-  const { data: rm2 } = bed ? await sb.from("rooms").select("letter, unit_id").eq("id", bed.room_id).maybeSingle() : { data: null };
-  const { data: un } = rm2 ? await sb.from("units").select("unit_no, residence_id").eq("id", rm2.unit_id).maybeSingle() : { data: null };
-  const { data: rs } = un ? await sb.from("residences").select("name").eq("id", un.residence_id).maybeSingle() : { data: null };
+  // their bed now, or - once they have left and the next resident has it - the
+  // one their tenancy kept, so the statement never shows the next person's room
+  const { placementForResident } = await import("@/lib/placement.server");
+  const placed = await placementForResident(sb, residentId);
+  const bed = placed?.bed ?? null;
+  const rm2 = placed?.room ?? null;
+  const un = placed?.unit ?? null;
+  const rs = placed?.residence ?? null;
   const { data: ag } = await sb.from("tenancy_agreements").select("id").eq("resident_id", residentId).order("created_at", { ascending: false }).limit(1);
   const { data: doc } = ag?.length
     ? await sb.from("agreement_documents").select("period_start, period_end").eq("agreement_id", ag[0].id).eq("doc_type", "agreement").order("version", { ascending: false }).limit(1)

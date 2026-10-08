@@ -224,10 +224,11 @@ function BookingsTable() {
     if (actionFilter !== "all" && next.action !== actionFilter) return false;
     const q = query.trim().toLowerCase();
     if (!q) return true;
-    return [row.reference, row.full_name, row.email, row.phone, row.residence_name, row.room_name]
+    const hay = [row.reference, row.full_name, row.email, row.phone, row.residence_name, row.room_name, row.university]
       .join(" ")
-      .toLowerCase()
-      .includes(q);
+      .toLowerCase();
+    // every word typed, in any order
+    return q.split(/\s+/).every((w) => hay.includes(w));
   });
 
   // asked for by name in the filter, it is shown whatever the toggle says

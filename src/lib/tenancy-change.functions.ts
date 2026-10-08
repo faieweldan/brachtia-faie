@@ -194,6 +194,41 @@ export const applyTenancyChange = createServerFn({ method: "POST" })
       const claimed = (await E.claimedBeds(sb)).find((c) => c.bedId === data.moveTo!.bedId && c.residentId !== data.residentId);
       if (claimed) throw new Error("That bed is reserved for another resident's room change.");
     }
+    // never into the dates of somebody who has the room booked after - they are moved first (9 Oct 2026)
+    {
+      const { dayBefore } = await import("@/lib/placement");
+      const stayUntil = T.isMove(flags) && data.moveOn ? dayBefore(data.moveOn) : finalEnd;
+      // the stays to come on a bed, from anyone else: an unpaid hold, or a paid tenancy
+      const comingOn = async (bedId: string | null | undefined) => {
+        if (!bedId) return [] as { name: string; start: string; end: string }[];
+        const [{ data: b }, { data: ts }] = await Promise.all([
+          sb.from("beds").select("enquiry_id, resident_id").eq("id", bedId).maybeSingle(),
+          sb.from("tenancies").select("resident_id, start_date, end_date").eq("bed_id", bedId).neq("resident_id", data.residentId),
+        ]);
+        const out: { name: string; start: string; end: string }[] = [];
+        if (b?.enquiry_id && b.resident_id) {
+          const { data: e } = await sb.from("enquiries").select("full_name, move_in, move_out, resident_id").eq("id", b.enquiry_id).maybeSingle();
+          if (e && e.resident_id !== data.residentId) out.push({ name: String(e.full_name ?? "Another resident"), start: String(e.move_in ?? ""), end: String(e.move_out ?? "") });
+        }
+        for (const t of (ts ?? []) as any[]) {
+          if (t.end_date && t.end_date < today) continue;
+          const { data: r } = await sb.from("residents").select("full_name, status").eq("id", t.resident_id).maybeSingle();
+          if (!r || String(r.status ?? "").toLowerCase() === "inactive") continue;
+          out.push({ name: String(r.full_name ?? "Another resident"), start: String(t.start_date ?? ""), end: String(t.end_date ?? "") });
+        }
+        return out.sort((x, y) => x.start.localeCompare(y.start));
+      };
+      const { data: live } = await sb.from("beds").select("id").eq("resident_id", data.residentId).limit(1).maybeSingle();
+      const here = (await comingOn(live?.id)).find((c) => c.start && c.start <= stayUntil) ?? null;
+      const there = data.moveTo
+        ? ((await comingOn(data.moveTo.bedId)).find((c) => c.start && c.start <= finalEnd && (c.end || "9999-12-31") >= data.moveOn) ?? null)
+        : null;
+      const clash = here ?? there;
+      if (clash) {
+        const { data: me } = await sb.from("residents").select("full_name").eq("id", data.residentId).maybeSingle();
+        throw new Error(`${me?.full_name || "This resident"}'s change to ${fmtDay(finalEnd)} overlaps ${clash.name}'s confirmed reservation from ${fmtDay(clash.start)}. Move ${clash.name} first.`);
+      }
+    }
     const plan = T.planEvents(flags, data.moveOn, data.change.oldEnd);
     if (plan.length !== data.events.length || plan.some((p, i) => p.date !== data.events[i]!.date)) throw new Error("The change was read differently - close the window and start again.");
     // a change still under way is finished first: cancelling one is not decided yet (7 Oct 2026)
@@ -382,4 +417,9 @@ export async function tenancyChangeAfterPayment(sb: any, invoiceId: string) {
   if (!residentId) return [];
   const { processResident } = await import("@/lib/tenancy-events.server");
   return processResident(sb, residentId);
+}
+
+function fmtDay(iso: string) {
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 }

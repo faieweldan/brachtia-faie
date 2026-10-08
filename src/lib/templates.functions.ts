@@ -275,14 +275,17 @@ async function buildContext(db: any, residentId: string) {
   const data = { residentId };
     const { data: resident } = await db.from("residents").select("*").eq("id", data.residentId).maybeSingle();
     if (!resident) throw new Error("Resident not found");
-    const [{ data: bed }, { data: tenancy }, { data: enquiry }] = await Promise.all([
-      db.from("beds").select("*").eq("resident_id", data.residentId).limit(1).maybeSingle(),
+    // where they are placed - a room booked for after its current resident leaves included
+    const { placementForResident } = await import("@/lib/placement.server");
+    const [placed, { data: tenancy }, { data: enquiry }] = await Promise.all([
+      placementForResident(db, data.residentId),
       db.from("tenancies").select("*").eq("resident_id", data.residentId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       resident.enquiry_id ? db.from("enquiries").select("*").eq("id", resident.enquiry_id).maybeSingle() : Promise.resolve({ data: null }),
     ]);
-    const { data: room } = bed ? await db.from("rooms").select("*").eq("id", bed.room_id).maybeSingle() : { data: null };
-    const { data: unit } = room ? await db.from("units").select("*").eq("id", room.unit_id).maybeSingle() : { data: null };
-    const { data: residence } = unit ? await db.from("residences").select("id, name, slug").eq("id", unit.residence_id).maybeSingle() : { data: null };
+    const bed = placed?.bed ?? null;
+    const room = placed?.room ?? null;
+    const unit = placed?.unit ?? null;
+    const residence = placed?.residence ?? null;
     const { data: agreement } = await db.from("tenancy_agreements").select("agreement_no, created_at").eq("resident_id", data.residentId).order("created_at", { ascending: false }).limit(1).maybeSingle();
     const { loadSignatory } = await import("@/lib/signatory.server");
     const signatory = await loadSignatory(db);

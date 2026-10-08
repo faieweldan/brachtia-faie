@@ -482,6 +482,20 @@ export const saveAppointment = createServerFn({ method: "POST" })
       const { statusWithStaff } = await import("@/lib/appointment-status");
       values["status"] = statusWithStaff(values["status"], values["assigned_staff"]);
     }
+    /*
+     * A check-in marked Completed is the resident arriving: their bed goes
+     * Booked -> Active first, and the appointment is only completed if it can -
+     * not while the previous resident is still the bed's (8 Oct 2026).
+     */
+    if (data.id && values["status"] === "completed") {
+      const { data: appt } = await supabase.from("appointments").select("type_slug, resident_id, status").eq("id", data.id).maybeSingle();
+      const { CHECKIN_TYPE } = await import("@/lib/checkin");
+      if (appt?.type_slug === CHECKIN_TYPE && appt.resident_id && appt.status !== "completed") {
+        const { activateAtCheckIn } = await import("@/lib/homes.functions");
+        const res = await activateAtCheckIn(supabase, String(appt.resident_id));
+        if (!res.ok) throw new Error(res.error);
+      }
+    }
     const q = data.id
       ? supabase.from("appointments").update(values as any).eq("id", data.id)
       : supabase.from("appointments").insert(values as any);
@@ -1477,7 +1491,10 @@ export const syncInvoiceWithQuote = createServerFn({ method: "POST" })
         payment_frequency: frequency,
       },
     });
-    return { ok: true as const, invoice: saved };
+    // paid already: the resident's tenancy, bed and rent follow the invoice (9 Oct 2026)
+    const { syncPaidStay } = await import("@/lib/booking-lifecycle");
+    const stay = await syncPaidStay(supabase, data.enquiryId);
+    return { ok: true as const, invoice: saved, stay };
   });
 
 /**

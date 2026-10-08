@@ -31,9 +31,17 @@ export async function heldPlace(
     .select("room_id, status")
     .eq("enquiry_id", enquiryId);
   if (bedError) console.warn("unit lookup failed at beds", bedError.message);
-  const held =
-    ((beds ?? []) as { room_id: string; status: string }[]).find((b) => b.status !== "vacant") ??
-    null;
+  // paid for a room somebody else still lives in: the tenancy names the bed
+  let later: { room_id: string } | null = null;
+  const own = ((beds ?? []) as { room_id: string; status: string }[]).find((b) => b.status !== "vacant");
+  if (!own) {
+    const { data: t } = await supabase.from("tenancies").select("bed_id").eq("enquiry_id", enquiryId).maybeSingle();
+    if (t?.bed_id) {
+      const { data: b } = await supabase.from("beds").select("room_id").eq("id", t.bed_id).maybeSingle();
+      later = b ?? null;
+    }
+  }
+  const held = own ?? later;
   if (!held?.room_id) return { unitNo, roomLetter };
 
   const { data: theRoom, error: roomError } = await supabase

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { klToday } from "@/lib/kl-date";
+import { PERSON_LABEL, personStatus, timingLine } from "@/lib/placement";
 import { ArrowLeft, DoorOpen, Link2, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -68,7 +70,6 @@ import {
   stayDates,
   updateBed,
   useOps,
-  vacateBed,
   allBeds,
   type BedStatus,
   type Resident,
@@ -437,11 +438,35 @@ function ResidentProfilePage() {
    */
   const pendingEvents = (tenancyEvents.data?.events ?? []).filter((e) => e.state !== "effective" && e.state !== "cancelled").sort((a, b) => a.date.localeCompare(b.date));
 
+  /*
+   * Booked into a room somebody else has not left yet (8 Oct 2026): the bed's
+   * own dates, rent and status are that person's, so none of them are read -
+   * this resident is Upcoming, on their own tenancy's dates.
+   */
+  const upcoming = !!placed?.upcoming;
+  /*
+   * Two answers, kept apart (Dani, 9 Oct 2026): the status pill (No room,
+   * Reserved, Booked, Occupied, Inactive) sits by the name; the timing
+   * (Upcoming, Current, Former) sits under the tenancy dates, where "when" is
+   * read. Neither is stored.
+   */
+  const person = personStatus({
+    inactive: (form.status || "").toLowerCase() === "inactive",
+    bedStatus: placed?.bed.status,
+    upcomingAs: upcoming ? placed?.bed.upcoming?.find((u) => u.residentId === form.id)?.status : undefined,
+  });
+  // not checked in yet: the only thing to do is move their room
+  const notArrived = person === "held" || person === "booked";
   const stay = {
-    ...stayDates(tenancy, placed, form, saved),
+    ...stayDates(tenancy, upcoming ? undefined : placed, form, saved),
     // the rent terms' rent in force today wins - the page's own copy can be stale (7 Oct 2026)
-    rent: tenancyEvents.data?.rentToday || tenancy?.rent || placed?.bed.rent || placed?.room.rent || 0,
-    status: (placed?.bed.status ?? "vacant") as BedStatus,
+    rent:
+      tenancyEvents.data?.rentToday ||
+      tenancy?.rent ||
+      (upcoming ? placed?.bed.upcoming?.find((u) => u.residentId === form.id)?.rent : placed?.bed.rent) ||
+      placed?.room.rent ||
+      0,
+    status: (upcoming ? "booked" : (placed?.bed.status ?? "vacant")) as BedStatus,
     get duration(): string {
       return monthsBetween(this.start, this.end);
     },
@@ -502,10 +527,10 @@ function ResidentProfilePage() {
    * them inactive and frees the bed they held.
    */
   async function deactivate() {
-    const bed = placed?.bed;
     try {
       await saveResidentRecord({ ...form, status: "Inactive" } as Resident);
-      if (bed) vacateBed(bed.id);
+      // a bed they are in is freed - or handed to whoever has it next - by the server
+      if (placed && !placed.upcoming) await freeTheirBed();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not deactivate resident");
       return;
@@ -517,10 +542,23 @@ function ResidentProfilePage() {
   /** checked out and settled: Inactive, and the bed is free for the next resident (Dani, 2 Oct 2026) */
   async function checkedOut() {
     if (!form) return;
-    const bed = placed?.bed;
     await saveResidentRecord({ ...form, status: "Inactive" } as Resident);
-    if (bed) vacateBed(bed.id);
+    if (placed && !placed.upcoming) await freeTheirBed();
     setForm({ ...form, status: "Inactive" } as Resident);
+  }
+
+  /**
+   * They have left: their bed goes to whoever has it next - Booked, not
+   * Occupied, until that person checks in - or is emptied. Done by the server
+   * in one step; the browser used to empty the bed itself, which would have
+   * wiped the next resident's booking with it (8 Oct 2026).
+   */
+  async function freeTheirBed() {
+    if (!form) return;
+    const { releaseAfterCheckout } = await import("@/lib/homes.functions");
+    const { promoted } = await releaseAfterCheckout({ data: { residentId: form.id } });
+    await refreshUnits();
+    if (promoted.length) toast.success(`Room handed to ${promoted.join(", ")}`, { description: "Booked until they check in." });
   }
 
   /**
@@ -584,7 +622,10 @@ function ResidentProfilePage() {
                 {form.fullName || "New resident"}
               </p>
               <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                <StatusPill status={stay.status} />
+                <StatusPill
+                  status={person === "none" || person === "inactive" ? "muted" : person}
+                  label={PERSON_LABEL[person]}
+                />
                 {[
                   residentIdOf(form) && `ID ${residentIdOf(form)}`,
                   form.university,
@@ -611,7 +652,17 @@ function ResidentProfilePage() {
             no Brachtia ID - a test - can still be deactivated and deleted.
           */}
           <div className="flex shrink-0 flex-wrap items-center gap-1">
-            {tenancy && !isNew ? (
+            {/* their room is moved on the booking, where every room is chosen - same
+                tenancy, same dates, payment and receipts kept, no change fee (8 Oct 2026) */}
+            {notArrived && form.enquiryId && !isNew ? (
+              <Button size="sm" variant="outline" asChild>
+                <Link to="/admin/bookings/$id" params={{ id: form.enquiryId }}>
+                  Change room
+                </Link>
+              </Button>
+            ) : null}
+            {/* not moved in yet, and the room is still somebody else's: nothing to update or check out */}
+            {tenancy && !isNew && !notArrived ? (
               <>
                 {/* one button for both: what changes is picked inside (Dani, 2 Oct 2026) */}
                 <Button size="sm" variant="outline" onClick={() => setUpdateTenancyOpen(true)}>
@@ -639,7 +690,7 @@ function ResidentProfilePage() {
               <Button size="sm" variant="outline" onClick={discard}>
                 <Trash2 className="mr-1 size-3.5" /> Discard
               </Button>
-            ) : !isFormer && !form.quickbooksId.trim() ? (
+            ) : !isFormer && !notArrived && !form.quickbooksId.trim() ? (
               <Button size="sm" variant="outline" onClick={deactivate}>
                 Deactivate
               </Button>
@@ -714,10 +765,38 @@ function ResidentProfilePage() {
             { label: "Unit number", value: placed?.unit.unitNo },
             {
               label: "Room / bed",
-              value: placed ? `Room ${placed.room.letter} · ${placed.bed.label}` : undefined,
+              // straight to their unit in Homes
+              value: placed ? (
+                <Link
+                  to="/admin/homes"
+                  search={{ residence: placed.unit.residenceName, unit: placed.unit.id }}
+                  className="text-brand-deep underline-offset-2 hover:underline"
+                >
+                  Room {placed.room.letter} · {placed.bed.label}
+                </Link>
+              ) : undefined,
             },
             { label: "Monthly rent", value: stay.rent ? money(stay.rent) : undefined },
-            { label: "Tenancy start", value: stay.start ? fmtDate(stay.start) : undefined },
+            {
+              label: "Tenancy start",
+              value: stay.start ? (
+                <>
+                  {fmtDate(stay.start)}
+                  {/* the timing, quietly, under the date it is about */}
+                  {timingLine(person, stay.start, stay.end, klToday()) ? (
+                    <span
+                      className={`block text-xs font-normal ${
+                        timingLine(person, stay.start, stay.end, klToday()) === "Checkout overdue"
+                          ? "text-rose-700"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {timingLine(person, stay.start, stay.end, klToday())}
+                    </span>
+                  ) : null}
+                </>
+              ) : undefined,
+            },
             { label: "Tenancy end", value: stay.end ? fmtDate(stay.end) : undefined },
             { label: "Duration", value: stay.duration },
           ].map((f) => (

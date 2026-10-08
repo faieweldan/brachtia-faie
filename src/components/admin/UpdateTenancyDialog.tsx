@@ -32,6 +32,7 @@ import {
   type Deposits,
 } from "@/lib/tenancy-change";
 import { klToday } from "@/lib/kl-date";
+import { dayBefore } from "@/lib/placement";
 import { rentForDays, shiftDate } from "@/lib/rental-schedule";
 import { applyTenancyChange, getTenancyChangeBasis } from "@/lib/tenancy-change.functions";
 
@@ -246,6 +247,23 @@ export function UpdateTenancyDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [basis.data, flags.room, flags.unit, flags.occupancy, flags.date, effectiveMove, oldEnd, end, target, placed, oldRent, rentTyped, requiredTyped, waived, today]);
 
+  /*
+   * Somebody has a room booked next (8 Oct 2026): an extension, or staying on
+   * until a later move, must not run into their dates. Neither is overwritten -
+   * they are moved first, through the booking's own room picker, then this is
+   * tried again. The server checks the same before it saves.
+   */
+  const stayUntil = moved && effectiveMove ? dayBefore(effectiveMove) : end;
+  const nextHere = placed?.bed.upcoming?.find((u) => u.start && u.start <= stayUntil) ?? null;
+  const nextThere = moved
+    ? (target?.bed.upcoming?.find((u) => u.start && u.start <= end && (u.end || "9999-12-31") >= effectiveMove) ?? null)
+    : null;
+  const clash = nextHere ?? nextThere;
+  const who = residents.find((r) => r.id === residentId)?.fullName || "This resident";
+  const clashText = clash
+    ? `${who}'s ${flags.date !== "none" && !nextThere ? `${flags.date === "renewal" ? "renewal" : "extension"} to ${fmtDate(end)}` : "change"} overlaps ${clash.name}'s confirmed reservation from ${fmtDate(clash.start)}.`
+    : "";
+
   const openEvents = basis.data?.open ?? [];
   const tooEarly = !!occupiedUntil && effectiveMove <= occupiedUntil;
   const moveAfterEnd = moved && effectiveMove > end;
@@ -256,7 +274,9 @@ export function UpdateTenancyDialog({
         ? "Pick what is changing."
         : ""
       : step === 2
-        ? wantRoom && !target
+        ? clashText
+          ? clashText
+          : wantRoom && !target
           ? "Choose the new room."
           : tooEarly
             ? "The effective date is before the bed is free."
@@ -541,7 +561,23 @@ export function UpdateTenancyDialog({
         </div>
 
         <div className="flex items-center gap-2 border-t border-border px-6 py-3">
-          {stop ? <span className="mr-auto text-xs text-amber-700">{stop}</span> : <span className="mr-auto" />}
+          {stop ? (
+            <span className="mr-auto text-xs text-amber-700">
+              {stop}
+              {clash?.enquiryId && stop === clashText ? (
+                <a
+                  href={`/admin/bookings/${clash.enquiryId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ml-2 font-semibold text-brand-deep underline"
+                >
+                  Move {clash.name.split(" ")[0]}
+                </a>
+              ) : null}
+            </span>
+          ) : (
+            <span className="mr-auto" />
+          )}
           <Button variant="ghost" onClick={() => (step > 1 ? setStep(step - 1) : onOpenChange(false))} disabled={busy}>
             {step > 1 ? "Back" : "Cancel"}
           </Button>

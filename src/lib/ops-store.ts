@@ -32,6 +32,30 @@ export type Bed = {
   holdFor?: string | undefined;
   holdUntil?: string | undefined;
   enquiryId?: string | undefined;
+  /**
+   * Stays to come on this bed while somebody else is its resident (9 Oct
+   * 2026), earliest first: an unpaid hold (beds.enquiry_id on an occupied
+   * bed) is Reserved, a paid tenancy (tenancies.bed_id) is Booked. Worked out
+   * by listUnits - nothing on the bed row stores it.
+   */
+  upcoming?: UpcomingStay[] | undefined;
+};
+
+/** A stay still to come on a bed: its booking, and its resident once the fee is paid. */
+export type UpcomingStay = {
+  enquiryId?: string | undefined;
+  /** the booking's reference, shown and linked to the booking */
+  reference?: string | undefined;
+  residentId?: string | undefined;
+  name: string;
+  code?: string | undefined;
+  gender?: string | undefined;
+  university?: string | undefined;
+  start?: string | undefined;
+  end?: string | undefined;
+  rent?: number | undefined;
+  /** Reserved: fee not paid yet. Booked: fee paid. */
+  status: "reserved" | "booked";
 };
 
 /** How a room may be sold. "unit" is the whole-unit letting for the unit. */
@@ -268,6 +292,9 @@ function subscribe(cb: () => void) {
   listeners.add(cb);
   return () => listeners.delete(cb);
 }
+
+/** The units as they are now, outside a component - after a refresh has been awaited. */
+export const getOpsUnits = () => state.units;
 
 export function useOps(): OpsState {
   hydrate();
@@ -591,6 +618,8 @@ export function bedBlockedBy(unit: Unit, room: UnitRoom, bed: Bed): string {
 /** A bed is usable for a stay when it is free, or its tenancy does not overlap. */
 export function bedFreeForPeriod(bed: Bed, from?: string | null, to?: string | null) {
   if (bed.enquiryId) return false;
+  // a stay to come on it: free only if this one is over before every one of them starts
+  if (bed.upcoming?.some((u) => !from || !u.start || (to ?? from) >= u.start)) return false;
   if (bed.status === "vacant") return true;
   if (!bed.tenancyEnd && !bed.tenancyStart) return false;
   if (!from) return false;
@@ -605,6 +634,8 @@ export type BedRow = {
   unit: Unit;
   room: UnitRoom;
   bed: Bed;
+  /** found through bed.upcoming: the resident has this bed booked, and someone else is its resident now */
+  upcoming?: boolean | undefined;
 };
 
 /**
@@ -724,8 +755,13 @@ export function findBedForResident(
   units: Unit[],
   resident: { id: string; quickbooksId?: string | undefined; bedId?: string | undefined },
 ): BedRow | undefined {
-  const byLink = allBeds(units).find((r) => r.bed.residentId === resident.id);
-  return byLink ?? findBed(units, resident.bedId);
+  const beds = allBeds(units);
+  const byLink = beds.find((r) => r.bed.residentId === resident.id);
+  if (byLink) return byLink;
+  // booked into a room somebody else has not left yet: theirs, from their start date
+  const later = beds.find((r) => r.bed.upcoming?.some((u) => u.residentId === resident.id));
+  if (later) return { ...later, upcoming: true };
+  return findBed(units, resident.bedId);
 }
 
 /**

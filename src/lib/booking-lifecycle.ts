@@ -127,10 +127,13 @@ export async function residentFromBooking(supabase: any, enquiryId: string) {
   /* ---- 2. the bed, the booking and the money, together ---- */
   const beds = (bedsRes.data ?? []) as { id: string; resident_id: string | null }[];
   // a bed already theirs is left alone - a later payment must not turn a
-  // checked-in bed back into "booked" - and a bed someone else is in is never taken
+  // checked-in bed back into "booked" - and a bed someone else is in is never
+  // taken: a room booked for after its current resident leaves becomes their
+  // tenancy's bed (confirm_paid_placement, below) and the bed is left alone
   const bed = beds.some((b) => b.resident_id === residentId)
     ? null
     : beds.find((b) => !b.resident_id);
+  const heldOnOccupied = beds.find((b) => b.resident_id && b.resident_id !== residentId);
 
   const writes = await Promise.all([
     bed
@@ -189,6 +192,16 @@ export async function residentFromBooking(supabase: any, enquiryId: string) {
     } catch (err) {
       console.warn(`rent schedule: ${err instanceof Error ? err.message : String(err)}`);
     }
+  }
+
+  /*
+   * Paid for a room somebody still lives in (9 Oct 2026): the hold on their
+   * bed becomes this tenancy's bed_id, in one transaction - the bed itself is
+   * not touched. Also mends a tenancy made before this existed.
+   */
+  if (heldOnOccupied) {
+    const { error: placeErr } = await supabase.rpc("confirm_paid_placement", { p_enquiry: enquiryId });
+    if (placeErr) console.warn(`confirm_paid_placement: ${placeErr.message}`);
   }
 
   // given by the database as the resident is saved - blank until gender and nationality are known
@@ -259,6 +272,13 @@ export async function releaseBooking(supabase: any, enquiryId: string) {
   if (voidRes.error) throw new Error(voidRes.error.message);
   if (enquiryRes.error) throw new Error(enquiryRes.error.message);
   if (bedRes.error) throw new Error(bedRes.error.message);
+  // a hold on a bed somebody still lives in: only the hold goes - the person stays
+  const { error: holdErr } = await supabase
+    .from("beds")
+    .update({ enquiry_id: null, hold_until: null })
+    .eq("enquiry_id", enquiryId)
+    .not("resident_id", "is", null);
+  if (holdErr) throw new Error(holdErr.message);
 
   return {
     ok: true as const,
@@ -292,7 +312,7 @@ export async function syncBookingStage(supabase: any, enquiryId: string) {
   if (error) throw new Error(error.message);
   if (!enquiry || enquiry.status === "closed") return;
 
-  const [invoiceRes, viewingRes, bedRes] = await Promise.all([
+  const [invoiceRes, viewingRes, bedRes, nextBedRes] = await Promise.all([
     liveInvoices(supabase, "id").eq("enquiry_id", enquiryId),
     supabase
       .from("appointments")
@@ -300,8 +320,11 @@ export async function syncBookingStage(supabase: any, enquiryId: string) {
       .eq("enquiry_id", enquiryId)
       .neq("status", "cancelled"),
     supabase.from("beds").select("id").eq("enquiry_id", enquiryId),
+    // a paid booking placed on a bed somebody else still lives in
+    supabase.from("tenancies").select("bed_id").eq("enquiry_id", enquiryId).not("bed_id", "is", null),
   ]);
   const invoiceIds = ((invoiceRes.data ?? []) as any[]).map((i) => i.id);
+  const hasRoom = !!(bedRes.data ?? []).length || !!(nextBedRes.data ?? []).length;
   /*
    * How much is in, not how many payments there are. A student who pays RM250
    * of the RM500 today and the rest on Friday has made one payment and still
@@ -335,7 +358,7 @@ export async function syncBookingStage(supabase: any, enquiryId: string) {
           ? "invoice_requested"
           : (viewingRes.data ?? []).length || enquiry.viewing_completed_at
             ? "viewing_scheduled"
-            : (bedRes.data ?? []).length
+            : hasRoom
               ? "room_reserved"
               : "open";
   if (next === enquiry.status) return;
@@ -357,4 +380,77 @@ export async function syncBookingStage(supabase: any, enquiryId: string) {
       summary: `Stage ${back ? "back to" : "moved to"} ${stageLabel(next)}`,
     });
   }
+}
+
+/**
+ * A paid booking's stay changed (Dani, 9 Oct 2026): the dates or rent on its
+ * initial invoice were updated after the RM500 came in. The resident's
+ * tenancy, their bed and their profile follow, so the resident page shows the
+ * same stay the invoice does - and their rent is invoiced again for it.
+ *
+ * Only before check-in: once they live there, a change of dates is Update
+ * Tenancy's job, with its own payment and documents. Rent already billed is
+ * never touched; when some has been, the rent terms are left for admin on the
+ * Payments tab rather than rebuilt here.
+ */
+export async function syncPaidStay(supabase: any, enquiryId: string) {
+  const { data: t } = await supabase
+    .from("tenancies")
+    .select("id, resident_id, start_date, end_date")
+    .eq("enquiry_id", enquiryId)
+    .maybeSingle();
+  if (!t) return { changed: false as const, reason: "not paid" };
+
+  const { data: living } = await supabase
+    .from("beds")
+    .select("id")
+    .eq("resident_id", t.resident_id)
+    .in("status", ["active", "notice"])
+    .limit(1);
+  if ((living ?? []).length) return { changed: false as const, reason: "checked in" };
+
+  const invoice = await liveInvoices(supabase, "tenancy_start, tenancy_end, monthly_rent")
+    .eq("enquiry_id", enquiryId)
+    .eq("invoice_type", "initial")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const inv = invoice.data as any;
+  const start = String(inv?.tenancy_start ?? "").slice(0, 10);
+  const end = String(inv?.tenancy_end ?? "").slice(0, 10);
+  const rent = Number(inv?.monthly_rent || 0);
+  if (!start || !end) return { changed: false as const, reason: "no dates" };
+  const datesChanged = start !== String(t.start_date ?? "") || end !== String(t.end_date ?? "");
+
+  const now = new Date().toISOString();
+  const months = monthsBetween(start, end);
+  const writes = await Promise.all([
+    supabase.from("tenancies").update({ start_date: start, end_date: end, updated_at: now }).eq("id", t.id),
+    // the bed they are assigned to and have not moved into
+    supabase
+      .from("beds")
+      .update({ tenancy_start: start, tenancy_end: end, ...(rent > 0 ? { rent } : {}) })
+      .eq("resident_id", t.resident_id)
+      .in("status", ["booked", "held"]),
+    supabase
+      .from("residents")
+      .update({ move_in: start, ...(months ? { lease_months: String(months) } : {}) })
+      .eq("id", t.resident_id),
+  ]);
+  const failed = writes.find((w: any) => w.error);
+  if (failed) throw new Error(failed.error.message);
+
+  // rent terms made from the old stay: made again from the new one, unless rent has been billed
+  const { data: billed } = await supabase
+    .from("invoices")
+    .select("id")
+    .eq("tenancy_id", t.id)
+    .eq("invoice_type", "rental")
+    .not("status", "in", "(void,scheduled)")
+    .limit(1);
+  if ((billed ?? []).length) return { changed: true as const, rent: "kept - rent already billed" };
+  await supabase.from("rental_schedules").delete().eq("tenancy_id", t.id);
+  const { prepareTenancyRent } = await import("@/lib/rent-schedule.server");
+  await prepareTenancyRent(supabase, String(t.id));
+  return { changed: true as const, datesChanged, rent: "rebuilt" };
 }

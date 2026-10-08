@@ -13,6 +13,8 @@ import { rowsFromGrid } from "@/lib/master-list";
 import { useBillingLedger } from "@/lib/billing-client";
 import { useQuery } from "@tanstack/react-query";
 import { tenancyDatesByResident } from "@/lib/rental-schedule.functions";
+import { klToday } from "@/lib/kl-date";
+import { personStatus, timingLine } from "@/lib/placement";
 import {
   blankResident,
   findBedForResident,
@@ -47,7 +49,7 @@ function ResidentsListPage() {
     return m;
   }, [ledger]);
   const [q, setQ] = useState("");
-  const [view, setView] = useState<"active" | "inactive" | "all">("active");
+  const [view, setView] = useState<"active" | "upcoming" | "inactive" | "all">("active");
   const [university, setUniversity] = useState("");
   const [residence, setResidence] = useState("");
 
@@ -68,23 +70,52 @@ function ResidentsListPage() {
   const isInactive = (r: (typeof residents)[number]) =>
     (r.status || "").toLowerCase() === "inactive";
 
+  /*
+   * Current, Upcoming or Former (Dani, 9 Oct 2026) - worked out, never stored:
+   * Former is checked out; Upcoming has a room reserved or booked but has not
+   * checked in, or no room yet and a stay that starts later; everyone else is
+   * Current.
+   */
+  const today = klToday();
+  const phaseOf = (r: (typeof residents)[number]) => {
+    if (isInactive(r)) return "inactive" as const;
+    const placed = findBedForResident(units, r);
+    const st = personStatus({
+      bedStatus: placed?.bed.status,
+      upcomingAs: placed?.upcoming ? placed.bed.upcoming?.find((u) => u.residentId === r.id)?.status : undefined,
+    });
+    if (st === "held" || st === "booked") return "upcoming" as const;
+    if (st === "none") {
+      const start = savedDates.data?.[r.id]?.start || r.moveIn || "";
+      if (start > today) return "upcoming" as const;
+    }
+    return "active" as const;
+  };
+  const phases = new Map(residents.map((r) => [r.id, phaseOf(r)]));
   const counts = {
-    active: residents.filter((r) => !isInactive(r)).length,
-    inactive: residents.filter(isInactive).length,
+    active: residents.filter((r) => phases.get(r.id) === "active").length,
+    upcoming: residents.filter((r) => phases.get(r.id) === "upcoming").length,
+    inactive: residents.filter((r) => phases.get(r.id) === "inactive").length,
   };
 
   const rows = residents.filter((r) => {
-    if (view === "active" && isInactive(r)) return false;
-    if (view === "inactive" && !isInactive(r)) return false;
+    if (view !== "all" && phases.get(r.id) !== view) return false;
     if (university && universityAbbr(r.university) !== university) return false;
     if (residence) {
       const placed = findBedForResident(units, r);
       if (placed?.unit.residenceName !== residence) return false;
     }
-    // the Brachtia id and mobile are how staff actually look people up
+    // the Brachtia id and mobile are how staff actually look people up - and the
+    // room they are in, said the way the list says it ("B-08-05 · Room C")
+    const placed = findBedForResident(units, r);
+    const place = placed
+      ? `${placed.unit.unitNo} ${placed.unit.code} ${placed.unit.unitNo} · Room ${placed.room.letter} room ${placed.room.letter} ${placed.bed.label} ${placed.unit.residenceName}`
+      : "no room";
     const haystack =
-      `${r.fullName} ${r.residentCode} ${r.quickbooksId} ${r.email} ${r.studentId} ${r.mobile} ${r.idNumber}`.toLowerCase();
-    if (q && !haystack.includes(q.trim().toLowerCase())) return false;
+      `${r.fullName} ${r.residentCode} ${r.quickbooksId} ${r.email} ${r.studentId} ${r.mobile} ${r.idNumber} ${r.university} ${universityAbbr(r.university)} ${place}`.toLowerCase();
+    // every word typed has to be found somewhere, in any order: "aisha room c" works
+    const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (words.some((w) => !haystack.includes(w))) return false;
     return true;
   });
 
@@ -272,6 +303,7 @@ function ResidentsListPage() {
               {(
                 [
                   { key: "active", label: "Current", count: counts.active },
+                  { key: "upcoming", label: "Upcoming", count: counts.upcoming },
                   { key: "inactive", label: "Former", count: counts.inactive },
                   { key: "all", label: "All", count: residents.length },
                 ] as const
@@ -297,7 +329,7 @@ function ResidentsListPage() {
                 <Input
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
-                  placeholder="Name, resident ID, email, mobile"
+                  placeholder="Name, ID, email, mobile, unit, room…"
                 />
               </div>
               <Select
@@ -335,7 +367,8 @@ function ResidentsListPage() {
                     const placed = findBedForResident(units, r);
                     const stay = stayDates(
                       tenancies.find((t) => t.residentId === r.id),
-                      placed,
+                      // a room booked for later still carries its current resident's dates
+                      placed?.upcoming ? undefined : placed,
                       r,
                       savedDates.data?.[r.id],
                     );
@@ -382,7 +415,7 @@ function ResidentsListPage() {
                               <span className="text-xs">{placed.bed.label}</span>
                             </Link>
                           ) : (
-                            "Unassigned"
+                            "No room"
                           )}
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">
@@ -390,9 +423,29 @@ function ResidentsListPage() {
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">
                           {stay.start || stay.end ? (
-                            <span className="whitespace-nowrap">
-                              {fmtDate(stay.start)} → {fmtDate(stay.end)}
-                            </span>
+                            <>
+                              <span className="whitespace-nowrap">
+                                {fmtDate(stay.start)} → {fmtDate(stay.end)}
+                              </span>
+                              {/* when, under the dates it is about - not beside the place */}
+                              {(() => {
+                                const st = personStatus({
+                                  inactive: isInactive(r),
+                                  bedStatus: placed?.bed.status,
+                                  upcomingAs: placed?.upcoming
+                                    ? placed.bed.upcoming?.find((u) => u.residentId === r.id)?.status
+                                    : undefined,
+                                });
+                                const when = timingLine(st, stay.start, stay.end, today);
+                                return when ? (
+                                  <span
+                                    className={`block text-xs ${when === "Checkout overdue" ? "text-rose-700" : ""}`}
+                                  >
+                                    {when}
+                                  </span>
+                                ) : null;
+                              })()}
+                            </>
                           ) : (
                             "—"
                           )}

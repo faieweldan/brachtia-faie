@@ -37,6 +37,9 @@ import {
   residentIdOf,
 } from "@/lib/ops-store";
 import { DateInput } from "@/components/ui/date-input";
+import { klToday } from "@/lib/kl-date";
+import { PERSON_LABEL, dayBefore, personStatus, timingLine, type PersonStatus } from "@/lib/placement";
+import { universityAbbr } from "@/data/form-options";
 
 /**
  * Which residence is open lives in the address, not in memory.
@@ -184,15 +187,21 @@ function InventoryPage() {
       if (from && bed.tenancyEnd && bed.tenancyEnd < from) return false;
       if (to && bed.tenancyStart && bed.tenancyStart > to) return false;
       if (q) {
+        // the people still to come are searched too - typing Aisha finds her room
+        const later = (bed.upcoming ?? [])
+          .map((u) => `${u.name} ${u.code ?? ""} ${u.reference ?? ""}`)
+          .join(" ");
+        const who = residentForBed(residents, bed);
         const hay =
-          `${unit.code} ${unit.unitNo} ${room.letter} ${bed.label} ${bed.residentName ?? ""} ${
-            bed.status === "vacant" ? "" : (bed.university ?? "")
-          }`.toLowerCase();
-        if (!hay.includes(q.toLowerCase())) return false;
+          `${unit.code} ${unit.unitNo} room ${room.letter} ${bed.label} ${bed.residentName ?? ""} ${bed.holdFor ?? ""} ${later} ${
+            who ? `${who.residentCode} ${who.quickbooksId} ${who.email} ${who.mobile}` : ""
+          } ${bed.status === "vacant" ? "" : (bed.university ?? "")}`.toLowerCase();
+        // every word typed, in any order: "b-08-05 aisha" works
+        if (q.toLowerCase().split(/\s+/).filter(Boolean).some((w) => !hay.includes(w))) return false;
       }
       return true;
     });
-  }, [units, residence, block, unitType, letter, occupancy, gender, status, from, to, q]);
+  }, [units, residents, residence, block, unitType, letter, occupancy, gender, status, from, to, q]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, typeof rows>();
@@ -471,100 +480,17 @@ function InventoryPage() {
                     </thead>
                     <tbody className="divide-y divide-border">
                       {collapseSingles(sellable, roomTypes).map(({ room, bed, asSingle }) => (
-                        <tr key={bed.id}>
-                          <td className="px-4 py-2 font-medium">
-                            {isUnitSlot(room) ? "Whole unit" : `Room ${room.letter}`}
-                          </td>
-                          <td className="px-4 py-2">{asSingle ? "Single" : bed.label}</td>
-                          <td className="px-4 py-2">
-                            <StatusPill
-                              status={inventoryStatus(bed.status)}
-                              label={
-                                inventoryStatus(bed.status) === "active" ? "Occupied" : undefined
-                              }
-                            />
-                            {bed.status === "held" && bed.holdUntil ? (
-                              <span className="ml-2 text-xs text-muted-foreground">
-                                till {fmtDate(bed.holdUntil)}
-                              </span>
-                            ) : null}
-                          </td>
-                          <td className="px-4 py-2">
-                            {(() => {
-                              const person = residentForBed(residents, bed);
-                              if (!person) return bed.residentName || bed.holdFor || "—";
-                              return (
-                                <Link
-                                  to="/admin/residents/$id"
-                                  params={{ id: person.id }}
-                                  className="text-brand-deep underline-offset-2 hover:underline"
-                                >
-                                  {person.fullName || bed.residentName}
-                                  {residentIdOf(person) ? (
-                                    <span className="block text-xs tabular-nums text-muted-foreground">
-                                      {residentIdOf(person)}
-                                    </span>
-                                  ) : null}
-                                </Link>
-                              );
-                            })()}
-                          </td>
-                          <td className="px-4 py-2 text-muted-foreground">
-                            {/* a vacant bed has nobody to study anywhere - nothing left over shows */}
-                            {bed.status === "vacant"
-                              ? "—"
-                              : residentForBed(residents, bed)?.university || bed.university || "—"}
-                          </td>
-                          <td className="px-4 py-2 text-muted-foreground">
-                            {(() => {
-                              const person = residentForBed(residents, bed);
-                              if (!person) return "—";
-                              return sponsorLabel(person.payerName || person.sponsor);
-                            })()}
-                          </td>
-                          <td className="px-4 py-2 text-muted-foreground">
-                            {bed.tenancyStart
-                              ? `${fmtDate(bed.tenancyStart)} → ${fmtDate(bed.tenancyEnd)}`
-                              : "—"}
-                          </td>
-                          <td className="px-4 py-2">
-                            {money(bedRent(roomTypes, unit, room, bed, asSingle))}
-                          </td>
-                          <td className="px-4 py-2 text-right">
-                            {bed.status === "vacant" ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setReserving({ unit, room, bed, asSingle })}
-                              >
-                                Reserve
-                              </Button>
-                            ) : (
-                              /*
-                               * An occupied bed holds a resident, and release()
-                               * only guards a booking hold - an occupied bed with
-                               * no enquiry went straight to vacateBed and the
-                               * person lost their room. Moving somebody out is a
-                               * checkout, not a release, so the button is shown
-                               * and refused rather than hidden: hiding it looks
-                               * like a bug to whoever went looking for it.
-                               */
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                disabled={inventoryStatus(bed.status) === "active"}
-                                title={
-                                  inventoryStatus(bed.status) === "active"
-                                    ? "Someone lives here - end their tenancy to free the bed"
-                                    : undefined
-                                }
-                                onClick={() => void release(bed)}
-                              >
-                                Release
-                              </Button>
-                            )}
-                          </td>
-                        </tr>
+                        <BedLine
+                          key={bed.id}
+                          unit={unit}
+                          room={room}
+                          bed={bed}
+                          asSingle={asSingle}
+                          residents={residents}
+                          rent={bedRent(roomTypes, unit, room, bed, asSingle)}
+                          onReserve={() => setReserving({ unit, room, bed, asSingle })}
+                          onRelease={() => void release(bed)}
+                        />
                       ))}
                     </tbody>
                   </table>
@@ -593,5 +519,222 @@ function InventoryPage() {
         />
       ) : null}
     </div>
+  );
+}
+
+/* ---------------- one bed: who is in it, and who comes next ---------------- */
+
+/** One person's line in a bed's row - the bed's own, or a stay still to come. */
+type Stay = {
+  key: string;
+  name: string;
+  residentId?: string | undefined;
+  enquiryId?: string | undefined;
+  reference?: string | undefined;
+  code?: string | undefined;
+  university?: string | undefined;
+  sponsor?: string | undefined;
+  start?: string | undefined;
+  end?: string | undefined;
+  rent: number;
+  status: PersonStatus;
+  later: boolean;
+};
+
+/**
+ * A bed's row (Dani, 9 Oct 2026). One physical row, however many people are
+ * booked into it; each person is a block, and every column stacks its blocks
+ * in the same order, two lines each, so they line up across the row.
+ *
+ * What goes where, so nothing is said twice:
+ *   Inventory status  the ROOM - it follows whoever is in it physically
+ *   Resident          who, their ID; a later stay also shows its own status
+ *                     pill and links its booking
+ *   Tenancy           the dates, and under them the timing - Upcoming,
+ *                     Current, Checkout overdue - because timing is a date
+ *                     fact, not a place
+ */
+function BedLine({
+  unit,
+  room,
+  bed,
+  asSingle,
+  residents,
+  rent,
+  onReserve,
+  onRelease,
+}: {
+  unit: Unit;
+  room: BedRow["room"];
+  bed: BedRow["bed"];
+  asSingle: boolean;
+  residents: Resident[];
+  rent: number;
+  onReserve: () => void;
+  onRelease: () => void;
+}) {
+  const today = klToday();
+  const person = residentForBed(residents, bed);
+  const stays: Stay[] = [];
+  if (bed.status !== "vacant" && (bed.residentId || bed.residentName || bed.holdFor)) {
+    stays.push({
+      key: "now",
+      name: person?.fullName || bed.residentName || bed.holdFor || "—",
+      residentId: person?.id,
+      enquiryId: bed.residentId ? undefined : bed.enquiryId,
+      code: person ? residentIdOf(person) : undefined,
+      university: person?.university || bed.university,
+      sponsor: person ? sponsorLabel(person.payerName || person.sponsor) : undefined,
+      start: bed.tenancyStart,
+      end: bed.tenancyEnd,
+      rent,
+      status: personStatus({ bedStatus: bed.status }),
+      later: false,
+    });
+  }
+  for (const [i, u] of (bed.upcoming ?? []).entries()) {
+    const who = u.residentId ? residents.find((r) => r.id === u.residentId) : undefined;
+    stays.push({
+      key: `later-${i}`,
+      name: u.name,
+      residentId: u.residentId,
+      enquiryId: u.enquiryId,
+      reference: u.reference,
+      code: u.code,
+      university: who?.university || universityAbbr(u.university) || undefined,
+      sponsor: who ? sponsorLabel(who.payerName || who.sponsor) : undefined,
+      start: u.start,
+      end: u.end,
+      rent: u.rent || rent,
+      status: personStatus({ upcomingAs: u.status }),
+      later: true,
+    });
+  }
+
+  // the room's own status: whoever is physically in it decides
+  const roomStatus = inventoryStatus(bed.status);
+  const arriving = bed.status === "booked" && !!bed.tenancyStart && bed.tenancyStart > today;
+
+  /** a column's blocks, stacked: the bed's own first, then each later stay under a hairline */
+  const col = (render: (s: Stay) => React.ReactNode) =>
+    stays.length ? (
+      stays.map((st, i) => (
+        <div
+          key={st.key}
+          className={`min-h-[2.6rem] ${i ? "mt-2 border-t border-dashed border-border pt-2" : ""}`}
+        >
+          {render(st)}
+        </div>
+      ))
+    ) : (
+      <span className="text-muted-foreground">—</span>
+    );
+
+  const muted = "block text-xs text-muted-foreground";
+  // the bed's own booking, for a resident who has not checked in yet - moved from there
+  const ownBooking = !stays[0]?.later && bed.status === "booked" ? bed.enquiryId : undefined;
+
+  return (
+    <tr className="align-top">
+      <td className="px-4 py-2 font-medium">{isUnitSlot(room) ? "Whole unit" : `Room ${room.letter}`}</td>
+      <td className="px-4 py-2">{asSingle ? "Single" : bed.label}</td>
+      <td className="px-4 py-2">
+        <StatusPill status={roomStatus} label={roomStatus === "active" ? "Occupied" : undefined} />
+        {bed.status === "held" && bed.holdUntil ? (
+          <span className={muted}>till {fmtDate(bed.holdUntil)}</span>
+        ) : arriving && bed.tenancyStart ? (
+          <span className={muted}>Vacant until {fmtDate(dayBefore(bed.tenancyStart))}</span>
+        ) : null}
+      </td>
+      <td className="px-4 py-2">
+        {col((st) => (
+          <>
+            {st.residentId ? (
+              <Link
+                to="/admin/residents/$id"
+                params={{ id: st.residentId }}
+                className="text-brand-deep underline-offset-2 hover:underline"
+              >
+                {st.later ? <span className="text-muted-foreground">Next · </span> : null}
+                {st.name}
+              </Link>
+            ) : (
+              <span>
+                {st.later ? <span className="text-muted-foreground">Next · </span> : null}
+                {st.name}
+              </span>
+            )}
+            <span className="flex flex-wrap items-center gap-1.5 text-xs tabular-nums text-muted-foreground">
+              {st.code ? <span>{st.code}</span> : null}
+              {st.enquiryId && st.later ? (
+                <Link
+                  to="/admin/bookings/$id"
+                  params={{ id: st.enquiryId }}
+                  className="underline-offset-2 hover:text-brand-deep hover:underline"
+                >
+                  {st.reference || "Booking"}
+                </Link>
+              ) : null}
+              {/* the room's pill already says the bed's own status - only a later stay needs its own */}
+              {st.later ? <StatusPill status={st.status} label={PERSON_LABEL[st.status]} /> : null}
+            </span>
+          </>
+        ))}
+      </td>
+      <td className="px-4 py-2 text-muted-foreground">{col((st) => st.university || "—")}</td>
+      <td className="px-4 py-2 text-muted-foreground">{col((st) => st.sponsor || "—")}</td>
+      <td className="px-4 py-2 text-muted-foreground">
+        {col((st) => {
+          const when = timingLine(st.status, st.start, st.end, today);
+          return (
+            <>
+              <span className="whitespace-nowrap">
+                {st.start ? `${fmtDate(st.start)} → ${fmtDate(st.end)}` : "—"}
+              </span>
+              {when ? (
+                <span className={`block text-xs ${when === "Checkout overdue" ? "font-medium text-rose-700" : ""}`}>
+                  {when}
+                </span>
+              ) : null}
+            </>
+          );
+        })}
+      </td>
+      <td className="px-4 py-2">{stays.length ? col((st) => money(st.rent)) : money(rent)}</td>
+      <td className="px-4 py-2 text-right">
+        {col((st) =>
+          st.later || (st.key === "now" && ownBooking) ? (
+            // moved where every booking's room is chosen - the booking's own room picker
+            st.enquiryId || ownBooking ? (
+              <Button size="sm" variant="outline" asChild>
+                <Link
+                  to="/admin/bookings/$id"
+                  params={{ id: (st.enquiryId || ownBooking)! }}
+                  hash="booking-room"
+                  title={`Move ${st.name} to another room`}
+                >
+                  Change room
+                </Link>
+              </Button>
+            ) : null
+          ) : (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={roomStatus === "active"}
+              title={roomStatus === "active" ? "Someone lives here - end their tenancy to free the bed" : undefined}
+              onClick={onRelease}
+            >
+              Release
+            </Button>
+          ),
+        )}
+        {!stays.length ? (
+          <Button size="sm" variant="outline" onClick={onReserve}>
+            Reserve
+          </Button>
+        ) : null}
+      </td>
+    </tr>
   );
 }
