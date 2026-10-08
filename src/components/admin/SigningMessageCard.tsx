@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, Copy, MessageCircle } from "lucide-react";
+import { Check, Copy, ExternalLink, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -46,13 +46,19 @@ export function SigningMessageCard({ residentId, phone, packId, fresh }: { resid
   const [copied, setCopied] = useState(() => wasCopied(packId));
   const [open, setOpen] = useState(() => fresh && !wasCopied(packId));
   const [message, setMessage] = useState("");
+  const [link, setLink] = useState("");
 
   // the link is made (or the live one reused) only when the message is opened
   useEffect(() => {
     if (!open || message) return;
     let live = true;
     getOrCreateProfileLink({ data: { residentId } })
-      .then(({ token }) => live && setMessage(messageFor(`${window.location.origin}/sign/${token}`)))
+      .then(({ token }) => {
+        if (!live) return;
+        const url = `${window.location.origin}/sign/${token}`;
+        setLink(url);
+        setMessage(messageFor(url));
+      })
       .catch(() => live && toast.error("Could not create the signing link"));
     return () => {
       live = false;
@@ -101,6 +107,16 @@ export function SigningMessageCard({ residentId, phone, packId, fresh }: { resid
           <div className="mt-3 space-y-3">
             {/* editable, so a line can be added before sending */}
             <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={12} className="bg-background" />
+            {/* a text box cannot hold a link, so the signing link is also here to open (Dani, 8 Oct 2026) */}
+            {link ? (
+              <p className="flex min-w-0 items-center gap-1.5 text-xs">
+                <span className="shrink-0 text-muted-foreground">Signing link:</span>
+                <a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex min-w-0 items-center gap-1 font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900">
+                  <span className="truncate">{link}</span>
+                  <ExternalLink className="size-3.5 shrink-0" />
+                </a>
+              </p>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               <Button size="sm" onClick={() => void copy()}>
                 <Copy className="size-4" /> Copy message
