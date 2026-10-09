@@ -9,6 +9,7 @@ import { listResidences } from "@/lib/admin.functions";
 import { GenderMark } from "@/components/admin/GenderMark";
 import { DeactivateUnitDialog } from "@/components/admin/DeactivateUnitDialog";
 import { NO_ROOM_TYPES, typesOfUnitType, unitTypeNames } from "@/lib/room-types";
+import { shapeFromWebsite, wholeUnitOffered } from "@/lib/room-offer";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -216,9 +217,8 @@ function UnitSetupPage() {
    */
   function typeInfo(list: any[], code: string, want?: Occupancy) {
     const rt = list.find((r) => r.code === code || r.room_code === code);
-    const fallback: "single" | "twin" =
-      rt?.occupancies?.length === 1 && rt.occupancies[0] === "twin" ? "twin" : "single";
-    const occ: "single" | "twin" = want === "twin" || want === "single" ? want : fallback;
+    // the room's shape is Website's (room-offer.ts), never picked here (11 Oct 2026)
+    const occ: "single" | "twin" = want === "twin" || want === "single" ? want : shapeFromWebsite(rt);
     const rent = rt?.rent?.long?.[occ] ?? rt?.rent?.long?.single ?? 0;
     return { rt, occ, rent: Number(rent) || 0 };
   }
@@ -289,7 +289,7 @@ function UnitSetupPage() {
 
   function applyRoomType(roomId: string, code: string) {
     const room = draft?.rooms.find((r) => r.id === roomId);
-    const { occ, rent } = typeInfo(typesForResidence, code, room?.occupancy);
+    const { occ, rent } = typeInfo(typesForResidence, code);
     patchRoom(roomId, { roomTypeCode: code, occupancy: occ, rent, beds: bedsFor(occ) });
   }
 
@@ -439,14 +439,9 @@ function UnitSetupPage() {
         const occRaw = (row["occupancy"] ?? "").toLowerCase();
         // "unit" marks the whole-unit letting, which the master list records as
         // Room "Unit" / Bed "Unit"
+        // twin or single is Website's, whatever the file says (11 Oct 2026)
         const occ: Occupancy =
-          occRaw === "unit" || letter.toLowerCase() === "unit"
-            ? "unit"
-            : occRaw === "twin"
-              ? "twin"
-              : occRaw === "single"
-                ? "single"
-                : typeInfo(typesForUnit, code).occ;
+          occRaw === "unit" || letter.toLowerCase() === "unit" ? "unit" : typeInfo(typesForUnit, code).occ;
         // price for the way this room is actually let, not the type's default
         const info = typeInfo(typesForUnit, code, occ);
         return {
@@ -465,8 +460,10 @@ function UnitSetupPage() {
       // that) - so the rooms win and the stray Unit row is dropped
       const wholeRows = unit.rooms.filter((r) => r.letter.toLowerCase() === "unit");
       const roomRows = unit.rooms.filter((r) => r.letter.toLowerCase() !== "unit");
-      unit.rooms = roomRows.length ? roomRows : wholeRows.slice(0, 1);
-      unit.wholeUnit = !roomRows.length && wholeRows.length > 0;
+      // and only a unit type Website gives a whole-unit rate can be let whole
+      const whole = !roomRows.length && wholeRows.length > 0 && wholeUnitOffered(res, unitType);
+      unit.rooms = whole ? wholeRows.slice(0, 1) : roomRows.length ? roomRows : buildRooms(unitType, typesForUnit);
+      unit.wholeUnit = whole;
       try {
         await saveUnit(unit, batchId);
         created += 1;
@@ -534,7 +531,13 @@ function UnitSetupPage() {
         </p>
 
         <div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted p-3">
-          <Switch checked={draft.wholeUnit} onCheckedChange={setWholeUnit} id="whole-unit" />
+          {/* only a unit type Website gives a whole-unit rate can be let whole (11 Oct 2026) */}
+          <Switch
+            checked={draft.wholeUnit}
+            onCheckedChange={setWholeUnit}
+            id="whole-unit"
+            disabled={!draft.wholeUnit && !wholeUnitOffered(residences.find((r) => r.id === draft.residenceId), draft.unitType)}
+          />
           <Label htmlFor="whole-unit" className="text-sm">
             Rent as whole unit
           </Label>
@@ -548,7 +551,12 @@ function UnitSetupPage() {
               />
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground">Off — beds are rented individually.</p>
+            <p className="text-xs text-muted-foreground">
+              Off — beds are rented individually.
+              {wholeUnitOffered(residences.find((r) => r.id === draft.residenceId), draft.unitType)
+                ? ""
+                : " No whole-unit rate in Website."}
+            </p>
           )}
         </div>
 
@@ -580,27 +588,8 @@ function UnitSetupPage() {
                     }
                   />
 
-                  <Select
-                    label="Occupancy"
-                    value={room.occupancy}
-                    onChange={(v) => {
-                      // the rate follows the way the room is let
-                      const { rent } = typeInfo(
-                        typesForResidence,
-                        room.roomTypeCode,
-                        v as Occupancy,
-                      );
-                      patchRoom(room.id, {
-                        occupancy: v as Occupancy,
-                        rent,
-                        beds: bedsFor(v as "single" | "twin"),
-                      });
-                    }}
-                    options={[
-                      { value: "single", label: "Single" },
-                      { value: "twin", label: "Twin sharing" },
-                    ]}
-                  />
+                  {/* twin or single comes from the room type in Website (11 Oct 2026) */}
+                  <Text label="Occupancy" value={room.occupancy === "twin" ? "Twin sharing" : "Single"} onChange={() => undefined} readOnly />
                   <Text
                     label="Rent (RM/mo)"
                     type="number"

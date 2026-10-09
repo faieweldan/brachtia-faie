@@ -953,13 +953,8 @@ function BookingDetail() {
     // emptied completely, the same as Release in Homes - clearing only the hold
     // left the student's university, nationality and gender on an empty bed
     vacateBed(assignedBed.bed.id);
-    // revert an auto-converted twin back to single when nobody else is in it
-    if (
-      room.occupancy === "twin" &&
-      room.beds.every((b) => b.id === assignedBed.bed.id || b.status === "vacant")
-    ) {
-      void convertRoomOccupancy(room.id, "single");
-    }
+    // the room keeps the shape Website gives it - nothing is converted back (11 Oct 2026)
+    void room;
     return true;
   }
 
@@ -1003,7 +998,7 @@ function BookingDetail() {
     if (!blocked && wantedOcc === "unit" && !unitEmpty) blocked = "Unit not fully empty";
     // a unit is let whole or by room, never both
     if (wrongShape) blocked = wantedOcc === "unit" ? "Not a whole unit" : "Whole unit";
-    const shape = { convert: !blocked && as === "convert", whole: !blocked && as === "whole" };
+    const shape = { convert: false, whole: !blocked && as === "whole" };
 
     if (showAllRooms) {
       candidates.push({ row: b, ...shape, ...(blocked ? { blocked } : {}) });

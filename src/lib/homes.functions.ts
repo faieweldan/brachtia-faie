@@ -141,6 +141,15 @@ export const saveUnitRow = createServerFn({ method: "POST" })
     if (slots.length && slots.length !== unit.rooms.length) {
       throw new Error(`${unit.unitNo}: a unit is let either whole or by room, not both`);
     }
+    // and let whole only when Website gives its unit type a whole-unit rate (11 Oct 2026)
+    if (slots.length) {
+      const { data: resRow } = await supabase.from("residences").select("unit_rates").eq("id", unit.residenceId).maybeSingle();
+      const { wholeUnitOffered } = await import("@/lib/room-offer");
+      const taken = slots.some((r) => r.beds.some((b) => b.residentId || b.enquiryId || b.status !== "vacant"));
+      if (!taken && !wholeUnitOffered(resRow as any, unit.unitType ?? "")) {
+        throw new Error(`${unit.unitNo}: no whole-unit rate in Website for ${unit.unitType || "this unit type"}`);
+      }
+    }
 
     /*
      * The code this unit is known by - U001, U002, and no dash, the way the
@@ -291,8 +300,22 @@ export const saveUnitRow = createServerFn({ method: "POST" })
       await dropBeds;
     }
 
+    // twin or single follows the room type in Website, whatever was sent
+    await syncRoomShapes(supabase, unitId);
     return await readUnit(supabase, unitId);
   });
+
+/**
+ * Put rooms nobody is in back in line with their room type in Website (11 Oct
+ * 2026) - sync_room_shapes in 20261011110000_room_shape_from_website.sql. A
+ * database without that migration keeps the rooms as they were.
+ */
+export async function syncRoomShapes(supabase: any, unitId?: string) {
+  const { error } = await supabase.rpc("sync_room_shapes", unitId ? { p_unit: unitId } : {});
+  if (error && !/function .* does not exist|Could not find the function/i.test(String(error.message))) {
+    throw new Error(error.message);
+  }
+}
 
 async function readUnit(supabase: any, unitId: string): Promise<Unit> {
   const { data: row, error } = await supabase

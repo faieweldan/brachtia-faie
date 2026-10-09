@@ -727,6 +727,9 @@ export const saveRoomType = createServerFn({ method: "POST" })
       : supabase.from("room_types").insert(data.values as any);
     const { error } = await q;
     if (error) throw new Error(error.message);
+    // rooms of this type nobody is in take its twin / single (11 Oct 2026)
+    const { syncRoomShapes } = await import("@/lib/homes.functions");
+    await syncRoomShapes(supabase);
     return { ok: true };
   });
 

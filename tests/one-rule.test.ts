@@ -21,6 +21,8 @@ const KNOWN: Record<string, number> = {
   "src/components/admin/StayDetailsCard.tsx": 2,
   "src/routes/admin.bookings.$id.tsx": 8,
   "src/routes/admin.bookings.$id_.invoice.tsx": 2,
+  // the read-only Occupancy label in the unit editor - a label, not a rule (11 Oct 2026)
+  "src/routes/admin.homes.units.tsx": 1,
 };
 
 function files(dir: string): string[] {

@@ -22,7 +22,8 @@ export type Sharing = "single" | "twin" | "unit";
  *   bed      the bed itself, as it is
  *   whole    a twin room nobody is in, let as one single - its other bed is
  *            marked Sold as single (place_stay with whole)
- *   convert  a single room nobody is in, made twin for a twin request
+ *   (a single room is no longer made twin for a twin request: twin or single
+ *   is Website's - shapeFromWebsite - so a single room is single, 11 Oct 2026)
  *   blocked  not for this request, and why
  *
  * `wanted` undefined is Homes, which lists every way a room can be sold.
@@ -32,7 +33,7 @@ export function roomOffer(
   room: { letter: string; occupancy: string; beds: { status: string; upcoming?: unknown[] | undefined }[] },
   wanted: Sharing | undefined,
   sellsSingle: boolean,
-): { as: "bed" | "whole" | "convert" } | { blocked: string } {
+): { as: "bed" | "whole" } | { blocked: string } {
   const unitSlot = room.letter.toLowerCase() === "unit";
   const twin = room.occupancy === "twin" && room.beds.length > 1;
   const untouched = roomUntouched(room);
@@ -40,10 +41,32 @@ export function roomOffer(
   if (wanted === "unit") return { blocked: "Not a whole unit" };
   if (wanted === "twin") {
     if (twin) return { as: "bed" };
-    return untouched ? { as: "convert" } : { blocked: "Single room already occupied" };
+    return { blocked: "Single room" };
   }
   if (!twin) return { as: "bed" };
   if (untouched && sellsSingle) return { as: "whole" };
   if (!wanted) return { as: "bed" };
   return { blocked: "Twin room" };
+}
+
+/**
+ * How many beds a room has, from its room type in Website (Dani, 11 Oct 2026):
+ * twin if the type is sold as twin at all, else single. A room of a type sold
+ * both ways is a twin room; while both beds are empty it is sold as a single
+ * (roomOffer "whole"). Homes, the bulk upload and the server all ask this -
+ * the room no longer keeps its own idea of its shape.
+ */
+export function shapeFromWebsite(type: { occupancies?: unknown } | null | undefined): "single" | "twin" {
+  const occ = Array.isArray(type?.occupancies) ? (type!.occupancies as unknown[]) : [];
+  return occ.includes("twin") ? "twin" : "single";
+}
+
+/** A unit can be let whole only when Website sets a whole-unit rate for its unit type. */
+export function wholeUnitOffered(
+  residence: { unit_rates?: unknown } | null | undefined,
+  unitType: string,
+) {
+  const rates = (residence?.unit_rates ?? {}) as Record<string, Record<string, unknown> | undefined>;
+  const r = rates[unitType];
+  return Number(r?.["long"]) > 0 || Number(r?.["short"]) > 0;
 }

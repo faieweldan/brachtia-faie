@@ -35,10 +35,11 @@ describe("roomOffer", () => {
     expect(roomOffer(emptySingle, "single", true)).toEqual({ as: "bed" });
     expect(roomOffer(takenSingle, "single", true)).toEqual({ as: "bed" });
   });
-  test("twin wanted: twin beds as they are, an empty single converted", () => {
+  test("twin wanted: twin beds as they are, never a single room", () => {
     expect(roomOffer(halfTwin, "twin", true)).toEqual({ as: "bed" });
-    expect(roomOffer(emptySingle, "twin", true)).toEqual({ as: "convert" });
-    expect(roomOffer(takenSingle, "twin", true)).toEqual({ blocked: "Single room already occupied" });
+    // a single room stays single: its shape is Website's (11 Oct 2026)
+    expect(roomOffer(emptySingle, "twin", true)).toEqual({ blocked: "Single room" });
+    expect(roomOffer(takenSingle, "twin", true)).toEqual({ blocked: "Single room" });
   });
   test("whole unit: only the Unit slot, and the Unit slot only for it", () => {
     expect(roomOffer(unitSlot, "unit", true)).toEqual({ as: "bed" });
@@ -49,5 +50,25 @@ describe("roomOffer", () => {
     expect(roomOffer(emptyTwin, undefined, true)).toEqual({ as: "whole" });
     expect(roomOffer(halfTwin, undefined, true)).toEqual({ as: "bed" });
     expect(roomOffer(laterTwin, undefined, true)).toEqual({ as: "bed" });
+  });
+});
+
+import { shapeFromWebsite, wholeUnitOffered } from "../src/lib/room-offer";
+
+describe("shapeFromWebsite", () => {
+  test("twin if the room type is sold as twin at all", () => {
+    expect(shapeFromWebsite({ occupancies: ["single", "twin"] })).toBe("twin");
+    expect(shapeFromWebsite({ occupancies: ["twin"] })).toBe("twin");
+    expect(shapeFromWebsite({ occupancies: ["single"] })).toBe("single");
+    expect(shapeFromWebsite(undefined)).toBe("single");
+  });
+});
+
+describe("wholeUnitOffered", () => {
+  test("only with a whole-unit rate for the unit type", () => {
+    expect(wholeUnitOffered({ unit_rates: {} }, "4-bedroom")).toBe(false);
+    expect(wholeUnitOffered({ unit_rates: { "4-bedroom": { long: 0 } } }, "4-bedroom")).toBe(false);
+    expect(wholeUnitOffered({ unit_rates: { "4-bedroom": { long: 4800 } } }, "4-bedroom")).toBe(true);
+    expect(wholeUnitOffered({ unit_rates: { "4-bedroom": { short: 5200 } } }, "3-bedroom")).toBe(false);
   });
 });
