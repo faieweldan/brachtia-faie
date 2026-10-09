@@ -1,4 +1,5 @@
 import { isSoldAsSingle, isUnitSlot, type BedRow, type Unit, type UnitRoom } from "@/lib/ops-store";
+import { roomOffer } from "@/lib/room-offer";
 
 /**
  * Room types as Website configures them, and the rules read from them.
@@ -133,6 +134,12 @@ export function wholeUnitRate(
  * bed, so a student who asked for a twin can be put in it and the room simply
  * becomes twin again.
  */
+/** The room type has a single rate set up in Website, so the room can be let as one single. */
+export function sellsSingle(room: Pick<UnitRoom, "roomTypeCode">, roomTypes: SiteRoomType[]) {
+  const rt = roomTypes.find((t) => t.code === room.roomTypeCode);
+  return (rt?.occupancies ?? []).includes("single");
+}
+
 export function collapseSingles(
   rows: BedRow[],
   roomTypes: SiteRoomType[],
@@ -155,10 +162,9 @@ export function collapseSingles(
       continue;
     }
 
-    const rt = roomTypes.find((t) => t.code === room.roomTypeCode);
-    const offersSingle = (rt?.occupancies ?? []).includes("single");
-    const wholeRoomFree = group.length > 1 && group.every((g) => g.bed.status === "vacant");
-    if (offersSingle && wholeRoomFree && !isUnitSlot(room)) {
+    // the same rule as the booking's room picker (placement.ts roomOffer)
+    const offer = roomOffer(room, undefined, sellsSingle(room, roomTypes));
+    if ("as" in offer && offer.as === "whole") {
       out.push({ ...group[0]!, asSingle: true });
     } else {
       for (const g of group) out.push({ ...g, asSingle: false });

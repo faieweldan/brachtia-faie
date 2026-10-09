@@ -32,7 +32,8 @@ import { WelcomeMessageCard } from "@/components/admin/WelcomeMessageCard";
 import { InvoiceMessageCard } from "@/components/admin/InvoiceMessageCard";
 import { StayDetailsCard } from "@/components/admin/StayDetailsCard";
 import { roomFitChanged, stayChanges } from "@/lib/stay-fit";
-import { offersTerm, wholeUnitRate, type SiteRoomType } from "@/lib/room-types";
+import { offersTerm, sellsSingle, wholeUnitRate, type SiteRoomType } from "@/lib/room-types";
+import { roomOffer, type Sharing } from "@/lib/room-offer";
 import { RoomMessageCard } from "@/components/admin/RoomMessageCard";
 import {
   refreshResidents,
@@ -46,12 +47,14 @@ import {
   unitAccepts,
   unitGender,
   vacateBed,
+  SOLD_AS_SINGLE,
   fmtDate,
   type BedRow,
   roomCountFor,
 } from "@/lib/ops-store";
 
-type Candidate = { row: BedRow; convert: boolean; blocked?: string };
+/** whole: a twin room nobody is in, let as one single (its other bed is marked Sold as single) */
+type Candidate = { row: BedRow; convert: boolean; whole?: boolean; blocked?: string };
 
 import {
   STAFF,
@@ -904,7 +907,15 @@ function BookingDetail() {
         });
         return;
       }
-    } else updateBed(b.bed.id, hold);
+    } else {
+      updateBed(b.bed.id, hold);
+      // a twin room let whole: the other bed is not for sale either (as in Homes)
+      if (c.whole) {
+        for (const other of b.room.beds) {
+          if (other.id !== b.bed.id) updateBed(other.id, { status: "held", holdFor: SOLD_AS_SINGLE, holdUntil: undefined });
+        }
+      }
+    }
     const bedId = c.convert ? b.room.id : b.bed.id;
     // the bed is held in the browser, so its audit row is written from here
     void recordBookingEvent({
@@ -922,7 +933,7 @@ function BookingDetail() {
     toast.success(
       c.convert
         ? `${b.unit.unitNo} · Room ${b.room.letter} reconfigured to Twin — 1 of 2 reserved`
-        : `Room ${b.unit.unitNo} · ${b.room.letter} reserved`,
+        : `Room ${b.unit.unitNo} · ${b.room.letter} reserved${c.whole ? " as a single" : ""}`,
     );
     setShowPicker(false);
     setOpenUnitId(null);
@@ -976,42 +987,29 @@ function BookingDetail() {
     const wrongShape = wantedOcc === "unit" ? !isUnitSlot(b.room) : wholeUnit;
     const roomBeds = b.room.beds;
     const bedFree = bedFreeForPeriod(b.bed, r.move_in, r.move_out);
-    const roomEmpty = roomBeds.every((x) => bedFreeForPeriod(x, r.move_in, r.move_out));
     const unitEmpty = b.unit.rooms.every((rm) =>
       rm.beds.every((x) => bedFreeForPeriod(x, r.move_in, r.move_out)),
     );
 
+    // "Show all" widens what the student would prefer, never the dates
+    if (!bedFree) continue;
+    // how this room can be sold to this request - the one rule Homes uses too
+    // (room-offer.ts, 11 Oct 2026)
+    const offer = roomOffer(b.room, wantedOcc as Sharing, sellsSingle(b.room, siteRooms));
+    const as = "as" in offer ? offer.as : null;
+    // a room sold as one (a single, or a twin let whole) is one row: its first bed
+    if ((b.room.occupancy === "single" || as === "whole") && roomBeds[0]?.id !== b.bed.id) continue;
+    let blocked = "blocked" in offer ? offer.blocked : undefined;
+    if (!blocked && wantedOcc === "unit" && !unitEmpty) blocked = "Unit not fully empty";
+    // a unit is let whole or by room, never both
+    if (wrongShape) blocked = wantedOcc === "unit" ? "Not a whole unit" : "Whole unit";
+    const shape = { convert: !blocked && as === "convert", whole: !blocked && as === "whole" };
+
     if (showAllRooms) {
-      if (!bedFree) continue;
-      if (roomBeds[0]?.id !== b.bed.id && b.room.occupancy === "single") continue;
-      // honour the student's sharing preference even in override mode
-      let convert = false;
-      let blocked: string | undefined;
-      if (wantedOcc === "twin") {
-        if (isUnitSlot(b.room)) {
-          blocked = "Whole unit";
-        } else if (b.room.occupancy === "single") {
-          if (roomEmpty) convert = true;
-          else blocked = "Single room already occupied";
-        }
-      } else if (wantedOcc === "single") {
-        if (b.room.occupancy === "twin") blocked = "Twin room";
-        else if (isUnitSlot(b.room)) blocked = "Whole unit";
-      } else if (wantedOcc === "unit" && !unitEmpty) {
-        blocked = "Unit not fully empty";
-      }
-      if (wrongShape) {
-        convert = false;
-        blocked = wantedOcc === "unit" ? "Not a whole unit" : "Whole unit";
-      }
-      candidates.push({ row: b, convert, ...(blocked ? { blocked } : {}) });
+      candidates.push({ row: b, ...shape, ...(blocked ? { blocked } : {}) });
       continue;
     }
-
-    if (!bedFree) continue;
-    // every free bed is its own row - a twin room with both beds free lists Twin 1 and Twin 2
-
-    if (wrongShape) continue;
+    if (blocked) continue;
     if (r.residence_slug && b.unit.residenceSlug !== r.residence_slug) continue;
     // exactly the room type asked for - a Room A request sees Room A. A room with
     // no type set used to slip through as a match; it now waits for Show all rooms
@@ -1026,19 +1024,7 @@ function BookingDetail() {
       roomCountFor(String(wantedType.unit_type)) !== roomCountFor(b.unit.unitType)
     )
       continue;
-
-    if (wantedOcc === "unit") {
-      if (!unitEmpty) continue;
-      candidates.push({ row: b, convert: false });
-    } else if (wantedOcc === "twin") {
-      if (b.room.occupancy === "twin") candidates.push({ row: b, convert: false });
-      // a whole unit is several bedrooms let as one - folding it into a single
-      // twin room would lose them, so it is never offered to a twin. To put a
-      // student in a whole unit, the sharing preference is changed to Whole unit
-      else if (roomEmpty && !isUnitSlot(b.room)) candidates.push({ row: b, convert: true });
-    } else {
-      if (b.room.occupancy === "single") candidates.push({ row: b, convert: false });
-    }
+    candidates.push({ row: b, ...shape });
   }
 
   /*
@@ -1063,7 +1049,7 @@ function BookingDetail() {
         continue;
       }
       const type = siteRooms.find((t) => t.code === c.row.room.roomTypeCode);
-      const occupancy = c.convert || c.row.room.occupancy === "twin" ? "twin" : "single";
+      const occupancy = c.whole ? "single" : c.convert || c.row.room.occupancy === "twin" ? "twin" : "single";
       if (type && !offersTerm(type, stayTerm, occupancy)) {
         c.blocked = `No ${termName} rate`;
       }
@@ -1421,7 +1407,9 @@ function BookingDetail() {
                       // the bed this row reserves: Twin 1 and Twin 2 are separate rows
                       const config = c.convert
                         ? "Single → Twin"
-                        : isUnitSlot(b.room)
+                        : c.whole
+                          ? "Single"
+                          : isUnitSlot(b.room)
                           ? "Unit"
                           : b.room.occupancy === "twin"
                             ? b.bed.label

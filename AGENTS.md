@@ -9,6 +9,14 @@
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
 
+## Rules live in src/lib, once
+
+Before writing a business rule on a screen (can this room be sold as a
+single, is this booking paid, which dates clash), search `src/lib/` for the one
+that already exists and call it. If two screens need a rule, it moves to
+`src/lib/` first. Room selling is `roomOffer` in `src/lib/room-offer.ts`, and
+`tests/one-rule.test.ts` fails when a screen adds its own copy.
+
 ## Domain context
 
 Before changing student, booking, billing, maintenance, renewal, or checkout
