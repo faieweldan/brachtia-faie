@@ -8,10 +8,11 @@ import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState, Panel, Select, StatusPill } from "@/components/admin/ops-ui";
+import { MigrationPanel } from "@/components/admin/MigrationPanel";
 import { completeness } from "@/lib/resident-fields";
 import { rowsFromGrid } from "@/lib/master-list";
 import { useBillingLedger } from "@/lib/billing-client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { tenancyDatesByResident } from "@/lib/rental-schedule.functions";
 import { klToday } from "@/lib/kl-date";
 import { personStatus, timingLine } from "@/lib/placement";
@@ -27,6 +28,7 @@ import {
   useOps,
 } from "@/lib/ops-store";
 import { universityAbbr } from "@/data/form-options";
+import { isSheet3Grid, previewSheet3Grid, type MigrationPreview } from "@/lib/migration/sheet3";
 
 export const Route = createFileRoute("/admin/residents/")({
   component: ResidentsListPage,
@@ -38,7 +40,15 @@ function ResidentsListPage() {
   // what each resident owes, from the same invoices as Collections
   const { rows: ledger } = useBillingLedger();
   // each stay's dates as the tenancies table has them (the browser copy said end = start)
-  const savedDates = useQuery({ queryKey: ["tenancy-dates"], queryFn: () => tenancyDatesByResident() });
+  const savedDates = useQuery({
+    queryKey: ["tenancy-dates"],
+    queryFn: () => tenancyDatesByResident(),
+  });
+  // booked check-in days - arriving on the booked day is not overdue (10 Oct 2026)
+  const checkInDays = useQuery({
+    queryKey: ["admin", "check-in-days"],
+    queryFn: async () => (await import("@/lib/admin.functions")).listCheckInDays(),
+  });
   const owed = useMemo(() => {
     const m = new Map<string, number>();
     for (const l of ledger) {
@@ -82,7 +92,9 @@ function ResidentsListPage() {
     const placed = findBedForResident(units, r);
     const st = personStatus({
       bedStatus: placed?.bed.status,
-      upcomingAs: placed?.upcoming ? placed.bed.upcoming?.find((u) => u.residentId === r.id)?.status : undefined,
+      upcomingAs: placed?.upcoming
+        ? placed.bed.upcoming?.find((u) => u.residentId === r.id)?.status
+        : undefined,
     });
     if (st === "held" || st === "booked") return "upcoming" as const;
     if (st === "none") {
@@ -122,6 +134,8 @@ function ResidentsListPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
   const [report, setReport] = useState<ImportReport | null>(null);
+  const [migrationPreview, setMigrationPreview] = useState<MigrationPreview | null>(null);
+  const queryClient = useQueryClient();
 
   /**
    * Reads the Brachtia master list as-is - one row per bed - and hands it to the
@@ -131,7 +145,33 @@ function ResidentsListPage() {
   async function importMasterList(file: File) {
     setImporting(true);
     try {
-      const book = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const book = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+      const migrationSheet = book.Sheets["Sheet3"];
+      const migrationGrid: unknown[][] = migrationSheet
+        ? (XLSX.utils.sheet_to_json(migrationSheet, {
+            header: 1,
+            defval: "",
+            raw: false,
+            dateNF: "yyyy-mm-dd",
+          }) as unknown[][])
+        : [];
+      if (isSheet3Grid(migrationGrid)) {
+        const preview = previewSheet3Grid(migrationGrid, { units, residents });
+        setMigrationPreview(preview);
+        setReport(null);
+        if (preview.missingHeaders.length) {
+          toast.error(
+            `Sheet3 is missing ${preview.missingHeaders.length} required column${preview.missingHeaders.length === 1 ? "" : "s"}`,
+          );
+        } else if (preview.totals.blocked) {
+          toast.warning(
+            `${preview.totals.residents} residents checked · ${preview.totals.blocked} blocked`,
+          );
+        } else {
+          toast.success(`${preview.totals.residents} residents checked · no blocked rows`);
+        }
+        return;
+      }
       const sheetName = book.SheetNames[0];
       const sheet = sheetName ? book.Sheets[sheetName] : undefined;
       const grid: unknown[][] = sheet
@@ -196,8 +236,58 @@ function ResidentsListPage() {
     URL.revokeObjectURL(url);
   }
 
+  function downloadMigrationReview() {
+    if (!migrationPreview) return;
+    const sheet = XLSX.utils.json_to_sheet(
+      migrationPreview.rows.flatMap((row) =>
+        row.issues.length
+          ? row.issues.map((issue) => ({
+              Row: row.sourceRow,
+              "QuickBooks ID": row.quickbooksId,
+              Resident: row.residentName,
+              Result: row.status,
+              Field: issue.field,
+              Problem: issue.message,
+            }))
+          : [
+              {
+                Row: row.sourceRow,
+                "QuickBooks ID": row.quickbooksId,
+                Resident: row.residentName,
+                Result: row.status,
+                Field: "",
+                Problem: "",
+              },
+            ],
+      ),
+    );
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, sheet, "Migration 1 review");
+    XLSX.writeFile(book, "migration-1-readiness.xlsx");
+  }
+
   return (
     <div className="space-y-5">
+      {migrationPreview ? (
+        <MigrationPanel
+          preview={migrationPreview}
+          today={klToday()}
+          onExport={downloadMigrationReview}
+          onDismiss={() => setMigrationPreview(null)}
+          onImport={async (row) => {
+            const { importMigration } = await import("@/lib/migration/import.functions");
+            const { outcomes } = await importMigration({ data: { rows: [row], today: klToday() } });
+            return outcomes[0]!;
+          }}
+          onDone={async () => {
+            // the new residents, their beds and their money show on every screen
+            await refreshUnits();
+            await refreshResidents();
+            void queryClient.invalidateQueries();
+          }}
+        />
+      ) : null}
+
       {report ? (
         <Panel
           title="Last import"
@@ -267,7 +357,7 @@ function ResidentsListPage() {
               disabled={importing}
               onClick={() => fileRef.current?.click()}
             >
-              <Upload className="mr-1 size-4" /> {importing ? "Importing…" : "Bulk upload"}
+              <Upload className="mr-1 size-4" /> {importing ? "Reading…" : "Bulk upload"}
             </Button>
             <Button size="sm" onClick={addResident}>
               <Plus className="mr-1 size-4" /> Add resident
@@ -433,13 +523,20 @@ function ResidentsListPage() {
                                   inactive: isInactive(r),
                                   bedStatus: placed?.bed.status,
                                   upcomingAs: placed?.upcoming
-                                    ? placed.bed.upcoming?.find((u) => u.residentId === r.id)?.status
+                                    ? placed.bed.upcoming?.find((u) => u.residentId === r.id)
+                                        ?.status
                                     : undefined,
                                 });
-                                const when = timingLine(st, stay.start, stay.end, today);
+                                const when = timingLine(
+                                  st,
+                                  stay.start,
+                                  stay.end,
+                                  today,
+                                  checkInDays.data?.[r.id],
+                                );
                                 return when ? (
                                   <span
-                                    className={`block text-xs ${when === "Checkout overdue" ? "text-rose-700" : ""}`}
+                                    className={`block text-xs ${when.endsWith("overdue") ? "text-rose-700" : ""}`}
                                   >
                                     {when}
                                   </span>
