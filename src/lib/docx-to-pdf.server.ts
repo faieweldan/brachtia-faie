@@ -6,11 +6,11 @@
  * never exact. A real Word-compatible engine lays it out the way it will print
  * and be signed, so the eye-icon preview uses one.
  *
- * Today the engine is LibreOffice, run on the machine serving the app - which
- * is a laptop with LibreOffice installed. The live app on Lovable cannot run
- * programs, so there this says plainly that the PDF preview is not set up yet;
- * a converter service (or Microsoft Word online) is the decision for live
- * (Dani and Lav, 29 Sep 2026). Only this file changes when that is chosen.
+ * The engine is LibreOffice. Vercel and Lovable cannot run programs, so there
+ * it runs as a Gotenberg service (Cloud Run, Basic Auth) - decided 8 Oct 2026,
+ * see docs/DOCUMENT-RENDERING-DECISION.md. With GOTENBERG_URL set the filled
+ * file is sent there; without it, LibreOffice on this machine is used (a
+ * laptop with LibreOffice installed). Only this file knows which.
  */
 
 const CANDIDATES = [
@@ -52,6 +52,92 @@ export async function docxToPdf(docx: Uint8Array): Promise<Uint8Array> {
 }
 
 async function convert(docx: Uint8Array): Promise<Uint8Array> {
+  const gotenberg = gotenbergConfig();
+  return gotenberg ? convertWithGotenberg(docx, gotenberg) : convertWithSoffice(docx);
+}
+
+/* ---------------- Gotenberg (deployed) ---------------- */
+
+export type GotenbergConfig = { url: string; username?: string | undefined; password?: string | undefined };
+
+/** GOTENBERG_URL turns the service on; the user name and password are optional. */
+export function gotenbergConfig(env: Record<string, string | undefined> = process.env): GotenbergConfig | null {
+  const url = env["GOTENBERG_URL"]?.trim();
+  if (!url) return null;
+  return { url: url.replace(/\/+$/, ""), username: env["GOTENBERG_USERNAME"], password: env["GOTENBERG_PASSWORD"] };
+}
+
+// a cold Cloud Run start plus LibreOffice can take a while; past this the page says try again
+export const GOTENBERG_TIMEOUT_MS = 60_000;
+
+/** A failure the page can show as it is. Never carries the password, the file or the reply body. */
+export class PdfConversionFailed extends Error {}
+
+/**
+ * One filled .docx to Gotenberg's LibreOffice route, the PDF back.
+ * Logs only the status - never the credentials, the resident's file or the PDF.
+ */
+export async function convertWithGotenberg(
+  docx: Uint8Array,
+  config: GotenbergConfig,
+  fetchImpl: typeof fetch = fetch,
+  timeoutMs = GOTENBERG_TIMEOUT_MS,
+): Promise<Uint8Array> {
+  const form = new FormData();
+  form.append(
+    "files",
+    new Blob([docx as Uint8Array<ArrayBuffer>], {
+      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }),
+    "document.docx",
+  );
+  const headers: Record<string, string> = {};
+  if (config.username || config.password) {
+    headers["Authorization"] = `Basic ${btoa(`${config.username ?? ""}:${config.password ?? ""}`)}`;
+  }
+
+  let res: Response;
+  try {
+    res = await fetchImpl(`${config.url}/forms/libreoffice/convert`, {
+      method: "POST",
+      body: form,
+      headers,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (e) {
+    const timedOut = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
+    console.error(`[docx-to-pdf] Gotenberg ${timedOut ? "timed out" : "could not be reached"}`);
+    throw new PdfConversionFailed(
+      timedOut
+        ? "The PDF took too long to make. Please try again in a moment."
+        : "The PDF service could not be reached. Please try again in a moment.",
+    );
+  }
+
+  if (res.status === 401 || res.status === 403) {
+    console.error(`[docx-to-pdf] Gotenberg refused the login (${res.status})`);
+    throw new PdfConversionFailed("The PDF service refused this server's login. Ask the admin to check its settings.");
+  }
+  if (!res.ok) {
+    console.error(`[docx-to-pdf] Gotenberg answered ${res.status}`);
+    throw new PdfConversionFailed("The PDF could not be made from this document.");
+  }
+  const pdf = new Uint8Array(await res.arrayBuffer());
+  if (!isPdf(pdf)) {
+    console.error("[docx-to-pdf] Gotenberg answered with something that is not a PDF");
+    throw new PdfConversionFailed("The PDF service sent back something that is not a PDF.");
+  }
+  return pdf;
+}
+
+/** A PDF file starts with "%PDF-". */
+export function isPdf(bytes: Uint8Array) {
+  return bytes.length > 5 && String.fromCharCode(...bytes.subarray(0, 5)) === "%PDF-";
+}
+
+/* ---------------- LibreOffice on this machine (local) ---------------- */
+
+async function convertWithSoffice(docx: Uint8Array): Promise<Uint8Array> {
   let fs: typeof import("node:fs/promises");
   let path: typeof import("node:path");
   let os: typeof import("node:os");
