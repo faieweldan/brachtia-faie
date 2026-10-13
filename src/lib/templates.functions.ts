@@ -273,23 +273,59 @@ export const searchResidents = createServerFn({ method: "GET" })
 
 async function buildContext(db: any, residentId: string) {
   const data = { residentId };
-    const { data: resident } = await db.from("residents").select("*").eq("id", data.residentId).maybeSingle();
-    if (!resident) throw new Error("Resident not found");
-    // where they are placed - a room booked for after its current resident leaves included
-    const { placementForResident } = await import("@/lib/placement.server");
-    const [placed, { data: tenancy }, { data: enquiry }] = await Promise.all([
-      placementForResident(db, data.residentId),
-      db.from("tenancies").select("*").eq("resident_id", data.residentId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-      resident.enquiry_id ? db.from("enquiries").select("*").eq("id", resident.enquiry_id).maybeSingle() : Promise.resolve({ data: null }),
-    ]);
-    const bed = placed?.bed ?? null;
-    const room = placed?.room ?? null;
-    const unit = placed?.unit ?? null;
-    const residence = placed?.residence ?? null;
-    const { data: agreement } = await db.from("tenancy_agreements").select("agreement_no, created_at").eq("resident_id", data.residentId).order("created_at", { ascending: false }).limit(1).maybeSingle();
-    const { loadSignatory } = await import("@/lib/signatory.server");
-    const signatory = await loadSignatory(db);
-    const ctx: MappingContext = { resident, enquiry, bed, room, unit, residence, tenancy, agreement, signatory };
+  const { data: resident } = await db
+    .from("residents")
+    .select("*")
+    .eq("id", data.residentId)
+    .maybeSingle();
+  if (!resident) throw new Error("Resident not found");
+  // where they are placed - a room booked for after its current resident leaves included
+  const { placementForResident } = await import("@/lib/placement.server");
+  // the stay's official dates and the rent in force - the tenancy's, else the booking's (tenancy-facts, 14 Oct 2026)
+  const { officialStay, rentInForce } = await import("@/lib/tenancy-facts.server");
+  const [placed, stay, { data: enquiry }] = await Promise.all([
+    placementForResident(db, data.residentId),
+    officialStay(db, { residentId: data.residentId, enquiryId: resident.enquiry_id ?? null }),
+    resident.enquiry_id
+      ? db.from("enquiries").select("*").eq("id", resident.enquiry_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  const tenancy = stay.tenancy;
+  // the rent on the day the stay starts, or today once it has
+  const { klToday } = await import("@/lib/kl-date");
+  const today = klToday();
+  const now = await rentInForce(
+    db,
+    data.residentId,
+    stay.tenancyId,
+    stay.start > today ? stay.start : today,
+  );
+  const bed = placed?.bed ?? null;
+  const room = placed?.room ?? null;
+  const unit = placed?.unit ?? null;
+  const residence = placed?.residence ?? null;
+  const { data: agreement } = await db
+    .from("tenancy_agreements")
+    .select("agreement_no, created_at")
+    .eq("resident_id", data.residentId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const { loadSignatory } = await import("@/lib/signatory.server");
+  const signatory = await loadSignatory(db);
+  const ctx: MappingContext = {
+    resident,
+    enquiry,
+    bed,
+    room,
+    unit,
+    residence,
+    tenancy,
+    agreement,
+    signatory,
+    stay: { start: stay.start, end: stay.end },
+    rentInForce: now.hasSchedule && now.rent > 0 ? now.rent : null,
+  };
   return { resident, ctx };
 }
 
@@ -855,9 +891,20 @@ export async function eventDocumentValues(
     if (residence) ctx.residence = residence;
   }
   if (change.start || change.end) {
-    ctx.tenancy = { ...(ctx.tenancy ?? {}), ...(change.start ? { start_date: change.start } : {}), ...(change.end ? { end_date: change.end } : {}) };
+    ctx.tenancy = {
+      ...(ctx.tenancy ?? {}),
+      ...(change.start ? { start_date: change.start } : {}),
+      ...(change.end ? { end_date: change.end } : {}),
+    };
+    ctx.stay = {
+      start: change.start || ctx.stay?.start || "",
+      end: change.end || ctx.stay?.end || "",
+    };
   }
-  if (change.rent && change.rent > 0) ctx.bed = { ...(ctx.bed ?? {}), rent: change.rent };
+  if (change.rent && change.rent > 0) {
+    ctx.bed = { ...(ctx.bed ?? {}), rent: change.rent };
+    ctx.rentInForce = change.rent;
+  }
 
   const { data: rows } = await db
     .from("template_versions")
