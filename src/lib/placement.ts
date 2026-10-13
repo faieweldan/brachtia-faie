@@ -57,8 +57,8 @@ export function unitClaims(unit: Unit, residents: Resident[] = []): Claim[] {
         out.push({
           bedId: bed.id,
           roomId: room.id,
-          // a hold on somebody else's bed is in bed.upcoming, not here
-          enquiryId: bed.residentId ? undefined : bed.enquiryId,
+          // holds are in bed.upcoming (placement_holds), never on the bed row
+          enquiryId: undefined,
           residentId: bed.residentId,
           who: bed.residentName || person?.fullName || bed.holdFor || "someone",
           gender: person?.gender || bed.gender || "",
@@ -230,27 +230,50 @@ export function timingLine(
   start: string | undefined,
   end: string | undefined,
   today: string,
+  /** the day their check-in appointment is booked for - arriving then is not overdue */
+  checkInOn?: string | undefined,
 ) {
   if (status === "inactive") return "Former";
   if (status === "held" || status === "booked") {
     if (!start) return "Upcoming";
-    const n = days(today, start);
-    return n > 1
-      ? `Upcoming · in ${n} days`
-      : n === 1
-        ? "Upcoming · tomorrow"
-        : n === 0
-          ? "Upcoming · today"
-          : "Upcoming · not checked in";
+    // a check-in booked for after the start date: they are expected that day (10 Oct 2026)
+    const day = checkInOn && checkInOn > start ? checkInOn.slice(0, 10) : start;
+    const n = days(today, day);
+    if (n < 0) return "Check-in overdue";
+    const when = n > 1 ? `in ${n} days` : n === 1 ? "tomorrow" : "today";
+    return day === start ? `Upcoming · ${when}` : `Upcoming · check-in ${when}`;
   }
   if (status === "active") {
     if (end && end < today) return "Checkout overdue";
     if (end) {
       const n = days(today, end);
-      if (n <= 30)
-        return n === 0 ? "Current · ends today" : `Current · ends in ${n} day${n === 1 ? "" : "s"}`;
+      if (n <= 30) return n === 0 ? "Current · ends today" : `Current · ends in ${n} day${n === 1 ? "" : "s"}`;
     }
     return "Current";
   }
   return "";
+}
+
+/**
+ * The room status a bed shows (10 Oct 2026): whoever is physically in it
+ * decides; an empty bed shows its first stay to come - Reserved for an unpaid
+ * hold, Booked for a paid one - and Vacant only when nobody is coming.
+ */
+export function roomStatusOf(bed: Bed): "vacant" | "held" | "booked" | "active" {
+  if (bed.status === "notice" || bed.status === "active") return "active";
+  if (bed.status !== "vacant") return bed.status;
+  const first = bed.upcoming?.[0];
+  return first ? (first.status === "reserved" ? "held" : "booked") : "vacant";
+}
+
+/** What the Room assignment card offers, by where the booking stands (10 Oct 2026). */
+export function roomActions(p: {
+  closed: boolean;
+  hasRoom: boolean;
+  paid: boolean;
+  started: boolean;
+}) {
+  if (p.closed || !p.hasRoom) return [] as ("choose" | "release" | "change" | "update_tenancy")[];
+  if (p.started) return ["update_tenancy"] as const;
+  return p.paid ? (["change"] as const) : (["choose", "release"] as const);
 }

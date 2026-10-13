@@ -52,8 +52,8 @@ function toBed(row: any): Bed {
  * The stays to come on each bed while somebody else is its resident (9 Oct
  * 2026). Nothing on the bed row stores them - they are read from where each
  * one lives:
- *   Reserved   an unpaid hold on the bed (beds.enquiry_id), when the bed's
- *              resident is somebody else
+ *   Reserved   an unpaid hold on the bed (placement_holds, 10 Oct 2026) -
+ *              on an empty bed or on one somebody still lives in
  *   Booked     a paid tenancy placed on the bed (tenancies.bed_id) whose
  *              resident is not the bed's, has not ended, and is not living
  *              in another bed already
@@ -71,7 +71,9 @@ async function attachUpcoming(supabase: any, beds: any[]) {
     .not("bed_id", "is", null)
     .or(`end_date.is.null,end_date.gte.${today}`);
   const tenancies = ((tens ?? []) as any[]).filter((t) => bedIds.has(String(t.bed_id)));
-  const holdIds = beds.filter((b) => b.enquiry_id && b.resident_id).map((b) => b.enquiry_id);
+  const { data: holdRows } = await supabase.from("placement_holds").select("enquiry_id, bed_id, start_date, end_date");
+  const holds = ((holdRows ?? []) as any[]).filter((h) => bedIds.has(String(h.bed_id)));
+  const holdIds = holds.map((h) => h.enquiry_id);
   const enquiryIds = [...new Set([...holdIds, ...tenancies.map((t) => t.enquiry_id).filter(Boolean)])] as string[];
   const residentIds = [...new Set(tenancies.map((t) => t.resident_id).filter(Boolean))] as string[];
   const [{ data: enquiries }, { data: residents }, { data: invoices }, { data: living }] = await Promise.all([
@@ -84,8 +86,10 @@ async function attachUpcoming(supabase: any, beds: any[]) {
     enquiryIds.length
       ? supabase.from("invoices").select("enquiry_id, monthly_rent, created_at").in("enquiry_id", enquiryIds).neq("status", "void").order("created_at", { ascending: false })
       : { data: [] },
+    // anyone who is already a bed's own resident is placed there - an older tenancy
+    // pointing at another bed is out of date, never a second place
     residentIds.length
-      ? supabase.from("beds").select("resident_id").in("resident_id", residentIds).in("status", ["active", "notice"])
+      ? supabase.from("beds").select("resident_id").in("resident_id", residentIds).neq("status", "vacant")
       : { data: [] },
   ]);
   const enq = new Map(((enquiries ?? []) as any[]).map((e) => [e.id, e]));
@@ -95,17 +99,19 @@ async function attachUpcoming(supabase: any, beds: any[]) {
 
   return beds.map((b) => {
     const list: UpcomingStay[] = [];
-    // an unpaid hold on a bed somebody else is the resident of
-    const e = b.enquiry_id && b.resident_id ? enq.get(b.enquiry_id) : undefined;
-    if (e && e.resident_id !== b.resident_id) {
+    // unpaid holds on the bed
+    for (const h of holds) {
+      if (h.bed_id !== b.id) continue;
+      const e = enq.get(h.enquiry_id);
+      if (!e) continue;
       list.push({
         enquiryId: e.id,
         reference: e.reference || undefined,
         name: String(e.full_name ?? ""),
         gender: e.gender || undefined,
         university: e.university || undefined,
-        start: e.move_in || undefined,
-        end: e.move_out || undefined,
+        start: h.start_date || e.move_in || undefined,
+        end: h.end_date || e.move_out || undefined,
         rent: rentOf(e.id),
         status: "reserved",
       });
@@ -227,6 +233,15 @@ export const saveUnitRow = createServerFn({ method: "POST" })
     const slots = unit.rooms.filter((r) => r.letter.toLowerCase() === "unit");
     if (slots.length && slots.length !== unit.rooms.length) {
       throw new Error(`${unit.unitNo}: a unit is let either whole or by room, not both`);
+    }
+    // and let whole only when Website gives its unit type a whole-unit rate (11 Oct 2026)
+    if (slots.length) {
+      const { data: resRow } = await supabase.from("residences").select("unit_rates").eq("id", unit.residenceId).maybeSingle();
+      const { wholeUnitOffered } = await import("@/lib/room-offer");
+      const taken = slots.some((r) => r.beds.some((b) => b.residentId || b.enquiryId || b.status !== "vacant"));
+      if (!taken && !wholeUnitOffered(resRow as any, unit.unitType ?? "")) {
+        throw new Error(`${unit.unitNo}: no whole-unit rate in Website for ${unit.unitType || "this unit type"}`);
+      }
     }
 
     /*
@@ -378,8 +393,59 @@ export const saveUnitRow = createServerFn({ method: "POST" })
       await dropBeds;
     }
 
+    // twin or single follows the room type in Website, whatever was sent
+    await syncRoomShapes(supabase, unitId);
     return await readUnit(supabase, unitId);
   });
+
+/**
+ * Give units the codes the master list gives them (Dani, 12 Oct 2026).
+ *
+ * The units upload reads each unit's code from the file. Codes move between
+ * units at once - B-13A-01 takes U028 from a unit that is itself becoming U035 -
+ * so every unit named here first steps aside to a temporary code, then takes
+ * its own. A code held by a unit NOT named here is refused, never taken from it.
+ */
+export const setUnitCodes = createServerFn({ method: "POST" })
+  .inputValidator((data: { codes: { unitId: string; code: string }[] }) => data)
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    const wanted = data.codes.filter((c) => isUuid(c.unitId) && c.code.trim());
+    const ids = new Set(wanted.map((c) => c.unitId));
+    const codes = wanted.map((c) => c.code.trim());
+    const dup = codes.find((c, i) => codes.indexOf(c) !== i);
+    if (dup) return { ok: false as const, error: `${dup} is given to two units in the file` };
+    const { data: holders } = await supabase.from("units").select("id, code, unit_no").in("code", codes);
+    const blocked = ((holders ?? []) as any[]).filter((h) => !ids.has(h.id));
+    if (blocked.length) {
+      return {
+        ok: false as const,
+        error: `Already used by units not in the file: ${blocked.map((b) => `${b.code} (${b.unit_no})`).join(", ")}`,
+      };
+    }
+    for (const c of wanted) {
+      const { error } = await supabase.from("units").update({ code: `TMP-${c.unitId}` }).eq("id", c.unitId);
+      if (error) throw new Error(error.message);
+    }
+    for (const c of wanted) {
+      const { error } = await supabase
+        .from("units")
+        .update({ code: c.code.trim(), updated_at: new Date().toISOString() })
+        .eq("id", c.unitId);
+      if (error) throw new Error(error.message);
+    }
+    return { ok: true as const, changed: wanted.length };
+  });
+
+/**
+ * Put rooms nobody is in back in line with their room type in Website (11 Oct
+ * 2026) - sync_room_shapes in 20261011110000_room_shape_from_website.sql. A
+ * database without that migration keeps the rooms as they were.
+ */
+export async function syncRoomShapes(supabase: any, unitId?: string) {
+  const { error } = await supabase.rpc("sync_room_shapes", unitId ? { p_unit: unitId } : {});
+  if (error && !notMigrated(error)) throw new Error(error.message);
+}
 
 async function readUnit(supabase: any, unitId: string): Promise<Unit> {
   const { data: row, error } = await supabase
@@ -436,9 +502,18 @@ export const setUnitDeactivated = createServerFn({ method: "POST" })
           .select("label, resident_name")
           .in("room_id", roomIds)
           .or("resident_id.not.is.null,enquiry_id.not.is.null");
-        const who = ((taken ?? []) as any[])
-          .map((b) => String(b.resident_name ?? "").trim() || String(b.label ?? ""))
-          .filter(Boolean);
+        // unpaid bookings holding a bed here count too (placement_holds, 10 Oct 2026)
+        const { data: allBeds } = await supabase.from("beds").select("id").in("room_id", roomIds);
+        const { data: holds } = (allBeds ?? []).length
+          ? await supabase
+              .from("placement_holds")
+              .select("enquiries(full_name)")
+              .in("bed_id", ((allBeds ?? []) as any[]).map((b) => b.id))
+          : { data: [] };
+        const who = [
+          ...((taken ?? []) as any[]).map((b) => String(b.resident_name ?? "").trim() || String(b.label ?? "")),
+          ...((holds ?? []) as any[]).map((h) => String(h.enquiries?.full_name ?? "a booking")),
+        ].filter(Boolean);
         if (who.length) {
           return {
             ok: false as const,
@@ -580,7 +655,6 @@ export const placeStay = createServerFn({ method: "POST" })
       p_whole: !!data.whole,
       p_hold_until: data.holdUntil || null,
     });
-    if (error && notMigrated(error) && enquiryId) return holdTheOldWay(supabase, { enquiryId, bedId: data.bedId, ...(data.holdUntil ? { holdUntil: data.holdUntil } : {}) });
     if (error) return { ok: false as const, error: rpcError(error), detail: "" };
     const out = res as { ok: boolean; error?: string; detail?: string; placed?: "now" | "later" };
     if (!out?.ok) return { ok: false as const, error: out?.error || "The room could not be reserved.", detail: out?.detail ?? "" };
@@ -590,38 +664,6 @@ export const placeStay = createServerFn({ method: "POST" })
     }
     return { ok: true as const, placed: out.placed ?? "now" };
   });
-
-/**
- * Before the migration: an empty bed is held the way it always was. A bed
- * somebody is in, or a move, needs the database update - refused, not guessed.
- */
-async function holdTheOldWay(supabase: any, data: { enquiryId: string; bedId: string; holdUntil?: string }) {
-  const [{ data: bed }, { data: e }] = await Promise.all([
-    supabase.from("beds").select("status, resident_id, enquiry_id").eq("id", data.bedId).maybeSingle(),
-    supabase.from("enquiries").select("full_name, gender, university, nationality").eq("id", data.enquiryId).maybeSingle(),
-  ]);
-  const { data: had } = await supabase.from("beds").select("id").eq("enquiry_id", data.enquiryId).limit(1);
-  if (!bed || bed.status !== "vacant" || bed.resident_id || bed.enquiry_id || (had ?? []).length) {
-    return { ok: false as const, error: rpcError({ message: "function place_stay does not exist" }), detail: "" };
-  }
-  const { error } = await supabase
-    .from("beds")
-    .update({
-      enquiry_id: data.enquiryId,
-      status: "held",
-      hold_for: e?.full_name ?? null,
-      hold_until: data.holdUntil || null,
-      gender: e?.gender || null,
-      university: e?.university || null,
-      nationality: e?.nationality || null,
-    })
-    .eq("id", data.bedId)
-    .eq("status", "vacant");
-  if (error) return { ok: false as const, error: error.message, detail: "" };
-  const { syncBookingStage } = await import("@/lib/booking-lifecycle");
-  await syncBookingStage(supabase, data.enquiryId);
-  return { ok: true as const, placed: "now" as const };
-}
 
 /**
  * A checked-out resident leaves their bed: whoever has it next becomes its

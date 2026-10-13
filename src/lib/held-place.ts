@@ -26,22 +26,16 @@ export async function heldPlace(
   let roomLetter = "";
   if (!enquiryId) return { unitNo, roomLetter };
 
-  const { data: beds, error: bedError } = await supabase
-    .from("beds")
-    .select("room_id, status")
-    .eq("enquiry_id", enquiryId);
-  if (bedError) console.warn("unit lookup failed at beds", bedError.message);
-  // paid for a room somebody else still lives in: the tenancy names the bed
-  let later: { room_id: string } | null = null;
-  const own = ((beds ?? []) as { room_id: string; status: string }[]).find((b) => b.status !== "vacant");
-  if (!own) {
-    const { data: t } = await supabase.from("tenancies").select("bed_id").eq("enquiry_id", enquiryId).maybeSingle();
-    if (t?.bed_id) {
-      const { data: b } = await supabase.from("beds").select("room_id").eq("id", t.bed_id).maybeSingle();
-      later = b ?? null;
-    }
-  }
-  const held = own ?? later;
+  // its unpaid hold, or - paid - the bed its tenancy names (10 Oct 2026)
+  const [{ data: hold, error: bedError }, { data: t }] = await Promise.all([
+    supabase.from("placement_holds").select("bed_id").eq("enquiry_id", enquiryId).maybeSingle(),
+    supabase.from("tenancies").select("bed_id").eq("enquiry_id", enquiryId).maybeSingle(),
+  ]);
+  if (bedError) console.warn("unit lookup failed at holds", bedError.message);
+  const bedId = (hold as any)?.bed_id ?? (t as any)?.bed_id ?? null;
+  const { data: held } = bedId
+    ? await supabase.from("beds").select("room_id").eq("id", bedId).maybeSingle()
+    : { data: null };
   if (!held?.room_id) return { unitNo, roomLetter };
 
   const { data: theRoom, error: roomError } = await supabase

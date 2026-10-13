@@ -9,6 +9,8 @@ import { listResidences } from "@/lib/admin.functions";
 import { GenderMark } from "@/components/admin/GenderMark";
 import { DeactivateUnitDialog } from "@/components/admin/DeactivateUnitDialog";
 import { NO_ROOM_TYPES, typesOfUnitType, unitTypeNames } from "@/lib/room-types";
+import { shapeFromWebsite, wholeUnitOffered } from "@/lib/room-offer";
+import { findResidence, mergeUnitFromFile, normalUnitNo } from "@/lib/unit-import";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -19,6 +21,7 @@ import {
   fmtDate,
   money,
   nextUnitCode,
+  refreshUnits,
   roomCountFor,
   saveUnit,
   setUnitDeactivated,
@@ -38,6 +41,8 @@ export const Route = createFileRoute("/admin/homes/units")({
 const LETTERS = ["A", "B", "C", "D", "E", "F"];
 
 const TEMPLATE_HEADERS = [
+  // the unit's code from the master list - U001. Blank: the next free one is given
+  "code",
   "residence",
   "unit_no",
   "unit_type",
@@ -46,18 +51,16 @@ const TEMPLATE_HEADERS = [
   "occupancy",
 ];
 /*
- * One row per room, and a unit is its rows together - they are grouped by
- * residence and unit_no. The residence has to be written the way Website names
- * it, or the rows are skipped. The last unit here is let whole: room_letter
- * "Unit" is how the master list records a unit taken by one party, and it needs
- * no room rows of its own.
+ * One row per room, and a unit is its rows together - grouped by code, or by
+ * residence and unit_no when there is no code. "The Arc" is read as "The Arc,
+ * Cyberjaya" and "B-08-3A" as "B-08-03A". Twin or single always comes from
+ * Website, whatever the occupancy column says (12 Oct 2026).
  */
 const TEMPLATE_ROWS = [
-  ["The Arc, Cyberjaya", "A-12-10", "4-bedroom", "A", "A", "twin"],
-  ["The Arc, Cyberjaya", "A-12-10", "4-bedroom", "B", "B", "single"],
-  ["The Arc, Cyberjaya", "A-12-10", "4-bedroom", "C", "C", "single"],
-  ["The Arc, Cyberjaya", "A-12-10", "4-bedroom", "D", "D", "single"],
-  ["The Arc, Cyberjaya", "A-15-09", "3-bedroom", "Unit", "", "unit"],
+  ["U006", "The Arc, Cyberjaya", "A-12-10", "4-bedroom", "A", "arc-4br-a", "twin"],
+  ["U006", "The Arc, Cyberjaya", "A-12-10", "4-bedroom", "B", "arc-4br-b", "twin"],
+  ["U006", "The Arc, Cyberjaya", "A-12-10", "4-bedroom", "C", "arc-4br-c", "twin"],
+  ["U006", "The Arc, Cyberjaya", "A-12-10", "4-bedroom", "D", "arc-4br-d", "twin"],
 ];
 
 function blankUnit(code: string): Unit {
@@ -216,9 +219,8 @@ function UnitSetupPage() {
    */
   function typeInfo(list: any[], code: string, want?: Occupancy) {
     const rt = list.find((r) => r.code === code || r.room_code === code);
-    const fallback: "single" | "twin" =
-      rt?.occupancies?.length === 1 && rt.occupancies[0] === "twin" ? "twin" : "single";
-    const occ: "single" | "twin" = want === "twin" || want === "single" ? want : fallback;
+    // the room's shape is Website's (room-offer.ts), never picked here (11 Oct 2026)
+    const occ: "single" | "twin" = want === "twin" || want === "single" ? want : shapeFromWebsite(rt);
     const rent = rt?.rent?.long?.[occ] ?? rt?.rent?.long?.single ?? 0;
     return { rt, occ, rent: Number(rent) || 0 };
   }
@@ -289,7 +291,7 @@ function UnitSetupPage() {
 
   function applyRoomType(roomId: string, code: string) {
     const room = draft?.rooms.find((r) => r.id === roomId);
-    const { occ, rent } = typeInfo(typesForResidence, code, room?.occupancy);
+    const { occ, rent } = typeInfo(typesForResidence, code);
     patchRoom(roomId, { roomTypeCode: code, occupancy: occ, rent, beds: bedsFor(occ) });
   }
 
@@ -339,14 +341,15 @@ function UnitSetupPage() {
   /**
    * Every unit as it stands, in the same six columns.
    *
-   * A unit is upserted on its residence and unit number, so this file can be
-   * edited and uploaded back to change units that already exist - which a blank
-   * template cannot do once there are 74 of them. A unit's rooms are rewritten
-   * from the file, so a room left out of it is removed from that unit.
+   * A unit is found by its code (then by residence and unit number), so this
+   * file can be edited and uploaded back to change units that already exist.
+   * An upload updates a unit and never empties a bed somebody is in; a room left
+   * out of the file goes only when nobody is in it (12 Oct 2026).
    */
   function downloadUnits() {
     const rows = units.flatMap((u) =>
       (u.rooms.length ? u.rooms : [null]).map((room) => [
+        u.code ?? "",
         u.residenceName ?? "",
         u.unitNo ?? "",
         u.unitType ?? "",
@@ -381,7 +384,8 @@ function UnitSetupPage() {
 
     const groups = new Map<string, Record<string, string>[]>();
     for (const row of rows) {
-      const key = `${row["residence"] ?? ""}|${row["unit_no"] ?? ""}`;
+      // a unit is its code when the file has one, else its residence and number
+      const key = row["code"] || `${row["residence"] ?? ""}|${normalUnitNo(row["unit_no"] ?? "")}`;
       groups.set(key, [...(groups.get(key) ?? []), row]);
     }
 
@@ -399,15 +403,16 @@ function UnitSetupPage() {
     }
 
     let created = 0;
+    let updated = 0;
     let skipped = 0;
     let failed = 0;
+    const kept: string[] = [];
+    const codes: { unitId: string; code: string }[] = [];
 
     for (const group of groups.values()) {
       const first = group[0]!;
       const residenceName = first["residence"] ?? "";
-      const res = residences.find(
-        (r) => String(r.name).toLowerCase() === residenceName.toLowerCase(),
-      );
+      const res = findResidence(residences, residenceName);
       if (!res) {
         skipped += 1;
         continue;
@@ -431,7 +436,7 @@ function UnitSetupPage() {
       unit.residenceId = res.id;
       unit.residenceName = res.name;
       unit.residenceSlug = res.slug ?? "";
-      unit.unitNo = first["unit_no"] ?? "";
+      unit.unitNo = normalUnitNo(first["unit_no"] ?? "");
       unit.unitType = unitType;
       unit.rooms = group.map((row, i) => {
         const letter = row["room_letter"] || LETTERS[i] || String(i + 1);
@@ -439,14 +444,9 @@ function UnitSetupPage() {
         const occRaw = (row["occupancy"] ?? "").toLowerCase();
         // "unit" marks the whole-unit letting, which the master list records as
         // Room "Unit" / Bed "Unit"
+        // twin or single is Website's, whatever the file says (11 Oct 2026)
         const occ: Occupancy =
-          occRaw === "unit" || letter.toLowerCase() === "unit"
-            ? "unit"
-            : occRaw === "twin"
-              ? "twin"
-              : occRaw === "single"
-                ? "single"
-                : typeInfo(typesForUnit, code).occ;
+          occRaw === "unit" || letter.toLowerCase() === "unit" ? "unit" : typeInfo(typesForUnit, code).occ;
         // price for the way this room is actually let, not the type's default
         const info = typeInfo(typesForUnit, code, occ);
         return {
@@ -465,21 +465,48 @@ function UnitSetupPage() {
       // that) - so the rooms win and the stray Unit row is dropped
       const wholeRows = unit.rooms.filter((r) => r.letter.toLowerCase() === "unit");
       const roomRows = unit.rooms.filter((r) => r.letter.toLowerCase() !== "unit");
-      unit.rooms = roomRows.length ? roomRows : wholeRows.slice(0, 1);
-      unit.wholeUnit = !roomRows.length && wholeRows.length > 0;
+      // and only a unit type Website gives a whole-unit rate can be let whole
+      const whole = !roomRows.length && wholeRows.length > 0 && wholeUnitOffered(res, unitType);
+      unit.rooms = whole ? wholeRows.slice(0, 1) : roomRows.length ? roomRows : buildRooms(unitType, typesForUnit);
+      unit.wholeUnit = whole;
+      // the unit already there is updated, never saved over (12 Oct 2026): found
+      // by its code, else by residence and unit number
+      const fileCode = (first["code"] ?? "").trim();
+      const existing =
+        (fileCode ? units.find((u) => u.code === fileCode) : undefined) ??
+        units.find((u) => u.residenceId === res.id && u.unitNo.toUpperCase() === unit.unitNo);
+      const merged = mergeUnitFromFile(existing, unit);
+      kept.push(...merged.kept);
       try {
-        await saveUnit(unit, batchId);
-        created += 1;
+        const saved = await saveUnit(merged.unit, batchId);
+        if (existing) updated += 1;
+        else created += 1;
+        if (fileCode && saved.code !== fileCode) codes.push({ unitId: saved.id, code: fileCode });
       } catch {
         failed += 1;
       }
     }
 
+    // the codes the file gives, all in one step on the server
+    let codeError = "";
+    if (codes.length) {
+      const { setUnitCodes } = await import("@/lib/homes.functions");
+      const res = await setUnitCodes({ data: { codes } }).catch((e: unknown) => ({
+        ok: false as const,
+        error: e instanceof Error ? e.message : "Codes not saved",
+      }));
+      if (!res.ok) codeError = res.error;
+      await refreshUnits();
+    }
+
     toast.success(
-      `${created} unit${created === 1 ? "" : "s"} imported` +
+      `${created} unit${created === 1 ? "" : "s"} added · ${updated} updated` +
+        (codes.length && !codeError ? ` · ${codes.length} code${codes.length === 1 ? "" : "s"} set` : "") +
         (skipped ? ` · ${skipped} skipped (residence not found)` : "") +
         (failed ? ` · ${failed} failed` : ""),
+      kept.length ? { description: kept.join("\n"), duration: 20000 } : undefined,
     );
+    if (codeError) toast.error("Unit codes not changed", { description: codeError, duration: 20000 });
   }
 
   const editor = draft ? (
@@ -534,7 +561,13 @@ function UnitSetupPage() {
         </p>
 
         <div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted p-3">
-          <Switch checked={draft.wholeUnit} onCheckedChange={setWholeUnit} id="whole-unit" />
+          {/* only a unit type Website gives a whole-unit rate can be let whole (11 Oct 2026) */}
+          <Switch
+            checked={draft.wholeUnit}
+            onCheckedChange={setWholeUnit}
+            id="whole-unit"
+            disabled={!draft.wholeUnit && !wholeUnitOffered(residences.find((r) => r.id === draft.residenceId), draft.unitType)}
+          />
           <Label htmlFor="whole-unit" className="text-sm">
             Rent as whole unit
           </Label>
@@ -548,7 +581,12 @@ function UnitSetupPage() {
               />
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground">Off — beds are rented individually.</p>
+            <p className="text-xs text-muted-foreground">
+              Off — beds are rented individually.
+              {wholeUnitOffered(residences.find((r) => r.id === draft.residenceId), draft.unitType)
+                ? ""
+                : " No whole-unit rate in Website."}
+            </p>
           )}
         </div>
 
@@ -580,27 +618,8 @@ function UnitSetupPage() {
                     }
                   />
 
-                  <Select
-                    label="Occupancy"
-                    value={room.occupancy}
-                    onChange={(v) => {
-                      // the rate follows the way the room is let
-                      const { rent } = typeInfo(
-                        typesForResidence,
-                        room.roomTypeCode,
-                        v as Occupancy,
-                      );
-                      patchRoom(room.id, {
-                        occupancy: v as Occupancy,
-                        rent,
-                        beds: bedsFor(v as "single" | "twin"),
-                      });
-                    }}
-                    options={[
-                      { value: "single", label: "Single" },
-                      { value: "twin", label: "Twin sharing" },
-                    ]}
-                  />
+                  {/* twin or single comes from the room type in Website (11 Oct 2026) */}
+                  <Text label="Occupancy" value={room.occupancy === "twin" ? "Twin sharing" : "Single"} onChange={() => undefined} readOnly />
                   <Text
                     label="Rent (RM/mo)"
                     type="number"
