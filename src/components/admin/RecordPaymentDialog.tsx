@@ -142,15 +142,20 @@ export function RecordPaymentDialog({
           recordedBy,
         },
       });
-      await afterPaymentRecorded(queryClient, res);
+      /*
+       * Saved: the dialog closes now and the page catches up behind it (13 Oct
+       * 2026). Waiting for every list to reload - the whole unit tree, ~1 s on
+       * its own - kept the button spinning after the payment was already in.
+       */
+      onClose();
+      onRecorded?.();
+      void afterPaymentRecorded(queryClient, res);
       // an Update Tenancy IP paid in full: what it set going (Dani, 7 Oct 2026)
       toastTenancyOutcomes(res.tenancyChange);
       if (res.tenancyChange?.length) {
         void queryClient.invalidateQueries({ queryKey: ["tenancy-events"] });
         void queryClient.invalidateQueries({ queryKey: ["tenancy-docs"] });
       }
-      onClose();
-      onRecorded?.();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not record the payment");
     } finally {

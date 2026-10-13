@@ -362,6 +362,9 @@ function BookingDetail() {
     [beds, id, row?.resident_id],
   );
   const assignedBed = linkedBeds[0];
+  // one room reservation at a time - set by assignRoom (hooks stay above the loading return)
+  const reservingRef = useRef(false);
+  const [reserving, setReserving] = useState<string | null>(null);
 
   const viewing = upcomingViewing(appointments, id);
 
@@ -512,7 +515,8 @@ function BookingDetail() {
     const find = () => {
       const el = document.getElementById(`booking-${section}`);
       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-      else if (tries++ < 30) window.setTimeout(find, 100);
+      // up to 6 s: the page reloads behind a closed payment dialog (13 Oct 2026)
+      else if (tries++ < 60) window.setTimeout(find, 100);
     };
     requestAnimationFrame(find);
     window.setTimeout(() => setFlash((f) => (f === section ? null : f)), 2400);
@@ -913,7 +917,29 @@ function BookingDetail() {
     }
   }
 
+  /*
+   * One reservation at a time (13 Oct 2026): a Select pressed again while the
+   * first is still saving was saved - and logged - again, four times in 22
+   * seconds on QT0066. The ref answers at once; the state disables the buttons.
+   */
   async function assignRoom(c: Candidate) {
+    if (reservingRef.current) return;
+    // the room it already has: nothing to save, nothing to log
+    if (assignedBed && !c.convert && assignedBed.bed.id === c.row.bed.id) {
+      toast.info(`Room ${c.row.unit.unitNo} · ${c.row.room.letter} is already reserved for this booking`);
+      return;
+    }
+    reservingRef.current = true;
+    setReserving(c.row.bed.id);
+    try {
+      await assignRoomOnce(c);
+    } finally {
+      reservingRef.current = false;
+      setReserving(null);
+    }
+  }
+
+  async function assignRoomOnce(c: Candidate) {
     if (needStaff()) return;
     const b = c.row;
     // a room already held and money involved: the review opens under the picker
@@ -1644,11 +1670,11 @@ function BookingDetail() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              disabled={!!c.blocked}
+                              disabled={!!c.blocked || !!reserving}
                               title={c.blocked ?? ""}
                               onClick={() => void assignRoom(c)}
                             >
-                              Select
+                              {reserving === c.row.bed.id ? "Reserving…" : "Select"}
                             </Button>
                           </div>
                           {/* the unit's details open once, under its last row */}

@@ -2033,11 +2033,11 @@ export const recordPayment = createServerFn({ method: "POST" })
       const { STAFF } = await import("@/data/form-options");
       if (!STAFF.includes(String(data.recordedBy ?? ""))) throw new Error("Choose who is recording this payment");
     }
-    const { data: invoice, error } = await supabase
-      .from("invoices")
-      .select("*")
-      .eq("id", data.invoiceId)
-      .maybeSingle();
+    // read together - each read is a round trip to the database (13 Oct 2026)
+    const [{ data: invoice, error }, existing] = await Promise.all([
+      supabase.from("invoices").select("*").eq("id", data.invoiceId).maybeSingle(),
+      supabase.from("payments").select("amount").eq("invoice_id", data.invoiceId),
+    ]);
     if (error) throw new Error(error.message);
     if (!invoice) throw new Error("Invoice not found");
     if ((invoice as any).status === "void") {
@@ -2060,7 +2060,6 @@ export const recordPayment = createServerFn({ method: "POST" })
       ? await staffFor(supabase, (invoice as any).enquiry_id)
       : "";
 
-    const existing = await supabase.from("payments").select("amount").eq("invoice_id", data.invoiceId);
     const paidBefore = (existing.data ?? []).reduce((n: number, p: any) => n + Number(p.amount || 0), 0);
     const amount = Number(data.amount || 0);
     const balance = Number((invoice as any).total || 0) - paidBefore - amount;
@@ -2100,26 +2099,28 @@ export const recordPayment = createServerFn({ method: "POST" })
       .select("*")
       .maybeSingle();
     if (recErr) throw new Error(recErr.message);
-    if ((invoice as any).enquiry_id) {
-      const receiptNo = String((receipt as any)?.number ?? "");
-      const forWhat = data.description ? ` (${data.description})` : "";
-      await logBookingEvent(supabase, {
-        enquiryId: (invoice as any).enquiry_id,
-        staff: payStaff,
-        kind: "payment_recorded",
-        ref: String((payment as any).id),
-        summary: `${rm(amount)}${forWhat} received for ${(invoice as any).number} by ${words(data.method)}${receiptNo ? ` · Receipt ${receiptNo}` : ""}`,
-      });
-    }
-
-    await supabase
-      .from("invoices")
-      .update({
-        // paid in advance: it stays scheduled, and is billed on its day already paid
-        status: inAdvance ? "scheduled" : balance <= 0 ? "paid" : "part_paid",
-        updated_at: new Date().toISOString(),
-      } as any)
-      .eq("id", data.invoiceId);
+    // the log line and the invoice's status do not wait for each other
+    const receiptNo = String((receipt as any)?.number ?? "");
+    const forWhat = data.description ? ` (${data.description})` : "";
+    await Promise.all([
+      (invoice as any).enquiry_id
+        ? logBookingEvent(supabase, {
+            enquiryId: (invoice as any).enquiry_id,
+            staff: payStaff,
+            kind: "payment_recorded",
+            ref: String((payment as any).id),
+            summary: `${rm(amount)}${forWhat} received for ${(invoice as any).number} by ${words(data.method)}${receiptNo ? ` · Receipt ${receiptNo}` : ""}`,
+          })
+        : Promise.resolve(),
+      supabase
+        .from("invoices")
+        .update({
+          // paid in advance: it stays scheduled, and is billed on its day already paid
+          status: inAdvance ? "scheduled" : balance <= 0 ? "paid" : "part_paid",
+          updated_at: new Date().toISOString(),
+        } as any)
+        .eq("id", data.invoiceId),
+    ]);
 
     let tenancyChange: import("@/lib/tenancy-events.server").EventOutcome[] = [];
     // a replacement access card waits for its invoice to be paid (Dani, 2 Oct 2026)
