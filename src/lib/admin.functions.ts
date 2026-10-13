@@ -1384,15 +1384,6 @@ export const createInvoice = createServerFn({ method: "POST" })
   });
 
 /** Nothing paid on it yet. Once money is recorded, an invoice is a record. */
-async function paidOnInvoice(supabase: any, invoiceId: string) {
-  const { count, error } = await supabase
-    .from("payments")
-    .select("id", { count: "exact", head: true })
-    .eq("invoice_id", invoiceId);
-  if (error) throw new Error(error.message);
-  return (count ?? 0) > 0;
-}
-
 /**
  * How much has been paid on an invoice - the money, not the number of payments.
  *
@@ -1807,9 +1798,16 @@ export const changeRoomBeforeStart = createServerFn({ method: "POST" })
       note?: string;
       fromLabel: string;
       toLabel: string;
+      /** one per room change confirmed - its account credit is given once */
+      requestKey: string;
     }) => data,
   )
-  .handler(async ({ data }) => applyRoomChange(await admin(), data));
+  .handler(async ({ data }) => {
+    const { isRequestKey } = await import("@/lib/payments.server");
+    if (!isRequestKey(data.requestKey))
+      throw new Error("The room change could not be confirmed. Pick the room again.");
+    return applyRoomChange(await admin(), data);
+  });
 
 export type RoomChangeInput = {
   enquiryId: string;
@@ -1827,7 +1825,21 @@ export type RoomChangeInput = {
   note?: string;
   fromLabel: string;
   toLabel: string;
+  /** the room change confirmed - the same key again gives its account credit no second time */
+  requestKey?: string;
 };
+
+/**
+ * The key one credit of one room change is given under: the confirmation, the
+ * credit's kind, its deposit (or "revise"), and the invoice it came from. The
+ * same confirmation sent again gives the same keys, and so no credit twice.
+ */
+export const roomChangeCreditKey = (
+  requestKey: string,
+  kind: string,
+  part: string,
+  invoiceId: string,
+) => `roomchange:${requestKey}:${kind}:${part}:${invoiceId}`;
 
 /** changeRoomBeforeStart's body - handed the service-role client, so the database tests can run it too */
 export async function applyRoomChange(supabase: any, data: RoomChangeInput) {
@@ -1868,7 +1880,15 @@ export async function applyRoomChange(supabase: any, data: RoomChangeInput) {
     // 3. the initial payment - a difference invoice never paid goes first: it priced a room
     //    they are no longer moving to (marked void, kept as a record)
     for (const d of plan.dropping) {
-      await supabase.from("invoices").update({ status: "void", updated_at: new Date().toISOString() } as any).eq("id", d.id);
+      // only while nothing is paid on it, checked with the invoice locked (16 Oct 2026)
+      const { data: dropped, error: dropErr } = await supabase.rpc("void_invoice_if_unpaid", {
+        p_invoice: d.id,
+      });
+      if (dropErr) throw new Error(dropErr.message);
+      if (!(dropped as any)?.ok && (dropped as any)?.error !== "already_void")
+        throw new Error(
+          `A payment was just recorded on ${d.number || "the difference invoice"}, so it was not cancelled. Open the booking again and review the room change.`,
+        );
     }
     const m = plan.money;
     const out: { invoice?: string; version?: number; ipNumber?: string; ipAmount?: number; credit?: number; outstanding?: number } = {};
@@ -1920,7 +1940,14 @@ export async function applyRoomChange(supabase: any, data: RoomChangeInput) {
       if (m.kind === "revise" && m.credit > 0.005 && plan.residentId) {
         const { addCredit } = await import("@/lib/account-credit.server");
         await addCredit(supabase, plan.residentId, [
-          { amount: m.credit, reason: `Paid above the revised ${plan.invoice.number} - room change ${data.toLabel}`, kind: "rent" },
+          {
+            amount: m.credit,
+            reason: `Paid above the revised ${plan.invoice.number} - room change ${data.toLabel}`,
+            kind: "rent",
+            ...(data.requestKey
+              ? { key: roomChangeCreditKey(data.requestKey, "rent", "revise", plan.invoice.id) }
+              : {}),
+          },
         ]);
         out.credit = m.credit;
       }
@@ -1944,11 +1971,32 @@ export async function applyRoomChange(supabase: any, data: RoomChangeInput) {
       await addCredit(
         supabase,
         plan.residentId,
-        m.parts.map((p) =>
-          p.deposit
-            ? { amount: p.amount, kind: "deposit" as const, depositKey: p.deposit, depositLabel: depositLabel(p.deposit), reason: `${depositLabel(p.deposit)} reduced - room change ${data.toLabel}` }
-            : { amount: p.amount, kind: "rent" as const, reason: `Cheaper room - room change ${data.toLabel}` },
-        ),
+        m.parts.map((p) => ({
+          ...(p.deposit
+            ? {
+                amount: p.amount,
+                kind: "deposit" as const,
+                depositKey: p.deposit,
+                depositLabel: depositLabel(p.deposit),
+                reason: `${depositLabel(p.deposit)} reduced - room change ${data.toLabel}`,
+              }
+            : {
+                amount: p.amount,
+                kind: "rent" as const,
+                reason: `Cheaper room - room change ${data.toLabel}`,
+              }),
+          // the same room change confirmed again gives each part no second time (16 Oct 2026)
+          ...(data.requestKey
+            ? {
+                key: roomChangeCreditKey(
+                  data.requestKey,
+                  p.deposit ? "deposit" : "rent",
+                  p.deposit ?? "",
+                  plan.invoice!.id,
+                ),
+              }
+            : {}),
+        })),
       );
       out.credit = m.difference;
     }
@@ -2019,21 +2067,29 @@ export const cancelInvoice = createServerFn({ method: "POST" })
       .eq("id", data.invoiceId)
       .maybeSingle();
     if (!inv || (inv as any).status === "void") throw new Error("Invoice not found");
-    if (await paidOnInvoice(supabase, data.invoiceId)) {
-      throw new Error("Money has been paid on this invoice, so it can no longer be cancelled");
-    }
     // an invoice on a booking is cancelled by the booking's staff member
     const staff = (inv as any).enquiry_id ? await staffFor(supabase, (inv as any).enquiry_id) : "";
 
     const enquiryId = (inv as any).enquiry_id as string | null;
     const targets = [data.invoiceId];
 
-    const now = new Date().toISOString();
-    const { error } = await supabase
-      .from("invoices")
-      .update({ status: "void", updated_at: now } as any)
-      .in("id", targets);
+    /*
+     * Checked and voided in one step, with the invoice locked (16 Oct 2026): a
+     * payment saved at the same moment is either seen here - and the invoice is
+     * not cancelled - or refused because the invoice is void. Never both.
+     */
+    const { data: voided, error } = await (supabase as any).rpc("void_invoice_if_unpaid", {
+      p_invoice: data.invoiceId,
+    });
     if (error) throw new Error(error.message);
+    if (!(voided as any)?.ok) {
+      throw new Error(
+        (voided as any)?.error === "paid"
+          ? "Money has been paid on this invoice, so it can no longer be cancelled"
+          : "Invoice not found",
+      );
+    }
+    const now = new Date().toISOString();
 
     // the invoice is gone; the stage is worked out once its activity rows are written
     if (enquiryId) {

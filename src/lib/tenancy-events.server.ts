@@ -589,33 +589,21 @@ export async function cancelEvent(sb: any, residentId: string, eventId: string, 
   const later = list.filter((e) => e.requestId === ev.requestId && e.date >= ev.date && e.eventId !== ev.eventId && !e.cancelled);
   if (later.some((e) => e.effectiveAt)) throw new Error("A later part of this request has taken effect. Make a new Update Tenancy instead.");
   const targets = [ev, ...later];
-  const { addCredit, reverseCredit, CREDIT_METHOD } = await import("@/lib/account-credit.server");
+  const { reverseCredit, voidInvoiceToCredit } = await import("@/lib/account-credit.server");
 
-  /** void an invoice, keep it, and move money paid on it to credit */
-  const voidInvoice = async (invoiceId: string, what: string) => {
-    const { data: inv } = await sb.from("invoices").select("id, number, notes, status").eq("id", invoiceId).maybeSingle();
-    if (!inv || inv.status === "void") return 0;
-    const { data: pays } = await sb.from("payments").select("amount, method").eq("invoice_id", invoiceId);
-    const cash = r2(((pays ?? []) as any[]).filter((p) => p.method !== CREDIT_METHOD).reduce((n, p) => n + Number(p.amount || 0), 0));
-    const note = `Cancelled: ${reason} · Approved by ${approvedBy} · ${stamp}${cash ? ` · RM ${cash.toFixed(2)} moved to account credit` : ""}`;
-    const { error } = await sb
-      .from("invoices")
-      .update({ status: "void", notes: [String(inv.notes ?? ""), note].filter(Boolean).join(" | "), updated_at: at })
-      .eq("id", invoiceId);
-    if (error) throw new Error(error.message);
-    if (cash > 0)
-      // once per voided invoice - a cancellation run again gives it no second time
-      await addCredit(sb, residentId, [
-        {
-          amount: cash,
-          kind: "cancel",
-          reason: `Paid on ${what} ${String(inv.number).startsWith("SCH-") ? "(not billed yet)" : inv.number} - ${ev.name.toLowerCase()} cancelled`,
-          eventId: ev.eventId,
-          key: `cancel:${ev.eventId}:${invoiceId}`,
-        },
-      ]);
-    return cash;
-  };
+  /**
+   * void an invoice, keep it, and move money paid on it to credit - one locked
+   * step in the database (16 Oct 2026): a payment saved at the same moment is
+   * either counted or refused, and the credit is given once however often this runs
+   */
+  const voidInvoice = (invoiceId: string, what: string) =>
+    voidInvoiceToCredit(sb, residentId, {
+      invoiceId,
+      note: `Cancelled: ${reason} · Approved by ${approvedBy} · ${stamp}`,
+      what,
+      tail: `${ev.name.toLowerCase()} cancelled`,
+      eventId: ev.eventId,
+    });
 
   for (const t of targets) {
     let toCredit = 0;

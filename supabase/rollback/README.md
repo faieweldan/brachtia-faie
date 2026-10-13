@@ -44,3 +44,19 @@ changes on this branch are recorded here too, so they travel with the code.
 | --- | --- |
 | test-bratchia (Dani) | not run yet |
 | Lovable Cloud (Lav) | not run - only after the code is approved and pushed there |
+
+## 20261016100000_atomic_invoice_void.sql - cancelling an invoice in one step (16 Oct 2026)
+
+- File: `supabase/migrations/20261016100000_atomic_invoice_void.sql`. One transaction.
+- Needs first: 20261015100000_atomic_payments.sql (it stops with an error and
+  changes nothing without it).
+- Run it before this commit's code is deployed: Cancel invoice, releasing a
+  booking's room, a checkout cancellation, a room change dropping its unpaid
+  difference invoice, and cancelling an Update Tenancy event all call it.
+- Undo: `supabase/rollback/20261016100000_atomic_invoice_void.down.sql` - the
+  functions only; no money record is touched.
+
+| Database | Status |
+| --- | --- |
+| test-bratchia (Dani) | not run yet |
+| Lovable Cloud (Lav) | not run - only after the code is approved and pushed there |

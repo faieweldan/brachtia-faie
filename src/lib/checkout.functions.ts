@@ -613,7 +613,20 @@ async function settle(sb: any, residentId: string, s: import("@/lib/checkout.ser
     const { data: initial } = await sb.from("invoices").select("id, total, status").eq("resident_id", residentId).eq("invoice_type", "initial");
     for (const inv of (initial ?? []) as any[]) {
       if (inv.status === "paid" || inv.status === "void") continue;
-      await sb.from("invoices").update({ status: "void", updated_at: new Date().toISOString() }).eq("id", inv.id);
+      /*
+       * Voided only while what is paid on it is what this statement counted -
+       * checked with the invoice locked (16 Oct 2026). A payment saved since is
+       * not on the statement, so the invoice is left live for admin to look at.
+       */
+      const { data: pays } = await sb.from("payments").select("amount").eq("invoice_id", inv.id);
+      const paid = round2(((pays ?? []) as any[]).reduce((n, p) => n + Number(p.amount || 0), 0));
+      const { data: r, error } = await sb.rpc("void_invoice_if_unpaid", {
+        p_invoice: inv.id,
+        p_expect_paid: paid,
+      });
+      if (error) throw new Error(error.message);
+      if (!r?.ok && r?.error !== "already_void")
+        console.warn(`checkout cancellation: ${inv.id} not voided - paid on since the statement`);
     }
   }
   const { writeStatement } = await import("@/lib/checkout.server");

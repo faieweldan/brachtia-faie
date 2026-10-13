@@ -55,6 +55,19 @@ export function RoomChangeReview({
   const [approvedBy, setApprovedBy] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  /*
+   * One key for this room change (16 Oct 2026): Confirm pressed again, or after
+   * an answer that never came back, sends the same key, so any account credit
+   * it gives is given once. Another room or rent picked is another room change.
+   */
+  const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
+  const keyFor = useRef(`${picked.bedId}|${picked.rent}`);
+  useEffect(() => {
+    const now = `${picked.bedId}|${picked.rent}`;
+    if (keyFor.current === now) return;
+    keyFor.current = now;
+    setRequestKey(crypto.randomUUID());
+  }, [picked.bedId, picked.rent]);
   const preview = useQuery({
     queryKey: ["room-change", enquiryId, picked.bedId, picked.rent],
     queryFn: () => previewRoomChange({ data: { enquiryId, newRent: picked.rent } }),
@@ -88,12 +101,14 @@ export function RoomChangeReview({
           ...(note.trim() ? { note: note.trim() } : {}),
           fromLabel: current,
           toLabel: picked.label,
+          requestKey,
         },
       });
       if (!res.ok) {
         setError([res.error, res.detail].filter(Boolean).join(" "));
         return;
       }
+      setRequestKey(crypto.randomUUID());
       onDone(res);
     } catch (e) {
       setError(e instanceof Error ? e.message : "The room could not be changed.");

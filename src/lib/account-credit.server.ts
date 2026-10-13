@@ -181,6 +181,32 @@ export async function reclassifiedDeposits(sb: any, residentId: string) {
   return (await creditEntries(sb, residentId)).filter((e) => e.kind === "deposit" && !e.reversedAt);
 }
 
+/**
+ * Cancel an Update Tenancy event's invoice (its IP or RP adjustment) - one
+ * database step (void_invoice_to_credit, 16 Oct 2026): the resident's credit
+ * and the invoice locked, the money paid on it read, the invoice voided with
+ * the note, and that money given as account credit once. Already void - a
+ * cancellation run again - nothing changes. Returns the money moved to credit.
+ */
+export async function voidInvoiceToCredit(
+  sb: any,
+  residentId: string,
+  o: { invoiceId: string; note: string; what: string; tail: string; eventId: string },
+): Promise<number> {
+  if (!UUID.test(residentId)) throw new Error("Account credit needs a resident");
+  await ledgerReady(sb, residentId);
+  const { data, error } = await sb.rpc("void_invoice_to_credit", {
+    p_resident: residentId,
+    p_invoice: o.invoiceId,
+    p_note: o.note,
+    p_what: o.what,
+    p_tail: o.tail,
+    p_event_id: o.eventId,
+  });
+  if (error) throw new Error(`Could not cancel the invoice: ${error.message}`);
+  return Number((data as any)?.cash ?? 0);
+}
+
 /** a cancelled event's credit, taken back - marked, never removed */
 export async function reverseCredit(
   sb: any,

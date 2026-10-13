@@ -210,26 +210,21 @@ export async function residentFromBooking(supabase: any, enquiryId: string) {
 export async function releaseBooking(supabase: any, enquiryId: string) {
   const now = new Date().toISOString();
 
-  const paymentsRes = await supabase
-    .from("payments")
-    .select("id", { count: "exact", head: true })
-    .eq("enquiry_id", enquiryId);
-  if (paymentsRes.error) throw new Error(paymentsRes.error.message);
-  if ((paymentsRes.count ?? 0) > 0) return { ok: false as const, voided: [] as string[] };
+  /*
+   * Checked and voided in one step, with the booking's invoices locked (16 Oct
+   * 2026): a payment saved at the same moment is either seen here - and nothing
+   * is released - or refused because its invoice is void. Never both.
+   */
+  const { data: voidRes, error: voidErr } = await supabase.rpc("void_unpaid_booking_invoices", {
+    p_enquiry: enquiryId,
+  });
+  if (voidErr) throw new Error(voidErr.message);
+  if (!voidRes?.ok) return { ok: false as const, voided: [] as string[] };
 
-  const [voidRes, enquiryRes] = await Promise.all([
-    supabase
-      .from("invoices")
-      .update({ status: "void", updated_at: now })
-      .eq("enquiry_id", enquiryId)
-      .neq("status", "void")
-      .select("number"),
-    supabase
-      .from("enquiries")
-      .update({ invoice_issued_at: null, updated_at: now })
-      .eq("id", enquiryId),
-  ]);
-  if (voidRes.error) throw new Error(voidRes.error.message);
+  const enquiryRes = await supabase
+    .from("enquiries")
+    .update({ invoice_issued_at: null, updated_at: now })
+    .eq("id", enquiryId);
   if (enquiryRes.error) throw new Error(enquiryRes.error.message);
   // the booking's hold goes - nobody else's, and no bed row (10 Oct 2026), under the unit's lock (14 Oct 2026)
   const { error: holdErr } = await supabase.rpc("release_hold", {
@@ -241,7 +236,7 @@ export async function releaseBooking(supabase: any, enquiryId: string) {
 
   return {
     ok: true as const,
-    voided: ((voidRes.data ?? []) as any[]).map((v) => String(v.number)),
+    voided: ((voidRes.voided ?? []) as unknown[]).map((v) => String(v)),
   };
 }
 
