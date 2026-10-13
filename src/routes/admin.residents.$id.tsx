@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { klToday } from "@/lib/kl-date";
 import { PERSON_LABEL, personStatus, timingLine } from "@/lib/placement";
+import { beforeTenancyStart } from "@/lib/room-change";
+import { isSandboxClient } from "@/lib/sandbox";
 import { ArrowLeft, DoorOpen, Link2, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -223,6 +225,11 @@ function ResidentProfilePage() {
   const [linking, setLinking] = useState(false);
   const queryClient = useQueryClient();
   const savedDates = useQuery({ queryKey: ["tenancy-dates"], queryFn: () => tenancyDatesByResident() });
+  // booked check-in days - arriving on the booked day is not overdue (10 Oct 2026)
+  const checkInDays = useQuery({
+    queryKey: ["admin", "check-in-days"],
+    queryFn: async () => (await import("@/lib/admin.functions")).listCheckInDays(),
+  });
   // deleting a former resident for good asks for their name to be typed back
   const [deleting, setDeleting] = useState(false);
   const [confirmName, setConfirmName] = useState("");
@@ -297,7 +304,8 @@ function ResidentProfilePage() {
       bedId: row?.bed.id ?? form.bedId,
       start: dbTenancy.start,
       end: dbTenancy.end,
-      rent: row?.bed.rent ?? row?.room.rent ?? 0,
+      // their own agreed rent first - the room's Website price only when none is recorded
+      rent: dbTenancy.rent || row?.bed.rent || row?.room.rent || 0,
       schedule: form.paySchedule,
     });
   }, [form, hasLocal, dbTenancy, units]);
@@ -363,7 +371,7 @@ function ResidentProfilePage() {
   // the browser's copy of the tenancy, with the dates the tenancies table has (Dani, 4 Oct 2026)
   const localTenancy = tenancies.find((t) => t.residentId === form.id);
   const saved = savedDates.data?.[form.id];
-  const tenancy = localTenancy && saved ? { ...localTenancy, start: saved.start || localTenancy.start, end: saved.end || localTenancy.end } : localTenancy;
+  const tenancy = localTenancy && saved ? { ...localTenancy, start: saved.start || localTenancy.start, end: saved.end || localTenancy.end, rent: saved.rent || localTenancy.rent } : localTenancy;
   const placed = findBedForResident(units, form);
 
   async function save() {
@@ -456,12 +464,13 @@ function ResidentProfilePage() {
     upcomingAs: upcoming ? placed?.bed.upcoming?.find((u) => u.residentId === form.id)?.status : undefined,
   });
   // not checked in yet: the only thing to do is move their room
-  const notArrived = person === "held" || person === "booked";
   const stay = {
     ...stayDates(tenancy, upcoming ? undefined : placed, form, saved),
     // the rent terms' rent in force today wins - the page's own copy can be stale (7 Oct 2026)
     rent:
       tenancyEvents.data?.rentToday ||
+      // the tenancies table's rent - the resident's own, ahead of the browser's copy and the room price
+      saved?.rent ||
       tenancy?.rent ||
       (upcoming ? placed?.bed.upcoming?.find((u) => u.residentId === form.id)?.rent : placed?.bed.rent) ||
       placed?.room.rent ||
@@ -470,7 +479,10 @@ function ResidentProfilePage() {
     get duration(): string {
       return monthsBetween(this.start, this.end);
     },
-  };
+  };  // Change room before the move-in date; on or after it, Update Tenancy - checked
+  // in or not. The same rule as the booking page (beforeTenancyStart, 10 Oct 2026)
+  const notArrived = beforeTenancyStart(stay.start, !(person === "held" || person === "booked"), klToday());
+
 
   /**
    * A blank row is an accident, not a record: no name, no Brachtia id, no email,
@@ -567,7 +579,9 @@ function ResidentProfilePage() {
    * their invoices and payments. The server checks the same rules again.
    */
   const isFormer = (form.status || "").toLowerCase() === "inactive";
-  const canDelete = isFormer && !form.quickbooksId.trim();
+  // in the sandbox any resident can be deactivated and deleted for testing; elsewhere only test records (10 Oct 2026)
+  const sandbox = isSandboxClient();
+  const canDelete = isFormer && (sandbox || !form.quickbooksId.trim());
   const nameTyped = confirmName.trim().toLowerCase() === form.fullName.trim().toLowerCase();
 
   /**
@@ -656,7 +670,7 @@ function ResidentProfilePage() {
                 tenancy, same dates, payment and receipts kept, no change fee (8 Oct 2026) */}
             {notArrived && form.enquiryId && !isNew ? (
               <Button size="sm" variant="outline" asChild>
-                <Link to="/admin/bookings/$id" params={{ id: form.enquiryId }}>
+                <Link to="/admin/bookings/$id" params={{ id: form.enquiryId }} hash="booking-room">
                   Change room
                 </Link>
               </Button>
@@ -690,7 +704,7 @@ function ResidentProfilePage() {
               <Button size="sm" variant="outline" onClick={discard}>
                 <Trash2 className="mr-1 size-3.5" /> Discard
               </Button>
-            ) : !isFormer && !notArrived && !form.quickbooksId.trim() ? (
+            ) : !isFormer && !notArrived && (sandbox || !form.quickbooksId.trim()) ? (
               <Button size="sm" variant="outline" onClick={deactivate}>
                 Deactivate
               </Button>
@@ -783,15 +797,15 @@ function ResidentProfilePage() {
                 <>
                   {fmtDate(stay.start)}
                   {/* the timing, quietly, under the date it is about */}
-                  {timingLine(person, stay.start, stay.end, klToday()) ? (
+                  {timingLine(person, stay.start, stay.end, klToday(), checkInDays.data?.[form.id]) ? (
                     <span
-                      className={`block text-xs font-normal ${
-                        timingLine(person, stay.start, stay.end, klToday()) === "Checkout overdue"
+                      className={`block whitespace-normal text-xs font-normal ${
+                        timingLine(person, stay.start, stay.end, klToday(), checkInDays.data?.[form.id]) .endsWith("overdue")
                           ? "text-rose-700"
                           : "text-muted-foreground"
                       }`}
                     >
-                      {timingLine(person, stay.start, stay.end, klToday())}
+                      {timingLine(person, stay.start, stay.end, klToday(), checkInDays.data?.[form.id])}
                     </span>
                   ) : null}
                 </>
@@ -802,7 +816,9 @@ function ResidentProfilePage() {
           ].map((f) => (
             <div key={f.label} className="min-w-0">
               <p className="text-xs text-muted-foreground">{f.label}</p>
-              <p className="truncate text-sm font-medium text-foreground">{f.value || "—"}</p>
+              {/* not truncate: a value can carry a second, quieter line (the timing),
+                  and truncate cut it off - a long name still breaks, never hides */}
+              <div className="break-words text-sm font-medium text-foreground">{f.value || "—"}</div>
             </div>
           ))}
         </div>
@@ -995,6 +1011,11 @@ function ResidentProfilePage() {
                             toast.error(res.error);
                             return;
                           }
+                          // a link (a migrated copy on Google Drive) opens where it lives
+                          if ("external" in res && res.external) {
+                            window.open(res.url, "_blank", "noopener");
+                            return;
+                          }
                           try {
                             const blob = await (await fetch(res.url)).blob();
                             setDocPreview({
@@ -1081,7 +1102,8 @@ function ResidentProfilePage() {
           {tenancy ? (
             <TenancyDocs
               resident={form}
-              tenancy={tenancy}
+              tenancy={tenancy ? { ...tenancy, start: stay.start || tenancy.start, end: stay.end || tenancy.end } : tenancy}
+              place={placed ? { unitNo: placed.unit.unitNo, room: placed.room.letter } : undefined}
               onOpenInvoice={(number) => {
                 setFocusInvoice({ number, n: Date.now() });
                 setTab("payments");

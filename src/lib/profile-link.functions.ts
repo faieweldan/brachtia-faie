@@ -234,11 +234,12 @@ export const getProfileByToken = createServerFn({ method: "GET" })
       moveIn,
       residenceName,
       placeName,
-      checkIn: {
-        on: String((row as any).checkin_on ?? ""),
-        slot: String((row as any).checkin_slot ?? ""),
-        remind: Boolean((row as any).checkin_remind),
-      },
+      // what they see is the appointment as it stands - moved by admin or not (10 Oct 2026)
+      checkIn: await (async () => {
+        const { checkInFor } = await import("@/lib/checkin.server");
+        const c = await checkInFor(supabase, String(row.id));
+        return { on: c.on, slot: c.slot, remind: c.status === "remind" };
+      })(),
     };
   });
 

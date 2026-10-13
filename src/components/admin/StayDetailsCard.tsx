@@ -172,6 +172,7 @@ export function StayDetailsCard({
   const invoiceStage = Boolean(invoice);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Stay>(() => fromRow(row));
+  const datesBackwards = !!draft.moveIn && !!draft.moveOut && draft.moveOut <= draft.moveIn;
   const [busy, setBusy] = useState(false);
   const set = (patch: Partial<Stay>) => setDraft((d) => ({ ...d, ...patch }));
 
@@ -662,7 +663,7 @@ export function StayDetailsCard({
           ) : null}
           {editing ? (
             <>
-              <Button size="sm" disabled={busy} onClick={() => void persist(draft, false)}>
+              <Button size="sm" disabled={busy || datesBackwards} onClick={() => void persist(draft, false)}>
                 <Check className="size-4" /> {releasesRoom ? "Save and release room" : "Save"}
               </Button>
               <Button size="sm" variant="ghost" disabled={busy} onClick={() => setEditing(false)}>
@@ -807,9 +808,14 @@ export function StayDetailsCard({
             <label className="text-xs text-muted-foreground">Move out</label>
             <DateInput
               value={draft.moveOut}
+              min={draft.moveIn || undefined}
               onChange={(e) => set({ moveOut: e.target.value })}
               className="mt-1"
             />
+            {/* a stay ends after it starts (10 Oct 2026) */}
+            {datesBackwards ? (
+              <p className="mt-1 text-xs text-rose-700">Move out must be after move in.</p>
+            ) : null}
           </div>
           <Derived label="Term" hint="From move in and move out">
             {termLabel}

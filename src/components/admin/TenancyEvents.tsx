@@ -126,7 +126,7 @@ export function TenancyEvents({ events, residentId, onChanged }: { events: Event
                       {!e.ip
                         ? "None"
                         : ipLeft <= 0
-                          ? `${e.ip.number || "Paid in advance"} · settled`
+                          ? `${e.ip.number || "Paid in advance"} · paid`
                           : `${e.ip.number || `Billed ${fmtDate(e.ip.billOn)}`} · ${money(ipLeft)} to pay`}
                     </dd>
                   </div>

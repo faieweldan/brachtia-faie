@@ -5,7 +5,7 @@ import { NEED_STAFF, logBookingEvent, rm, staffFor, when, words } from "@/lib/bo
 import { BOOKING_FEE, discountPerMonth, lineQty, liveInvoices } from "@/lib/invoices";
 import { residentCodeFor } from "@/lib/resident-billing.functions";
 import { cleanPhone } from "@/lib/reference-data";
-import { addDays, CHECKIN_WINDOW_DAYS, checkInStatus, needsCheckInBooking, todayISO } from "@/lib/checkin";
+import { addDays, CHECKIN_WINDOW_DAYS, needsCheckInBooking, todayISO } from "@/lib/checkin";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -60,26 +60,44 @@ async function checkInsToBook(supabase: any): Promise<{ id: string; full_name: s
   if (!moveIn.size) return [];
   const { data: residents } = await supabase
     .from("residents")
-    .select("id, full_name, checkin_on, checkin_slot, checkin_remind")
+    .select("id, full_name")
     .in("id", [...moveIn.keys()]);
+  // the check-in appointment is the record - a reschedule counts (10 Oct 2026)
+  const { checkInsFor } = await import("@/lib/checkin.server");
+  const booked = await checkInsFor(supabase, [...moveIn.keys()]);
   return ((residents ?? []) as any[])
-    .map((r) => ({ r, status: checkInStatus({ on: r.checkin_on, slot: r.checkin_slot, remind: r.checkin_remind }) }))
+    .map((r) => ({ r, status: booked.get(r.id)?.status ?? "none" }))
     .filter(({ r, status }) => needsCheckInBooking(moveIn.get(r.id) ?? "", status, today))
     .map(({ r, status }) => ({ id: r.id, full_name: r.full_name ?? "", remind: status === "remind" }));
 }
+
+/** Every booked check-in day, by resident - from the appointments, as rescheduled. */
+export const listCheckInDays = createServerFn({ method: "GET" }).handler(async () => {
+  const supabase = await admin();
+  const { data } = await (supabase as any)
+    .from("appointments")
+    .select("resident_id, starts_at, updated_at")
+    .eq("type_slug", "check-in")
+    .neq("status", "cancelled")
+    .not("resident_id", "is", null)
+    .order("updated_at", { ascending: false });
+  const out: Record<string, string> = {};
+  for (const a of (data ?? []) as any[]) {
+    if (out[a.resident_id] || !a.starts_at) continue;
+    out[a.resident_id] = new Date(a.starts_at).toLocaleDateString("en-CA", { timeZone: "Asia/Kuala_Lumpur" });
+  }
+  return out;
+});
 
 /** One resident's arrival, for the Pre-check-in checklist. */
 export const getResidentCheckIn = createServerFn({ method: "GET" })
   .inputValidator((data: { id: string }) => data)
   .handler(async ({ data }) => {
     const supabase = await admin();
-    const { data: row } = await supabase
-      .from("residents")
-      .select("checkin_on, checkin_slot, checkin_remind")
-      .eq("id", data.id)
-      .maybeSingle();
-    const r = (row ?? {}) as any;
-    return { status: checkInStatus({ on: r.checkin_on, slot: r.checkin_slot, remind: r.checkin_remind }), on: r.checkin_on ?? "", slot: r.checkin_slot ?? "" };
+    // the check-in appointment is the record - what admin reschedules is what shows (10 Oct 2026)
+    const { checkInFor } = await import("@/lib/checkin.server");
+    const c = await checkInFor(supabase, data.id);
+    return { status: c.status, on: c.on, slot: c.slot };
   });
 
 export const listEnquiries = createServerFn({ method: "GET" })
@@ -298,6 +316,43 @@ export const updateEnquiry = createServerFn({ method: "POST" })
            * the quote changed under a student without anybody choosing to.
            */
         }
+      }
+    }
+    /*
+     * New dates on a booking that holds a room (Dani, 10 Oct 2026): checked
+     * against everyone else on that bed before they are saved. Dates that still
+     * fit move the hold with them; dates that clash are refused - the room is
+     * never let go of silently. A paid booking's dates move with Update invoice.
+     */
+    if (data.moveIn !== undefined || data.moveOut !== undefined) {
+      // a stay ends after it starts - refused here too, whatever sent it (10 Oct 2026)
+      {
+        const { data: cur } = await supabase.from("enquiries").select("move_in, move_out").eq("id", data.id).maybeSingle();
+        const inn = String((data.moveIn !== undefined ? data.moveIn : (cur as any)?.move_in) ?? "").slice(0, 10);
+        const out = String((data.moveOut !== undefined ? data.moveOut : (cur as any)?.move_out) ?? "").slice(0, 10);
+        if (inn && out && out <= inn) throw new Error("Move out must be after move in.");
+      }
+      const { data: h } = await (supabase as any)
+        .from("placement_holds")
+        .select("id, bed_id, start_date, end_date")
+        .eq("enquiry_id", data.id)
+        .maybeSingle();
+      if (h) {
+        const { data: cur } = await supabase.from("enquiries").select("move_in, move_out, gender").eq("id", data.id).maybeSingle();
+        const start = (patch["move_in"] as string | null | undefined) !== undefined ? (patch["move_in"] as string | null) : ((cur as any)?.move_in ?? null);
+        const end = (patch["move_out"] as string | null | undefined) !== undefined ? (patch["move_out"] as string | null) : ((cur as any)?.move_out ?? null);
+        const { data: clash, error: cErr } = await (supabase as any).rpc("placement_conflict", {
+          p_bed: h.bed_id,
+          p_enquiry: data.id,
+          p_resident: null,
+          p_start: start,
+          p_end: end,
+          p_gender: String((patch["gender"] as string) ?? (cur as any)?.gender ?? ""),
+          p_whole: false,
+        });
+        if (cErr) throw new Error(cErr.message);
+        if (clash) throw new Error(`These dates clash with the reserved room: ${clash} Choose other dates, or change the room first.`);
+        await (supabase as any).from("placement_holds").update({ start_date: start, end_date: end }).eq("id", h.id);
       }
     }
     const { error } = await supabase.from("enquiries").update(patch as any).eq("id", data.id);
@@ -741,6 +796,9 @@ export const saveRoomType = createServerFn({ method: "POST" })
       : supabase.from("room_types").insert(data.values as any);
     const { error } = await q;
     if (error) throw new Error(error.message);
+    // rooms of this type nobody is in take its twin / single (11 Oct 2026)
+    const { syncRoomShapes } = await import("@/lib/homes.functions");
+    await syncRoomShapes(supabase);
     return { ok: true };
   });
 
@@ -1172,8 +1230,9 @@ export const createInvoice = createServerFn({ method: "POST" })
      */
     // beds is not in the generated types this file reads from, so it is reached
     // the same way booking-lifecycle reaches it
+    // a room held for it - its unpaid hold (10 Oct 2026)
     const { data: held } = await (supabase as any)
-      .from("beds")
+      .from("placement_holds")
       .select("id")
       .eq("enquiry_id", data.enquiryId)
       .limit(1);
@@ -1339,7 +1398,16 @@ type InvoiceRewrite = {
  * held to the same rules - refused once more than the booking fee is paid,
  * never below what has been paid - and both leave the same history.
  */
-async function rewriteInvoice(supabase: any, data: InvoiceRewrite) {
+async function rewriteInvoice(
+  supabase: any,
+  data: InvoiceRewrite,
+  /**
+   * Change Room Before Tenancy Start only (Dani, 9 Oct 2026): an initial
+   * invoice not yet fully paid may be revised whatever has been paid on it,
+   * even below it - the caller turns the excess into account credit.
+   */
+  opts: { roomChange?: boolean } = {},
+) {
   const { data: inv } = await supabase
     .from("invoices")
     .select("id, number, enquiry_id, status, invoice_type")
@@ -1349,12 +1417,13 @@ async function rewriteInvoice(supabase: any, data: InvoiceRewrite) {
   // the same tolerance the fee is tested with everywhere else, so one booking
   // is never over the fee here and under it there
   const paidSoFar = await paidTotalOnInvoice(supabase, data.invoiceId);
-  if (paidSoFar > BOOKING_FEE + 0.005) {
+  if (!opts.roomChange && paidSoFar > BOOKING_FEE + 0.005) {
     throw new Error(
       `More than the ${asRM(BOOKING_FEE)} booking fee has been paid on this invoice, so it can no longer be changed`,
     );
   }
   if (
+    !opts.roomChange &&
     paidSoFar > 0 &&
     data.items.reduce((n, l) => n + Number(l.amount || 0) * lineQty(l.quantity), 0) + 0.005 <
       paidSoFar
@@ -1370,10 +1439,15 @@ async function rewriteInvoice(supabase: any, data: InvoiceRewrite) {
   const lines = data.items;
   const invoiceDate = data.invoiceDate || new Date().toISOString().slice(0, 10);
 
+  const newTotal = lines.reduce((n, l) => n + Number(l.amount || 0) * lineQty(l.quantity), 0);
   const { error } = await supabase
     .from("invoices")
     .update({
       ...data.values,
+      // a room change keeps the payments where they are: the status follows them
+      ...(opts.roomChange && paidSoFar > 0
+        ? { status: paidSoFar + 0.005 >= newTotal ? "paid" : "part_paid" }
+        : {}),
       ...nextPaymentValues(data.values, lines),
       invoice_date: invoiceDate,
       payment_terms: data.paymentTerms || "NET15",
@@ -1436,23 +1510,26 @@ export const updateInvoice = createServerFn({ method: "POST" })
  */
 export const syncInvoiceWithQuote = createServerFn({ method: "POST" })
   .inputValidator((data: { enquiryId: string }) => data)
-  .handler(async ({ data }) => {
-    const supabase = await admin();
+  .handler(async ({ data }) => syncInitialInvoice(await admin(), data.enquiryId));
+
+/** the body of syncInvoiceWithQuote - also run by a paid room move */
+async function syncInitialInvoice(supabase: any, enquiryId: string) {
     const { firstInvoiceLines } = await import("@/lib/invoice-lines");
     const { bookingAddonNames, selectedBookingAddons } = await import("@/lib/booking-quote");
 
     const { data: row } = await supabase
       .from("enquiries")
       .select("*")
-      .eq("id", data.enquiryId)
+      .eq("id", enquiryId)
       .maybeSingle();
     if (!row) throw new Error("Booking not found");
     const r = row as any;
 
     const { data: invs } = await liveInvoices(supabase, "*")
-      .eq("enquiry_id", data.enquiryId)
+      .eq("enquiry_id", enquiryId)
       .eq("invoice_type", "initial")
-      .order("created_at", { ascending: false })
+      // the first - a later Initial Payment invoice for a room-change difference is not it
+      .order("created_at", { ascending: true })
       .limit(1);
     const inv = ((invs ?? []) as any[])[0];
     if (!inv) return { ok: true as const, invoice: null };
@@ -1493,9 +1570,385 @@ export const syncInvoiceWithQuote = createServerFn({ method: "POST" })
     });
     // paid already: the resident's tenancy, bed and rent follow the invoice (9 Oct 2026)
     const { syncPaidStay } = await import("@/lib/booking-lifecycle");
-    const stay = await syncPaidStay(supabase, data.enquiryId);
+    const stay = await syncPaidStay(supabase, enquiryId);
     return { ok: true as const, invoice: saved, stay };
+}
+
+/**
+ * What the booking's first invoice would come to with another monthly rent,
+ * worked out the same way as Update invoice - for a room move's prompt.
+ */
+async function initialWithRent(supabase: any, enquiryId: string, rentOverride: number) {
+  const { firstInvoiceLines } = await import("@/lib/invoice-lines");
+  const { bookingAddonNames, selectedBookingAddons } = await import("@/lib/booking-quote");
+  const { data: r } = await supabase.from("enquiries").select("*").eq("id", enquiryId).maybeSingle();
+  if (!r) throw new Error("Booking not found");
+  const { data: invs } = await liveInvoices(supabase, "*")
+    .eq("enquiry_id", enquiryId)
+    .eq("invoice_type", "initial")
+    // the first one - a later Initial Payment invoice for a difference is not it
+    .order("created_at", { ascending: true })
+    .limit(1);
+  const inv = ((invs ?? []) as any[])[0];
+  if (!inv) return null;
+  const listRent = Number(r.monthly_rent || r.quote_snapshot?.quote?.monthlyAfter || 0);
+  const discount = discountPerMonth(rentOverride, inv.discount_type, Number(inv.discount_value || 0));
+  const property = r.quote_snapshot?.property;
+  const lines = property
+    ? firstInvoiceLines({
+        property,
+        rent: rentOverride - discount,
+        addons: selectedBookingAddons(property, bookingAddonNames(r)),
+        term: r.term === "short" ? "short" : "long",
+        moveIn: r.move_in,
+        moveOut: r.move_out,
+        frequency: String(r.payment_term || inv.payment_frequency || "bimonthly") as any,
+      })
+    : null;
+  const newTotal = lines ? lines.reduce((n: number, l: any) => n + lineQty(l.qty ?? l.quantity) * Number(l.amount || 0), 0) : Number(inv.total || 0);
+  const paid = await paidTotalOnInvoice(supabase, inv.id);
+  return {
+    lines: (lines ?? []) as { label: string; kind: string; amount: number; quantity?: number }[],
+    invoiceNumber: String(inv.number ?? ""),
+    oldRent: listRent,
+    oldTotal: Number(inv.total || 0),
+    newTotal: Math.round(newTotal * 100) / 100,
+    paid,
+    // past the booking fee the invoice is closed (rewriteInvoice), so it stays as paid
+    canRewrite: paid <= BOOKING_FEE + 0.005,
+  };
+}
+
+/**
+ * Change Room Before Tenancy Start (Dani, 9 Oct 2026). What the change will do
+ * to the money, worked out without writing anything - the review step shows it.
+ */
+export async function roomChangePlan(supabase: any, enquiryId: string, newRent: number) {
+  const { planRoomChangeMoney, beforeTenancyStart, lineDifferences } = await import("@/lib/room-change");
+  const { klToday } = await import("@/lib/kl-date");
+  const { data: r } = await supabase.from("enquiries").select("*").eq("id", enquiryId).maybeSingle();
+  if (!r) throw new Error("Booking not found");
+  const { data: t } = await supabase.from("tenancies").select("id, resident_id, start_date, end_date").eq("enquiry_id", enquiryId).maybeSingle();
+  const { data: living } = t
+    ? await supabase.from("beds").select("id").eq("resident_id", t.resident_id).in("status", ["active", "notice"]).limit(1)
+    : { data: [] };
+  const start = String(t?.start_date || r.move_in || "");
+  const allowed = beforeTenancyStart(start, !!(living ?? []).length, klToday());
+
+  /*
+   * The whole initial payment for this stay (10 Oct 2026): the move-in invoice
+   * and every room-change difference invoice raised since. Comparing the new
+   * room with the first invoice alone missed a difference already paid - an
+   * upgrade then a downgrade gave no credit back.
+   */
+  const { data: invs } = await liveInvoices(supabase, "*")
+    .eq("enquiry_id", enquiryId)
+    .eq("invoice_type", "initial")
+    .order("created_at", { ascending: true });
+  const all = (invs ?? []) as any[];
+  const inv = all[0] ?? null;
+  const others = all.slice(1);
+  const ids = all.map((i) => String(i.id));
+  const [{ data: itemRows }, { data: payRows }] = ids.length
+    ? await Promise.all([
+        supabase.from("invoice_items").select("invoice_id, label, kind, amount, quantity").in("invoice_id", ids).order("sort_order"),
+        supabase.from("payments").select("invoice_id, amount").in("invoice_id", ids),
+      ])
+    : [{ data: [] }, { data: [] }];
+  const paidOn = (id: string) =>
+    ((payRows ?? []) as any[]).filter((p) => p.invoice_id === id).reduce((n, p) => n + Number(p.amount || 0), 0);
+  const linesOf = (id: string) => ((itemRows ?? []) as any[]).filter((l) => l.invoice_id === id);
+  // a difference invoice nobody has paid priced a room they are no longer moving to: it goes
+  const dropping = others.filter((o) => paidOn(String(o.id)) <= 0.005);
+  const kept = all.filter((i) => !dropping.includes(i));
+  const paid = kept.reduce((n, i) => n + paidOn(String(i.id)), 0);
+  const charged = kept.reduce((n, i) => n + Number(i.total || 0), 0);
+  const priced = inv ? await initialWithRent(supabase, enquiryId, newRent) : null;
+  // an invoice whose stay cannot be priced again is never treated as "now RM0"
+  if (inv && !priced?.lines.length) {
+    throw new Error("The stay has no saved quote, rent or dates, so the new room cannot be priced. Update the quote first.");
+  }
+  const money = planRoomChangeMoney({
+    invoice: inv ? { total: charged, lines: kept.flatMap((i) => linesOf(String(i.id))) } : null,
+    paid,
+    newLines: priced?.lines ?? [],
   });
+  // revising: the move-in invoice carries what the kept difference invoices do not
+  const otherKept = kept.filter((i) => i !== inv);
+  const firstInvoiceLines = otherKept.length
+    ? (() => {
+        const d = lineDifferences(otherKept.flatMap((i) => linesOf(String(i.id))), priced?.lines ?? []);
+        return d.every((x) => x.difference > 0)
+          ? d.map((x) => ({ label: x.label.replace(/ - difference$/, ""), kind: x.kind, amount: x.difference, quantity: 1 }))
+          : [{ label: "Initial payment", kind: "rent", amount: Math.max(0, (priced?.lines ?? []).reduce((n, l) => n + l.amount, 0) - otherKept.reduce((n, i) => n + Number(i.total || 0), 0)), quantity: 1 }];
+      })()
+    : (priced?.lines ?? []);
+  // the TA: none yet, a pack nothing has happened to (made again), or one already signed (kept)
+  let ta: "none" | "draft" | "signed" = "none";
+  if (t?.resident_id) {
+    const { data: ags } = await supabase.from("tenancy_agreements").select("id").eq("resident_id", t.resident_id).order("created_at", { ascending: false }).limit(1);
+    const ag = ((ags ?? []) as any[])[0];
+    if (ag) {
+      const { RESETTABLE } = await import("@/lib/tenancy-docs.functions");
+      const { data: docs } = await supabase.from("agreement_documents").select("status").eq("agreement_id", ag.id);
+      ta = ((docs ?? []) as any[]).every((d) => RESETTABLE.has(d.status)) ? "draft" : "signed";
+    }
+  }
+  return {
+    ta,
+    allowed,
+    start,
+    end: String(t?.end_date || r.move_out || ""),
+    oldRent: Number(r.monthly_rent || 0),
+    newRent,
+    invoice: inv ? { id: String(inv.id), number: String(inv.number ?? ""), total: charged, paid } : null,
+    dropping: dropping.map((d) => ({ id: String(d.id), number: String(d.number ?? "") })),
+    firstInvoiceLines,
+    newLines: priced?.lines ?? [],
+    money,
+    tenancyId: t?.id ? String(t.id) : null,
+    residentId: t?.resident_id ? String(t.resident_id) : null,
+  };
+}
+
+export const previewRoomChange = createServerFn({ method: "GET" })
+  .inputValidator((data: { enquiryId: string; newRent: number }) => data)
+  .handler(async ({ data }) => {
+    const plan = await roomChangePlan(await admin(), data.enquiryId, Number(data.newRent || 0));
+    const { newLines: _lines, tenancyId: _t, residentId: _r, firstInvoiceLines: _f, ...shown } = plan;
+    void _lines;
+    void _f;
+    void _t;
+    void _r;
+    return shown;
+  });
+
+/**
+ * Confirm a room change before the tenancy starts, in this order:
+ *   1. the room - one locked step in the database (same booking, resident,
+ *      tenancy, payments and receipts; nothing released first)
+ *   2. the booking's room and rent, which price everything after
+ *   3. the initial payment, by the rules in room-change.ts - never voided
+ *   4. the tenancy's rent schedule, once paid
+ *   5. the TA: a pack nothing has happened to is reset, to be made again for
+ *      the new room; anything signed is left alone and the Tenancy tab asks
+ *   6. the audit line on the booking's trail
+ */
+export const changeRoomBeforeStart = createServerFn({ method: "POST" })
+  .inputValidator(
+    (data: {
+      enquiryId: string;
+      bedId: string;
+      newRent: number;
+      roomCode?: string;
+      roomName?: string;
+      unitType?: string;
+      residenceSlug?: string;
+      residenceName?: string;
+      occupancy?: string;
+      /** a twin room nobody is in, let whole as one single */
+      whole?: boolean;
+      approvedBy: string;
+      reason: string;
+      note?: string;
+      fromLabel: string;
+      toLabel: string;
+    }) => data,
+  )
+  .handler(async ({ data }) => applyRoomChange(await admin(), data));
+
+export type RoomChangeInput = {
+  enquiryId: string;
+  bedId: string;
+  newRent: number;
+  roomCode?: string;
+  roomName?: string;
+  unitType?: string;
+  residenceSlug?: string;
+  residenceName?: string;
+  occupancy?: string;
+  whole?: boolean;
+  approvedBy: string;
+  reason: string;
+  note?: string;
+  fromLabel: string;
+  toLabel: string;
+};
+
+/** changeRoomBeforeStart's body - handed the service-role client, so the database tests can run it too */
+export async function applyRoomChange(supabase: any, data: RoomChangeInput) {
+  {
+    const { STAFF } = await import("@/data/form-options");
+    const { ROOM_CHANGE_REASONS } = await import("@/lib/room-change");
+    if (!STAFF.includes(String(data.approvedBy ?? ""))) throw new Error("Choose who approved the change.");
+    if (!(ROOM_CHANGE_REASONS as readonly string[]).includes(data.reason)) throw new Error("Choose the reason.");
+    if (data.reason === "Other" && String(data.note ?? "").trim().length < 3) throw new Error("Say what the other reason is.");
+
+    const plan = await roomChangePlan(supabase, data.enquiryId, Number(data.newRent || 0));
+    if (!plan.allowed) throw new Error("The tenancy has started. Use Update Tenancy on the resident's page.");
+
+    // 1. the room
+    const { data: placed, error } = await (supabase as any).rpc("place_stay", {
+      p_enquiry: data.enquiryId,
+      p_resident: null,
+      p_bed: data.bedId,
+      p_whole: !!data.whole,
+      p_hold_until: null,
+    });
+    if (error) throw new Error(error.message);
+    if (!(placed as any)?.ok) {
+      return { ok: false as const, error: String((placed as any)?.error ?? "The room could not be reserved."), detail: String((placed as any)?.detail ?? "") };
+    }
+
+    // 2. the booking's room and rent
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (data.roomCode) patch["room_code"] = data.roomCode;
+    if (data.roomName) patch["room_name"] = data.roomName;
+    if (data.unitType) patch["unit_type"] = data.unitType;
+    if (data.residenceSlug) patch["residence_slug"] = data.residenceSlug;
+    if (data.residenceName) patch["residence_name"] = data.residenceName;
+    if (data.occupancy) patch["occupancy"] = data.occupancy;
+    if (data.newRent > 0) patch["monthly_rent"] = data.newRent;
+    await supabase.from("enquiries").update(patch as any).eq("id", data.enquiryId);
+
+    // 3. the initial payment - a difference invoice never paid goes first: it priced a room
+    //    they are no longer moving to (marked void, kept as a record)
+    for (const d of plan.dropping) {
+      await supabase.from("invoices").update({ status: "void", updated_at: new Date().toISOString() } as any).eq("id", d.id);
+    }
+    const m = plan.money;
+    const out: { invoice?: string; version?: number; ipNumber?: string; ipAmount?: number; credit?: number; outstanding?: number } = {};
+    // the invoice's Room line names the unit and room - "Unit A-10-11 · Room C" - the
+    // same as when the invoice is raised, never the room type (10 Oct 2026)
+    // plain lookups: a nested select that fails comes back empty, not as an error
+    const { data: tb } = await (supabase as any).from("beds").select("room_id").eq("id", data.bedId).maybeSingle();
+    const { data: tr } = tb ? await (supabase as any).from("rooms").select("letter, unit_id").eq("id", tb.room_id).maybeSingle() : { data: null };
+    const { data: tu } = tr ? await (supabase as any).from("units").select("unit_no").eq("id", tr.unit_id).maybeSingle() : { data: null };
+    const placeName = tu?.unit_no ? `Unit ${tu.unit_no} · Room ${tr.letter}` : data.roomName;
+    const roomValues = {
+      ...(placeName ? { room_name: placeName } : {}),
+      ...(data.occupancy ? { occupancy: data.occupancy } : {}),
+      ...(data.residenceName ? { residence_name: data.residenceName } : {}),
+    };
+    if (plan.invoice && (m.kind === "same" || m.kind === "revise")) {
+      const { data: inv } = await supabase.from("invoices").select("*").eq("id", plan.invoice.id).maybeSingle();
+      await rewriteInvoice(
+        supabase,
+        {
+          invoiceId: plan.invoice.id,
+          // same price: the same lines, with the new room's details
+          items: m.kind === "same"
+            ? (((await supabase.from("invoice_items").select("label, kind, amount, quantity").eq("invoice_id", plan.invoice.id).order("sort_order")).data ?? []) as any[])
+            : (plan.firstInvoiceLines as any[]),
+          invoiceDate: String(inv?.invoice_date ?? "") || undefined,
+          paymentTerms: String(inv?.payment_terms ?? "") || undefined,
+          values: {
+            ...roomValues,
+            tenancy_start: inv?.tenancy_start ?? null,
+            tenancy_end: inv?.tenancy_end ?? null,
+            monthly_rent: m.kind === "same" ? inv?.monthly_rent : data.newRent,
+            payment_frequency: inv?.payment_frequency ?? null,
+          },
+        },
+        { roomChange: true },
+      );
+      const { data: v } = await supabase
+        .from("invoice_versions")
+        .select("version")
+        .eq("root_invoice_id", plan.invoice.id)
+        .order("version", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      out.invoice = plan.invoice.number;
+      const version = Number((v as any)?.version ?? 0);
+      if (version) out.version = version;
+      out.outstanding = m.outstanding;
+      if (m.kind === "revise" && m.credit > 0.005 && plan.residentId) {
+        const { addCredit } = await import("@/lib/account-credit.server");
+        await addCredit(supabase, plan.residentId, [
+          { amount: m.credit, reason: `Paid above the revised ${plan.invoice.number} - room change ${data.toLabel}`, kind: "rent" },
+        ]);
+        out.credit = m.credit;
+      }
+    } else if (plan.invoice && m.kind === "ip" && plan.residentId && plan.tenancyId) {
+      const { raiseIp } = await import("@/lib/tenancy-events.server");
+      const { klToday } = await import("@/lib/kl-date");
+      const ip = await raiseIp(supabase, plan.residentId, plan.tenancyId, m.lines.map((l) => ({ label: l.label, amount: l.amount, kind: l.kind })), {
+        billOn: klToday(),
+        note: `Initial payment difference - room change ${data.fromLabel} to ${data.toLabel}`,
+        tenancyEnd: plan.end,
+        rent: data.newRent,
+        roomName: data.roomName ?? "",
+        occupancy: data.occupancy ?? "",
+      });
+      await supabase.from("invoices").update({ enquiry_id: data.enquiryId }).eq("id", ip.id);
+      out.ipNumber = ip.number;
+      out.ipAmount = m.difference;
+    } else if (plan.invoice && m.kind === "credit" && plan.residentId) {
+      const { addCredit } = await import("@/lib/account-credit.server");
+      const { depositLabel } = await import("@/lib/tenancy-change");
+      await addCredit(
+        supabase,
+        plan.residentId,
+        m.parts.map((p) =>
+          p.deposit
+            ? { amount: p.amount, kind: "deposit" as const, depositKey: p.deposit, depositLabel: depositLabel(p.deposit), reason: `${depositLabel(p.deposit)} reduced - room change ${data.toLabel}` }
+            : { amount: p.amount, kind: "rent" as const, reason: `Cheaper room - room change ${data.toLabel}` },
+        ),
+      );
+      out.credit = m.difference;
+    }
+
+    // credit given: used at once on anything already owed - the oldest first (10 Oct 2026)
+    if (out.credit && plan.residentId) {
+      const { applyAccountCredit } = await import("@/lib/account-credit.server");
+      await applyAccountCredit(supabase, plan.residentId);
+    }
+
+    // 4. the tenancy's rent schedule, at the new rent
+    if (plan.tenancyId) {
+      const { syncPaidStay } = await import("@/lib/booking-lifecycle");
+      await syncPaidStay(supabase, data.enquiryId, data.newRent > 0 ? data.newRent : undefined);
+    }
+
+    // 5. the TA
+    let ta: "none" | "reset" | "kept" = "none";
+    if (plan.residentId) {
+      const { data: ags } = await supabase.from("tenancy_agreements").select("id").eq("resident_id", plan.residentId).order("created_at", { ascending: false }).limit(1);
+      const ag = ((ags ?? []) as any[])[0];
+      if (ag) {
+        const { resetDocumentPack } = await import("@/lib/tenancy-docs.functions");
+        try {
+          await resetDocumentPack(supabase, ag.id);
+          ta = "reset";
+        } catch {
+          ta = "kept";
+        }
+      }
+    }
+
+    // 6. the audit line
+    const { syncBookingStage } = await import("@/lib/booking-lifecycle");
+    await syncBookingStage(supabase, data.enquiryId);
+    const priceWord = Math.abs(plan.oldRent - data.newRent) <= 0.005 ? "price unchanged" : data.newRent > plan.oldRent ? "price increased" : "price decreased";
+    const money = [
+      out.invoice ? `${out.invoice}${out.version ? ` v${out.version}` : ""}` : "",
+      out.ipNumber ? `IP ${out.ipNumber} for the difference` : "",
+      out.credit ? `RM${out.credit.toFixed(2)} to account credit` : "",
+    ].filter(Boolean).join(" · ");
+    await logBookingEvent(supabase, {
+      enquiryId: data.enquiryId,
+      staff: data.approvedBy,
+      kind: "room_reserved",
+      summary:
+        `Room changed ${data.fromLabel} → ${data.toLabel} · ${plan.start} – ${plan.end} · ${priceWord}` +
+        (money ? ` · ${money}` : "") +
+        (ta === "reset" ? " · TA reset to be made again" : ta === "kept" ? " · signed TA kept" : "") +
+        ` · approved by ${data.approvedBy}: ${data.reason}${data.note ? ` - ${data.note.trim()}` : ""}`,
+    });
+    return { ok: true as const, kind: m.kind, ...out, ta };
+  }
+}
 
 /**
  * Cancel an invoice nothing has been paid on - marked void, kept as a record,

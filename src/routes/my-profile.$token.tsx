@@ -33,6 +33,7 @@ import { ChoicePicker, DialPicker } from "@/components/site/ChoicePicker";
 import { getDeclarationByToken, type SignedDeclaration } from "@/lib/declaration.functions";
 import {
   UNIVERSITY_OPTIONS,
+  normUniversity,
   dialFor,
   idLabelFor,
   idPlaceholderFor,
@@ -719,7 +720,9 @@ function MyProfilePage() {
                 // A university outside the list is typed into the same field, so
                 // nothing new has to be stored. The dropdown reads back as
                 // "Other" whenever what is saved is not one of the known codes.
-                const knownUniversity = UNIVERSITY_OPTIONS.some((o) => o.value === value);
+                // an older code (UOC, CTU) reads back as the one list's (UoC, CU)
+                const uni = f.key === "university" ? normUniversity(value).value : value;
+                const knownUniversity = UNIVERSITY_OPTIONS.some((o) => o.value === uni);
                 const otherUniversity = f.key === "university" && !!value && !knownUniversity;
 
                 return (
@@ -759,7 +762,7 @@ function MyProfilePage() {
                     ) : f.kind === "choice" ? (
                       f.key === "university" ? (
                         <ChoicePicker
-                          value={otherUniversity ? "OTHER" : value}
+                          value={otherUniversity ? "OTHER" : uni}
                           options={UNIVERSITY_OPTIONS}
                           // choosing Other clears the field so they can type
                           onChange={(v) => set(f.key, v === "OTHER" ? "" : v)}

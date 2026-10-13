@@ -201,14 +201,15 @@ export const applyTenancyChange = createServerFn({ method: "POST" })
       // the stays to come on a bed, from anyone else: an unpaid hold, or a paid tenancy
       const comingOn = async (bedId: string | null | undefined) => {
         if (!bedId) return [] as { name: string; start: string; end: string }[];
-        const [{ data: b }, { data: ts }] = await Promise.all([
-          sb.from("beds").select("enquiry_id, resident_id").eq("id", bedId).maybeSingle(),
+        const [{ data: holds }, { data: ts }] = await Promise.all([
+          sb.from("placement_holds").select("enquiry_id, start_date, end_date").eq("bed_id", bedId),
           sb.from("tenancies").select("resident_id, start_date, end_date").eq("bed_id", bedId).neq("resident_id", data.residentId),
         ]);
         const out: { name: string; start: string; end: string }[] = [];
-        if (b?.enquiry_id && b.resident_id) {
-          const { data: e } = await sb.from("enquiries").select("full_name, move_in, move_out, resident_id").eq("id", b.enquiry_id).maybeSingle();
-          if (e && e.resident_id !== data.residentId) out.push({ name: String(e.full_name ?? "Another resident"), start: String(e.move_in ?? ""), end: String(e.move_out ?? "") });
+        // unpaid holds on the bed (10 Oct 2026)
+        for (const h of (holds ?? []) as any[]) {
+          const { data: e } = await sb.from("enquiries").select("full_name, move_in, move_out").eq("id", h.enquiry_id).maybeSingle();
+          out.push({ name: String(e?.full_name ?? "Another resident"), start: String(h.start_date || e?.move_in || ""), end: String(h.end_date || e?.move_out || "") });
         }
         for (const t of (ts ?? []) as any[]) {
           if (t.end_date && t.end_date < today) continue;

@@ -38,6 +38,8 @@ const fmtDate = (v: unknown) => {
   if (Number.isNaN(d.getTime())) return String(v);
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 };
+/** a date as the templates print it - for values set outside a mapping */
+export const fmtTemplateDate = (v: unknown) => fmtDate(v);
 const rent = (c: MappingContext) => c.bed?.["rent"] ?? c.room?.["rent"] ?? c.enquiry?.["monthly_rent"] ?? "";
 const start = (c: MappingContext) => c.tenancy?.["start_date"] ?? c.bed?.["tenancy_start"] ?? c.resident?.["move_in"];
 const end = (c: MappingContext) => c.tenancy?.["end_date"] ?? c.bed?.["tenancy_end"] ?? c.enquiry?.["move_out"];

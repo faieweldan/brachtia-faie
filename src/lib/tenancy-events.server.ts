@@ -307,8 +307,35 @@ async function applyRent(sb: any, residentId: string, ev: TenancyEvent) {
 }
 
 /** each document once: a new agreement, or a revised Schedule A / C; and the access card form */
-async function makeDocuments(sb: any, residentId: string, ev: TenancyEvent) {
+async function makeDocuments(sb: any, residentId: string, ev0: TenancyEvent) {
   const { renewAgreement, reviseSchedule } = await import("@/lib/tenancy-docs.functions");
+  /*
+   * The documents' values, built like the first pack's: every placeholder through
+   * its mapping, with this event's bed, dates and rent (10 Oct 2026). What the
+   * last version said for itself (ticks, typed fields) is kept.
+   */
+  const { data: lastAg } = await sb.from("tenancy_agreements").select("id").eq("resident_id", residentId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const { data: lastDocs } = lastAg
+    ? await sb.from("agreement_documents").select("merge_values, version").eq("agreement_id", lastAg.id).order("version", { ascending: true })
+    : { data: [] };
+  const previous: Record<string, string> = Object.assign({}, ...((lastDocs ?? []) as any[]).map((d) => d.merge_values ?? {}));
+  const { eventDocumentValues } = await import("@/lib/templates.functions");
+  const mapped = await eventDocumentValues(
+    sb,
+    residentId,
+    {
+      bedId: ev0.moveTo?.bedId,
+      // a renewal starts a new term on its date; an extension keeps the start it had
+      ...(ev0.plan.newAgreement ? { start: ev0.date } : {}),
+      end: ev0.periodEnd,
+      rent: ev0.rent,
+    },
+    previous,
+  );
+  // a revised schedule takes effect on the event's date, not the date the first one did
+  const { fmtTemplateDate } = await import("@/lib/template-fields");
+  for (const k of Object.keys(mapped)) if (/^(schedule_a_effective_date|effective_date)$/i.test(k)) mapped[k] = fmtTemplateDate(ev0.date);
+  const ev = { ...ev0, mergeValues: { ...ev0.mergeValues, ...mapped } };
   if (ev.plan.newAgreement) {
     await renewAgreement({
       data: { residentId, tenancyId: ev.tenancyId, mergeValues: ev.mergeValues, periodStart: ev.date, periodEnd: ev.periodEnd },

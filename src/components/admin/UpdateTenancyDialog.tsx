@@ -32,7 +32,8 @@ import {
   type Deposits,
 } from "@/lib/tenancy-change";
 import { klToday } from "@/lib/kl-date";
-import { dayBefore } from "@/lib/placement";
+import { stayLength } from "@/lib/stay-length";
+import { dayBefore, placementConflict } from "@/lib/placement";
 import { rentForDays, shiftDate } from "@/lib/rental-schedule";
 import { applyTenancyChange, getTenancyChangeBasis } from "@/lib/tenancy-change.functions";
 
@@ -157,18 +158,35 @@ export function UpdateTenancyDialog({
   const free = useMemo(
     () =>
       allBeds(units).filter(
-        ({ unit, bed }) =>
+        ({ unit, room, bed }) =>
           // vacant now, or someone else's whose tenancy ends before ours does - the move then waits for it (Dani, 7 Oct 2026)
           bed.id !== placed?.bed.id &&
           // reserved for another resident's room change
           !claimedIds.has(bed.id) &&
           (bed.status === "vacant" || (!!bed.residentId && !!bed.tenancyEnd && bed.tenancyEnd.slice(0, 10) < (tenancy.end || "9999"))) &&
           bedOccupancy(bed.label) === occ &&
-          // men and women never share a unit - the same rule as a booking's room list
-          unitAccepts(unit, residents, gender),
+          /*
+           * Free for the dates this stay would have it - from when the bed is free
+           * (or today) to the new end - by the same rule as the booking's room list
+           * (placementConflict, 10 Oct 2026): a booking already coming onto the bed,
+           * a whole room or unit let, or the other gender in the unit then, rules
+           * it out. It used to be offered and then refused on Next.
+           */
+          !placementConflict(
+            unit,
+            room,
+            bed,
+            {
+              start: bed.residentId && bed.tenancyEnd ? nextDay(bed.tenancyEnd.slice(0, 10)) : klToday(),
+              end: newEnd || tenancy.end || undefined,
+              gender,
+              residentId,
+            },
+            residents,
+          ),
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [units, occ, placed?.bed.id, residents, gender, tenancy.end, basis.data?.claimed],
+    [units, occ, placed?.bed.id, residents, gender, tenancy.end, newEnd, basis.data?.claimed],
   );
   const target = wantRoom ? (free.find((b) => b.bed.id === bedId) ?? null) : null;
   const end = wantDate && newEnd ? newEnd : oldEnd;
@@ -509,6 +527,7 @@ export function UpdateTenancyDialog({
                 <EventCard
                   key={e.i}
                   e={e}
+                  dates={{ start: tenancy.start, oldEnd }}
                   numbered={events.length > 1}
                   today={today}
                   bedLabel={bedLabel}
@@ -533,7 +552,7 @@ export function UpdateTenancyDialog({
                     <span>
                       <span className="font-medium">{fmtDate(e.date)}</span> · {e.name}
                     </span>
-                    <span className="tabular-nums text-muted-foreground">IP {e.ip.total > 0 ? money2(e.ip.payable) : "none"}</span>
+                    <span className="tabular-nums text-muted-foreground">IP {e.ip.total > 0 ? money(e.ip.payable) : "none"}</span>
                   </li>
                 ))}
               </ul>
@@ -643,6 +662,7 @@ function ChoiceCard({ icon: Icon, title, now, on, onToggle }: { icon: typeof Bed
  */
 function EventCard({
   e,
+  dates,
   numbered,
   today,
   bedLabel,
@@ -656,6 +676,8 @@ function EventCard({
 }: {
   position: { cash: Record<string, number>; waived: Record<string, number> } | null;
   e: PricedEvent;
+  /** the tenancy as it stands - what a date change is measured from */
+  dates: { start: string; oldEnd: string };
   numbered: boolean;
   today: string;
   bedLabel: (b: BedRow | null | undefined) => string;
@@ -687,12 +709,24 @@ function EventCard({
         {moves && e.bed && e.bedBefore && e.bed.unit.residenceName !== e.bedBefore.unit.residenceName ? (
           <Row label="Residence" value={`${e.bedBefore.unit.residenceName} → ${e.bed.unit.residenceName}`} />
         ) : null}
+        {/* a date change says the new dates and how long it adds (Dani, 10 Oct 2026) */}
+        {e.flags.date === "renewal" ? (
+          <Row
+            label="New term"
+            value={`${fmtDate(e.date)} → ${fmtDate(e.periodEnd)} · ${stayLength(e.date, e.periodEnd)}`}
+          />
+        ) : e.flags.date === "extension" ? (
+          <Row
+            label="Tenancy"
+            value={`${fmtDate(dates.start)} → ${fmtDate(e.periodEnd)} · extended ${stayLength(nextDay(dates.oldEnd), e.periodEnd)} (was to ${fmtDate(dates.oldEnd)})`}
+          />
+        ) : null}
         <Row label="Rental" value={Math.abs(e.rent - e.rentBefore) > 0.005 ? `${money(e.rentBefore)} → ${money(e.rent)} a month` : `${money(e.rent)} a month, unchanged`} />
         <Row
           label="IP payable"
           value={
             e.ip.total > 0
-              ? `${money2(e.ip.payable)}${e.ip.creditApplied ? ` (after ${money2(e.ip.creditApplied)} account credit)` : ""} · ${e.billOn <= today ? "billed today" : `billed ${fmtDate(e.billOn)}`}`
+              ? `${money(e.ip.payable)}${e.ip.creditApplied ? ` (after ${money(e.ip.creditApplied)} account credit)` : ""} · ${e.billOn <= today ? "billed today" : `billed ${fmtDate(e.billOn)}`}`
               : "None"
           }
           strong
@@ -740,22 +774,22 @@ function EventCard({
           <div className="space-y-0.5">
             <p className="font-medium text-foreground">IP</p>
             {e.ip.lines.map((l) => (
-              <Line key={l.label} label={l.label} amount={money2(l.amount)} />
+              <Line key={l.label} label={l.label} amount={money(l.amount)} />
             ))}
             {e.fees.filter((f) => f.waived).map((f) => (
-              <Line key={f.key} label={`${f.label} - waived`} amount={money2(0)} muted />
+              <Line key={f.key} label={`${f.label} - waived`} amount={money(0)} muted />
             ))}
-            {e.ip.creditApplied ? <Line label="Less account credit" amount={`− ${money2(e.ip.creditApplied)}`} /> : null}
-            <Line label="Payable" amount={money2(e.ip.payable)} strong />
-            {e.deposits.credit ? <p className="pt-1 text-emerald-800">{money2(e.deposits.credit)} of deposit becomes account credit.</p> : null}
-            {e.ip.creditLeft ? <p className="text-emerald-800">{money2(e.ip.creditLeft)} account credit carried to the next invoice.</p> : null}
+            {e.ip.creditApplied ? <Line label="Less account credit" amount={`− ${money(e.ip.creditApplied)}`} /> : null}
+            <Line label="Payable" amount={money(e.ip.payable)} strong />
+            {e.deposits.credit ? <p className="pt-1 text-emerald-800">{money(e.deposits.credit)} of deposit becomes account credit.</p> : null}
+            {e.ip.creditLeft ? <p className="text-emerald-800">{money(e.ip.creditLeft)} account credit carried to the next invoice.</p> : null}
           </div>
           {split ? (
             <div className="space-y-0.5">
               <p className="font-medium text-foreground">{split.month} rental, pro-rated by day</p>
-              {split.before ? <Line label={`${split.before.range} · previous room (${split.before.days} days)`} amount={money2(split.before.amount)} /> : null}
-              <Line label={`${split.after.range} · new room (${split.after.days} days)`} amount={money2(split.after.amount)} />
-              <Line label={split.month} amount={money2(split.total)} strong />
+              {split.before ? <Line label={`${split.before.range} · previous room (${split.before.days} days)`} amount={money(split.before.amount)} /> : null}
+              <Line label={`${split.after.range} · new room (${split.after.days} days)`} amount={money(split.after.amount)} />
+              <Line label={split.month} amount={money(split.total)} strong />
             </div>
           ) : null}
           <p className="text-muted-foreground">A billed Rental Payment is never changed: higher rent becomes an RP adjustment, lower rent account credit.</p>
@@ -791,7 +825,7 @@ function EventCard({
           {e.fees.map((f) => (
             <label key={f.key} className="flex items-center gap-3 text-xs">
               <span className="w-36 text-muted-foreground">{f.label}</span>
-              <span className="w-28 text-right tabular-nums">{money2(f.amount)}</span>
+              <span className="w-28 text-right tabular-nums">{money(f.amount)}</span>
               <span className="flex items-center gap-1.5">
                 <input type="checkbox" className="size-4 accent-brand" checked={f.waived} onChange={(x) => onWaive(`fee:${f.key}`, x.target.checked)} />
                 Waive fee
@@ -906,7 +940,6 @@ function Segmented({ label, value, options, onChange }: { label: string; value: 
   );
 }
 
-const money2 = (n: number) => `RM ${n.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 /** the move month, split on the move date - each part priced by its real days (Dani, 6 Oct 2026) */
 function moveMonthSplit(from: string, oldRent: number, newRent: number) {

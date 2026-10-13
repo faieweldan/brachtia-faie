@@ -38,7 +38,7 @@ export const adminWorkQueue = createServerFn({ method: "GET" }).handler(async ()
   // agreements and their documents, once - Schedule C and stamping both read them
   const { data: ags } = await sb.from("tenancy_agreements").select("id, resident_id, agreement_no");
   const agById = new Map(((ags ?? []) as any[]).map((a) => [a.id, a]));
-  const { data: docs } = await sb.from("agreement_documents").select("id, agreement_id, doc_type, version, status, created_at");
+  const { data: docs } = await sb.from("agreement_documents").select("id, agreement_id, doc_type, version, status, created_at, merge_values");
   const latest = new Map<string, any>();
   for (const d of (docs ?? []) as any[]) {
     const k = `${d.agreement_id}:${d.doc_type}`;
@@ -71,6 +71,8 @@ export const adminWorkQueue = createServerFn({ method: "GET" }).handler(async ()
   for (const [agId, list] of byAgreement) {
     const ag = agById.get(agId);
     if (!ag || !list.length) continue;
+    // a migrated TA was signed and stamped before the system - nothing to stamp here (12 Oct 2026)
+    if (list.some((d) => d.merge_values?.source === "migrated")) continue;
     if (!list.every((d) => DONE.has(d.status)) || list.some((d) => d.status === "stamped")) continue;
     out.push({
       kind: "stamping",

@@ -801,7 +801,7 @@ function CheckoutCard({ token }: { token: string }) {
           <span className="block text-sm font-semibold text-brand-deep">Checkout statement · {c.number}</span>
           <span className="block text-xs text-muted-foreground">
             {c.refunded
-              ? `Settled · ${amount}`
+              ? `Paid · ${amount}`
               : c.signed
                 ? c.net >= 0
                   ? "Signed - Brachtia will pay your refund"

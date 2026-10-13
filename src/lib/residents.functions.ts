@@ -240,7 +240,9 @@ export const deleteFormerResident = createServerFn({ method: "POST" })
       throw new Error("Only a former resident can be deleted. Deactivate them first.");
     }
     // quickbooks_id is still legacy_id on a database that has not had its rename
-    if (str(row.quickbooks_id ?? row.legacy_id).trim()) {
+    // real residents are protected - except in Dani's sandbox, where any can be tested (10 Oct 2026)
+    const { isSandboxServer } = await import("@/lib/sandbox");
+    if (!isSandboxServer() && str(row.quickbooks_id ?? row.legacy_id).trim()) {
       throw new Error(
         "This resident has a QuickBooks ID - a real record, so it cannot be deleted.",
       );
@@ -388,6 +390,9 @@ export const importResidents = createServerFn({ method: "POST" })
     const { data: beds } = await supabase
       .from("beds")
       .select("id, room_id, label, resident_id, enquiry_id");
+    // a bed an unpaid booking holds is taken too (placement_holds, 10 Oct 2026)
+    const { data: holdRows } = await (supabase as any).from("placement_holds").select("bed_id");
+    const held = new Set(((holdRows ?? []) as any[]).map((h) => String(h.bed_id)));
     const bedIdByKey = new Map<string, string>();
     for (const b of beds ?? []) {
       const room = roomById.get((b as any).room_id);
@@ -409,7 +414,7 @@ export const importResidents = createServerFn({ method: "POST" })
         id: (b as any).id,
         label: String((b as any).label),
         // someone living there, or a booking holding it
-        taken: !!(b as any).resident_id || !!(b as any).enquiry_id,
+        taken: !!(b as any).resident_id || !!(b as any).enquiry_id || held.has(String((b as any).id)),
       });
       bedsByRoom.set((b as any).room_id, list);
     }
@@ -875,6 +880,10 @@ export const residentDocUrl = createServerFn({ method: "GET" })
         ok: false as const,
         error: "There is no stored file for this one - only its name was noted. Upload it again.",
       };
+    // a copy kept as a link (a migrated TA or invoice on Google Drive, 12 Oct 2026)
+    if (/^https?:\/\//i.test(String(doc.path))) {
+      return { ok: true as const, url: String(doc.path), external: true as const };
+    }
     const { data: signed, error } = await supabase.storage
       .from(DOC_BUCKET)
       .createSignedUrl(String(doc.path), 300);

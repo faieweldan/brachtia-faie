@@ -313,8 +313,9 @@ export function setState(next: (prev: OpsState) => OpsState) {
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
+// always to the sen: rounding to the ringgit showed RM 2,549.67 as RM 2,550 (Dani, 12 Oct 2026)
 export const money = (n: number) =>
-  `RM ${Number(n || 0).toLocaleString("en-MY", { maximumFractionDigits: 0 })}`;
+  `RM ${Number(n || 0).toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const fmtDate = (d?: string) =>
   d
@@ -400,6 +401,8 @@ function mergeUnit(unit: Unit, replaceId = unit.id) {
  * the saved row (with real database ids) replaces the optimistic one.
  */
 export async function saveUnit(unit: Unit, importBatchId?: string) {
+  // a unit already listed is put back as it was if the save fails - not removed
+  const before = state.units.find((u) => u.id === unit.id);
   mergeUnit(unit);
   try {
     const { saveUnitRow } = await import("@/lib/homes.functions");
@@ -410,7 +413,12 @@ export async function saveUnit(unit: Unit, importBatchId?: string) {
     return saved;
   } catch (err) {
     // roll back so the UI never shows a unit the database does not have
-    setState((s) => ({ ...s, units: s.units.filter((u) => u.id !== unit.id) }));
+    setState((s) => ({
+      ...s,
+      units: before
+        ? s.units.map((u) => (u.id === unit.id ? before : u))
+        : s.units.filter((u) => u.id !== unit.id),
+    }));
     throw err;
   }
 }

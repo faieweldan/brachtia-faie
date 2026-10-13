@@ -216,9 +216,9 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
       await requireFiles(db, data.residentId, types);
     }
 
-    const { data: seqRow, error: seqErr } = await db.rpc("next_agreement_no" as never);
-    if (seqErr) throw new Error((seqErr as any).message ?? "Could not number the agreement");
-    const agreementNo = `TA-${String(seqRow).padStart(4, "0")}`;
+    // TA + Resident ID + their own sequence (agreement-no.ts, 12 Oct 2026)
+    const { nextAgreementNo } = await import("@/lib/agreement-no");
+    const agreementNo = await nextAgreementNo(db, data.residentId);
 
     const { data: agreement, error: aErr } = await db
       .from("tenancy_agreements")
@@ -296,7 +296,25 @@ export const reviseSchedule = createServerFn({ method: "POST" })
       .limit(1)
       .maybeSingle();
     if (error) throw new Error(error.message);
-    if (!current) throw new Error("No existing schedule to revise");
+    /*
+     * A migrated agreement (Migration 1) holds only the old signed TA as one
+     * file - there is no schedule of ours to revise. Its first extension or
+     * room change makes version 1 of that schedule under the same Agreement
+     * No., next to the old TA (Dani, 12 Oct 2026). Any other agreement without
+     * the schedule is still refused.
+     */
+    let base: { id: string | null; version: number; period_start: string | null; period_end: string | null } | null = current;
+    if (!base) {
+      const { data: migrated } = await db
+        .from("agreement_documents")
+        .select("period_start, period_end, merge_values")
+        .eq("agreement_id", data.agreementId)
+        .eq("doc_type", "agreement")
+        .limit(1)
+        .maybeSingle();
+      if ((migrated?.merge_values as any)?.source !== "migrated") throw new Error("No existing schedule to revise");
+      base = { id: null, version: 0, period_start: migrated?.period_start ?? null, period_end: migrated?.period_end ?? null };
+    }
 
     const today = new Date().toISOString().slice(0, 10);
     const { data: ag } = await db.from("tenancy_agreements").select("resident_id").eq("id", data.agreementId).maybeSingle();
@@ -304,13 +322,13 @@ export const reviseSchedule = createServerFn({ method: "POST" })
     const { error: iErr } = await db.from("agreement_documents").insert({
       agreement_id: data.agreementId,
       doc_type: data.docType,
-      version: (current.version ?? 1) + 1,
+      version: (base.version ?? 0) + 1,
       status: "generated",
       effective_date: today,
-      period_start: data.periodStart || current.period_start,
-      period_end: data.periodEnd || current.period_end,
+      period_start: data.periodStart || base.period_start,
+      period_end: data.periodEnd || base.period_end,
       merge_values: data.mergeValues,
-      supersedes: current.id,
+      supersedes: base.id,
       template_version_id: tv[data.docType] || null,
     });
     if (iErr) throw new Error(iErr.message);
@@ -331,9 +349,11 @@ export const renewAgreement = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const db = await admin();
     await requireFiles(db, data.residentId, [...(await docTypesInUse(db))]);
-    const { data: seqRow, error: seqErr } = await db.rpc("next_agreement_no" as never);
-    if (seqErr) throw new Error((seqErr as any).message ?? "Could not number the agreement");
-    const agreementNo = `TA-${String(seqRow).padStart(4, "0")}`;
+    // TA + Resident ID + their own sequence (agreement-no.ts, 12 Oct 2026)
+    const { nextAgreementNo } = await import("@/lib/agreement-no");
+    const agreementNo = await nextAgreementNo(db, data.residentId);
+    // the new number goes on its own documents - the values were built before it existed (10 Oct 2026)
+    for (const k of Object.keys(data.mergeValues)) if (/^agreement_(id|no)$/i.test(k)) data.mergeValues[k] = agreementNo;
 
     const { data: agreement, error: aErr } = await db
       .from("tenancy_agreements")
@@ -447,8 +467,11 @@ export const RESETTABLE = new Set(["generated", "pending_signature", "submitted"
 
 export const undoDocumentPack = createServerFn({ method: "POST" })
   .inputValidator((data: { agreementId: string }) => data)
-  .handler(async ({ data }) => {
-    const db = await admin();
+  .handler(async ({ data }) => resetDocumentPack(await admin(), data.agreementId));
+
+/** The reset itself - also run by a room change before the tenancy starts. Throws when anything is signed. */
+export async function resetDocumentPack(db: any, agreementId: string) {
+    const data = { agreementId };
     const { data: agreement } = await db.from("tenancy_agreements").select("id, resident_id, kind").eq("id", data.agreementId).maybeSingle();
     if (!agreement) throw new Error("This pack no longer exists.");
     const { data: docs } = await db.from("agreement_documents").select("id, doc_type, status").eq("agreement_id", agreement.id);
@@ -458,8 +481,10 @@ export const undoDocumentPack = createServerFn({ method: "POST" })
     // the first pack brought the first access card form with it; it goes too
     let cardIds: string[] = [];
     if (agreement.kind === "initial") {
-      const { data: cards } = await db.from("access_card_forms").select("id, status").eq("resident_id", agreement.resident_id);
-      if ((cards ?? []).some((c: any) => c.status !== "generated")) {
+      const { data: cards } = await db.from("access_card_forms").select("id, status, card_no").eq("resident_id", agreement.resident_id);
+      // not handed to ARC yet - no serial number given back - it can still be made again
+      const untouchedCard = (c: any) => c.status === "generated" || (c.status === "pending_approval" && !c.card_no);
+      if ((cards ?? []).some((c: any) => !untouchedCard(c))) {
         throw new Error("The access card form has moved on (signed or submitted), so this pack can no longer be reset.");
       }
       cardIds = (cards ?? []).map((c: any) => c.id);
@@ -481,4 +506,4 @@ export const undoDocumentPack = createServerFn({ method: "POST" })
     const { error: aErr } = await db.from("tenancy_agreements").delete().eq("id", agreement.id);
     if (aErr) throw new Error(aErr.message);
     return { ok: true as const };
-  });
+}

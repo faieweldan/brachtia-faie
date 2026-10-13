@@ -9,6 +9,33 @@
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
 
+## Rules live in src/lib, once
+
+Before writing a business rule on a screen (can this room be sold as a
+single, is this booking paid, which dates clash), search `src/lib/` for the one
+that already exists and call it. If two screens need a rule, it moves to
+`src/lib/` first. Room selling is `roomOffer` in `src/lib/room-offer.ts`, and
+`tests/one-rule.test.ts` fails when a screen adds its own copy. See
+`docs/MISTAKES-TO-AVOID.md` 3b.
+
+## Shared pieces - reuse, never rebuild
+
+A new feature that needs one of these calls it, passing what differs as
+props or arguments. Copying it is how Update Tenancy came to reserve rooms
+its own way and the checkout statement got its own invoice table. Full list,
+and what is still duplicated: `docs/HANDOFF-REUSE.md`.
+
+| Need | Use | Guarded by |
+| --- | --- | --- |
+| Lines of any money document (invoice, credit note, statement) | `LineItemsEditor` (`src/components/admin/LineItemsEditor.tsx`) | `tests/one-rule.test.ts` |
+| Preview a PDF before it is issued | `PdfPreviewButton` (`src/components/admin/PdfPreview.tsx`) | - |
+| How a room can be sold | `roomOffer` (`src/lib/room-offer.ts`) | `tests/one-rule.test.ts` |
+| Reserve a bed for a booking | `placeStay` -> SQL `place_stay` (`placement_holds`) | `tests/placement*.test.ts` |
+| Checkout statement sums, credit note vs invoice | `checkoutTotals`, `checkoutDocKind` (`src/lib/checkout-types.ts`) | `tests/checkout-type.test.ts` |
+| Payment methods and what each needs | `METHOD_RULES`, `ruleFor` (`src/lib/payment-methods.ts`) | `tests/payment-methods.test.ts` |
+| Shrink a photo before upload | `compressImage` (`src/lib/compress.ts`) | - |
+| Money on a document | `formatRM` (with sen). `money` in ops-store rounds to the ringgit - lists only | - |
+
 ## Domain context
 
 Before changing student, booking, billing, maintenance, renewal, or checkout
@@ -19,6 +46,24 @@ handoffs the product is intended to support.
 Treat that document as historical discovery context, not a final specification.
 Preserve useful operational intent, but do not encode values, responsibilities,
 or policies marked as unresolved without confirmation from the business.
+
+Before changing tenancy-agreement templates, document previews, DOCX-to-PDF
+conversion, resident signing, PDF forms, or signed-file storage, read
+[`docs/DOCUMENT-RENDERING-DECISION.md`](docs/DOCUMENT-RENDERING-DECISION.md),
+then the fuller history in
+[`docs/HANDOFF-TENANCY-AGREEMENT.md`](docs/HANDOFF-TENANCY-AGREEMENT.md).
+The current direction is hybrid: flexible tenancy documents remain Word
+templates and use Gotenberg/LibreOffice for deployed conversion; fixed forms
+such as the Access Card Form remain PDFs filled through mapped boxes.
+
+Before deployment, environment, Git remote, billing or infrastructure work,
+read [`docs/ENVIRONMENT-AND-DEPLOYMENT-MAP.md`](docs/ENVIRONMENT-AND-DEPLOYMENT-MAP.md).
+Dani's Vercel, `test-bratchia` Supabase, personal GitHub workflow and personal
+Google Cloud project are a proof-of-concept environment, not the client-facing
+Lovable environment. Never infer the target GitHub remote and never make the
+live application permanently depend on Dani's personal billing account.
+For the personal document-converter walkthrough, read
+[`docs/GOTENBERG-CLOUD-RUN-POC.md`](docs/GOTENBERG-CLOUD-RUN-POC.md).
 
 ## Two databases, and which is which
 
