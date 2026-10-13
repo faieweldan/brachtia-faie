@@ -107,6 +107,8 @@ function world(docs: Row[] | null = generatedPack()) {
         ]
       : [],
     agreement_documents: docs ?? [],
+    // their old Storage credit brought over already - no one-time import in these tests
+    account_credit_imports: [{ resident_id: R, entries: 0 }],
   };
 }
 

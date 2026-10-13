@@ -96,6 +96,13 @@ export function RecordPaymentDialog({
   const [saving, setSaving] = useState(false);
   // who is recording it - asked every time, as on entering a booking
   const [recordedBy, setRecordedBy] = useState(invoice?.staff ?? "");
+  /*
+   * One key per payment being saved (15 Oct 2026): a double click, or Save again
+   * after an answer that never came back, sends the same key - and the server
+   * returns the payment it already saved instead of saving a second one. A new
+   * key only once this payment is saved.
+   */
+  const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
 
   async function upload(file: File) {
     if (!invoice) return;
@@ -140,8 +147,10 @@ export function RecordPaymentDialog({
           proofPath: proof?.path ?? "",
           description: description.trim(),
           recordedBy,
+          requestKey,
         },
       });
+      setRequestKey(crypto.randomUUID());
       /*
        * Saved: the dialog closes now and the page catches up behind it (13 Oct
        * 2026). Waiting for every list to reload - the whole unit tree, ~1 s on

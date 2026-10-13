@@ -516,41 +516,33 @@ export const signCheckout = createServerFn({ method: "POST" })
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-/** A payment and its receipt on an invoice - the same records a payment admin records makes. */
+/**
+ * The deposit applied to an invoice: a payment and its receipt, saved the way
+ * every payment is (recordInvoicePayment, 15 Oct 2026) - never more than the
+ * invoice owes when it is saved, and once per statement and invoice however
+ * often settling is run. Returns what was applied.
+ */
 async function applyPayment(sb: any, inv: any, amount: number, reference: string) {
-  const { data: existing } = await sb.from("payments").select("amount").eq("invoice_id", inv.id);
-  const paidBefore = ((existing ?? []) as any[]).reduce((n, p) => n + Number(p.amount || 0), 0);
-  const balance = round2(Number(inv.total || 0) - paidBefore - amount);
-  const today = klToday();
-  const row: Record<string, unknown> = {
-    invoice_id: inv.id,
-    enquiry_id: inv.enquiry_id,
-    resident_id: inv.resident_id ?? "",
-    amount,
-    paid_on: today,
-    method: "Deposit applied",
-    reference,
-    proof_path: "",
-    description: "Deposit applied at checkout",
-    recorded_by: "Checkout",
-  };
-  let { data: payment, error } = await sb.from("payments").insert(row).select("*").maybeSingle();
-  if (error && /recorded_by/.test(error.message)) {
-    delete row["recorded_by"];
-    ({ data: payment, error } = await sb.from("payments").insert(row).select("*").maybeSingle());
+  const { recordInvoicePayment, PaymentRefused } = await import("@/lib/payments.server");
+  try {
+    const saved = await recordInvoicePayment(sb, {
+      invoiceId: inv.id,
+      amount,
+      paidOn: klToday(),
+      method: "Deposit applied",
+      reference,
+      proofPath: "",
+      description: "Deposit applied at checkout",
+      recordedBy: "Checkout",
+      requestKey: `checkout:${reference}:${inv.id}`,
+      capToOwing: true,
+    });
+    return Number(saved.payment.amount);
+  } catch (err) {
+    // paid in full since the statement was read: nothing to apply
+    if (err instanceof PaymentRefused && err.code === "nothing_owing") return 0;
+    throw err;
   }
-  if (error) throw new Error(error.message);
-  const { error: recErr } = await sb.from("receipts").insert({
-    payment_id: payment.id,
-    invoice_id: inv.id,
-    enquiry_id: inv.enquiry_id,
-    resident_id: inv.resident_id ?? "",
-    amount,
-    balance_after: balance,
-    paid_to_date: round2(paidBefore + amount),
-  });
-  if (recErr) throw new Error(recErr.message);
-  await sb.from("invoices").update({ status: balance <= 0 ? "paid" : "part_paid", updated_at: new Date().toISOString() }).eq("id", inv.id);
 }
 
 /**
@@ -569,9 +561,10 @@ async function settle(sb: any, residentId: string, s: import("@/lib/checkout.ser
     const owing = round2(Number(inv.total || 0) - ((pays ?? []) as any[]).reduce((n, p) => n + Number(p.amount || 0), 0));
     const amount = round2(Math.min(left, owing));
     if (amount <= 0) continue;
-    await applyPayment(sb, inv, amount, s.number);
-    applied.push({ invoiceNumber: String(inv.number), amount });
-    left = round2(left - amount);
+    const done = await applyPayment(sb, inv, amount, s.number);
+    if (done <= 0) continue;
+    applied.push({ invoiceNumber: String(inv.number), amount: done });
+    left = round2(left - done);
   }
   // what admin added, and what the kind of checkout keeps
   const deductions = v.lines.filter((x) => x.source !== "outstanding");

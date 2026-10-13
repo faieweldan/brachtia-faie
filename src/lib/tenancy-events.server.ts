@@ -604,7 +604,16 @@ export async function cancelEvent(sb: any, residentId: string, eventId: string, 
       .eq("id", invoiceId);
     if (error) throw new Error(error.message);
     if (cash > 0)
-      await addCredit(sb, residentId, [{ amount: cash, kind: "cancel", reason: `Paid on ${what} ${String(inv.number).startsWith("SCH-") ? "(not billed yet)" : inv.number} - ${ev.name.toLowerCase()} cancelled`, eventId: ev.eventId }]);
+      // once per voided invoice - a cancellation run again gives it no second time
+      await addCredit(sb, residentId, [
+        {
+          amount: cash,
+          kind: "cancel",
+          reason: `Paid on ${what} ${String(inv.number).startsWith("SCH-") ? "(not billed yet)" : inv.number} - ${ev.name.toLowerCase()} cancelled`,
+          eventId: ev.eventId,
+          key: `cancel:${ev.eventId}:${invoiceId}`,
+        },
+      ]);
     return cash;
   };
 

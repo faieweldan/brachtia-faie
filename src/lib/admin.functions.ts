@@ -2065,7 +2065,15 @@ export const cancelInvoice = createServerFn({ method: "POST" })
     return { ok: true, cancelled: targets.length };
   });
 
-/** Logs a payment against an invoice and issues the matching receipt. */
+/**
+ * Logs a payment against an invoice and issues the matching receipt - in one
+ * database step (recordInvoicePayment, 15 Oct 2026): the payment, its receipt
+ * and the invoice's status are saved together or not at all. The same
+ * requestKey sent again returns that payment and saves nothing, so a double
+ * click or a retry after a lost answer is never a second payment. What follows
+ * the money (the booking's stage, the resident, an access card, an Update
+ * Tenancy event) runs after it, and is safe to run again on a retry.
+ */
 export const recordPayment = createServerFn({ method: "POST" })
   .inputValidator(
     (data: {
@@ -2079,6 +2087,8 @@ export const recordPayment = createServerFn({ method: "POST" })
       description?: string;
       /** the staff member recording it - shown as "by Syazwani" */
       recordedBy?: string;
+      /** one per save attempt, from the Record payment box */
+      requestKey?: string;
     }) => data,
   )
   .handler(async ({ data }) => {
@@ -2087,94 +2097,56 @@ export const recordPayment = createServerFn({ method: "POST" })
       const { STAFF } = await import("@/data/form-options");
       if (!STAFF.includes(String(data.recordedBy ?? ""))) throw new Error("Choose who is recording this payment");
     }
-    // read together - each read is a round trip to the database (13 Oct 2026)
-    const [{ data: invoice, error }, existing] = await Promise.all([
-      supabase.from("invoices").select("*").eq("id", data.invoiceId).maybeSingle(),
-      supabase.from("payments").select("amount").eq("invoice_id", data.invoiceId),
-    ]);
-    if (error) throw new Error(error.message);
-    if (!invoice) throw new Error("Invoice not found");
-    if ((invoice as any).status === "void") {
-      throw new Error("This invoice was cancelled");
-    }
-    // an Update Tenancy IP can be paid before its billing day (agreed 7 Oct 2026); rent cannot
-    const inAdvance = (invoice as any).status === "scheduled";
-    if (inAdvance && (invoice as any).invoice_type !== "initial") {
-      throw new Error("This invoice is not billed yet");
-    }
     // the same rule the form shows: what this way of paying needs (1 Oct 2026)
     {
       const { paymentMissing } = await import("@/lib/payment-methods");
       const missing = paymentMissing({ method: data.method ?? "", reference: data.reference ?? "", proofPath: data.proofPath ?? "" });
       if (missing) throw new Error(missing);
     }
-
-    // money on a booking's invoice is recorded by the booking's staff member
-    const payStaff = (invoice as any).enquiry_id
-      ? await staffFor(supabase, (invoice as any).enquiry_id)
-      : "";
-
-    const paidBefore = (existing.data ?? []).reduce((n: number, p: any) => n + Number(p.amount || 0), 0);
-    const amount = Number(data.amount || 0);
-    const balance = Number((invoice as any).total || 0) - paidBefore - amount;
-
-    const row: Record<string, unknown> = {
-      invoice_id: data.invoiceId,
-      enquiry_id: (invoice as any).enquiry_id,
-      resident_id: (invoice as any).resident_id ?? "",
-      amount,
-      paid_on: data.paidOn,
+    // the invoice, its payments, its receipt and its status: one step in the database
+    const { recordInvoicePayment } = await import("@/lib/payments.server");
+    const saved = await recordInvoicePayment(supabase, {
+      invoiceId: data.invoiceId,
+      amount: data.amount,
+      paidOn: data.paidOn,
       method: data.method,
       reference: data.reference ?? "",
-      proof_path: data.proofPath ?? "",
+      proofPath: data.proofPath ?? "",
       description: data.description ?? "",
-      recorded_by: data.recordedBy ?? "",
-    };
-    let { data: payment, error: payErr } = await supabase.from("payments").insert(row as any).select("*").maybeSingle();
-    // the recorded_by column comes with the 1 Oct 2026 SQL: until a database
-    // has it, the payment is still saved, only without the name
-    if (payErr && /recorded_by/.test(payErr.message)) {
-      delete row["recorded_by"];
-      ({ data: payment, error: payErr } = await supabase.from("payments").insert(row as any).select("*").maybeSingle());
-    }
-    if (payErr) throw new Error(payErr.message);
+      recordedBy: data.recordedBy ?? "",
+      requestKey: data.requestKey ?? null,
+    });
+    const invoice = saved.invoice;
+    const payment = saved.payment;
+    const receipt = saved.receipt;
+    const amount = Number(payment.amount);
+    const balance = saved.balance;
 
-    const { data: receipt, error: recErr } = await supabase
-      .from("receipts")
-      .insert({
-        payment_id: (payment as any).id,
-        invoice_id: data.invoiceId,
-        enquiry_id: (invoice as any).enquiry_id,
-        resident_id: (invoice as any).resident_id ?? "",
-        amount,
-        balance_after: balance,
-        paid_to_date: paidBefore + amount,
-      } as any)
-      .select("*")
-      .maybeSingle();
-    if (recErr) throw new Error(recErr.message);
-    // the log line and the invoice's status do not wait for each other
-    const receiptNo = String((receipt as any)?.number ?? "");
-    const forWhat = data.description ? ` (${data.description})` : "";
-    await Promise.all([
-      (invoice as any).enquiry_id
-        ? logBookingEvent(supabase, {
-            enquiryId: (invoice as any).enquiry_id,
-            staff: payStaff,
-            kind: "payment_recorded",
-            ref: String((payment as any).id),
-            summary: `${rm(amount)}${forWhat} received for ${(invoice as any).number} by ${words(data.method)}${receiptNo ? ` · Receipt ${receiptNo}` : ""}`,
-          })
-        : Promise.resolve(),
-      supabase
-        .from("invoices")
-        .update({
-          // paid in advance: it stays scheduled, and is billed on its day already paid
-          status: inAdvance ? "scheduled" : balance <= 0 ? "paid" : "part_paid",
-          updated_at: new Date().toISOString(),
-        } as any)
-        .eq("id", data.invoiceId),
-    ]);
+    // the activity line, once per payment - a retry finds the one already written
+    if (invoice.enquiry_id) {
+      const { data: logged } = saved.replayed
+        ? await supabase
+            .from("booking_events")
+            .select("id")
+            .eq("enquiry_id", invoice.enquiry_id)
+            .eq("kind", "payment_recorded")
+            .eq("ref", String(payment.id))
+            .limit(1)
+        : { data: [] };
+      if (!(logged ?? []).length) {
+        // money on a booking's invoice is recorded by the booking's staff member
+        const payStaff = await staffFor(supabase, invoice.enquiry_id);
+        const receiptNo = String(receipt?.number ?? "");
+        const forWhat = payment.description ? ` (${payment.description})` : "";
+        await logBookingEvent(supabase, {
+          enquiryId: invoice.enquiry_id,
+          staff: payStaff,
+          kind: "payment_recorded",
+          ref: String(payment.id),
+          summary: `${rm(amount)}${forWhat} received for ${invoice.number} by ${words(payment.method)}${receiptNo ? ` · Receipt ${receiptNo}` : ""}`,
+        });
+      }
+    }
 
     let tenancyChange: import("@/lib/tenancy-events.server").EventOutcome[] = [];
     // a replacement access card waits for its invoice to be paid (Dani, 2 Oct 2026)
