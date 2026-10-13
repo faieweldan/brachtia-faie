@@ -26,9 +26,21 @@
 --   resident_placements(residents)
 --                                 where each resident is - the ONE lookup every
 --                                 screen and document reads
+--   move_stay_dates(enquiry, start, end)
+--                                 new dates for a booking's hold or its paid stay,
+--                                 checked and written under the unit's lock
+--   drop_unused_rooms_beds(unit, rooms) / delete_unit_if_unused(unit)
+--                                 the unit editor removing rooms or beds - never
+--                                 one anybody is, was or will be placed on
+--   sync_room_shapes(unit)        as before, now under the unit's lock
+--   placement_guard_report()      whether the rules below are all in place; this
+--                                 file stops with an error unless they are
 --
--- Safe to run twice. Nothing here moves, removes or rewrites a placement.
+-- Safe to run twice. Nothing here moves, removes or rewrites a placement. If it
+-- stops with an error, nothing in it was applied.
 -- ===========================================================================
+
+begin;
 
 -- ---------------------------------------------------------------------------
 -- 1. A hold for a resident (Update Tenancy), beside a booking's hold
@@ -36,13 +48,14 @@
 alter table public.placement_holds
   add column if not exists resident_id uuid references public.residents(id) on delete cascade;
 alter table public.placement_holds alter column enquiry_id drop not null;
-do $$
-begin
-  if not exists (select 1 from pg_constraint where conname = 'placement_holds_owner') then
-    alter table public.placement_holds
-      add constraint placement_holds_owner check (enquiry_id is not null or resident_id is not null);
-  end if;
-end $$;
+-- a hold is a booking's OR a resident's - exactly one of the two
+alter table public.placement_holds drop constraint if exists placement_holds_owner;
+alter table public.placement_holds
+  add constraint placement_holds_owner check ((enquiry_id is null) <> (resident_id is null));
+-- a room held for a resident's change always says from when and until when
+alter table public.placement_holds drop constraint if exists placement_holds_resident_dates;
+alter table public.placement_holds
+  add constraint placement_holds_resident_dates check (resident_id is null or (start_date is not null and end_date is not null));
 create index if not exists placement_holds_resident_idx on public.placement_holds (resident_id);
 
 -- where a stay moved from and to: the tenancy names only its bed now, so a move
@@ -84,7 +97,7 @@ begin
         join public.placement_holds b on b.bed_id = a.bed_id and b.id > a.id
        where public.stay_range(a.start_date, a.end_date) && public.stay_range(b.start_date, b.end_date)
     ) then
-      raise notice 'placement_holds_no_overlap NOT added: two holds on one bed overlap. Release one, then run this file again.';
+      raise exception 'placement_holds_no_overlap cannot be added: two holds on one bed overlap. Release one of them, then run this file again. Nothing was applied.';
     else
       execute 'alter table public.placement_holds add constraint placement_holds_no_overlap
                  exclude using gist (bed_id with =, public.stay_range(start_date, end_date) with &&)';
@@ -278,6 +291,9 @@ begin
   if p_later and v_res.id is null then
     return jsonb_build_object('ok', false, 'error', 'Only a resident''s room can be held for a later date.');
   end if;
+  if p_later and (p_start is null or p_end is null) then
+    return jsonb_build_object('ok', false, 'error', 'A room held for a change needs its start and end dates.');
+  end if;
 
   select * into v_t from public.tenancies t
    where (p_enquiry is not null and t.enquiry_id = p_enquiry)
@@ -448,7 +464,264 @@ as $$
 $$;
 
 -- ---------------------------------------------------------------------------
--- 6. Server only: a new function is open to everyone until it is closed
+-- 6. Is anybody placed on this bed - now, held, to come, or before? Such a bed
+--    is never deleted (a delete would cascade the placement away).
+-- ---------------------------------------------------------------------------
+create or replace function public.bed_in_use(p_bed uuid)
+returns boolean
+language sql stable
+set search_path = public
+as $$
+  select exists (select 1 from public.beds b
+                  where b.id = p_bed and (b.resident_id is not null or b.enquiry_id is not null or b.status <> 'vacant'))
+      or exists (select 1 from public.placement_holds h where h.bed_id = p_bed)
+      or exists (select 1 from public.tenancies t where t.bed_id = p_bed::text)
+      or exists (select 1 from public.placement_moves m where m.from_bed_id = p_bed or m.to_bed_id = p_bed)
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 7. New dates for a booking's stay, checked and written in one step under the
+--    unit's lock (Stay details, Update invoice):
+--      unpaid  its hold's dates
+--      paid    its tenancy's dates, and the copies on its bed and profile
+--    Refused if anybody else has the bed on those dates. Not for a stay already
+--    checked into - that is Update Tenancy's.
+-- ---------------------------------------------------------------------------
+create or replace function public.move_stay_dates(
+  p_enquiry uuid, p_start date, p_end date, p_gender text default null,
+  p_rent numeric default null, p_lease_months text default null
+) returns jsonb
+language plpgsql
+set search_path = public
+as $$
+declare
+  v_e     record;
+  v_h     record;
+  v_t     record;
+  v_bed   uuid;
+  v_again uuid;
+  v_res   uuid;
+  v_units uuid[];
+  v_err   text;
+begin
+  if p_start is not null and p_end is not null and p_end <= p_start then
+    return jsonb_build_object('ok', false, 'error', 'Move out must be after move in.');
+  end if;
+  select * into v_e from public.enquiries where id = p_enquiry;
+  if v_e.id is null then return jsonb_build_object('ok', false, 'error', 'Booking not found.'); end if;
+
+  select * into v_h from public.placement_holds where enquiry_id = p_enquiry;
+  select * into v_t from public.tenancies where enquiry_id = p_enquiry order by created_at desc limit 1;
+  if v_h.id is null and v_t.id is null then
+    -- nothing placed yet: the booking's dates are its own
+    return jsonb_build_object('ok', true, 'kind', 'none');
+  end if;
+  if v_h.id is null and exists (select 1 from public.beds where resident_id = v_t.resident_id and status in ('active', 'notice')) then
+    return jsonb_build_object('ok', false, 'kind', 'checked_in', 'error', 'They have checked in - change the dates with Update Tenancy.');
+  end if;
+  v_res := case when v_h.id is null then v_t.resident_id end;
+  v_bed := coalesce(v_h.bed_id, case when v_t.bed_id ~* '^[0-9a-f-]{36}$' then v_t.bed_id::uuid end);
+
+  select array_agg(distinct rm.unit_id) into v_units
+    from public.beds b join public.rooms rm on rm.id = b.room_id
+   where b.id = v_bed or (v_res is not null and b.resident_id = v_res);
+  perform public.lock_units(v_units);
+
+  -- read again under the lock: the room may have moved meanwhile
+  select coalesce((select h.bed_id from public.placement_holds h where h.enquiry_id = p_enquiry),
+                  (select case when t.bed_id ~* '^[0-9a-f-]{36}$' then t.bed_id::uuid end
+                     from public.tenancies t where t.id = v_t.id)) into v_again;
+  if v_again is distinct from v_bed then
+    return jsonb_build_object('ok', false, 'error', 'The room changed while these dates were being saved. Try again.');
+  end if;
+
+  if v_bed is not null then
+    v_err := public.placement_conflict(v_bed, p_enquiry, v_res, p_start, p_end, coalesce(nullif(p_gender, ''), v_e.gender), false);
+    if v_err is not null then
+      return jsonb_build_object('ok', false, 'conflict', true, 'error', 'These dates clash with the reserved room.', 'detail', v_err);
+    end if;
+  end if;
+
+  if v_h.id is not null then
+    update public.placement_holds set start_date = p_start, end_date = p_end where id = v_h.id;
+  end if;
+  -- unpaid: the hold is the whole placement
+  if v_t.id is null then
+    return jsonb_build_object('ok', true, 'kind', 'hold');
+  end if;
+  update public.tenancies set start_date = p_start, end_date = p_end, updated_at = now() where id = v_t.id;
+  -- the copies shown on the bed they are assigned to and have not moved into, and on their profile
+  update public.beds set tenancy_start = p_start, tenancy_end = p_end,
+         rent = case when coalesce(p_rent, 0) > 0 then p_rent else rent end
+   where resident_id = v_t.resident_id and status in ('booked', 'held');
+  update public.residents set move_in = coalesce(to_char(p_start, 'YYYY-MM-DD'), move_in),
+         lease_months = coalesce(nullif(p_lease_months, ''), lease_months)
+   where id = v_t.resident_id;
+  return jsonb_build_object('ok', true, 'kind', 'tenancy',
+    'changed', v_t.start_date is distinct from p_start or v_t.end_date is distinct from p_end);
+end;
+$$;
+
+-- An Update Tenancy extension or renewal taking effect: the tenancy runs to
+-- p_end, checked under the unit's lock against everybody else on their bed for
+-- the days added, and the room held on for those days is let go - one step.
+create or replace function public.extend_stay(p_resident uuid, p_tenancy uuid, p_end date)
+returns jsonb
+language plpgsql
+set search_path = public
+as $$
+declare
+  v_t   record;
+  v_bed record;
+  v_err text;
+begin
+  select * into v_t from public.tenancies where id = p_tenancy and resident_id = p_resident;
+  if v_t.id is null then return jsonb_build_object('ok', false, 'error', 'Tenancy not found.'); end if;
+  select b.id, rm.unit_id into v_bed from public.beds b join public.rooms rm on rm.id = b.room_id
+   where b.resident_id = p_resident and b.status <> 'vacant' limit 1;
+  if v_bed.id is not null then perform public.lock_units(array[v_bed.unit_id]); end if;
+  if v_t.end_date is not null and p_end > v_t.end_date then
+    if v_bed.id is not null then
+      v_err := public.placement_conflict(v_bed.id, null, p_resident, v_t.end_date + 1, p_end, null, false);
+      if v_err is not null then
+        return jsonb_build_object('ok', false, 'conflict', true, 'error', 'The longer stay clashes with the room.', 'detail', v_err);
+      end if;
+    end if;
+    update public.tenancies set end_date = p_end, updated_at = now() where id = p_tenancy;
+  end if;
+  -- the copy shown on their bed
+  update public.beds set tenancy_end = p_end where resident_id = p_resident;
+  if v_bed.id is not null then
+    delete from public.placement_holds where enquiry_id is null and resident_id = p_resident and bed_id = v_bed.id;
+  end if;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 8. The unit editor removing rooms and beds it no longer lists - checked and
+--    deleted in one step under the unit's lock, so a reservation made a moment
+--    before can never be deleted with its bed. p_rooms: [{letter, labels: [...]}]
+-- ---------------------------------------------------------------------------
+create or replace function public.drop_unused_rooms_beds(p_unit uuid, p_rooms jsonb)
+returns jsonb
+language plpgsql
+set search_path = public
+as $$
+declare
+  v_going uuid[];
+  v_busy  text[];
+begin
+  perform public.lock_units(array[p_unit]);
+  select array_agg(b.id) into v_going
+    from public.beds b join public.rooms rm on rm.id = b.room_id
+   where rm.unit_id = p_unit
+     and not exists (select 1 from jsonb_array_elements(coalesce(p_rooms, '[]'::jsonb)) x
+                      where x ->> 'letter' = rm.letter and coalesce(x -> 'labels', '[]'::jsonb) ? b.label);
+  select array_agg(format('Room %s %s', rm.letter, b.label) order by rm.letter, b.label) into v_busy
+    from public.beds b join public.rooms rm on rm.id = b.room_id
+   where b.id = any(coalesce(v_going, '{}'::uuid[])) and public.bed_in_use(b.id);
+  if v_busy is not null then
+    return jsonb_build_object('ok', false, 'busy', to_jsonb(v_busy));
+  end if;
+  delete from public.beds where id = any(coalesce(v_going, '{}'::uuid[]));
+  delete from public.rooms rm
+   where rm.unit_id = p_unit
+     and not exists (select 1 from jsonb_array_elements(coalesce(p_rooms, '[]'::jsonb)) x where x ->> 'letter' = rm.letter)
+     and not exists (select 1 from public.beds b where b.room_id = rm.id);
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+-- a whole unit deleted only when nobody is, was or will be placed in it
+create or replace function public.delete_unit_if_unused(p_unit uuid)
+returns jsonb
+language plpgsql
+set search_path = public
+as $$
+begin
+  perform public.lock_units(array[p_unit]);
+  if exists (select 1 from public.beds b join public.rooms rm on rm.id = b.room_id
+              where rm.unit_id = p_unit and public.bed_in_use(b.id)) then
+    return jsonb_build_object('ok', false, 'error', 'Somebody is placed in this unit, now, later or before. Deactivate it instead.');
+  end if;
+  delete from public.units where id = p_unit;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 9. sync_room_shapes (20261011110000), now under the units' lock and with the
+--    one bed_in_use rule: it deletes a bed when a twin becomes a single, so a
+--    reservation made meanwhile must not be deleted with it.
+-- ---------------------------------------------------------------------------
+create or replace function public.sync_room_shapes(p_unit uuid default null)
+returns integer
+language plpgsql
+set search_path = public
+as $$
+declare v_n integer;
+begin
+  perform public.lock_units(case when p_unit is null then (select array_agg(id) from public.units) else array[p_unit] end);
+  create temporary table if not exists _reshape (room_id uuid, occ text) on commit drop;
+  delete from _reshape;
+
+  insert into _reshape
+  select rm.id, case when rt.occupancies ? 'twin' then 'twin' else 'single' end
+    from public.rooms rm
+    join public.room_types rt on rt.code = rm.room_type_code
+   where (p_unit is null or rm.unit_id = p_unit)
+     and lower(rm.letter) <> 'unit'
+     and rm.occupancy <> case when rt.occupancies ? 'twin' then 'twin' else 'single' end
+     and not exists (select 1 from public.beds b where b.room_id = rm.id and public.bed_in_use(b.id));
+  get diagnostics v_n = row_count;
+
+  -- single -> twin: the bed becomes Twin 1, and Twin 2 is added
+  update public.beds b set label = 'Twin 1'
+    from _reshape r where r.room_id = b.room_id and r.occ = 'twin';
+  insert into public.beds (room_id, label, status)
+  select r.room_id, 'Twin 2', 'vacant' from _reshape r
+   where r.occ = 'twin' and (select count(*) from public.beds b where b.room_id = r.room_id) < 2;
+
+  -- twin -> single: one bed is kept as Single
+  delete from public.beds b
+   using _reshape r
+   where r.room_id = b.room_id and r.occ = 'single'
+     and b.id <> (select b2.id from public.beds b2 where b2.room_id = r.room_id order by b2.label limit 1);
+  update public.beds b set label = 'Single'
+    from _reshape r where r.room_id = b.room_id and r.occ = 'single';
+
+  update public.rooms rm set occupancy = r.occ, updated_at = now()
+    from _reshape r where r.room_id = rm.id;
+
+  return v_n;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 10. Whether the database's own guards are all in place
+-- ---------------------------------------------------------------------------
+create or replace function public.placement_guard_report()
+returns jsonb
+language sql stable
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'no_overlap', exists (select 1 from pg_constraint
+                           where conrelid = 'public.placement_holds'::regclass and conname = 'placement_holds_no_overlap' and contype = 'x'),
+    'owner_xor', exists (select 1 from pg_constraint
+                          where conrelid = 'public.placement_holds'::regclass and conname = 'placement_holds_owner'
+                            and pg_get_constraintdef(oid) like '%<>%'),
+    'resident_dates', exists (select 1 from pg_constraint
+                               where conrelid = 'public.placement_holds'::regclass and conname = 'placement_holds_resident_dates'),
+    'overlapping_holds', (select count(*) from public.placement_holds a
+                            join public.placement_holds b on b.bed_id = a.bed_id and b.id > a.id
+                           where public.stay_range(a.start_date, a.end_date) && public.stay_range(b.start_date, b.end_date))
+  )
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 11. Server only: a new function is open to everyone until it is closed
 -- ---------------------------------------------------------------------------
 do $$
 declare f text;
@@ -460,9 +733,31 @@ begin
     'public.release_hold(uuid, uuid, uuid)',
     'public.release_hand_hold(uuid)',
     'public.place_stay(uuid, uuid, uuid, boolean, timestamptz, text, date, date, boolean)',
-    'public.resident_placements(uuid[])'
+    'public.resident_placements(uuid[])',
+    'public.bed_in_use(uuid)',
+    'public.move_stay_dates(uuid, date, date, text, numeric, text)',
+    'public.extend_stay(uuid, uuid, date)',
+    'public.drop_unused_rooms_beds(uuid, jsonb)',
+    'public.delete_unit_if_unused(uuid)',
+    'public.sync_room_shapes(uuid)',
+    'public.placement_guard_report()'
   ] loop
     execute format('revoke execute on function %s from public, anon, authenticated', f);
     execute format('grant execute on function %s to service_role', f);
   end loop;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- 12. The file is done only when every guard is in place - otherwise it stops
+--     here with an error, and nothing above is kept.
+-- ---------------------------------------------------------------------------
+do $$
+declare r jsonb := public.placement_guard_report();
+begin
+  if not ((r ->> 'no_overlap')::boolean and (r ->> 'owner_xor')::boolean and (r ->> 'resident_dates')::boolean
+          and (r ->> 'overlapping_holds')::int = 0) then
+    raise exception 'one_placement did not complete: %', r;
+  end if;
+end $$;
+
+commit;

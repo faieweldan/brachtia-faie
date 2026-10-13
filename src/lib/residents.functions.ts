@@ -807,7 +807,12 @@ export const importResidents = createServerFn({ method: "POST" })
         p_end: tenancyEnd || null,
         p_by: "Master list",
       });
-      const placedOut = placedRes as { ok?: boolean; placed?: string; error?: string; detail?: string } | null;
+      const placedOut = placedRes as {
+        ok?: boolean;
+        placed?: string;
+        error?: string;
+        detail?: string;
+      } | null;
       if (placeErr || !placedOut?.ok || placedOut.placed !== "now") {
         report.problems.push({
           row: i + 2,
@@ -817,11 +822,18 @@ export const importResidents = createServerFn({ method: "POST" })
         continue;
       }
       if (!/^booked$/i.test(rawStatus)) {
-        const { data: live } = await supabase.rpc("activate_at_checkin", { p_resident: residentId });
-        if ((live as any)?.ok === false) report.problems.push({ row: i + 2, quickbooksId, reason: String((live as any).error) });
+        const { data: live } = await supabase.rpc("activate_at_checkin", {
+          p_resident: residentId,
+        });
+        if ((live as any)?.ok === false)
+          report.problems.push({ row: i + 2, quickbooksId, reason: String((live as any).error) });
       }
       // the master list's own rent for them, and the upload it came in
-      await supabase.from("beds").update({ rent, import_batch_id: batchId ?? null } as any).eq("id", bedId).eq("resident_id", residentId);
+      await supabase
+        .from("beds")
+        .update({ rent, import_batch_id: batchId ?? null } as any)
+        .eq("id", bedId)
+        .eq("resident_id", residentId);
       report.placed += 1;
     }
 
@@ -837,12 +849,22 @@ export const importResidents = createServerFn({ method: "POST" })
      */
     let cleared = 0;
     for (const id of toClear) {
-      const { data: b } = await supabase.from("beds").select("resident_id, status").eq("id", id).maybeSingle();
+      const { data: b } = await supabase
+        .from("beds")
+        .select("resident_id, status")
+        .eq("id", id)
+        .maybeSingle();
       if (!b) continue;
       if (b.resident_id) {
-        const { data: who } = await supabase.from("residents").select("status").eq("id", b.resident_id).maybeSingle();
+        const { data: who } = await supabase
+          .from("residents")
+          .select("status")
+          .eq("id", b.resident_id)
+          .maybeSingle();
         if (String((who as any)?.status ?? "").toLowerCase() !== "inactive") continue;
-        const { error } = await supabase.rpc("release_after_checkout", { p_resident: b.resident_id });
+        const { error } = await supabase.rpc("release_after_checkout", {
+          p_resident: b.resident_id,
+        });
         if (!error) cleared += 1;
       } else if (b.status === "held") {
         const { data: out } = await supabase.rpc("release_hand_hold", { p_bed: id });

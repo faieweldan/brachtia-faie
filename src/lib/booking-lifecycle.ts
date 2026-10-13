@@ -232,7 +232,11 @@ export async function releaseBooking(supabase: any, enquiryId: string) {
   if (voidRes.error) throw new Error(voidRes.error.message);
   if (enquiryRes.error) throw new Error(enquiryRes.error.message);
   // the booking's hold goes - nobody else's, and no bed row (10 Oct 2026), under the unit's lock (14 Oct 2026)
-  const { error: holdErr } = await supabase.rpc("release_hold", { p_enquiry: enquiryId, p_resident: null, p_bed: null });
+  const { error: holdErr } = await supabase.rpc("release_hold", {
+    p_enquiry: enquiryId,
+    p_resident: null,
+    p_bed: null,
+  });
   if (holdErr) throw new Error(holdErr.message);
 
   return {
@@ -339,6 +343,53 @@ export async function syncBookingStage(supabase: any, enquiryId: string) {
 }
 
 /**
+ * New dates for a booking's stay - its hold, or its paid tenancy and the copies
+ * on its bed and profile - checked and written in one step under the unit's
+ * lock (SQL move_stay_dates, 14 Oct 2026). Used by Stay details, Update invoice and syncPaidStay.
+ */
+export async function moveStayDates(
+  supabase: any,
+  enquiryId: string,
+  start: string | null,
+  end: string | null,
+  gender: string,
+  copies: { rent?: number; leaseMonths?: string } = {},
+): Promise<
+  { ok: true; kind: string; changed?: boolean } | { ok: false; kind?: string; message: string }
+> {
+  const { data, error } = await supabase.rpc("move_stay_dates", {
+    p_enquiry: enquiryId,
+    p_start: start || null,
+    p_end: end || null,
+    p_gender: gender || null,
+    p_rent: copies.rent && copies.rent > 0 ? copies.rent : null,
+    p_lease_months: copies.leaseMonths || null,
+  });
+  if (error) throw new Error(error.message);
+  const out = data as {
+    ok: boolean;
+    kind?: string;
+    changed?: boolean;
+    conflict?: boolean;
+    error?: string;
+    detail?: string;
+  };
+  if (out?.ok)
+    return {
+      ok: true,
+      kind: String(out.kind ?? ""),
+      ...(out.changed !== undefined ? { changed: out.changed } : {}),
+    };
+  return {
+    ok: false,
+    ...(out?.kind ? { kind: out.kind } : {}),
+    message: out?.conflict
+      ? `These dates clash with the reserved room: ${out.detail} Choose other dates, or change the room first.`
+      : String(out?.error ?? "The dates could not be saved."),
+  };
+}
+
+/**
  * A paid booking's stay changed (Dani, 9 Oct 2026): the dates or rent on its
  * initial invoice were updated after the RM500 came in. The resident's
  * tenancy, their bed and their profile follow, so the resident page shows the
@@ -378,23 +429,14 @@ export async function syncPaidStay(supabase: any, enquiryId: string, rentOverrid
   if (!start || !end) return { changed: false as const, reason: "no dates" };
   const datesChanged = start !== String(t.start_date ?? "") || end !== String(t.end_date ?? "");
 
-  const now = new Date().toISOString();
+  // the tenancy, the bed they are assigned to and have not moved into, and their profile -
+  // in one step under the unit's lock, refused if the new dates clash (14 Oct 2026)
   const months = monthsBetween(start, end);
-  const writes = await Promise.all([
-    supabase.from("tenancies").update({ start_date: start, end_date: end, updated_at: now }).eq("id", t.id),
-    // the bed they are assigned to and have not moved into
-    supabase
-      .from("beds")
-      .update({ tenancy_start: start, tenancy_end: end, ...((rentOverride || rent) > 0 ? { rent: rentOverride || rent } : {}) })
-      .eq("resident_id", t.resident_id)
-      .in("status", ["booked", "held"]),
-    supabase
-      .from("residents")
-      .update({ move_in: start, ...(months ? { lease_months: String(months) } : {}) })
-      .eq("id", t.resident_id),
-  ]);
-  const failed = writes.find((w: any) => w.error);
-  if (failed) throw new Error(failed.error.message);
+  const moved = await moveStayDates(supabase, enquiryId, start, end, "", {
+    rent: rentOverride || rent,
+    ...(months ? { leaseMonths: String(months) } : {}),
+  });
+  if (!moved.ok) throw new Error(moved.message);
 
   // rent terms made from the old stay: made again from the new one, unless rent has been billed
   const { data: billed } = await supabase

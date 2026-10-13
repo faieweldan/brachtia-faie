@@ -106,7 +106,8 @@ d("one placement system (test-bratchia)", () => {
         .single(),
     );
     made.unit = u.id;
-    const letters = ["A", "B", "C", "D", "E", "F"];
+    // G: a room nobody is ever placed in, for the "old tab against a reservation" race
+    const letters = ["A", "B", "C", "D", "E", "F", "G"];
     const rooms = await ok<any[]>(
       sb
         .from("rooms")
@@ -336,5 +337,115 @@ d("one placement system (test-bratchia)", () => {
     const f = beds.find((b: any) => b.id === ids["F"]);
     expect(f.status).toBe("active");
     expect(f.upcoming.map((u: any) => u.status)).toEqual(["reserved", "booked"]);
+  });
+
+  test("13. a booking's new dates racing a new reservation on the same bed: exactly one wins", async () => {
+    const { moveStayDates } = await import("../src/lib/booking-lifecycle");
+    const x = await enquiry("Stretch", "2029-01-01", "2029-02-28");
+    expect((await place(x, null, ids["C"]!)).ok).toBe(true);
+    const y = await enquiry("Squeeze", "2029-04-01", "2029-05-31");
+    const [moved, placed] = await Promise.all([
+      moveStayDates(sb, x, "2029-01-01", "2029-06-30", "Male"),
+      place(y, null, ids["C"]!),
+    ]);
+    expect([moved.ok, placed.ok].filter(Boolean).length).toBe(1);
+    const holds = (await holdsOn(ids["C"]!)).filter((h) => String(h.start_date).startsWith("2029"));
+    const overlap = holds.some((a) =>
+      holds.some((b) => a.id !== b.id && a.start_date <= b.end_date && a.end_date >= b.start_date),
+    );
+    expect(overlap).toBe(false);
+  });
+
+  test("14. a paid stay's new dates racing a new reservation: exactly one wins, the tenancy never overlaps it", async () => {
+    const { moveStayDates } = await import("../src/lib/booking-lifecycle");
+    const z = await enquiry("Summer", "2027-08-01", "2027-09-30");
+    const [moved, placed] = await Promise.all([
+      moveStayDates(sb, ids["e2"]!, "2027-01-01", "2027-12-31", "Male"),
+      place(z, null, ids["B1"]!),
+    ]);
+    expect([moved.ok, placed.ok].filter(Boolean).length).toBe(1);
+    const t = await ok<any>(
+      sb.from("tenancies").select("end_date").eq("enquiry_id", ids["e2"]).single(),
+    );
+    const h = (await holdsOn(ids["B1"]!)).find((x) => x.enquiry_id === z);
+    if (h) expect(t.end_date < h.start_date).toBe(true);
+    else expect(t.end_date).toBe("2027-12-31");
+  });
+
+  test("15. an old tab removing a room racing a reservation of it: the reservation is never deleted", async () => {
+    const { readUnit, saveUnitWith } = await import("../src/lib/homes.functions");
+    const now = await readUnit(sb, made.unit);
+    const withoutG = { ...now, rooms: now.rooms.filter((r: any) => r.letter !== "G") };
+    const w = await enquiry("Gamma", "2030-01-01", "2030-03-31");
+    const [saved, placed] = await Promise.all([
+      saveUnitWith(sb, { unit: withoutG }).then(
+        () => true,
+        () => false,
+      ),
+      place(w, null, ids["G"]!).catch(() => ({ ok: false })),
+    ]);
+    const roomG = await ok<any[]>(
+      sb.from("rooms").select("id").eq("unit_id", made.unit).eq("letter", "G"),
+    );
+    const hold = await ok<any>(
+      sb.from("placement_holds").select("id").eq("enquiry_id", w).maybeSingle(),
+    );
+    // one or the other - never a reservation that was made and then deleted with its room
+    expect([saved, placed.ok].filter(Boolean).length).toBe(1);
+    if (placed.ok) expect([roomG.length, !!hold]).toEqual([1, true]);
+    else expect([roomG.length, hold]).toEqual([0, null]);
+  });
+
+  test("16. a hold belongs to exactly one booking or one resident, and a resident's always has dates", async () => {
+    const e = await enquiry("Owner", "2031-01-01", "2031-01-31");
+    const both = await sb.from("placement_holds").insert({
+      enquiry_id: e,
+      resident_id: ids["M"],
+      bed_id: ids["D"],
+      start_date: "2031-01-01",
+      end_date: "2031-01-31",
+    });
+    expect(String(both.error?.message ?? "")).toContain("placement_holds_owner");
+    const neither = await sb
+      .from("placement_holds")
+      .insert({ bed_id: ids["D"], start_date: "2031-02-01", end_date: "2031-02-28" });
+    expect(String(neither.error?.message ?? "")).toContain("placement_holds_owner");
+    const open = await sb.from("placement_holds").insert({
+      resident_id: ids["M"],
+      bed_id: ids["D"],
+      start_date: "2031-03-01",
+      end_date: null,
+    });
+    expect(String(open.error?.message ?? "")).toContain("placement_holds_resident_dates");
+    const later = await place(null, ids["M"]!, ids["D"]!, { p_later: true, p_start: "2031-04-01" });
+    expect([later.ok, later.error]).toEqual([
+      false,
+      "A room held for a change needs its start and end dates.",
+    ]);
+  });
+
+  test("17. an extension taking effect is checked against the stay after it on the same bed", async () => {
+    const t = await ok<any>(
+      sb.from("tenancies").select("id, end_date").eq("resident_id", ids["M"]).single(),
+    );
+    const into = await rpc("extend_stay", {
+      p_resident: ids["M"],
+      p_tenancy: t.id,
+      p_end: "2027-04-30",
+    });
+    expect(into.ok).toBe(false);
+    expect(String(into.detail)).toContain("Future");
+    expect(
+      (await ok<any>(sb.from("tenancies").select("end_date").eq("id", t.id).single())).end_date,
+    ).toBe(t.end_date);
+  });
+
+  test("18. the migration's own guards are all in place (it stops with an error otherwise)", async () => {
+    expect(await rpc("placement_guard_report", {})).toEqual({
+      no_overlap: true,
+      owner_xor: true,
+      resident_dates: true,
+      overlapping_holds: 0,
+    });
   });
 });

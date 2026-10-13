@@ -84,7 +84,9 @@ async function attachUpcoming(supabase: any, beds: any[], unitIds: string[]) {
   if (!beds.length) return beds;
   const bedIds = new Set(beds.map((b) => String(b.id)));
   const claims = (await placementClaims(supabase, unitIds)).filter(
-    (c) => bedIds.has(String(c.bed_id)) && (c.source === "hold" || c.source === "move" || c.source === "tenancy"),
+    (c) =>
+      bedIds.has(String(c.bed_id)) &&
+      (c.source === "hold" || c.source === "move" || c.source === "tenancy"),
   );
   const enquiryIds = [...new Set(claims.map((c) => c.enquiry_id).filter(Boolean))] as string[];
   const residentIds = [...new Set(claims.map((c) => c.resident_id).filter(Boolean))] as string[];
@@ -101,7 +103,12 @@ async function attachUpcoming(supabase: any, beds: any[], unitIds: string[]) {
   ]);
   const enq = new Map(((enquiries ?? []) as any[]).map((e) => [e.id, e]));
   const res = new Map(((residents ?? []) as any[]).map((r) => [r.id, r]));
-  const rentOf = (id?: string | null) => Number(((invoices ?? []) as any[]).find((i) => i.enquiry_id === id)?.monthly_rent || enq.get(id ?? "")?.monthly_rent || 0) || undefined;
+  const rentOf = (id?: string | null) =>
+    Number(
+      ((invoices ?? []) as any[]).find((i) => i.enquiry_id === id)?.monthly_rent ||
+        enq.get(id ?? "")?.monthly_rent ||
+        0,
+    ) || undefined;
 
   return beds.map((b) => {
     const list: UpcomingStay[] = [];
@@ -219,7 +226,11 @@ export const listUnits = createServerFn({ method: "GET" }).handler(async (): Pro
 
   const roomIds = (rooms ?? []).map((r: any) => r.id);
   const beds = roomIds.length
-    ? await attachUpcoming(supabase, (await supabase.from("beds").select("*").in("room_id", roomIds)).data ?? [], unitIds)
+    ? await attachUpcoming(
+        supabase,
+        (await supabase.from("beds").select("*").in("room_id", roomIds)).data ?? [],
+        unitIds,
+      )
     : [];
 
   return units.map((u: any) => toUnit(u, rooms ?? [], beds));
@@ -246,7 +257,10 @@ export const saveUnitRow = createServerFn({ method: "POST" })
  * old: written back, it put a moved or newly booked resident back where they
  * were. Who is in a bed is written only by the placement functions.
  */
-export async function saveUnitWith(supabase: any, data: { unit: Unit; importBatchId?: string }): Promise<Unit> {
+export async function saveUnitWith(
+  supabase: any,
+  data: { unit: Unit; importBatchId?: string },
+): Promise<Unit> {
   {
     const { unit, importBatchId } = data;
 
@@ -363,35 +377,6 @@ export async function saveUnitWith(supabase: any, data: { unit: Unit; importBatc
       : { data: [] as any[], error: null };
     if (roomErr) throw new Error(roomErr.message);
 
-    /*
-     * A room or bed the page no longer lists goes - unless somebody is placed
-     * on it: in it now, holding it, coming to it, or there before (their
-     * tenancy names it, and their statement and documents still read it).
-     */
-    const keptLetters = unit.rooms.map((r) => r.letter);
-    {
-      const { data: allRooms } = await supabase.from("rooms").select("id, letter").eq("unit_id", unitId);
-      const letterOf = new Map(((allRooms ?? []) as any[]).map((r) => [String(r.id), String(r.letter)]));
-      const wanted = new Map(unit.rooms.map((r) => [r.letter, r.beds.map((b) => b.label)]));
-      const { data: allBeds } = letterOf.size
-        ? await supabase.from("beds").select("id, room_id, label").in("room_id", [...letterOf.keys()])
-        : { data: [] };
-      const going = ((allBeds ?? []) as any[]).filter((b) => {
-        const want = wanted.get(letterOf.get(String(b.room_id)) ?? "");
-        return !want || !want.includes(String(b.label));
-      });
-      const busy = await bedsInUse(supabase, unitId, going.map((b) => String(b.id)));
-      if (busy.size) {
-        const names = going
-          .filter((b) => busy.has(String(b.id)))
-          .map((b) => `Room ${letterOf.get(String(b.room_id))} ${b.label}`);
-        throw new Error(`${unit.unitNo}: ${names.join(", ")} cannot be removed - somebody is placed there, now, later or before. Move them first.`);
-      }
-    }
-    let dropRooms = supabase.from("rooms").delete().eq("unit_id", unitId);
-    if (keptLetters.length) dropRooms = dropRooms.not("letter", "in", `(${keptLetters.join(",")})`);
-    await dropRooms;
-
     // beds
     const roomIdByLetter = new Map<string, string>(
       (savedRooms ?? []).map((r: any) => [r.letter as string, r.id as string]),
@@ -417,38 +402,31 @@ export async function saveUnitWith(supabase: any, data: { unit: Unit; importBatc
       if (bedErr) throw new Error(bedErr.message);
     }
 
-    for (const room of unit.rooms) {
-      const roomId = roomIdByLetter.get(room.letter);
-      if (!roomId) continue;
-      const labels = room.beds.map((b) => b.label);
-      let dropBeds = supabase.from("beds").delete().eq("room_id", roomId);
-      if (labels.length)
-        dropBeds = dropBeds.not("label", "in", `(${labels.map((l) => `"${l}"`).join(",")})`);
-      await dropBeds;
+    /*
+     * A room or bed the page no longer lists goes - unless somebody is placed
+     * on it: in it now, holding it, coming to it, or there before (their
+     * tenancy names it, and their statement and documents still read it).
+     * Checked and deleted in one step under the unit's lock (14 Oct 2026), so a
+     * reservation made a moment before is never deleted with its bed.
+     */
+    {
+      const { data: dropped, error: dropErr } = await supabase.rpc("drop_unused_rooms_beds", {
+        p_unit: unitId,
+        p_rooms: unit.rooms.map((r) => ({ letter: r.letter, labels: r.beds.map((b) => b.label) })),
+      });
+      if (dropErr) throw new Error(rpcError(dropErr));
+      const out = dropped as { ok: boolean; busy?: string[] };
+      if (!out?.ok) {
+        throw new Error(
+          `${unit.unitNo}: ${(out?.busy ?? []).join(", ")} cannot be removed - somebody is placed there, now, later or before. Move them first.`,
+        );
+      }
     }
 
     // twin or single follows the room type in Website, whatever was sent
     await syncRoomShapes(supabase, unitId);
     return await readUnit(supabase, unitId);
   }
-}
-
-/**
- * The beds among `bedIds` somebody is placed on - in it now, holding it, or a
- * stay coming to it (placementClaims) - or that any tenancy names, past ones
- * included. Such a bed is never deleted.
- */
-async function bedsInUse(supabase: any, unitId: string, bedIds: string[]) {
-  const ids = new Set(bedIds);
-  if (!ids.size) return new Set<string>();
-  const [claims, { data: tenancyRows }] = await Promise.all([
-    placementClaims(supabase, [unitId]),
-    supabase.from("tenancies").select("bed_id").in("bed_id", [...ids]),
-  ]);
-  return new Set([
-    ...claims.map((c) => String(c.bed_id)),
-    ...((tenancyRows ?? []) as any[]).map((t) => String(t.bed_id)),
-  ].filter((id) => ids.has(id)));
 }
 
 /**
@@ -510,7 +488,11 @@ export async function readUnit(supabase: any, unitId: string): Promise<Unit> {
   const { data: rooms } = await supabase.from("rooms").select("*").eq("unit_id", unitId);
   const roomIds = (rooms ?? []).map((r: any) => r.id);
   const beds = roomIds.length
-    ? await attachUpcoming(supabase, (await supabase.from("beds").select("*").in("room_id", roomIds)).data ?? [], [unitId])
+    ? await attachUpcoming(
+        supabase,
+        (await supabase.from("beds").select("*").in("room_id", roomIds)).data ?? [],
+        [unitId],
+      )
     : [];
   return toUnit(row, rooms ?? [], beds);
 }
@@ -548,7 +530,13 @@ export const setUnitDeactivated = createServerFn({ method: "POST" })
     // placement, so nobody can have moved into it since
     if (data.deactivated && !alreadyOff) {
       // everybody with a claim on it - in it, holding it, or coming to it (placementClaims, 14 Oct 2026)
-      const who = [...new Set((await placementClaims(supabase, [data.id])).map((c) => String(c.who || "").trim()).filter(Boolean))];
+      const who = [
+        ...new Set(
+          (await placementClaims(supabase, [data.id]))
+            .map((c) => String(c.who || "").trim())
+            .filter(Boolean),
+        ),
+      ];
       if (who.length) {
         return {
           ok: false as const,
@@ -597,15 +585,12 @@ export const deleteUnitRow = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     if (!isUuid(data.id)) return { ok: true };
     const supabase = await admin();
-    // its rooms and beds go with it, so a unit anybody is placed in - now, later or before - is kept
-    const { data: rooms } = await supabase.from("rooms").select("id").eq("unit_id", data.id);
-    const roomIds = ((rooms ?? []) as any[]).map((r) => r.id);
-    const { data: beds } = roomIds.length ? await supabase.from("beds").select("id").in("room_id", roomIds) : { data: [] };
-    if ((await bedsInUse(supabase, data.id, ((beds ?? []) as any[]).map((b) => String(b.id)))).size) {
-      throw new Error("Somebody is placed in this unit, now, later or before. Deactivate it instead.");
-    }
-    const { error } = await supabase.from("units").delete().eq("id", data.id);
-    if (error) throw new Error(error.message);
+    // its rooms and beds go with it, so a unit anybody is placed in - now, later or before - is kept,
+    // checked and deleted in one step under the unit's lock (14 Oct 2026)
+    const { data: res, error } = await supabase.rpc("delete_unit_if_unused", { p_unit: data.id });
+    if (error) throw new Error(rpcError(error));
+    if (!(res as any)?.ok)
+      throw new Error(String((res as any)?.error ?? "This unit could not be deleted."));
     return { ok: true };
   });
 
@@ -623,7 +608,9 @@ export const releaseHandHold = createServerFn({ method: "POST" })
     const { data: res, error } = await supabase.rpc("release_hand_hold", { p_bed: data.bedId });
     if (error) return { ok: false as const, error: rpcError(error) };
     const out = res as { ok: boolean; error?: string; released?: boolean };
-    return out?.ok ? { ok: true as const, released: !!out.released } : { ok: false as const, error: out?.error || "The bed could not be released." };
+    return out?.ok
+      ? { ok: true as const, released: !!out.released }
+      : { ok: false as const, error: out?.error || "The bed could not be released." };
   });
 
 /**
@@ -650,7 +637,13 @@ export function toPlacement(row: any): ResidentPlacement {
     enquiryId: row.enquiry_id ?? undefined,
     start: row.starts ?? undefined,
     end: row.ends ?? undefined,
-    next: row.next_bed_id ? { bedId: String(row.next_bed_id), start: row.next_start ?? undefined, end: row.next_end ?? undefined } : undefined,
+    next: row.next_bed_id
+      ? {
+          bedId: String(row.next_bed_id),
+          start: row.next_start ?? undefined,
+          end: row.next_end ?? undefined,
+        }
+      : undefined,
   };
 }
 
@@ -659,7 +652,9 @@ export const listResidentPlacements = createServerFn({ method: "GET" }).handler(
     const supabase = await admin();
     const { data, error } = await supabase.rpc("resident_placements", { p_residents: null });
     if (error) throw new Error(rpcError(error));
-    return Object.fromEntries(((data ?? []) as any[]).map((r) => [String(r.resident_id), toPlacement(r)]));
+    return Object.fromEntries(
+      ((data ?? []) as any[]).map((r) => [String(r.resident_id), toPlacement(r)]),
+    );
   },
 );
 

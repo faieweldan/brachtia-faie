@@ -337,25 +337,23 @@ export const updateEnquiry = createServerFn({ method: "POST" })
       }
       const { data: h } = await (supabase as any)
         .from("placement_holds")
-        .select("id, bed_id, start_date, end_date")
+        .select("id")
         .eq("enquiry_id", data.id)
         .maybeSingle();
       if (h) {
         const { data: cur } = await supabase.from("enquiries").select("move_in, move_out, gender").eq("id", data.id).maybeSingle();
         const start = (patch["move_in"] as string | null | undefined) !== undefined ? (patch["move_in"] as string | null) : ((cur as any)?.move_in ?? null);
         const end = (patch["move_out"] as string | null | undefined) !== undefined ? (patch["move_out"] as string | null) : ((cur as any)?.move_out ?? null);
-        const { data: clash, error: cErr } = await (supabase as any).rpc("placement_conflict", {
-          p_bed: h.bed_id,
-          p_enquiry: data.id,
-          p_resident: null,
-          p_start: start,
-          p_end: end,
-          p_gender: String((patch["gender"] as string) ?? (cur as any)?.gender ?? ""),
-          p_whole: false,
-        });
-        if (cErr) throw new Error(cErr.message);
-        if (clash) throw new Error(`These dates clash with the reserved room: ${clash} Choose other dates, or change the room first.`);
-        await (supabase as any).from("placement_holds").update({ start_date: start, end_date: end }).eq("id", h.id);
+        // checked and moved in one step under the unit's lock (move_stay_dates, 14 Oct 2026)
+        const { moveStayDates } = await import("@/lib/booking-lifecycle");
+        const moved = await moveStayDates(
+          supabase,
+          data.id,
+          start,
+          end,
+          String((patch["gender"] as string) ?? (cur as any)?.gender ?? ""),
+        );
+        if (!moved.ok) throw new Error(moved.message);
       } else {
         /*
          * Paid (14 Oct 2026): the stay is its tenancy, on the bed it names. New
@@ -371,9 +369,15 @@ export const updateEnquiry = createServerFn({ method: "POST" })
           .not("bed_id", "is", null)
           .maybeSingle();
         if (t?.bed_id) {
-          const { data: cur } = await supabase.from("enquiries").select("move_in, move_out, gender").eq("id", data.id).maybeSingle();
-          const start = data.moveIn !== undefined ? data.moveIn || null : ((cur as any)?.move_in ?? null);
-          const end = data.moveOut !== undefined ? data.moveOut || null : ((cur as any)?.move_out ?? null);
+          const { data: cur } = await supabase
+            .from("enquiries")
+            .select("move_in, move_out, gender")
+            .eq("id", data.id)
+            .maybeSingle();
+          const start =
+            data.moveIn !== undefined ? data.moveIn || null : ((cur as any)?.move_in ?? null);
+          const end =
+            data.moveOut !== undefined ? data.moveOut || null : ((cur as any)?.move_out ?? null);
           const { data: clash, error: cErr } = await (supabase as any).rpc("placement_conflict", {
             p_bed: t.bed_id,
             p_enquiry: data.id,
@@ -384,7 +388,10 @@ export const updateEnquiry = createServerFn({ method: "POST" })
             p_whole: false,
           });
           if (cErr) throw new Error(cErr.message);
-          if (clash) throw new Error(`These dates clash with the reserved room: ${clash} Choose other dates, or change the room first.`);
+          if (clash)
+            throw new Error(
+              `These dates clash with the reserved room: ${clash} Choose other dates, or change the room first.`,
+            );
         }
       }
     }
@@ -1586,6 +1593,20 @@ async function syncInitialInvoice(supabase: any, enquiryId: string) {
     if (!lines)
       throw new Error("The stay has no rent or dates, so the invoice could not be worked out");
 
+  // the stay moves to the new dates first, checked under the unit's lock - so dates that
+  // clash with somebody else on the bed are refused before the invoice changes (14 Oct 2026)
+  {
+    const { moveStayDates } = await import("@/lib/booking-lifecycle");
+    const moved = await moveStayDates(
+      supabase,
+      enquiryId,
+      r.move_in ?? null,
+      r.move_out ?? null,
+      String(r.gender ?? ""),
+    );
+    if (!moved.ok && moved.kind !== "checked_in") throw new Error(moved.message);
+  }
+
     const saved = await rewriteInvoice(supabase, {
       invoiceId: inv.id,
       items: lines,
@@ -2349,7 +2370,10 @@ export const getCheckInContext = createServerFn({ method: "GET" })
       if (row) tenancy = { start: String(row.start_date ?? ""), end: String(row.end_date ?? "") };
     }
 
-    const place = enquiryId || residentId ? await heldPlace(supabase, enquiryId, residentId || undefined) : null;
+    const place =
+      enquiryId || residentId
+        ? await heldPlace(supabase, enquiryId, residentId || undefined)
+        : null;
     return {
       resident,
       residenceName: String(a.residence_name ?? ""),

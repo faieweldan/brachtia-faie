@@ -209,115 +209,183 @@ export const applyTenancyChange = createServerFn({ method: "POST" })
     const held: string[] = [];
     {
       const { dayBefore } = await import("@/lib/placement");
-      const { data: live } = await sb.from("beds").select("id").eq("resident_id", data.residentId).neq("status", "vacant").limit(1).maybeSingle();
+      const { data: live } = await sb
+        .from("beds")
+        .select("id")
+        .eq("resident_id", data.residentId)
+        .neq("status", "vacant")
+        .limit(1)
+        .maybeSingle();
       const holds: { bedId: string; start: string; end: string }[] = [];
       if (live?.id && finalEnd > data.change.oldEnd) {
         const from = T.nextDay(data.change.oldEnd);
         const until = T.isMove(flags) && data.moveOn ? dayBefore(data.moveOn) : finalEnd;
         if (until >= from) holds.push({ bedId: String(live.id), start: from, end: until });
       }
-      if (T.isMove(flags) && data.moveTo) holds.push({ bedId: data.moveTo.bedId, start: data.moveOn, end: finalEnd });
+      if (T.isMove(flags) && data.moveTo)
+        holds.push({ bedId: data.moveTo.bedId, start: data.moveOn, end: finalEnd });
       for (const h of holds) {
         const r = await E.holdForChange(sb, data.residentId, h.bedId, h.start, h.end);
         if (!r.ok) {
           for (const b of held) await E.releaseChangeHold(sb, data.residentId, b);
-          const { data: me } = await sb.from("residents").select("full_name").eq("id", data.residentId).maybeSingle();
-          throw new Error(`${me?.full_name || "This resident"}'s change to ${fmtDay(finalEnd)} overlaps: ${r.detail} Move them first.`);
+          const { data: me } = await sb
+            .from("residents")
+            .select("full_name")
+            .eq("id", data.residentId)
+            .maybeSingle();
+          throw new Error(
+            `${me?.full_name || "This resident"}'s change to ${fmtDay(finalEnd)} overlaps: ${r.detail} Move them first.`,
+          );
         }
         held.push(h.bedId);
       }
     }
     let saved = false;
     try {
+      const { data: sched } = await sb
+        .from("rental_schedules")
+        .select("monthly_rent")
+        .eq("tenancy_id", data.tenancyId)
+        .maybeSingle();
+      const { data: ag } = await sb
+        .from("tenancy_agreements")
+        .select("id")
+        .eq("resident_id", data.residentId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const { addCredit, applyAccountCredit } = await import("@/lib/account-credit.server");
+      const { readRentSteps, rentOn } = await import("@/lib/rent-schedule.server");
+      const { shiftDate } = await import("@/lib/rental-schedule");
+      const steps = (await readRentSteps(sb, data.residentId, data.tenancyId)).steps;
 
-    const { data: sched } = await sb.from("rental_schedules").select("monthly_rent").eq("tenancy_id", data.tenancyId).maybeSingle();
-    const { data: ag } = await sb.from("tenancy_agreements").select("id").eq("resident_id", data.residentId).order("created_at", { ascending: false }).limit(1).maybeSingle();
-    const { addCredit, applyAccountCredit } = await import("@/lib/account-credit.server");
-    const { readRentSteps, rentOn } = await import("@/lib/rent-schedule.server");
-    const { shiftDate } = await import("@/lib/rental-schedule");
-    const steps = (await readRentSteps(sb, data.residentId, data.tenancyId)).steps;
-
-    let rent = rentOn(steps, shiftDate(plan[0]!.date, { days: -1 }), Number(sched?.monthly_rent ?? 0));
-    let held = await heldNow(sb, data.residentId);
-    const requestId = crypto.randomUUID().slice(0, 8);
-    const allowances = (await readJson<Allowance[]>(sb, allowancePath(data.residentId))) ?? [];
-    const events: import("@/lib/tenancy-events.server").TenancyEvent[] = [];
-    const log: unknown[] = [];
-    let renewalBefore = false;
-
-    for (const [i, p] of plan.entries()) {
-      const e = data.events[i]!;
-      const eventId = crypto.randomUUID().slice(0, 8);
-      const name = T.eventName(p.flags);
-
-      // the deposits against what is held before this event; the card deposit is carried over
-      const d = T.eventDeposits(held, { ...e.required, card_deposit: held.card_deposit }, e.waived);
-      await addCredit(
-        sb,
-        data.residentId,
-        d.reclassified.map((r) => ({ amount: r.amount, kind: "deposit" as const, depositKey: r.key, depositLabel: r.label, reason: `${r.label} reduced - ${name.toLowerCase()} ${p.date}`, eventId })),
+      let rent = rentOn(
+        steps,
+        shiftDate(plan[0]!.date, { days: -1 }),
+        Number(sched?.monthly_rent ?? 0),
       );
-      allowances.push(...d.waived.map((w) => ({ ...w, eventId, at: new Date().toISOString() })));
-      held = d.heldAfter;
+      let held = await heldNow(sb, data.residentId);
+      const requestId = crypto.randomUUID().slice(0, 8);
+      const allowances = (await readJson<Allowance[]>(sb, allowancePath(data.residentId))) ?? [];
+      const events: import("@/lib/tenancy-events.server").TenancyEvent[] = [];
+      const log: unknown[] = [];
+      let renewalBefore = false;
 
-      // the IP: deposit differences, and the fixed fees not waived
-      const fees = T.fixedCharges(p.flags).filter((c) => !e.waivedFees.includes(c.key));
-      const ip = T.eventInvoice(d.ipLines, fees, 0);
-      let invoice: { id: string; number: string } | null = null;
-      const billOn = ip.total > 0 ? T.ipBillOn(p.date, today) : "";
-      if (ip.total > 0) {
-        const { raiseIp } = await import("@/lib/tenancy-events.server");
-        invoice = await raiseIp(sb, data.residentId, data.tenancyId, ip.lines, {
-          billOn,
-          note: `${TOP_UP_NOTE} - ${name} ${p.date}`,
-          tenancyEnd: e.periodEnd,
+      for (const [i, p] of plan.entries()) {
+        const e = data.events[i]!;
+        const eventId = crypto.randomUUID().slice(0, 8);
+        const name = T.eventName(p.flags);
+
+        // the deposits against what is held before this event; the card deposit is carried over
+        const d = T.eventDeposits(
+          held,
+          { ...e.required, card_deposit: held.card_deposit },
+          e.waived,
+        );
+        await addCredit(
+          sb,
+          data.residentId,
+          d.reclassified.map((r) => ({
+            amount: r.amount,
+            kind: "deposit" as const,
+            depositKey: r.key,
+            depositLabel: r.label,
+            reason: `${r.label} reduced - ${name.toLowerCase()} ${p.date}`,
+            eventId,
+          })),
+        );
+        allowances.push(...d.waived.map((w) => ({ ...w, eventId, at: new Date().toISOString() })));
+        held = d.heldAfter;
+
+        // the IP: deposit differences, and the fixed fees not waived
+        const fees = T.fixedCharges(p.flags).filter((c) => !e.waivedFees.includes(c.key));
+        const ip = T.eventInvoice(d.ipLines, fees, 0);
+        let invoice: { id: string; number: string } | null = null;
+        const billOn = ip.total > 0 ? T.ipBillOn(p.date, today) : "";
+        if (ip.total > 0) {
+          const { raiseIp } = await import("@/lib/tenancy-events.server");
+          invoice = await raiseIp(sb, data.residentId, data.tenancyId, ip.lines, {
+            billOn,
+            note: `${TOP_UP_NOTE} - ${name} ${p.date}`,
+            tenancyEnd: e.periodEnd,
+            rent: e.rent || rent,
+            roomName: e.roomName,
+            occupancy: e.occupancy,
+          });
+        }
+        const docs = T.documentsFor(p.flags);
+        events.push({
+          eventId,
+          requestId,
+          name,
+          date: p.date,
+          flags: p.flags,
+          tenancyId: data.tenancyId,
+          rentBefore: rent,
           rent: e.rent || rent,
-          roomName: e.roomName,
-          occupancy: e.occupancy,
+          periodEnd: e.periodEnd,
+          ...(T.isMove(p.flags) && data.moveTo ? { moveTo: data.moveTo } : {}),
+          ...(invoice
+            ? {
+                invoiceId: invoice.id,
+                invoiceNumber: invoice.number.startsWith("SCH-") ? "" : invoice.number,
+                billOn,
+              }
+            : {}),
+          ipTotal: ip.total,
+          plan: docs,
+          mergeValues: e.mergeValues,
+          // a room change before any renewal revises today's agreement
+          ...(!docs.newAgreement && !renewalBefore && ag?.id ? { agreementId: String(ag.id) } : {}),
+          at: new Date().toISOString(),
         });
+        if (docs.newAgreement) renewalBefore = true;
+        log.push({
+          eventId,
+          name,
+          date: p.date,
+          flags: p.flags,
+          rent: e.rent,
+          deposits: d.rows,
+          waived: d.waived,
+          waivedFees: e.waivedFees,
+          reclassified: d.reclassified,
+          ip,
+        });
+        rent = e.rent || rent;
       }
-      const docs = T.documentsFor(p.flags);
-      events.push({
-        eventId,
-        requestId,
-        name,
-        date: p.date,
-        flags: p.flags,
-        tenancyId: data.tenancyId,
-        rentBefore: rent,
-        rent: e.rent || rent,
-        periodEnd: e.periodEnd,
-        ...(T.isMove(p.flags) && data.moveTo ? { moveTo: data.moveTo } : {}),
-        ...(invoice ? { invoiceId: invoice.id, invoiceNumber: invoice.number.startsWith("SCH-") ? "" : invoice.number, billOn } : {}),
-        ipTotal: ip.total,
-        plan: docs,
-        mergeValues: e.mergeValues,
-        // a room change before any renewal revises today's agreement
-        ...(!docs.newAgreement && !renewalBefore && ag?.id ? { agreementId: String(ag.id) } : {}),
-        at: new Date().toISOString(),
-      });
-      if (docs.newAgreement) renewalBefore = true;
-      log.push({ eventId, name, date: p.date, flags: p.flags, rent: e.rent, deposits: d.rows, waived: d.waived, waivedFees: e.waivedFees, reclassified: d.reclassified, ip });
-      rent = e.rent || rent;
-    }
 
-    await writeJson(sb, allowancePath(data.residentId), allowances);
-    await writeJson(sb, `tenancy-change/${data.residentId}/${new Date().toISOString().replace(/[:.]/g, "-")}.json`, { change: data.change, moveOn: data.moveOn, events: log });
-    await E.addEvents(sb, data.residentId, events);
-    saved = true;
-    // account credit on the IPs, in event order - nothing else, as the preview showed it
-    for (const ev of events) if (ev.invoiceId) await applyAccountCredit(sb, data.residentId, ev.invoiceId, true);
-    await E.processResident(sb, data.residentId);
-    const after = await E.readEvents(sb, data.residentId);
-    return {
-      events: events.map((ev) => {
-        const now = after.find((a) => a.eventId === ev.eventId);
-        return { name: ev.name, date: ev.date, ipTotal: ev.ipTotal, billOn: ev.billOn ?? "", settled: !!now?.settledAt, effective: !!now?.effectiveAt };
-      }),
-    };
+      await writeJson(sb, allowancePath(data.residentId), allowances);
+      await writeJson(
+        sb,
+        `tenancy-change/${data.residentId}/${new Date().toISOString().replace(/[:.]/g, "-")}.json`,
+        { change: data.change, moveOn: data.moveOn, events: log },
+      );
+      await E.addEvents(sb, data.residentId, events);
+      saved = true;
+      // account credit on the IPs, in event order - nothing else, as the preview showed it
+      for (const ev of events)
+        if (ev.invoiceId) await applyAccountCredit(sb, data.residentId, ev.invoiceId, true);
+      await E.processResident(sb, data.residentId);
+      const after = await E.readEvents(sb, data.residentId);
+      return {
+        events: events.map((ev) => {
+          const now = after.find((a) => a.eventId === ev.eventId);
+          return {
+            name: ev.name,
+            date: ev.date,
+            ipTotal: ev.ipTotal,
+            billOn: ev.billOn ?? "",
+            settled: !!now?.settledAt,
+            effective: !!now?.effectiveAt,
+          };
+        }),
+      };
     } catch (err) {
       // the change was not saved: the rooms held for it are let go
-      if (!saved) for (const b of held) await E.releaseChangeHold(sb, data.residentId, b).catch(() => undefined);
+      if (!saved)
+        for (const b of held)
+          await E.releaseChangeHold(sb, data.residentId, b).catch(() => undefined);
       throw err;
     }
   });

@@ -358,7 +358,11 @@ async function makeDocuments(sb: any, residentId: string, ev0: TenancyEvent) {
 /* --------------------------------------------------------------- effective */
 
 /** the day has come: the bed moves, and the end date changes */
-export async function makeEffective(sb: any, residentId: string, ev: TenancyEvent): Promise<boolean> {
+export async function makeEffective(
+  sb: any,
+  residentId: string,
+  ev: TenancyEvent,
+): Promise<boolean> {
   if (ev.moveTo) {
     const { data: target } = await sb.from("beds").select("id, resident_id, resident_name").eq("id", ev.moveTo.bedId).maybeSingle();
     if (!target) return false;
@@ -400,12 +404,18 @@ export async function makeEffective(sb: any, residentId: string, ev: TenancyEven
     await sb.from("beds").update({ rent: ev.rent }).eq("resident_id", residentId);
   }
   if (ev.flags.date !== "none") {
-    const { data: t } = await sb.from("tenancies").select("end_date").eq("id", ev.tenancyId).maybeSingle();
-    if (t && day(t.end_date) < ev.periodEnd) await sb.from("tenancies").update({ end_date: ev.periodEnd }).eq("id", ev.tenancyId);
-    await sb.from("beds").update({ tenancy_end: ev.periodEnd }).eq("resident_id", residentId);
-    // the room held on for the longer stay is now part of it
-    const { data: own } = await sb.from("beds").select("id").eq("resident_id", residentId).neq("status", "vacant").limit(1).maybeSingle();
-    if (own?.id) await releaseChangeHold(sb, residentId, own.id);
+    // the tenancy runs to its new end, checked under the unit's lock, and the room held on
+    // for those days is let go - one step (extend_stay, 14 Oct 2026)
+    const { data: out, error } = await sb.rpc("extend_stay", {
+      p_resident: residentId,
+      p_tenancy: ev.tenancyId,
+      p_end: ev.periodEnd,
+    });
+    if (error) throw new Error(error.message);
+    if (!(out as any)?.ok)
+      throw new Error(
+        String((out as any)?.detail || (out as any)?.error || "The tenancy could not be extended."),
+      );
   }
   ev.effectiveAt = new Date().toISOString();
   return true;
@@ -610,7 +620,13 @@ export async function cancelEvent(sb: any, residentId: string, eventId: string, 
     // the room held for this part of the change - the new room, or their own held on for a longer stay
     if (t.moveTo) await releaseChangeHold(sb, residentId, t.moveTo.bedId);
     else if (t.flags.date !== "none") {
-      const { data: own } = await sb.from("beds").select("id").eq("resident_id", residentId).neq("status", "vacant").limit(1).maybeSingle();
+      const { data: own } = await sb
+        .from("beds")
+        .select("id")
+        .eq("resident_id", residentId)
+        .neq("status", "vacant")
+        .limit(1)
+        .maybeSingle();
       if (own?.id) await releaseChangeHold(sb, residentId, own.id);
     }
     t.cancelled = { at, reason, approvedBy, toCredit, ...(t !== ev ? { withEvent: ev.eventId } : {}) };
@@ -688,7 +704,13 @@ export const reservedLabel = (name: string, date: string) => `${name} - room cha
  * booking's room picker, Homes and the database rule. It blocks only those
  * dates. Before, the bed row was marked held (no dates, unseen by bookings).
  */
-export async function holdForChange(sb: any, residentId: string, bedId: string, start: string, end: string) {
+export async function holdForChange(
+  sb: any,
+  residentId: string,
+  bedId: string,
+  start: string,
+  end: string,
+) {
   const { data, error } = await sb.rpc("place_stay", {
     p_enquiry: null,
     p_resident: residentId,
@@ -700,12 +722,21 @@ export async function holdForChange(sb: any, residentId: string, bedId: string, 
   });
   if (error) throw new Error(error.message);
   const out = data as { ok: boolean; error?: string; detail?: string };
-  return out?.ok ? { ok: true as const } : { ok: false as const, detail: String(out?.detail || out?.error || "The room is not free for these dates.") };
+  return out?.ok
+    ? { ok: true as const }
+    : {
+        ok: false as const,
+        detail: String(out?.detail || out?.error || "The room is not free for these dates."),
+      };
 }
 
 /** Let go of the rooms held for the resident's change - every one, or the one on `bedId`. Nobody else's. */
 export async function releaseChangeHold(sb: any, residentId: string, bedId?: string) {
-  const { error } = await sb.rpc("release_hold", { p_enquiry: null, p_resident: residentId, p_bed: bedId ?? null });
+  const { error } = await sb.rpc("release_hold", {
+    p_enquiry: null,
+    p_resident: residentId,
+    p_bed: bedId ?? null,
+  });
   if (error) throw new Error(error.message);
 }
 

@@ -18,19 +18,18 @@ import { findBedForResident, type Unit } from "../src/lib/ops-store";
  * or one of the release functions instead.
  */
 const KNOWN: Record<string, number> = {
-  // saveUnitWith: bed labels and order only; removing a bed nobody is placed on;
-  // the two "database not migrated yet" fallbacks of checkout and check-in
-  "src/lib/homes.functions.ts": 4,
-  // the rent in force and the longer end date, copied onto the bed for display
-  "src/lib/tenancy-events.server.ts": 3,
-  // syncPaidStay: the paid stay's dates and rent copied onto its bed for display
-  "src/lib/booking-lifecycle.ts": 1,
+  // saveUnitWith: bed labels and order only (removal is drop_unused_rooms_beds); the two
+  // "database not migrated yet" fallbacks of checkout and check-in
+  "src/lib/homes.functions.ts": 3,
+  // the rent in force copied onto the bed for display, after a move or a rent change
+  "src/lib/tenancy-events.server.ts": 2,
   // the master-list upload building a unit's rooms and beds, and its rent on the bed
   "src/lib/residents.functions.ts": 5,
-  // Stay details: an unpaid booking's hold follows its dates, after placement_conflict
-  "src/lib/admin.functions.ts": 1,
 };
-const WRITE = /from\("(beds|placement_holds)"\)\s*\.\s*(update|insert|upsert|delete)\b/g;
+// a tenancy's dates (and its bed) count too: they are written by place_stay, move_stay_dates
+// and extend_stay. Creating a tenancy (insert) is not a date change and is not counted.
+const WRITE =
+  /from\("(beds|placement_holds)"\)\s*\.\s*(update|insert|upsert|delete)\b|from\("tenancies"\)\s*\.\s*(update|upsert)\b/g;
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => {
@@ -116,5 +115,48 @@ describe("findBedForResident reads the one lookup", () => {
 
   test("not in the lookup once it has loaded: no room, whatever a bed row says", () => {
     expect(findBedForResident([unit], { id: "someone-else" }, {})).toBeUndefined();
+  });
+});
+
+/*
+ * The migration stops - and keeps nothing - unless every guard is in place
+ * (review, 14 Oct 2026). Its failure path cannot be run against a database
+ * from here (the service role cannot drop a constraint), so its text is
+ * checked; the database test checks placement_guard_report on the result.
+ */
+describe("20261014100000_one_placement.sql guards itself", () => {
+  const sql = readFileSync("supabase/migrations/20261014100000_one_placement.sql", "utf8");
+
+  test("it runs as one transaction", () => {
+    expect(sql).toMatch(/^begin;$/m);
+    expect(sql.trimEnd().endsWith("commit;")).toBe(true);
+  });
+
+  test("overlapping holds stop it with an error, never just a notice", () => {
+    expect(sql).not.toMatch(/raise notice/i);
+    const block = sql.slice(
+      sql.indexOf("placement_holds_no_overlap"),
+      sql.indexOf("-- 2. Every claim"),
+    );
+    expect(block).toMatch(/raise exception 'placement_holds_no_overlap cannot be added/);
+  });
+
+  test("it ends by checking every guard, and raises if one is missing", () => {
+    const tail = sql.slice(sql.lastIndexOf("-- 12."));
+    expect(tail).toContain("placement_guard_report()");
+    expect(tail).toMatch(/raise exception 'one_placement did not complete/);
+  });
+
+  test("a hold has exactly one owner, and a resident's hold has both dates", () => {
+    expect(sql).toContain("check ((enquiry_id is null) <> (resident_id is null))");
+    expect(sql).toContain(
+      "check (resident_id is null or (start_date is not null and end_date is not null))",
+    );
+  });
+
+  test("every function it creates is closed to everybody but the server", () => {
+    const made = [...sql.matchAll(/create or replace function public\.(\w+)\(/g)].map((m) => m[1]!);
+    const grants = sql.slice(sql.indexOf("foreach f in array array["));
+    expect(made.filter((f) => !grants.includes(`'public.${f}(`))).toEqual([]);
   });
 });
