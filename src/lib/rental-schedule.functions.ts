@@ -15,9 +15,10 @@ import type { ScheduleTerms } from "@/lib/rental-schedule";
  * financial history; they never write back to them.
  */
 
+/** the service-role client - only after the admin session is checked (adminDb) */
 async function admin(): Promise<any> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin as any;
+  const { adminDb } = await import("@/lib/admin-session.server");
+  return adminDb();
 }
 
 export type TenancyTerms = { id: string; start: string; end: string };

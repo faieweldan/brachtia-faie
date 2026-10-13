@@ -3,9 +3,10 @@ import { createServerFn } from "@tanstack/react-start";
 import type { MigrationPreviewRow } from "@/lib/migration/sheet3";
 import type { ImportOutcome } from "@/lib/migration/import.server";
 
+/** the service-role client - only after the admin session is checked (adminDb) */
 async function admin(): Promise<any> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin as any;
+  const { adminDb } = await import("@/lib/admin-session.server");
+  return adminDb();
 }
 
 /**

@@ -17,9 +17,10 @@ import { DOC_BUCKET, DOC_MIME_TYPES, MAX_DOC_BYTES, safeExt } from "@/lib/reside
  * charges, and checkout.
  */
 
+/** the service-role client - only after the admin session is checked (adminDb) */
 async function admin(): Promise<any> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin as any;
+  const { adminDb } = await import("@/lib/admin-session.server");
+  return adminDb();
 }
 
 export type BillingInvoice = {

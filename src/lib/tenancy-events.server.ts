@@ -308,7 +308,7 @@ async function applyRent(sb: any, residentId: string, ev: TenancyEvent) {
 
 /** each document once: a new agreement, or a revised Schedule A / C; and the access card form */
 async function makeDocuments(sb: any, residentId: string, ev0: TenancyEvent) {
-  const { renewAgreement, reviseSchedule } = await import("@/lib/tenancy-docs.functions");
+  const { renewAgreementWith, reviseScheduleWith } = await import("@/lib/tenancy-docs.functions");
   /*
    * The documents' values, built like the first pack's: every placeholder through
    * its mapping, with this event's bed, dates and rent (10 Oct 2026). What the
@@ -337,9 +337,7 @@ async function makeDocuments(sb: any, residentId: string, ev0: TenancyEvent) {
   for (const k of Object.keys(mapped)) if (/^(schedule_a_effective_date|effective_date)$/i.test(k)) mapped[k] = fmtTemplateDate(ev0.date);
   const ev = { ...ev0, mergeValues: { ...ev0.mergeValues, ...mapped } };
   if (ev.plan.newAgreement) {
-    await renewAgreement({
-      data: { residentId, tenancyId: ev.tenancyId, mergeValues: ev.mergeValues, periodStart: ev.date, periodEnd: ev.periodEnd },
-    });
+    await renewAgreementWith(sb, { residentId, tenancyId: ev.tenancyId, mergeValues: ev.mergeValues, periodStart: ev.date, periodEnd: ev.periodEnd });
   } else if (ev.plan.scheduleA || ev.plan.scheduleC) {
     // fixed on confirm - a renewal earlier in the request leaves its own agreement as the latest
     const { data: latest } = ev.agreementId
@@ -347,8 +345,8 @@ async function makeDocuments(sb: any, residentId: string, ev0: TenancyEvent) {
       : await sb.from("tenancy_agreements").select("id").eq("resident_id", residentId).order("created_at", { ascending: false }).limit(1).maybeSingle();
     const agreementId = ev.agreementId || latest?.id;
     if (agreementId) {
-      if (ev.plan.scheduleA) await reviseSchedule({ data: { agreementId, docType: "sched_a", mergeValues: ev.mergeValues, periodEnd: ev.periodEnd } });
-      if (ev.plan.scheduleC) await reviseSchedule({ data: { agreementId, docType: "sched_c", mergeValues: ev.mergeValues } });
+      if (ev.plan.scheduleA) await reviseScheduleWith(sb, { agreementId, docType: "sched_a", mergeValues: ev.mergeValues, periodEnd: ev.periodEnd });
+      if (ev.plan.scheduleC) await reviseScheduleWith(sb, { agreementId, docType: "sched_c", mergeValues: ev.mergeValues });
     }
   }
   if (ev.plan.accessCard) {

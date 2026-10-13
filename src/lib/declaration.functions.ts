@@ -21,9 +21,16 @@ import {
  * that amounts to a signature.
  */
 
-async function admin(): Promise<any> {
+/** for the token-link functions: each checks its own token before reading anything */
+async function db(): Promise<any> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   return supabaseAdmin as any;
+}
+
+/** for the admin functions: the client only after the admin session is checked */
+async function admin(): Promise<any> {
+  const { adminDb } = await import("@/lib/admin-session.server");
+  return adminDb();
 }
 
 async function sha256(text: string) {
@@ -94,7 +101,7 @@ export type SignedDeclaration = {
 export const getDeclarationByToken = createServerFn({ method: "GET" })
   .inputValidator((data: { token: string }) => data)
   .handler(async ({ data }) => {
-    const supabase = await admin();
+    const supabase = await db();
     const found = await residentForToken(supabase, data.token);
     if ("error" in found) return { ok: false as const, error: found.error };
 
@@ -129,7 +136,7 @@ export const signDeclarationByToken = createServerFn({ method: "POST" })
     }) => data,
   )
   .handler(async ({ data }) => {
-    const supabase = await admin();
+    const supabase = await db();
     const found = await residentForToken(supabase, data.token);
     if ("error" in found) return { ok: false as const, error: found.error };
 

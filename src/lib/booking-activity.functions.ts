@@ -15,9 +15,10 @@ import { stageLabel } from "@/lib/bookings-pipeline";
  * A step that is in both is shown once, from the audit trail.
  */
 
+/** the service-role client - only after the admin session is checked (adminDb) */
 async function admin(): Promise<any> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin as any;
+  const { adminDb } = await import("@/lib/admin-session.server");
+  return adminDb();
 }
 
 /** `staff` is empty only for steps from before the audit trail. */

@@ -19,11 +19,12 @@ import type { DepositLine, RentDue } from "@/lib/dashboard-money";
  */
 export const dashboardMoney = createServerFn({ method: "GET" }).handler(
   async (): Promise<{ deposits: DepositLine[]; rent: RentDue[] }> => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // admin only: the session is checked on the server before the database is read
+    const { adminDb } = await import("@/lib/admin-session.server");
+    const sb = await adminDb();
     const { dueDateOf, isDeposit } = await import("@/lib/resident-billing.functions");
     const { readStatement } = await import("@/lib/checkout.server");
     const { reclassifiedDeposits } = await import("@/lib/account-credit.server");
-    const sb = supabaseAdmin as any;
 
     const { data: invoices, error } = await sb
       .from("invoices")

@@ -18,9 +18,10 @@ import type {
  * functions do.
  */
 
+/** the service-role client - only after the admin session is checked (adminDb) */
 async function admin(): Promise<any> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin as any;
+  const { adminDb } = await import("@/lib/admin-session.server");
+  return adminDb();
 }
 
 const str = (v: unknown) => (v == null ? "" : String(v));
@@ -275,18 +276,21 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
  * Issue a revised schedule under the same Agreement No. The previous version
  * is kept and linked through `supersedes`.
  */
+type ReviseInput = {
+  agreementId: string;
+  docType: AgreementDocType;
+  mergeValues: Record<string, string>;
+  periodStart?: string;
+  periodEnd?: string;
+};
+
 export const reviseSchedule = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: {
-      agreementId: string;
-      docType: AgreementDocType;
-      mergeValues: Record<string, string>;
-      periodStart?: string;
-      periodEnd?: string;
-    }) => data,
-  )
-  .handler(async ({ data }) => {
-    const db = await admin();
+  .inputValidator((data: ReviseInput) => data)
+  .handler(async ({ data }) => reviseScheduleWith(await admin(), data));
+
+/** reviseSchedule's body - handed the client, so Update Tenancy's daily job (no admin session) can run it */
+export async function reviseScheduleWith(db: any, data: ReviseInput) {
+  {
     const { data: current, error } = await db
       .from("agreement_documents")
       .select("*")
@@ -333,21 +337,25 @@ export const reviseSchedule = createServerFn({ method: "POST" })
     });
     if (iErr) throw new Error(iErr.message);
     return { ok: true as const };
-  });
+  }
+}
 
 /** a renewal is a brand-new Agreement No. with a fresh set of four documents */
+type RenewInput = {
+  residentId: string;
+  tenancyId?: string | undefined;
+  mergeValues: Record<string, string>;
+  periodStart?: string | undefined;
+  periodEnd?: string | undefined;
+};
+
 export const renewAgreement = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: {
-      residentId: string;
-      tenancyId?: string | undefined;
-      mergeValues: Record<string, string>;
-      periodStart?: string | undefined;
-      periodEnd?: string | undefined;
-    }) => data,
-  )
-  .handler(async ({ data }) => {
-    const db = await admin();
+  .inputValidator((data: RenewInput) => data)
+  .handler(async ({ data }) => renewAgreementWith(await admin(), data));
+
+/** renewAgreement's body - handed the client, so Update Tenancy's daily job (no admin session) can run it */
+export async function renewAgreementWith(db: any, data: RenewInput) {
+  {
     await requireFiles(db, data.residentId, [...(await docTypesInUse(db))]);
     // TA + Resident ID + their own sequence (agreement-no.ts, 12 Oct 2026)
     const { nextAgreementNo } = await import("@/lib/agreement-no");
@@ -385,7 +393,8 @@ export const renewAgreement = createServerFn({ method: "POST" })
     );
     if (dErr) throw new Error(dErr.message);
     return { ok: true as const, agreementId: agreement.id, agreementNo };
-  });
+  }
+}
 
 export const setDocumentStatus = createServerFn({ method: "POST" })
   .inputValidator((data: { documentId: string; status: string }) => data)
