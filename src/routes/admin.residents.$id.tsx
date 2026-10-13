@@ -69,7 +69,6 @@ import {
   refreshUnits,
   saveResidentRecord,
   stayDates,
-  updateBed,
   useOps,
   allBeds,
   type BedStatus,
@@ -360,21 +359,6 @@ function ResidentProfilePage() {
       toast.success("Resident created");
       void navigate({ to: "/admin/residents/$id", params: { id: saved.id }, replace: true });
       return;
-    }
-    if (form.bedId) {
-      const row = findBed(units, form.bedId);
-      if (row) {
-        updateBed(form.bedId, {
-          status:
-            row.bed.status === "vacant" || row.bed.status === "held" ? "booked" : row.bed.status,
-          residentId: form.id,
-          residentName: form.fullName,
-          university: form.university,
-          nationality: form.nationality,
-          gender: form.gender,
-          studentId: form.studentId,
-        });
-      }
     }
     toast.success("Resident saved");
   }

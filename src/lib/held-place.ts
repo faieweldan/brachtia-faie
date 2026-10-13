@@ -21,18 +21,44 @@
 export async function heldPlace(
   supabase: any,
   enquiryId: string,
+  /** the resident, when the caller knows them - their place is the one every screen shows */
+  residentId?: string,
 ): Promise<{ unitNo: string; roomLetter: string }> {
   let unitNo = "";
   let roomLetter = "";
-  if (!enquiryId) return { unitNo, roomLetter };
+  if (!enquiryId && !residentId) return { unitNo, roomLetter };
 
-  // its unpaid hold, or - paid - the bed its tenancy names (10 Oct 2026)
-  const [{ data: hold, error: bedError }, { data: t }] = await Promise.all([
-    supabase.from("placement_holds").select("bed_id").eq("enquiry_id", enquiryId).maybeSingle(),
-    supabase.from("tenancies").select("bed_id").eq("enquiry_id", enquiryId).maybeSingle(),
-  ]);
-  if (bedError) console.warn("unit lookup failed at holds", bedError.message);
-  const bedId = (hold as any)?.bed_id ?? (t as any)?.bed_id ?? null;
+  /*
+   * A resident's place is SQL resident_placements - the same answer the admin
+   * pages give (14 Oct 2026). Before, this read the booking's own tenancy, so
+   * after an Update Tenancy move the student's link still named the old room.
+   * A booking with nobody made from it yet: its unpaid hold.
+   */
+  let who = residentId ?? "";
+  if (!who && enquiryId) {
+    const { data: e } = await supabase
+      .from("enquiries")
+      .select("resident_id")
+      .eq("id", enquiryId)
+      .maybeSingle();
+    who = /^[0-9a-f-]{36}$/i.test(String((e as any)?.resident_id ?? ""))
+      ? String((e as any).resident_id)
+      : "";
+  }
+  let bedId: string | null = null;
+  if (who) {
+    const { data: rows, error } = await supabase.rpc("resident_placements", { p_residents: [who] });
+    if (error) console.warn("unit lookup failed at resident_placements", error.message);
+    bedId = ((rows ?? []) as any[])[0]?.bed_id ?? null;
+  } else {
+    const { data: hold, error: bedError } = await supabase
+      .from("placement_holds")
+      .select("bed_id")
+      .eq("enquiry_id", enquiryId)
+      .maybeSingle();
+    if (bedError) console.warn("unit lookup failed at holds", bedError.message);
+    bedId = (hold as any)?.bed_id ?? null;
+  }
   const { data: held } = bedId
     ? await supabase.from("beds").select("room_id").eq("id", bedId).maybeSingle()
     : { data: null };

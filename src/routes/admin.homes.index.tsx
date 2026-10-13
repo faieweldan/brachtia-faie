@@ -32,7 +32,6 @@ import {
   money,
   useOps,
   refreshUnits,
-  vacateBed,
   type BedStatus,
   sponsorLabel,
   residentIdOf,
@@ -122,7 +121,14 @@ function InventoryPage() {
       );
       return;
     }
-    vacateBed(bed.id);
+    // held by hand, nobody behind it: let go in the database, under the unit's lock (14 Oct 2026)
+    const { releaseHandHold } = await import("@/lib/homes.functions");
+    const res = await releaseHandHold({ data: { bedId: bed.id } });
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    await refreshUnits();
     toast.success("Bed released");
   }
 

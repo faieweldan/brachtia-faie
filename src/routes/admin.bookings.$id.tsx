@@ -42,13 +42,9 @@ import {
   refreshResidents,
   refreshUnits,
   useOps,
-  getOpsUnits,
   allBeds,
-  updateBed,
-  convertRoomOccupancy,
   isUnitSlot,
   unitGender,
-  vacateBed,
   fmtDate,
   type BedRow,
   roomCountFor,
@@ -948,31 +944,11 @@ function BookingDetail() {
       setPicked(toOption(c));
       return;
     }
-    // a single turned twin gets new beds: the hold goes into that same change and
-    // save, or it lands on a bed that no longer exists. The save is waited for, so
-    // a room that did not save is never reported reserved and the stage stays put
+    // a room's shape is Website's (shapeFromWebsite, 11 Oct 2026): a single is never
+    // made twin here, and the page no longer offers it (14 Oct 2026)
     if (c.convert) {
-      try {
-        // the room is made twin first (its beds get new ids), then Twin 1 is
-        // placed through the server like any other room
-        await convertRoomOccupancy(b.room.id, "twin");
-      } catch (err) {
-        toast.error("Could not reserve the room", {
-          description: err instanceof Error ? err.message : "The room was not changed",
-        });
-        return;
-      }
-      await refreshUnits();
-      const twin1 = allBeds(getOpsUnits()).find((x) => x.room.id === b.room.id)?.bed.id;
-      const placed = twin1
-        ? await placeStay({ data: { enquiryId: id, bedId: twin1, ...(r.move_in ? { holdUntil: r.move_in } : {}) } })
-        : { ok: false as const, error: "The room was changed but could not be reserved.", detail: "" };
-      await refreshUnits();
-      if (!placed.ok) {
-        toast.error(placed.error, placed.detail ? { description: placed.detail } : undefined);
-        return;
-      }
-      void queryClient.invalidateQueries({ queryKey: ["admin"] });
+      toast.error("Could not reserve the room", { description: "This room is not sold that way." });
+      return;
     } else {
       /*
        * Reserved - or moved, for a booking that already has a room - by the

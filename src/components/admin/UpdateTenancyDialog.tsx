@@ -154,15 +154,13 @@ export function UpdateTenancyDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, placed?.bed.id]);
 
-  const claimedIds = new Set((basis.data?.claimed ?? []).map((c) => c.bedId));
   const free = useMemo(
     () =>
       allBeds(units).filter(
         ({ unit, room, bed }) =>
           // vacant now, or someone else's whose tenancy ends before ours does - the move then waits for it (Dani, 7 Oct 2026)
           bed.id !== placed?.bed.id &&
-          // reserved for another resident's room change
-          !claimedIds.has(bed.id) &&
+          // a room held for another resident's change is in its upcoming stays, with its dates - placementConflict below (14 Oct 2026)
           (bed.status === "vacant" || (!!bed.residentId && !!bed.tenancyEnd && bed.tenancyEnd.slice(0, 10) < (tenancy.end || "9999"))) &&
           bedOccupancy(bed.label) === occ &&
           /*
@@ -186,7 +184,7 @@ export function UpdateTenancyDialog({
           ),
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [units, occ, placed?.bed.id, residents, gender, tenancy.end, newEnd, basis.data?.claimed],
+    [units, occ, placed?.bed.id, residents, gender, tenancy.end, newEnd],
   );
   const target = wantRoom ? (free.find((b) => b.bed.id === bedId) ?? null) : null;
   const end = wantDate && newEnd ? newEnd : oldEnd;

@@ -12,13 +12,14 @@
  * once Muhammad leaves and Aisha takes the bed, his checkout statement lost
  * his room.
  *
- * In order:
+ * The bed is SQL resident_placements (20261014100000_one_placement.sql) - the
+ * same answer the Residents list, the resident page and Homes give (14 Oct
+ * 2026). In order:
  *   1. the bed they are the resident of (checked in, or assigned after the
  *      last resident left)
  *   2. the bed their latest tenancy names - a paid stay still to come on
  *      somebody else's bed, or, after they leave, where they lived
- *   3. the bed their booking still holds - Booked, initial payment not yet
- *      paid in full (13 Oct 2026)
+ *   3. the bed their booking still holds
  *
  * Server only - handed the service-role client by a server function.
  */
@@ -33,56 +34,14 @@ export type Placement = {
 
 export async function placementForResident(sb: any, residentId: string): Promise<Placement | null> {
   if (!residentId) return null;
-  let via: Placement["via"] = "live";
-  let enquiryId: string | null = null;
-
-  const { data: live } = await sb
-    .from("beds")
-    .select("*")
-    .eq("resident_id", residentId)
-    .limit(1)
-    .maybeSingle();
-  let bed: any = live ?? null;
-
-  if (!bed) {
-    const { data: ts } = await sb
-      .from("tenancies")
-      .select("enquiry_id, bed_id, start_date, created_at")
-      .eq("resident_id", residentId)
-      .not("bed_id", "is", null)
-      .order("start_date", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .limit(1);
-    const t = ((ts ?? []) as any[])[0];
-    if (t) {
-      const { data: b } = await sb.from("beds").select("*").eq("id", t.bed_id).maybeSingle();
-      if (b) {
-        bed = b;
-        via = "tenancy";
-        enquiryId = t.enquiry_id ?? null;
-      }
-    }
-  }
-  /*
-   * 3. Booked - the fee is in - but the initial payment is not paid in full,
-   * so the room is still their booking's hold, not yet a bed of theirs (13 Oct
-   * 2026: the document pack said Room "Missing" for UAT Faris).
-   */
-  if (!bed) {
-    const { data: es } = await sb.from("enquiries").select("id").eq("resident_id", residentId);
-    const ids = ((es ?? []) as any[]).map((e) => e.id);
-    const { data: h } = ids.length
-      ? await sb.from("placement_holds").select("enquiry_id, bed_id").in("enquiry_id", ids).limit(1).maybeSingle()
-      : { data: null };
-    if (h?.bed_id) {
-      const { data: b } = await sb.from("beds").select("*").eq("id", h.bed_id).maybeSingle();
-      if (b) {
-        bed = b;
-        via = "tenancy";
-        enquiryId = h.enquiry_id ?? null;
-      }
-    }
-  }
+  const { data: rows, error } = await sb.rpc("resident_placements", { p_residents: [residentId] });
+  if (error) throw new Error(error.message);
+  const p = ((rows ?? []) as any[])[0];
+  if (!p?.bed_id) return null;
+  const via: Placement["via"] = p.via === "seated" ? "live" : "tenancy";
+  const enquiryId: string | null = p.enquiry_id ?? null;
+  const { data: found } = await sb.from("beds").select("*").eq("id", p.bed_id).maybeSingle();
+  let bed: any = found ?? null;
   if (!bed) return null;
 
   /*

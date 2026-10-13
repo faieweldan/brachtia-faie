@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Bed, Resident, Unit, UnitRoom } from "../src/lib/ops-store";
-import { bedFreeForPeriod, findBedForResident } from "../src/lib/ops-store";
+import { findBedForResident } from "../src/lib/ops-store";
 import {
   PERSON_LABEL,
   dayBefore,
@@ -129,10 +129,6 @@ describe("dates decide, not the bed row", () => {
     const other = { start: "2026-11-01", end: "2027-01-31", gender: "Female", enquiryId: "ez" };
     expect(placementConflict(u, rc, rc.beds[0]!, other, [muhammad, aishaRes])).toContain(
       "Reserved for Aisha",
-    );
-    // and the browser's quick check agrees
-    expect(bedFreeForPeriod({ ...rc.beds[0]!, status: "vacant" }, "2026-11-01", "2027-01-31")).toBe(
-      false,
     );
     // Aisha's own reservation never blocks Aisha
     expect(placementConflict(u, rc, rc.beds[0]!, aisha, [muhammad, aishaRes])).toBe("");

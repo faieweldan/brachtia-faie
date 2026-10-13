@@ -115,8 +115,6 @@ export const getTenancyChangeBasis = createServerFn({ method: "GET" })
         const p = await depositPosition(sb, data.residentId);
         return { held: p.covered, heldCash: p.cash, waivedHeld: p.waived };
       })()),
-      // beds other open events have claimed - not offered to this resident
-      claimed: (await ev.claimedBeds(sb)).filter((c) => c.residentId !== data.residentId),
       // each deposit line, with its invoice - the same table as the checkout statement (Dani, 5 Oct 2026)
       heldLines: [
         ...(await ev.settledDepositLines(sb, data.residentId)),
@@ -191,50 +189,46 @@ export const applyTenancyChange = createServerFn({ method: "POST" })
     if (data.moveTo) {
       const residenceOf = async (unitId: string) => String((await sb.from("units").select("residence_id").eq("id", unitId).maybeSingle()).data?.residence_id ?? "");
       if ((await residenceOf(data.moveTo.unitId)) !== (await residenceOf(data.change.oldUnitId))) throw new Error("A move to another residence is not available yet.");
-      const claimed = (await E.claimedBeds(sb)).find((c) => c.bedId === data.moveTo!.bedId && c.residentId !== data.residentId);
-      if (claimed) throw new Error("That bed is reserved for another resident's room change.");
-    }
-    // never into the dates of somebody who has the room booked after - they are moved first (9 Oct 2026)
-    {
-      const { dayBefore } = await import("@/lib/placement");
-      const stayUntil = T.isMove(flags) && data.moveOn ? dayBefore(data.moveOn) : finalEnd;
-      // the stays to come on a bed, from anyone else: an unpaid hold, or a paid tenancy
-      const comingOn = async (bedId: string | null | undefined) => {
-        if (!bedId) return [] as { name: string; start: string; end: string }[];
-        const [{ data: holds }, { data: ts }] = await Promise.all([
-          sb.from("placement_holds").select("enquiry_id, start_date, end_date").eq("bed_id", bedId),
-          sb.from("tenancies").select("resident_id, start_date, end_date").eq("bed_id", bedId).neq("resident_id", data.residentId),
-        ]);
-        const out: { name: string; start: string; end: string }[] = [];
-        // unpaid holds on the bed (10 Oct 2026)
-        for (const h of (holds ?? []) as any[]) {
-          const { data: e } = await sb.from("enquiries").select("full_name, move_in, move_out").eq("id", h.enquiry_id).maybeSingle();
-          out.push({ name: String(e?.full_name ?? "Another resident"), start: String(h.start_date || e?.move_in || ""), end: String(h.end_date || e?.move_out || "") });
-        }
-        for (const t of (ts ?? []) as any[]) {
-          if (t.end_date && t.end_date < today) continue;
-          const { data: r } = await sb.from("residents").select("full_name, status").eq("id", t.resident_id).maybeSingle();
-          if (!r || String(r.status ?? "").toLowerCase() === "inactive") continue;
-          out.push({ name: String(r.full_name ?? "Another resident"), start: String(t.start_date ?? ""), end: String(t.end_date ?? "") });
-        }
-        return out.sort((x, y) => x.start.localeCompare(y.start));
-      };
-      const { data: live } = await sb.from("beds").select("id").eq("resident_id", data.residentId).limit(1).maybeSingle();
-      const here = (await comingOn(live?.id)).find((c) => c.start && c.start <= stayUntil) ?? null;
-      const there = data.moveTo
-        ? ((await comingOn(data.moveTo.bedId)).find((c) => c.start && c.start <= finalEnd && (c.end || "9999-12-31") >= data.moveOn) ?? null)
-        : null;
-      const clash = here ?? there;
-      if (clash) {
-        const { data: me } = await sb.from("residents").select("full_name").eq("id", data.residentId).maybeSingle();
-        throw new Error(`${me?.full_name || "This resident"}'s change to ${fmtDay(finalEnd)} overlaps ${clash.name}'s confirmed reservation from ${fmtDay(clash.start)}. Move ${clash.name} first.`);
-      }
     }
     const plan = T.planEvents(flags, data.moveOn, data.change.oldEnd);
     if (plan.length !== data.events.length || plan.some((p, i) => p.date !== data.events[i]!.date)) throw new Error("The change was read differently - close the window and start again.");
     // a change still under way is finished first: cancelling one is not decided yet (7 Oct 2026)
     const open = (await E.readEvents(sb, data.residentId)).filter(E.isOpen);
     if (open.length) throw new Error(`An earlier change is still scheduled: ${open.map((o) => `${o.name}, ${o.date}`).join("; ")}.`);
+
+    /*
+     * The rooms this change needs, held for the resident from their dates
+     * (14 Oct 2026) - through place_stay, like a booking, so it is checked under
+     * the unit's lock against everybody's dates and the booking's room picker
+     * sees it. Never into the dates of somebody who has a room booked after:
+     * they are moved first (9 Oct 2026).
+     *   the new room          from the move day to the end
+     *   their own, for longer from the day after the old end, until the move or the new end
+     * Made before any money, and let go again if anything after fails.
+     */
+    const held: string[] = [];
+    {
+      const { dayBefore } = await import("@/lib/placement");
+      const { data: live } = await sb.from("beds").select("id").eq("resident_id", data.residentId).neq("status", "vacant").limit(1).maybeSingle();
+      const holds: { bedId: string; start: string; end: string }[] = [];
+      if (live?.id && finalEnd > data.change.oldEnd) {
+        const from = T.nextDay(data.change.oldEnd);
+        const until = T.isMove(flags) && data.moveOn ? dayBefore(data.moveOn) : finalEnd;
+        if (until >= from) holds.push({ bedId: String(live.id), start: from, end: until });
+      }
+      if (T.isMove(flags) && data.moveTo) holds.push({ bedId: data.moveTo.bedId, start: data.moveOn, end: finalEnd });
+      for (const h of holds) {
+        const r = await E.holdForChange(sb, data.residentId, h.bedId, h.start, h.end);
+        if (!r.ok) {
+          for (const b of held) await E.releaseChangeHold(sb, data.residentId, b);
+          const { data: me } = await sb.from("residents").select("full_name").eq("id", data.residentId).maybeSingle();
+          throw new Error(`${me?.full_name || "This resident"}'s change to ${fmtDay(finalEnd)} overlaps: ${r.detail} Move them first.`);
+        }
+        held.push(h.bedId);
+      }
+    }
+    let saved = false;
+    try {
 
     const { data: sched } = await sb.from("rental_schedules").select("monthly_rent").eq("tenancy_id", data.tenancyId).maybeSingle();
     const { data: ag } = await sb.from("tenancy_agreements").select("id").eq("resident_id", data.residentId).order("created_at", { ascending: false }).limit(1).maybeSingle();
@@ -309,10 +303,8 @@ export const applyTenancyChange = createServerFn({ method: "POST" })
 
     await writeJson(sb, allowancePath(data.residentId), allowances);
     await writeJson(sb, `tenancy-change/${data.residentId}/${new Date().toISOString().replace(/[:.]/g, "-")}.json`, { change: data.change, moveOn: data.moveOn, events: log });
-    // the target bed, held for this resident from the effective date
-    const mover = events.find((e) => e.moveTo);
-    if (mover?.moveTo && (await E.reserveBed(sb, data.residentId, mover.moveTo.bedId, mover.date))) mover.reservedBed = mover.moveTo.bedId;
     await E.addEvents(sb, data.residentId, events);
+    saved = true;
     // account credit on the IPs, in event order - nothing else, as the preview showed it
     for (const ev of events) if (ev.invoiceId) await applyAccountCredit(sb, data.residentId, ev.invoiceId, true);
     await E.processResident(sb, data.residentId);
@@ -323,6 +315,11 @@ export const applyTenancyChange = createServerFn({ method: "POST" })
         return { name: ev.name, date: ev.date, ipTotal: ev.ipTotal, billOn: ev.billOn ?? "", settled: !!now?.settledAt, effective: !!now?.effectiveAt };
       }),
     };
+    } catch (err) {
+      // the change was not saved: the rooms held for it are let go
+      if (!saved) for (const b of held) await E.releaseChangeHold(sb, data.residentId, b).catch(() => undefined);
+      throw err;
+    }
   });
 
 /** The resident's Update Tenancy events, for the Tenancy tab - moved on first, so what shows is current. */

@@ -217,7 +217,7 @@ export async function releaseBooking(supabase: any, enquiryId: string) {
   if (paymentsRes.error) throw new Error(paymentsRes.error.message);
   if ((paymentsRes.count ?? 0) > 0) return { ok: false as const, voided: [] as string[] };
 
-  const [voidRes, enquiryRes, bedRes] = await Promise.all([
+  const [voidRes, enquiryRes] = await Promise.all([
     supabase
       .from("invoices")
       .update({ status: "void", updated_at: now })
@@ -228,30 +228,11 @@ export async function releaseBooking(supabase: any, enquiryId: string) {
       .from("enquiries")
       .update({ invoice_issued_at: null, updated_at: now })
       .eq("id", enquiryId),
-    // a bed held the old way, before placement_holds (nothing after the migration)
-    supabase
-      .from("beds")
-      .update({
-        status: "vacant",
-        enquiry_id: null,
-        hold_for: null,
-        hold_until: null,
-        resident_name: null,
-        student_id: null,
-        university: null,
-        nationality: null,
-        gender: null,
-        tenancy_start: null,
-        tenancy_end: null,
-      })
-      .eq("enquiry_id", enquiryId)
-      .eq("status", "held"),
   ]);
   if (voidRes.error) throw new Error(voidRes.error.message);
   if (enquiryRes.error) throw new Error(enquiryRes.error.message);
-  if (bedRes.error) throw new Error(bedRes.error.message);
-  // the booking's hold goes - nobody else's, and no bed row (10 Oct 2026)
-  const { error: holdErr } = await supabase.from("placement_holds").delete().eq("enquiry_id", enquiryId);
+  // the booking's hold goes - nobody else's, and no bed row (10 Oct 2026), under the unit's lock (14 Oct 2026)
+  const { error: holdErr } = await supabase.rpc("release_hold", { p_enquiry: enquiryId, p_resident: null, p_bed: null });
   if (holdErr) throw new Error(holdErr.message);
 
   return {

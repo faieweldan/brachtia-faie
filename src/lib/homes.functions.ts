@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 
-import type { Bed, BedPatch, Unit, UnitRoom, UpcomingStay } from "@/lib/ops-store";
+import type { Bed, Unit, UnitRoom, UpcomingStay } from "@/lib/ops-store";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -50,36 +50,45 @@ function toBed(row: any): Bed {
 }
 
 /**
+ * Every claim on the units' beds, with dates - SQL placement_claims
+ * (20261014100000_one_placement.sql), the same list place_stay checks a stay
+ * against. Null: every unit. Screens read this, never their own copy of it.
+ */
+export async function placementClaims(supabase: any, unitIds: string[] | null) {
+  const { data, error } = await supabase.rpc("placement_claims", { p_units: unitIds });
+  if (error) throw new Error(rpcError(error));
+  return (data ?? []) as {
+    bed_id: string;
+    room_id: string;
+    unit_id: string;
+    enquiry_id: string | null;
+    resident_id: string | null;
+    who: string;
+    gender: string;
+    starts: string | null;
+    ends: string | null;
+    source: "resident" | "hold" | "move" | "manual" | "tenancy";
+  }[];
+}
+
+/**
  * The stays to come on each bed while somebody else is its resident (9 Oct
- * 2026). Nothing on the bed row stores them - they are read from where each
- * one lives:
- *   Reserved   a hold on the bed (placement_holds, 10 Oct 2026) before the
- *              booking fee is in - on an empty bed or one somebody still
- *              lives in; Booked once the fee is in (the hold stays until the
- *              initial payment is paid in full)
- *   Booked     a paid tenancy placed on the bed (tenancies.bed_id) whose
- *              resident is not the bed's, has not ended, and is not living
- *              in another bed already
+ * 2026), from placementClaims - nothing on the bed row stores them:
+ *   Reserved   a booking's hold before the booking fee is in, or a room held
+ *              for a resident's Update Tenancy change (14 Oct 2026)
+ *   Booked     a paid tenancy placed on the bed whose resident is not the
+ *              bed's, has not ended, and is not living in another bed already
  * Earliest first, so a bed can have more than one.
  */
-async function attachUpcoming(supabase: any, beds: any[]) {
+async function attachUpcoming(supabase: any, beds: any[], unitIds: string[]) {
   if (!beds.length) return beds;
   const bedIds = new Set(beds.map((b) => String(b.id)));
-  const { klToday } = await import("@/lib/kl-date");
-  const today = klToday();
-  // every placed stay not over yet - one read, rather than a list of hundreds of bed ids in the address
-  const { data: tens } = await supabase
-    .from("tenancies")
-    .select("resident_id, enquiry_id, bed_id, start_date, end_date")
-    .not("bed_id", "is", null)
-    .or(`end_date.is.null,end_date.gte.${today}`);
-  const tenancies = ((tens ?? []) as any[]).filter((t) => bedIds.has(String(t.bed_id)));
-  const { data: holdRows } = await supabase.from("placement_holds").select("enquiry_id, bed_id, start_date, end_date");
-  const holds = ((holdRows ?? []) as any[]).filter((h) => bedIds.has(String(h.bed_id)));
-  const holdIds = holds.map((h) => h.enquiry_id);
-  const enquiryIds = [...new Set([...holdIds, ...tenancies.map((t) => t.enquiry_id).filter(Boolean)])] as string[];
-  const residentIds = [...new Set(tenancies.map((t) => t.resident_id).filter(Boolean))] as string[];
-  const [{ data: enquiries }, { data: residents }, { data: invoices }, { data: living }] = await Promise.all([
+  const claims = (await placementClaims(supabase, unitIds)).filter(
+    (c) => bedIds.has(String(c.bed_id)) && (c.source === "hold" || c.source === "move" || c.source === "tenancy"),
+  );
+  const enquiryIds = [...new Set(claims.map((c) => c.enquiry_id).filter(Boolean))] as string[];
+  const residentIds = [...new Set(claims.map((c) => c.resident_id).filter(Boolean))] as string[];
+  const [{ data: enquiries }, { data: residents }, { data: invoices }] = await Promise.all([
     enquiryIds.length
       ? supabase.from("enquiries").select("id, reference, status, full_name, gender, university, move_in, move_out, monthly_rent, resident_id").in("id", enquiryIds)
       : { data: [] },
@@ -89,56 +98,53 @@ async function attachUpcoming(supabase: any, beds: any[]) {
     enquiryIds.length
       ? supabase.from("invoices").select("enquiry_id, monthly_rent, created_at").in("enquiry_id", enquiryIds).neq("status", "void").order("created_at", { ascending: false })
       : { data: [] },
-    // anyone who is already a bed's own resident is placed there - an older tenancy
-    // pointing at another bed is out of date, never a second place
-    residentIds.length
-      ? supabase.from("beds").select("resident_id").in("resident_id", residentIds).neq("status", "vacant")
-      : { data: [] },
   ]);
   const enq = new Map(((enquiries ?? []) as any[]).map((e) => [e.id, e]));
   const res = new Map(((residents ?? []) as any[]).map((r) => [r.id, r]));
-  const rentOf = (id?: string) => Number(((invoices ?? []) as any[]).find((i) => i.enquiry_id === id)?.monthly_rent || enq.get(id ?? "")?.monthly_rent || 0) || undefined;
-  const livingIn = new Set(((living ?? []) as any[]).map((b) => b.resident_id));
+  const rentOf = (id?: string | null) => Number(((invoices ?? []) as any[]).find((i) => i.enquiry_id === id)?.monthly_rent || enq.get(id ?? "")?.monthly_rent || 0) || undefined;
 
   return beds.map((b) => {
     const list: UpcomingStay[] = [];
-    // unpaid holds on the bed
-    for (const h of holds) {
-      if (h.bed_id !== b.id) continue;
-      const e = enq.get(h.enquiry_id);
-      if (!e) continue;
+    for (const c of claims) {
+      if (c.bed_id !== b.id) continue;
+      if (c.source === "hold") {
+        // a booking's unpaid hold
+        const e = enq.get(c.enquiry_id);
+        if (!e) continue;
+        list.push({
+          enquiryId: e.id,
+          reference: e.reference || undefined,
+          // made a resident at the booking fee: their page finds the room by this (13 Oct 2026)
+          ...(e.resident_id ? { residentId: e.resident_id } : {}),
+          name: String(e.full_name ?? ""),
+          gender: e.gender || undefined,
+          university: e.university || undefined,
+          start: c.starts || undefined,
+          end: c.ends || undefined,
+          rent: rentOf(e.id),
+          // Reserved until the booking fee is in, then Booked - the booking's own stage says which (docs/MISTAKES-TO-AVOID.md 7)
+          status: e.status === "booked" ? "booked" : "reserved",
+        });
+        continue;
+      }
+      const r = res.get(c.resident_id);
+      if (!r) continue;
+      // a resident's own bed held on for their extension is still theirs - not a second person
+      if (c.source === "move" && c.resident_id === b.resident_id) continue;
+      const te = enq.get(c.enquiry_id ?? "");
       list.push({
-        enquiryId: e.id,
-        reference: e.reference || undefined,
-        // made a resident at the booking fee: their page finds the room by this (13 Oct 2026)
-        ...(e.resident_id ? { residentId: e.resident_id } : {}),
-        name: String(e.full_name ?? ""),
-        gender: e.gender || undefined,
-        university: e.university || undefined,
-        start: h.start_date || e.move_in || undefined,
-        end: h.end_date || e.move_out || undefined,
-        rent: rentOf(e.id),
-        // Reserved until the booking fee is in, then Booked - the booking's own stage says which (docs/MISTAKES-TO-AVOID.md 7)
-        status: e.status === "booked" ? "booked" : "reserved",
-      });
-    }
-    for (const t of tenancies) {
-      if (t.bed_id !== b.id || t.resident_id === b.resident_id || livingIn.has(t.resident_id)) continue;
-      const r = res.get(t.resident_id);
-      if (!r || String(r.status ?? "").toLowerCase() === "inactive") continue;
-      const te = enq.get(t.enquiry_id ?? "");
-      list.push({
-        enquiryId: t.enquiry_id || undefined,
+        ...(c.enquiry_id ? { enquiryId: c.enquiry_id } : {}),
         reference: te?.reference || undefined,
         residentId: r.id,
         name: String(r.full_name || te?.full_name || ""),
         code: String(r.resident_code || r.quickbooks_id || "") || undefined,
         gender: r.gender || undefined,
         university: r.university || te?.university || undefined,
-        start: t.start_date || undefined,
-        end: t.end_date || undefined,
-        rent: rentOf(t.enquiry_id),
-        status: "booked",
+        start: c.starts || undefined,
+        end: c.ends || undefined,
+        rent: rentOf(c.enquiry_id),
+        // a room held for an Update Tenancy change is Reserved until it takes effect (14 Oct 2026)
+        status: c.source === "move" ? "reserved" : "booked",
       });
     }
     list.sort((x, y) => String(x.start ?? "").localeCompare(String(y.start ?? "")));
@@ -213,7 +219,7 @@ export const listUnits = createServerFn({ method: "GET" }).handler(async (): Pro
 
   const roomIds = (rooms ?? []).map((r: any) => r.id);
   const beds = roomIds.length
-    ? await attachUpcoming(supabase, (await supabase.from("beds").select("*").in("room_id", roomIds)).data ?? [])
+    ? await attachUpcoming(supabase, (await supabase.from("beds").select("*").in("room_id", roomIds)).data ?? [], unitIds)
     : [];
 
   return units.map((u: any) => toUnit(u, rooms ?? [], beds));
@@ -230,8 +236,18 @@ export const listUnits = createServerFn({ method: "GET" }).handler(async (): Pro
  */
 export const saveUnitRow = createServerFn({ method: "POST" })
   .inputValidator((data: { unit: Unit; importBatchId?: string }) => data)
-  .handler(async ({ data }): Promise<Unit> => {
-    const supabase = await admin();
+  .handler(async ({ data }): Promise<Unit> => saveUnitWith(await admin(), data));
+
+/**
+ * saveUnitRow's body - handed the client, so the database tests can run it too.
+ *
+ * It saves the unit, its rooms and its beds' labels - never who is in a bed
+ * (14 Oct 2026). The page sends its own copy of the beds, which can be an hour
+ * old: written back, it put a moved or newly booked resident back where they
+ * were. Who is in a bed is written only by the placement functions.
+ */
+export async function saveUnitWith(supabase: any, data: { unit: Unit; importBatchId?: string }): Promise<Unit> {
+  {
     const { unit, importBatchId } = data;
 
     // a unit is let whole (one "Unit" bed) or by room - never both. Every screen
@@ -347,7 +363,31 @@ export const saveUnitRow = createServerFn({ method: "POST" })
       : { data: [] as any[], error: null };
     if (roomErr) throw new Error(roomErr.message);
 
+    /*
+     * A room or bed the page no longer lists goes - unless somebody is placed
+     * on it: in it now, holding it, coming to it, or there before (their
+     * tenancy names it, and their statement and documents still read it).
+     */
     const keptLetters = unit.rooms.map((r) => r.letter);
+    {
+      const { data: allRooms } = await supabase.from("rooms").select("id, letter").eq("unit_id", unitId);
+      const letterOf = new Map(((allRooms ?? []) as any[]).map((r) => [String(r.id), String(r.letter)]));
+      const wanted = new Map(unit.rooms.map((r) => [r.letter, r.beds.map((b) => b.label)]));
+      const { data: allBeds } = letterOf.size
+        ? await supabase.from("beds").select("id, room_id, label").in("room_id", [...letterOf.keys()])
+        : { data: [] };
+      const going = ((allBeds ?? []) as any[]).filter((b) => {
+        const want = wanted.get(letterOf.get(String(b.room_id)) ?? "");
+        return !want || !want.includes(String(b.label));
+      });
+      const busy = await bedsInUse(supabase, unitId, going.map((b) => String(b.id)));
+      if (busy.size) {
+        const names = going
+          .filter((b) => busy.has(String(b.id)))
+          .map((b) => `Room ${letterOf.get(String(b.room_id))} ${b.label}`);
+        throw new Error(`${unit.unitNo}: ${names.join(", ")} cannot be removed - somebody is placed there, now, later or before. Move them first.`);
+      }
+    }
     let dropRooms = supabase.from("rooms").delete().eq("unit_id", unitId);
     if (keptLetters.length) dropRooms = dropRooms.not("letter", "in", `(${keptLetters.join(",")})`);
     await dropRooms;
@@ -360,23 +400,11 @@ export const saveUnitRow = createServerFn({ method: "POST" })
     for (const room of unit.rooms) {
       const roomId = roomIdByLetter.get(room.letter);
       if (!roomId) continue;
+      // the label and the order only: a new bed starts vacant, an existing one keeps who is in it
       room.beds.forEach((b, i) => {
         bedRows.push({
           room_id: roomId,
           label: b.label,
-          status: b.status ?? "vacant",
-          hold_for: b.holdFor ?? null,
-          hold_until: b.holdUntil ?? null,
-          enquiry_id: isUuid(b.enquiryId) ? b.enquiryId : null,
-          resident_id: b.residentId ?? null,
-          resident_name: b.residentName ?? null,
-          student_id: b.studentId ?? null,
-          university: b.university ?? null,
-          nationality: b.nationality ?? null,
-          gender: b.gender ?? null,
-          tenancy_start: b.tenancyStart || null,
-          tenancy_end: b.tenancyEnd || null,
-          rent: b.rent ?? null,
           sort_order: i,
           ...(importBatchId ? { import_batch_id: importBatchId } : {}),
         });
@@ -402,7 +430,26 @@ export const saveUnitRow = createServerFn({ method: "POST" })
     // twin or single follows the room type in Website, whatever was sent
     await syncRoomShapes(supabase, unitId);
     return await readUnit(supabase, unitId);
-  });
+  }
+}
+
+/**
+ * The beds among `bedIds` somebody is placed on - in it now, holding it, or a
+ * stay coming to it (placementClaims) - or that any tenancy names, past ones
+ * included. Such a bed is never deleted.
+ */
+async function bedsInUse(supabase: any, unitId: string, bedIds: string[]) {
+  const ids = new Set(bedIds);
+  if (!ids.size) return new Set<string>();
+  const [claims, { data: tenancyRows }] = await Promise.all([
+    placementClaims(supabase, [unitId]),
+    supabase.from("tenancies").select("bed_id").in("bed_id", [...ids]),
+  ]);
+  return new Set([
+    ...claims.map((c) => String(c.bed_id)),
+    ...((tenancyRows ?? []) as any[]).map((t) => String(t.bed_id)),
+  ].filter((id) => ids.has(id)));
+}
 
 /**
  * Give units the codes the master list gives them (Dani, 12 Oct 2026).
@@ -453,7 +500,7 @@ export async function syncRoomShapes(supabase: any, unitId?: string) {
   if (error && !notMigrated(error)) throw new Error(error.message);
 }
 
-async function readUnit(supabase: any, unitId: string): Promise<Unit> {
+export async function readUnit(supabase: any, unitId: string): Promise<Unit> {
   const { data: row, error } = await supabase
     .from("units")
     .select("*, residences(name, slug)")
@@ -463,7 +510,7 @@ async function readUnit(supabase: any, unitId: string): Promise<Unit> {
   const { data: rooms } = await supabase.from("rooms").select("*").eq("unit_id", unitId);
   const roomIds = (rooms ?? []).map((r: any) => r.id);
   const beds = roomIds.length
-    ? await attachUpcoming(supabase, (await supabase.from("beds").select("*").in("room_id", roomIds)).data ?? [])
+    ? await attachUpcoming(supabase, (await supabase.from("beds").select("*").in("room_id", roomIds)).data ?? [], [unitId])
     : [];
   return toUnit(row, rooms ?? [], beds);
 }
@@ -500,32 +547,13 @@ export const setUnitDeactivated = createServerFn({ method: "POST" })
     // only when turning a LIVE unit off - a unit already off is hidden from
     // placement, so nobody can have moved into it since
     if (data.deactivated && !alreadyOff) {
-      const { data: rooms } = await supabase.from("rooms").select("id").eq("unit_id", data.id);
-      const roomIds = ((rooms ?? []) as any[]).map((r) => r.id);
-      if (roomIds.length) {
-        const { data: taken } = await supabase
-          .from("beds")
-          .select("label, resident_name")
-          .in("room_id", roomIds)
-          .or("resident_id.not.is.null,enquiry_id.not.is.null");
-        // unpaid bookings holding a bed here count too (placement_holds, 10 Oct 2026)
-        const { data: allBeds } = await supabase.from("beds").select("id").in("room_id", roomIds);
-        const { data: holds } = (allBeds ?? []).length
-          ? await supabase
-              .from("placement_holds")
-              .select("enquiries(full_name)")
-              .in("bed_id", ((allBeds ?? []) as any[]).map((b) => b.id))
-          : { data: [] };
-        const who = [
-          ...((taken ?? []) as any[]).map((b) => String(b.resident_name ?? "").trim() || String(b.label ?? "")),
-          ...((holds ?? []) as any[]).map((h) => String(h.enquiries?.full_name ?? "a booking")),
-        ].filter(Boolean);
-        if (who.length) {
-          return {
-            ok: false as const,
-            error: `${who.join(", ")} ${who.length === 1 ? "is" : "are"} still in this unit. Move them out before deactivating it.`,
-          };
-        }
+      // everybody with a claim on it - in it, holding it, or coming to it (placementClaims, 14 Oct 2026)
+      const who = [...new Set((await placementClaims(supabase, [data.id])).map((c) => String(c.who || "").trim()).filter(Boolean))];
+      if (who.length) {
+        return {
+          ok: false as const,
+          error: `${who.join(", ")} ${who.length === 1 ? "is" : "are"} still in this unit. Move them out before deactivating it.`,
+        };
       }
     }
 
@@ -569,42 +597,71 @@ export const deleteUnitRow = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     if (!isUuid(data.id)) return { ok: true };
     const supabase = await admin();
+    // its rooms and beds go with it, so a unit anybody is placed in - now, later or before - is kept
+    const { data: rooms } = await supabase.from("rooms").select("id").eq("unit_id", data.id);
+    const roomIds = ((rooms ?? []) as any[]).map((r) => r.id);
+    const { data: beds } = roomIds.length ? await supabase.from("beds").select("id").in("room_id", roomIds) : { data: [] };
+    if ((await bedsInUse(supabase, data.id, ((beds ?? []) as any[]).map((b) => String(b.id)))).size) {
+      throw new Error("Somebody is placed in this unit, now, later or before. Deactivate it instead.");
+    }
     const { error } = await supabase.from("units").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
 
-export const updateBedRow = createServerFn({ method: "POST" })
-  .inputValidator((data: { bedId: string; patch: BedPatch }) => data)
+/**
+ * Homes Release on a bed held by hand, with nobody and no booking behind it
+ * (14 Oct 2026) - SQL release_hand_hold, under the unit's lock. A bed somebody
+ * is in, or that a booking or resident holds, is never emptied here: a booking
+ * is released from its booking, a resident moved or checked out.
+ */
+export const releaseHandHold = createServerFn({ method: "POST" })
+  .inputValidator((data: { bedId: string }) => data)
   .handler(async ({ data }) => {
-    if (!isUuid(data.bedId)) return { ok: true };
+    if (!isUuid(data.bedId)) return { ok: false as const, error: "That bed no longer exists." };
     const supabase = await admin();
-    const p = data.patch;
-    const row: Record<string, unknown> = {};
-
-    if ("label" in p) row["label"] = p.label;
-    if ("status" in p) row["status"] = p.status ?? "vacant";
-    if ("holdFor" in p) row["hold_for"] = p.holdFor ?? null;
-    if ("holdUntil" in p) row["hold_until"] = p.holdUntil ?? null;
-    if ("enquiryId" in p) row["enquiry_id"] = isUuid(p.enquiryId) ? p.enquiryId : null;
-    if ("residentId" in p) row["resident_id"] = p.residentId ?? null;
-    if ("residentName" in p) row["resident_name"] = p.residentName ?? null;
-    if ("studentId" in p) row["student_id"] = p.studentId ?? null;
-    if ("university" in p) row["university"] = p.university ?? null;
-    if ("nationality" in p) row["nationality"] = p.nationality ?? null;
-    if ("gender" in p) row["gender"] = p.gender ?? null;
-    if ("tenancyStart" in p) row["tenancy_start"] = p.tenancyStart || null;
-    if ("tenancyEnd" in p) row["tenancy_end"] = p.tenancyEnd || null;
-    if ("rent" in p) row["rent"] = p.rent ?? null;
-    if (!Object.keys(row).length) return { ok: true };
-
-    const { error } = await supabase
-      .from("beds")
-      .update(row as any)
-      .eq("id", data.bedId);
-    if (error) throw new Error(error.message);
-    return { ok: true };
+    const { data: res, error } = await supabase.rpc("release_hand_hold", { p_bed: data.bedId });
+    if (error) return { ok: false as const, error: rpcError(error) };
+    const out = res as { ok: boolean; error?: string; released?: boolean };
+    return out?.ok ? { ok: true as const, released: !!out.released } : { ok: false as const, error: out?.error || "The bed could not be released." };
   });
+
+/**
+ * Where every resident is - SQL resident_placements, the one answer (14 Oct
+ * 2026). The browser's Residents list, resident page, document pack and Homes
+ * Reserve read this; the server's documents read placementForResident, which
+ * asks the same function.
+ */
+export type ResidentPlacement = {
+  bedId: string;
+  /** seated: the bed's resident (in it, or first assigned) · tenancy: their stay's bed, to come or before · hold: their booking's */
+  via: "seated" | "tenancy" | "hold";
+  enquiryId?: string | undefined;
+  start?: string | undefined;
+  end?: string | undefined;
+  /** a room held for their Update Tenancy change */
+  next?: { bedId: string; start?: string | undefined; end?: string | undefined } | undefined;
+};
+
+export function toPlacement(row: any): ResidentPlacement {
+  return {
+    bedId: String(row.bed_id),
+    via: row.via,
+    enquiryId: row.enquiry_id ?? undefined,
+    start: row.starts ?? undefined,
+    end: row.ends ?? undefined,
+    next: row.next_bed_id ? { bedId: String(row.next_bed_id), start: row.next_start ?? undefined, end: row.next_end ?? undefined } : undefined,
+  };
+}
+
+export const listResidentPlacements = createServerFn({ method: "GET" }).handler(
+  async (): Promise<Record<string, ResidentPlacement>> => {
+    const supabase = await admin();
+    const { data, error } = await supabase.rpc("resident_placements", { p_residents: null });
+    if (error) throw new Error(rpcError(error));
+    return Object.fromEntries(((data ?? []) as any[]).map((r) => [String(r.resident_id), toPlacement(r)]));
+  },
+);
 
 /* ---------------- import batches ---------------- */
 
@@ -633,7 +690,7 @@ const notMigrated = (error: { message: string }) =>
 /** What a placement function says when the database has not had its migration yet. */
 function rpcError(error: { message: string }) {
   return notMigrated(error)
-    ? "The database needs the placement update (20261009100000_dated_placement.sql) before rooms can be reserved this way."
+    ? "The database needs the placement update (20261014100000_one_placement.sql) before rooms can be reserved this way."
     : error.message;
 }
 

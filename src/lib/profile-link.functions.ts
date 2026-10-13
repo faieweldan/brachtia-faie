@@ -228,7 +228,7 @@ export const getProfileByToken = createServerFn({ method: "GET" })
       residenceName = String((enq as any)?.residence_name ?? "");
     }
     const { heldPlace, placeLabel } = await import("@/lib/held-place");
-    const place = row.enquiry_id ? await heldPlace(supabase, row.enquiry_id) : null;
+    const place = await heldPlace(supabase, String(row.enquiry_id ?? ""), String(row.id));
     const placeName = place ? placeLabel(place.unitNo, place.roomLetter) : "";
 
     return {

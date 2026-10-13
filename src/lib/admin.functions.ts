@@ -356,6 +356,36 @@ export const updateEnquiry = createServerFn({ method: "POST" })
         if (cErr) throw new Error(cErr.message);
         if (clash) throw new Error(`These dates clash with the reserved room: ${clash} Choose other dates, or change the room first.`);
         await (supabase as any).from("placement_holds").update({ start_date: start, end_date: end }).eq("id", h.id);
+      } else {
+        /*
+         * Paid (14 Oct 2026): the stay is its tenancy, on the bed it names. New
+         * dates are checked against everybody else on that bed by the same rule
+         * before anything is saved - Update invoice then moves the tenancy to
+         * them (syncPaidStay). Before, a paid stay could be lengthened into the
+         * next booking's dates on the same bed.
+         */
+        const { data: t } = await (supabase as any)
+          .from("tenancies")
+          .select("resident_id, bed_id")
+          .eq("enquiry_id", data.id)
+          .not("bed_id", "is", null)
+          .maybeSingle();
+        if (t?.bed_id) {
+          const { data: cur } = await supabase.from("enquiries").select("move_in, move_out, gender").eq("id", data.id).maybeSingle();
+          const start = data.moveIn !== undefined ? data.moveIn || null : ((cur as any)?.move_in ?? null);
+          const end = data.moveOut !== undefined ? data.moveOut || null : ((cur as any)?.move_out ?? null);
+          const { data: clash, error: cErr } = await (supabase as any).rpc("placement_conflict", {
+            p_bed: t.bed_id,
+            p_enquiry: data.id,
+            p_resident: t.resident_id,
+            p_start: start,
+            p_end: end,
+            p_gender: String((patch["gender"] as string) ?? (cur as any)?.gender ?? ""),
+            p_whole: false,
+          });
+          if (cErr) throw new Error(cErr.message);
+          if (clash) throw new Error(`These dates clash with the reserved room: ${clash} Choose other dates, or change the room first.`);
+        }
       }
     }
     const { error } = await supabase.from("enquiries").update(patch as any).eq("id", data.id);
@@ -2319,7 +2349,7 @@ export const getCheckInContext = createServerFn({ method: "GET" })
       if (row) tenancy = { start: String(row.start_date ?? ""), end: String(row.end_date ?? "") };
     }
 
-    const place = enquiryId ? await heldPlace(supabase, enquiryId) : null;
+    const place = enquiryId || residentId ? await heldPlace(supabase, enquiryId, residentId || undefined) : null;
     return {
       resident,
       residenceName: String(a.residence_name ?? ""),
