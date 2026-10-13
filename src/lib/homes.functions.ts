@@ -52,8 +52,10 @@ function toBed(row: any): Bed {
  * The stays to come on each bed while somebody else is its resident (9 Oct
  * 2026). Nothing on the bed row stores them - they are read from where each
  * one lives:
- *   Reserved   an unpaid hold on the bed (placement_holds, 10 Oct 2026) -
- *              on an empty bed or on one somebody still lives in
+ *   Reserved   a hold on the bed (placement_holds, 10 Oct 2026) before the
+ *              booking fee is in - on an empty bed or one somebody still
+ *              lives in; Booked once the fee is in (the hold stays until the
+ *              initial payment is paid in full)
  *   Booked     a paid tenancy placed on the bed (tenancies.bed_id) whose
  *              resident is not the bed's, has not ended, and is not living
  *              in another bed already
@@ -78,7 +80,7 @@ async function attachUpcoming(supabase: any, beds: any[]) {
   const residentIds = [...new Set(tenancies.map((t) => t.resident_id).filter(Boolean))] as string[];
   const [{ data: enquiries }, { data: residents }, { data: invoices }, { data: living }] = await Promise.all([
     enquiryIds.length
-      ? supabase.from("enquiries").select("id, reference, full_name, gender, university, move_in, move_out, monthly_rent, resident_id").in("id", enquiryIds)
+      ? supabase.from("enquiries").select("id, reference, status, full_name, gender, university, move_in, move_out, monthly_rent, resident_id").in("id", enquiryIds)
       : { data: [] },
     residentIds.length
       ? supabase.from("residents").select("id, full_name, gender, university, status, resident_code, quickbooks_id, enquiry_id").in("id", residentIds)
@@ -115,7 +117,8 @@ async function attachUpcoming(supabase: any, beds: any[]) {
         start: h.start_date || e.move_in || undefined,
         end: h.end_date || e.move_out || undefined,
         rent: rentOf(e.id),
-        status: "reserved",
+        // Reserved until the booking fee is in, then Booked - the booking's own stage says which (docs/MISTAKES-TO-AVOID.md 7)
+        status: e.status === "booked" ? "booked" : "reserved",
       });
     }
     for (const t of tenancies) {
