@@ -207,9 +207,9 @@ async function freeze(
   body: unknown,
   extra: Record<string, unknown>,
   issuedAs: string,
-  client?: any,
+  /** always given: the admin's client, or the caller's own - never looked up here, so this stays out of the browser's bundle */
+  supabase: any,
 ): Promise<number> {
-  const supabase = client ?? (await admin());
   const { data: rows, error } = await supabase
     .from(table)
     .select(`version, ${bodyColumn}`)
