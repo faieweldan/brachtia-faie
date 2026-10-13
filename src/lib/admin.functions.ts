@@ -9,8 +9,10 @@ import { addDays, CHECKIN_WINDOW_DAYS, checkInStatus, needsCheckInBooking, today
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-/** Admin portal data access. The portal lives at an unlisted /admin URL and has no login. */
+/** Admin portal data access. Every call needs the unlocked admin session cookie. */
 async function admin() {
+  const { requireAdminSession } = await import("@/lib/admin-session.server");
+  await requireAdminSession();
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   return supabaseAdmin;
 }
