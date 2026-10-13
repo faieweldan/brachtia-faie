@@ -6,9 +6,9 @@
  * background and reconcile with whatever the server saved.
  *
  * Residents are in Supabase too (residents.functions.ts), and so is money -
- * invoices and payments are read from resident-billing.functions.ts. Tenancies
- * and tasks are still front-end only, mirrored to localStorage until their
- * tables exist.
+ * invoices and payments are read from resident-billing.functions.ts, and
+ * tenancies (tenancyDatesByResident - the browser copy was removed 13 Oct
+ * 2026). Tasks are still front-end only, mirrored to localStorage.
  */
 import { useSyncExternalStore } from "react";
 
@@ -176,32 +176,6 @@ export type Resident = {
   docs: ResidentDoc[];
 };
 
-export type TenancyStage =
-  | "draft"
-  | "admin_signed"
-  | "sent"
-  | "student_signed"
-  | "checkin_scheduled"
-  | "checked_in"
-  | "stamped";
-
-export type Tenancy = {
-  id: string;
-  residentId: string;
-  unitId?: string | undefined;
-  roomId?: string | undefined;
-  bedId?: string | undefined;
-  start: string;
-  end: string;
-  rent: number;
-  schedule: string;
-  stage: TenancyStage;
-  checkinDate: string;
-  checklist: { key: string; label: string; done: boolean; date?: string | undefined }[];
-  agreementFile?: string | undefined;
-  stampedFile?: string | undefined;
-};
-
 export type Task = {
   id: string;
   type: "agreement" | "checkin" | "stamping" | "payment" | "hold";
@@ -216,7 +190,6 @@ export type Task = {
 export type OpsState = {
   units: Unit[];
   residents: Resident[];
-  tenancies: Tenancy[];
   tasks: Task[];
   taTemplate?: { fileName: string; uploadedAt: string } | undefined;
 };
@@ -224,7 +197,6 @@ export type OpsState = {
 const EMPTY: OpsState = {
   units: [],
   residents: [],
-  tenancies: [],
   tasks: [],
 };
 
@@ -239,7 +211,11 @@ function hydrate() {
   hydrated = true;
   try {
     const raw = window.localStorage.getItem(KEY);
-    if (raw) state = { ...EMPTY, ...(JSON.parse(raw) as OpsState), units: [], residents: [] };
+    if (raw) {
+      // an old "tenancies" list in the saved copy is dropped - the server has them (13 Oct 2026)
+      const { tenancies: _tenancies, ...saved } = JSON.parse(raw) as OpsState & { tenancies?: unknown };
+      state = { ...EMPTY, ...saved, units: [], residents: [] };
+    }
   } catch {
     /* ignore */
   }
@@ -781,7 +757,7 @@ export function findBedForResident(
  * one cannot show dates the other has not got.
  */
 export function stayDates(
-  tenancy: Pick<Tenancy, "start" | "end"> | undefined,
+  tenancy: { start: string; end: string } | undefined,
   placed: BedRow | undefined,
   resident: { moveIn?: string | undefined },
   /** the tenancies table's dates - the truth, ahead of the browser's own copy */
@@ -893,7 +869,6 @@ export async function deleteResident(id: string) {
   setState((s) => ({
     ...s,
     residents: s.residents.filter((r) => r.id !== id),
-    tenancies: s.tenancies.filter((t) => t.residentId !== id),
   }));
   try {
     const { deleteResidentRow } = await import("@/lib/residents.functions");
@@ -906,37 +881,7 @@ export async function deleteResident(id: string) {
 
 /* ---------------- Tenancy / task / payment helpers ---------------- */
 
-export const CHECKIN_CHECKLIST = [
-  { key: "keycard", label: "Prepare key card" },
-  { key: "clean", label: "Clean & set up room" },
-  { key: "residentcard", label: "Resident card application" },
-];
-
-export type TenancyPatch = { [K in keyof Tenancy]?: Tenancy[K] | undefined };
 export type ResidentPatch = { [K in keyof Resident]?: Resident[K] | undefined };
-
-export function createTenancy(input: TenancyPatch & { residentId: string }): Tenancy {
-  const tenancy: Tenancy = {
-    id: uid(),
-    start: "",
-    end: "",
-    rent: 0,
-    schedule: "",
-    stage: "draft",
-    checkinDate: "",
-    checklist: CHECKIN_CHECKLIST.map((c) => ({ ...c, done: false })),
-    ...input,
-  } as Tenancy;
-  setState((s) => ({ ...s, tenancies: [...s.tenancies, tenancy] }));
-  return tenancy;
-}
-
-export function saveTenancy(tenancy: Tenancy) {
-  setState((s) => ({
-    ...s,
-    tenancies: s.tenancies.map((t) => (t.id === tenancy.id ? tenancy : t)),
-  }));
-}
 
 export function addTask(task: Omit<Task, "id" | "status"> & { status?: Task["status"] }) {
   setState((s) => ({ ...s, tasks: [...s.tasks, { id: uid(), status: "open", ...task }] }));
