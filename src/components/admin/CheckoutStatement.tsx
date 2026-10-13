@@ -1,19 +1,18 @@
 import { useEffect, useState } from "react";
 import { Dropdown, StaffPicker } from "@/components/admin/Dropdown";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Camera, Check, FileText, Loader2, Plus, Send, Trash2, Undo2, X } from "lucide-react";
+import { Camera, Check, FileText, Loader2, Plus, Send, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/date-input";
 import { Textarea } from "@/components/ui/textarea";
-import { PdfPreviewDialog } from "@/components/admin/PdfPreview";
-import { STAFF } from "@/data/form-options";
+import { PdfPreviewButton, PdfPreviewDialog } from "@/components/admin/PdfPreview";
+import { LineItemsEditor } from "@/components/admin/LineItemsEditor";
 import { StaffTag } from "@/components/admin/RecordPaymentDialog";
-import { ChargeInput } from "@/components/admin/ChargePicker";
 import { ReturnMessage } from "@/components/admin/InventoryReturnMessage";
-import { money } from "@/lib/ops-store";
+import { formatRM as money } from "@/data/properties"; // with sen, as the statement PDF prints it
 import {
   checkoutPdf,
   discardCheckout,
@@ -28,7 +27,9 @@ import {
   uploadCheckoutPhoto,
 } from "@/lib/checkout.functions";
 import type { CheckoutLine } from "@/lib/checkout.server";
-import { CHECKOUT_TYPES, CHECKOUT_TYPE_LABEL, type CheckoutType } from "@/lib/checkout-types";
+import { CHECKOUT_TYPES, CHECKOUT_TYPE_LABEL, checkoutDocKind, checkoutTotals, type CheckoutType } from "@/lib/checkout-types";
+import { compressImage } from "@/lib/compress";
+import { METHOD_RULES, ruleFor } from "@/lib/payment-methods";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { klToday } from "@/lib/kl-date";
 
@@ -39,8 +40,14 @@ import { klToday } from "@/lib/kl-date";
  *
  *   Start → edit → Issue (v1) → the resident signs → Record refund
  *   Changed after issuing → Issue again (v2); v1 is kept, v2 is signed
+ *
+ * Built from the same pieces as every invoice (Dani, 12 Oct 2026): the lines
+ * are LineItemsEditor, the preview is PdfPreviewButton, the sums and "credit
+ * note or invoice" are checkoutTotals / checkoutDocKind - so it feels like
+ * Edit invoice, and only what is its own (deposits, photos, signing) is here.
  */
-const METHODS = ["Bank Transfer", "DuitNow QR Pay", "Cash Deposit", "Cash", "Cheque"];
+// the ways of paying Collections' Record payment knows, and what each needs
+const METHODS = Object.keys(METHOD_RULES);
 
 const pdfUrl = (base64: string) =>
   URL.createObjectURL(new Blob([Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))], { type: "application/pdf" }));
@@ -118,9 +125,7 @@ export function CheckoutStatement({
   if (!q.data) return null;
 
   const deposits = q.data.deposits;
-  const held = deposits.reduce((n, d) => n + d.amount, 0);
-  const deducted = lines.reduce((n, l) => n + (Number(l.amount) || 0), 0);
-  const net = Math.round((held - deducted) * 100) / 100;
+  const { held, net } = checkoutTotals(deposits, lines);
   const latest = s?.versions.at(-1) ?? null;
   // signed and settled: nothing on it changes any more
   const closed = !!s?.refund || !!s?.settled;
@@ -130,6 +135,7 @@ export function CheckoutStatement({
   const toIssue = !!s && !closed && (unsaved || q.data.changed);
 
   const edit = (i: number, patch: Partial<CheckoutLine>) => setLines((rows) => rows.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+  const docName = checkoutDocKind(net);
   const save = () => saveCheckoutDraft({ data: { residentId, lines, notes } });
   const type: CheckoutType = q.data.type;
   const changeType = (t: CheckoutType) =>
@@ -143,7 +149,7 @@ export function CheckoutStatement({
     try {
       const fd = new FormData();
       fd.set("residentId", residentId);
-      fd.set("file", await shrink(file));
+      fd.set("file", await compressImage(file));
       const r = await uploadCheckoutPhoto({ data: fd });
       setUrls((u) => ({ ...u, [r.path]: r.url }));
       edit(i, { photos: [...(lines[i]?.photos ?? []), r.path] });
@@ -191,7 +197,7 @@ export function CheckoutStatement({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-semibold text-brand-deep">
           {/* a refund is a credit note, a balance owed is an invoice - it follows the balance (Dani, 5 Oct 2026) */}
-          {net >= 0 ? "Credit note" : "Invoice"} {s.number}
+          {docName} {s.number}
           {latest ? <span className="ml-2 text-xs font-normal text-muted-foreground">Version {latest.v}</span> : null}
         </p>
         <span
@@ -206,13 +212,13 @@ export function CheckoutStatement({
           }`}
         >
           {s.refund
-            ? "Settled"
+            ? "Paid"
             : settled
               ? settled.refund > 0
                 ? "Signed - pay the refund"
                 : settled.owed > 0
                   ? "Signed - balance invoiced"
-                  : "Settled"
+                  : "Paid"
               : latest?.signed && !toIssue
                 ? "Signed"
                 : latest ? "With resident to sign" : "Draft"}
@@ -249,102 +255,51 @@ export function CheckoutStatement({
         </div>
       </div>
 
-      {/* deductions: unpaid invoices first, then what admin adds - like the invoice's lines */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">Deductions</p>
-          {closed ? null : (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setLines((rows) => [...rows, { id: crypto.randomUUID().slice(0, 8), label: "", amount: 0, source: "deduction", photos: [] }])}
-            >
-              <Plus className="size-4" /> Add line
-            </Button>
-          )}
-        </div>
-        <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
-          <div className="flex items-center gap-2 bg-muted/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            <span className="flex-1">Description</span>
-            <span className="w-28 text-right">Amount (RM)</span>
-            <span className="w-16 shrink-0" aria-hidden />
-          </div>
-          {lines.length ? null : <p className="px-3 py-2 text-sm text-muted-foreground">No deductions.</p>}
-          {lines.map((l, i) => (
-            <div key={l.id} className="space-y-2 px-3 py-2">
-              <div className="flex items-center gap-2">
-                {l.source === "deduction" ? (
-                  <ChargeInput
-                    value={l.label}
-                    placeholder="e.g. Cleaning, broken chair"
-                    disabled={closed}
-                    onChange={(label) => edit(i, { label })}
-                    onPick={(label, amount) => edit(i, { label, ...(amount != null ? { amount } : {}) })}
-                  />
-                ) : (
-                  <Input
-                    value={l.label}
-                    placeholder="e.g. Cleaning, broken chair"
-                    className="h-8 flex-1"
-                    disabled={closed || l.source === "forfeit"}
-                    onChange={(e) => edit(i, { label: e.target.value })}
-                  />
-                )}
-                <Input
-                  type="number"
-                  value={l.amount}
-                  aria-label="Amount"
-                  // what is kept can be changed - Brachtia may give some back (Dani, 6 Oct 2026)
-                  disabled={closed}
-                  className="h-8 w-28 text-right tabular-nums"
-                  onChange={(e) => edit(i, { amount: Math.max(0, Number(e.target.value) || 0) })}
-                />
-                <label
-                  title="Add a photo (optional)"
-                  className={`relative flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-muted ${closed ? "pointer-events-none opacity-40" : ""}`}
-                >
-                  <Camera className="size-4" />
-                  <input type="file" accept="image/*" className="sr-only" onChange={(e) => void addPhoto(i, e.target.files?.[0])} />
-                </label>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  disabled={closed}
-                  className="size-8 shrink-0 text-muted-foreground"
-                  aria-label="Remove line"
-                  onClick={() => setLines((rows) => rows.filter((_, j) => j !== i))}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-
-              {l.photos.length ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {l.photos.map((p) => (
-                    <span key={p} className="relative size-12 overflow-hidden rounded-md border border-border bg-muted">
-                      {urls[p] ? <img src={urls[p]} alt="" className="size-full object-cover" /> : null}
-                      {closed ? null : (
-                        <button
-                          type="button"
-                          title="Remove photo"
-                          onClick={() => edit(i, { photos: l.photos.filter((x) => x !== p) })}
-                          className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white"
-                        >
-                          <X className="size-3" />
-                        </button>
-                      )}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
+      {/* deductions: unpaid invoices first, then what admin adds - the invoices' own line editor */}
+      <LineItemsEditor
+        title="Deductions"
+        lines={lines}
+        onChange={setLines}
+        newLine={(): CheckoutLine => ({ id: crypto.randomUUID().slice(0, 8), label: "", amount: 0, source: "deduction", photos: [] })}
+        readOnly={closed}
+        negative
+        totalLabel="Total deductions"
+        empty="No deductions."
+        placeholder="e.g. Cleaning, broken chair"
+        // what admin adds picks from Schedule B; what the kind of checkout keeps is named by it.
+        // Every amount can still be changed - Brachtia may give some back (Dani, 6 Oct 2026)
+        describe={(l) => (l.source === "deduction" ? "charge" : l.source === "forfeit" ? "fixed" : "text")}
+        action={(_, i) => (
+          <label
+            title="Add a photo (optional)"
+            className="relative flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+          >
+            <Camera className="size-4" />
+            <input type="file" accept="image/*" className="sr-only" onChange={(e) => void addPhoto(i, e.target.files?.[0])} />
+          </label>
+        )}
+        extra={(l, i) =>
+          l.photos.length ? (
+            <div className="flex flex-wrap gap-1.5">
+              {l.photos.map((p) => (
+                <span key={p} className="relative size-12 overflow-hidden rounded-md border border-border bg-muted">
+                  {urls[p] ? <img src={urls[p]} alt="" className="size-full object-cover" /> : null}
+                  {closed ? null : (
+                    <button
+                      type="button"
+                      title="Remove photo"
+                      onClick={() => edit(i, { photos: l.photos.filter((x) => x !== p) })}
+                      className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  )}
+                </span>
+              ))}
             </div>
-          ))}
-          <div className="flex items-center justify-between bg-muted px-3 py-2 text-sm font-medium">
-            <span>Total deductions</span>
-            <span className="tabular-nums">- {money(deducted)}</span>
-          </div>
-        </div>
-      </div>
+          ) : null
+        }
+      />
 
       <div className={`flex items-center justify-between rounded-xl px-4 py-3 ${net >= 0 ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-900"}`}>
         <span className="text-sm font-semibold">{net >= 0 ? "Refund due to resident" : "Balance owed by resident"}</span>
@@ -358,24 +313,20 @@ export function CheckoutStatement({
 
       {closed ? null : (
         <div className="flex flex-wrap justify-end gap-2">
-          {/* the PDF as it would be issued, before anything is saved */}
-          <Button
+          {/* the PDF as it would be issued, before anything is saved - the invoices' own preview */}
+          <PdfPreviewButton
             size="sm"
             variant="outline"
             disabled={!!busy}
-            onClick={() =>
-              void (async () => {
-                try {
-                  const { base64 } = await previewCheckout({ data: { residentId, lines, notes } });
-                  setPdf({ url: pdfUrl(base64), title: `${s.number} · Preview` });
-                } catch (e) {
-                  toast.error(e instanceof Error ? e.message : "Could not make the preview");
-                }
-              })()
-            }
+            title={`${docName} ${s.number} · Preview`}
+            fileName={`${s.number.replace(/\//g, "-")}-preview.pdf`}
+            build={async () => pdfUrl((await previewCheckout({ data: { residentId, lines, notes } })).base64)}
+            /* like a draft invoice: not sent from here - the issued version is the one with a PDF to keep */
+            downloadable={false}
+            downloadHint="Issue it to download the PDF"
           >
             <FileText className="size-4" /> Preview
-          </Button>
+          </PdfPreviewButton>
           {/* start over with another kind of checkout - only until the resident signs */}
           {latest?.signed ? null : (
             <Button
@@ -502,7 +453,7 @@ export function CheckoutStatement({
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border p-3 text-sm">
             <span className="text-muted-foreground">
               {moneyDone
-                ? "Settled. Make the resident inactive - their bed is freed."
+                ? "Paid. Make the resident inactive - their bed is freed."
                 : settled.owed > 0
                   ? `Waiting for ${settled.csInvoiceNumber || "the settlement invoice"} to be paid.`
                   : "Waiting for the refund to be recorded."}
@@ -542,6 +493,7 @@ export function RefundForm({ residentId, net, onDone }: { residentId: string; ne
   const [file, setFile] = useState<File | null>(null);
   const [recordedBy, setRecordedBy] = useState("");
   const [busy, setBusy] = useState(false);
+  const rule = ruleFor(method);
   async function save() {
     if (!recordedBy) return void toast.error("Choose who is recording this");
     setBusy(true);
@@ -551,7 +503,7 @@ export function RefundForm({ residentId, net, onDone }: { residentId: string; ne
       fd.set("amount", amount);
       fd.set("paidOn", paidOn);
       fd.set("method", method);
-      fd.set("reference", reference);
+      fd.set("reference", rule.reference ? reference : "");
       fd.set("recordedBy", recordedBy);
       if (file) fd.set("file", file);
       await recordCheckoutRefund({ data: fd });
@@ -590,10 +542,13 @@ export function RefundForm({ residentId, net, onDone }: { residentId: string; ne
             ))}
           </Dropdown>
         </label>
-        <label className="space-y-1">
-          <span className="text-xs text-muted-foreground">Reference</span>
-          <Input value={reference} onChange={(e) => setReference(e.target.value)} className="h-9" placeholder="From the bank slip" />
-        </label>
+        {/* what each method asks for, as Record payment asks it - cash has no reference */}
+        {rule.reference ? (
+          <label className="space-y-1">
+            <span className="text-xs text-muted-foreground">{rule.reference.label}</span>
+            <Input value={reference} onChange={(e) => setReference(e.target.value)} className="h-9" placeholder={rule.reference.placeholder} />
+          </label>
+        ) : null}
       </div>
       <label className="block space-y-1">
         <span className="text-xs text-muted-foreground">Proof of payment {Number(amount) > 0 ? "" : "(optional)"}</span>
@@ -606,16 +561,4 @@ export function RefundForm({ residentId, net, onDone }: { residentId: string; ne
       </div>
     </div>
   );
-}
-
-/** a phone photo is several megabytes; 1600 pixels on the long side shows a scratch */
-async function shrink(file: File): Promise<File> {
-  const img = await createImageBitmap(file);
-  const k = Math.min(1, 1600 / Math.max(img.width, img.height));
-  const c = document.createElement("canvas");
-  c.width = Math.round(img.width * k);
-  c.height = Math.round(img.height * k);
-  c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
-  const blob = await new Promise<Blob>((r) => c.toBlob((b) => r(b!), "image/jpeg", 0.8));
-  return new File([blob], "photo.jpg", { type: "image/jpeg" });
 }

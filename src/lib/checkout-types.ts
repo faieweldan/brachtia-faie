@@ -32,3 +32,17 @@ export function checkoutTypeFor(start: string, end: string, today = klToday()): 
   }
   return "end_of_tenancy";
 }
+
+/*
+ * The statement's sums and what it is called - one rule for the admin card, the
+ * server and the PDF (Dani, 12 Oct 2026). The card used to work these out
+ * itself, beside the server's copy.
+ */
+const round = (n: number) => Math.round(n * 100) / 100;
+export const checkoutTotals = (deposits: { amount: number }[], lines: { amount: number }[]) => {
+  const held = round(deposits.reduce((n, d) => n + (Number(d.amount) || 0), 0));
+  const deducted = round(lines.reduce((n, l) => n + (Number(l.amount) || 0), 0));
+  return { held, deducted, net: round(held - deducted) };
+};
+/** a refund (or nothing either way) is a credit note; a balance owed is an invoice (Dani, 5 Oct 2026) */
+export const checkoutDocKind = (net: number) => (net >= 0 ? "Credit note" : "Invoice");

@@ -2,7 +2,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 
 import { company } from "@/data/properties";
-import { CHECKOUT_TYPE_LABEL, type CheckoutType } from "@/lib/checkout-types";
+import { CHECKOUT_TYPE_LABEL, checkoutDocKind, checkoutTotals, type CheckoutType } from "@/lib/checkout-types";
 
 export * from "@/lib/checkout-types";
 
@@ -147,12 +147,8 @@ export async function nextNumber(sb: any): Promise<string> {
 export const sha256 = async (b: Uint8Array) =>
   [...new Uint8Array(await crypto.subtle.digest("SHA-256", b as Uint8Array<ArrayBuffer>))].map((x) => x.toString(16).padStart(2, "0")).join("");
 
-export const totals = (deposits: CheckoutDeposit[], lines: CheckoutLine[]) => {
-  const held = round(deposits.reduce((n, d) => n + d.amount, 0));
-  const deducted = round(lines.reduce((n, l) => n + (Number(l.amount) || 0), 0));
-  return { held, deducted, net: round(held - deducted) };
-};
-const round = (n: number) => Math.round(n * 100) / 100;
+// the same sums the admin card shows - one rule, in checkout-types.ts
+export const totals = (deposits: CheckoutDeposit[], lines: CheckoutLine[]) => checkoutTotals(deposits, lines);
 
 /* ---------------------------------------------------------------- the PDF */
 
@@ -227,7 +223,7 @@ export async function statementPdf(input: StatementPdfInput): Promise<Uint8Array
   text(company.tagline, M, A4.h - 41, 8, font, white);
   text(`${company.email}  ·  WhatsApp ${company.phones[0]}`, M, A4.h - 52, 7.5, font, white);
   // what it is follows the balance: a refund is a credit note, a balance owed is an invoice
-  right(v.net >= 0 ? "CREDIT NOTE" : "INVOICE", A4.w - M, A4.h - 25, 12, bold, white);
+  right(checkoutDocKind(v.net).toUpperCase(), A4.w - M, A4.h - 25, 12, bold, white);
   right(`CHECKOUT STATEMENT · ${CHECKOUT_TYPE_LABEL[v.type ?? "end_of_tenancy"].toUpperCase()}`, A4.w - M, A4.h - 38, 8, font, white);
   right(`${input.number} · Version ${v.v} · ${day(v.issuedAt)}`, A4.w - M, A4.h - 50, 8, bold, white);
 

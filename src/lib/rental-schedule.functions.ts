@@ -173,15 +173,16 @@ export const tenancyDatesByResident = createServerFn({ method: "GET" }).handler(
   const supabase = await admin();
   const { data, error } = await supabase
     .from("tenancies")
-    .select("id, resident_id, start_date, end_date, created_at")
+    .select("id, resident_id, start_date, end_date, monthly_rent, created_at")
     .order("start_date", { ascending: true, nullsFirst: true })
     .order("created_at", { ascending: true });
   if (error) throw new Error(error.message);
-  const out: Record<string, { id: string; start: string; end: string }> = {};
+  // rent: the rent agreed with this resident - an existing resident keeps theirs, whatever the Website price is now
+  const out: Record<string, { id: string; start: string; end: string; rent: number }> = {};
   // the latest tenancy wins - a renewal is the newest
   for (const t of (data ?? []) as any[]) {
     if (!t.resident_id) continue;
-    out[String(t.resident_id)] = { id: String(t.id), start: day(t.start_date), end: day(t.end_date) };
+    out[String(t.resident_id)] = { id: String(t.id), start: day(t.start_date), end: day(t.end_date), rent: Number(t.monthly_rent) || 0 };
   }
   return out;
 });

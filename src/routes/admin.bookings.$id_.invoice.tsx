@@ -2,7 +2,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ import {
   type DiscountType,
 } from "@/lib/invoices";
 import { PdfPreviewButton } from "@/components/admin/PdfPreview";
+import { LineItemsEditor } from "@/components/admin/LineItemsEditor";
 import {
   addonsFor,
   stayQuote,
@@ -125,7 +126,13 @@ function InvoiceGenerator() {
    * filled in from the rent before anyone touches them.
    */
   const [invoiceDate, setInvoiceDate] = useState("");
-  const [paymentTerms, setPaymentTerms] = useState("NET15");
+  /*
+   * The due date is set by hand, like the invoice date - it varies (Dani,
+   * 9 Oct 2026). It is still saved as the days after the invoice date
+   * (payment_terms "NET n"), so everything that reads the due date that way
+   * keeps working; "NET" is never shown.
+   */
+  const [dueDate, setDueDate] = useState("");
   const [ready, setReady] = useState(false);
 
   /**
@@ -165,7 +172,10 @@ function InvoiceGenerator() {
     setManual(true);
     setNotes(String(inv.notes ?? ""));
     if (inv.invoice_date) setInvoiceDate(String(inv.invoice_date));
-    if (inv.payment_terms) setPaymentTerms(String(inv.payment_terms));
+    if (inv.invoice_date) {
+      const days = Number(/NET\s*(\d+)/i.exec(String(inv.payment_terms ?? ""))?.[1] ?? 15);
+      setDueDate(addDaysIso(String(inv.invoice_date), days));
+    }
     // the rent before its discount, then the discount
     const listed = Number(inv.list_rent || inv.monthly_rent);
     if (listed) setIssuedRent(listed);
@@ -185,8 +195,14 @@ function InvoiceGenerator() {
   /* The real assigned room comes from the room assignment made on Booking details. */
   const ops = useOps();
   const assignedBed = useMemo(
-    () => allBeds(ops.units).find((b) => b.bed.enquiryId === id),
-    [ops.units, id],
+    // its hold or paid stay on a bed, or the bed it is the resident of (placement_holds, 10 Oct 2026)
+    () =>
+      allBeds(ops.units).find(
+        (b) =>
+          !!b.bed.upcoming?.some((u) => u.enquiryId === id) ||
+          (!!(row as any)?.resident_id && b.bed.residentId === (row as any).resident_id),
+      ),
+    [ops.units, id, row],
   );
   const assignedRoomLabel = assignedBed
     ? `Unit ${assignedBed.unit.unitNo} · Room ${assignedBed.room.letter}`
@@ -389,12 +405,11 @@ function InvoiceGenerator() {
     setShowDiscount(false);
   }
 
-  const termDays = paymentTerms === "NET30" ? 30 : 15;
-  const dueDate = invoiceDate
-    ? new Date(new Date(invoiceDate).getTime() + termDays * 86400000)
-        .toISOString()
-        .slice(0, 10)
-    : "";
+  // a new invoice is due 15 days after its date until somebody says otherwise
+  const due = dueDate || (invoiceDate ? addDaysIso(invoiceDate, 15) : "");
+  const termDays =
+    invoiceDate && due ? Math.max(0, Math.round((Date.parse(due) - Date.parse(invoiceDate)) / 86400000)) : 15;
+  const paymentTerms = `NET${termDays}`;
 
   const invoiceValues = () => ({
     full_name: r.full_name ?? "",
@@ -470,7 +485,7 @@ function InvoiceGenerator() {
         : {}),
       invoice_date: invoiceDate || null,
       payment_terms: paymentTerms,
-      due_date: dueDate || null,
+      due_date: due || null,
       reference: r.reference ?? null,
       full_name: r.full_name ?? "",
       email: r.email ?? "",
@@ -736,7 +751,7 @@ function InvoiceGenerator() {
       {/* Invoice settings */}
       <section className="rounded-xl border border-border bg-card p-4">
         <h2 className="mb-3 text-sm font-semibold text-foreground">Invoice settings</h2>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Invoice date">
             <DateInput
               value={invoiceDate}
@@ -744,18 +759,13 @@ function InvoiceGenerator() {
               className="h-9"
             />
           </Field>
-          <Field label="Payment terms">
-            <select
-              value={paymentTerms}
-              onChange={(e) => setPaymentTerms(e.target.value)}
-              className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-            >
-              <option value="NET15">NET 15</option>
-              <option value="NET30">NET 30</option>
-            </select>
-          </Field>
           <Field label="Due date">
-            <p className="text-sm pt-2">{dueDate || "—"}</p>
+            <DateInput
+              value={due}
+              min={invoiceDate || undefined}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="h-9"
+            />
           </Field>
         </div>
       </section>
@@ -771,119 +781,33 @@ function InvoiceGenerator() {
                 : `Calculated from ${money(listRent)}/month${discountName ? ` less ${discountName}` : ""} · ${SCHEDULES.find((f) => f.value === frequency)?.label ?? frequency}`}
             </p>
           </div>
-          {manual && calculated ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setManual(false);
-                setLines(calculated);
-              }}
-            >
-              Recalculate
-            </Button>
-          ) : null}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() =>
-              editLines((l) => [...l, { label: "", kind: "onetime", amount: 0, quantity: 1 }])
-            }
-          >
-            <Plus className="size-4" /> Add line
-          </Button>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="py-2 pr-3 font-medium">Item</th>
-                <th className="py-2 pr-3 font-medium" style={{ width: "140px" }}>Type</th>
-                <th className="py-2 pl-3 text-right font-medium" style={{ width: "150px" }}>Amount (RM)</th>
-                <th className="py-2" style={{ width: "36px" }} />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {lines.map((l, i) => (
-                <tr key={i} className="group">
-                  <td className="py-2 pr-3">
-                    <Input
-                      value={l.label}
-                      placeholder="Description"
-                      className="h-8 border-transparent bg-transparent focus-visible:border-input"
-                      onChange={(e) =>
-                        editLines((rows) =>
-                          rows.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)),
-                        )
-                      }
-                    />
-                  </td>
-                  <td className="py-2 pr-3">
-                    <select
-                      value={l.kind}
-                      onChange={(e) =>
-                        editLines((rows) =>
-                          rows.map((x, j) => (j === i ? { ...x, kind: e.target.value } : x)),
-                        )
-                      }
-                      className="h-8 rounded-md border border-input bg-background px-2 text-sm"
-                    >
-                      {KINDS.map((k) => (
-                        <option key={k.value} value={k.value}>
-                          {k.label}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  {/* the line's amount, typed as it is. Quantity and a price
-                      each are gone: the one line that used them - advance
-                      rent - is now worked out in full, extra month included */}
-                  <td className="py-2 pl-3">
-                    <Input
-                      type="number"
-                      value={l.amount}
-                      aria-label="Amount"
-                      className="h-8 text-right tabular-nums"
-                      onChange={(e) =>
-                        editLines((rows) =>
-                          rows.map((x, j) =>
-                            j === i ? { ...x, amount: Number(e.target.value), quantity: 1 } : x,
-                          ),
-                        )
-                      }
-                    />
-                  </td>
-                  <td className="py-2 text-right">
-                    <button
-                      type="button"
-                      className="invisible text-muted-foreground hover:text-destructive group-hover:visible"
-                      onClick={() => editLines((rows) => rows.filter((_, j) => j !== i))}
-                    >
-                      <Trash2 className="size-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {lines.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="py-6 text-center text-sm text-muted-foreground">
-                    No lines yet — add the first one.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="mt-4 space-y-1 border-t border-border pt-4 text-sm">
-          <div className="flex items-center justify-between font-semibold">
-            <span>Total initial payment</span>
-            <span>{money(total)}</span>
-          </div>
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span>Refundable deposits included</span>
-            <span>{money(deposits)}</span>
-          </div>
+        {/* the same line editor as a resident's invoice and the checkout statement */}
+        <LineItemsEditor
+          title="Items"
+          lines={lines}
+          onChange={(next) => editLines(() => next)}
+          newLine={() => ({ label: "", kind: "onetime", amount: 0, quantity: 1 })}
+          kinds={KINDS}
+          totalLabel="Total initial payment"
+          headerActions={
+            manual && calculated ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setManual(false);
+                  setLines(calculated);
+                }}
+              >
+                Recalculate
+              </Button>
+            ) : null
+          }
+        />
+        <div className="mt-2 flex items-center justify-between px-3 text-sm text-muted-foreground">
+          <span>Refundable deposits included</span>
+          <span className="tabular-nums">{money(deposits)}</span>
         </div>
       </section>
 
@@ -1017,4 +941,11 @@ function InvoiceGenerator() {
       </div>
     </div>
   );
+}
+
+/** An ISO date moved by whole days, without the time zone shifting the day. */
+function addDaysIso(iso: string, days: number) {
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }

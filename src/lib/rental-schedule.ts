@@ -203,6 +203,39 @@ export function nextRentalPayment(input: {
   return { start: first.start, end: first.end, due: dueFor(first.start), amount };
 }
 
+/**
+ * The next rent of someone already living here when they are brought into the
+ * system (Migration 1, Dani 12 Oct 2026). Their billing cycle is the normal one
+ * - after the advance rent of the initial payment, stepping by the frequency -
+ * and every period that has started by `today` counts as paid: they are an
+ * existing resident and the team confirmed everyone is paid up to now. The
+ * next rent is the first period that starts after today. Null when nothing is
+ * left to bill (paid in full, or the tenancy ends within the current period).
+ */
+export function nextRentAfter(input: {
+  tenancyStart: string;
+  tenancyEnd: string;
+  frequency: string;
+  monthlyRent: number;
+  advance: number;
+  today: string;
+}) {
+  const first = firstRentPeriod(input.tenancyStart, input.tenancyEnd, input.frequency, input.advance, input.monthlyRent);
+  if (!first.start) return null;
+  const periods = buildPeriods({
+    monthlyRent: input.monthlyRent,
+    frequency: input.frequency,
+    firstPeriodStart: first.start,
+    firstPeriodEnd: first.end,
+    firstDueDate: dueFor(first.start),
+    tenancyEnd: input.tenancyEnd.slice(0, 10),
+    finalAmount: null,
+    firstPeriodCredit: first.credit,
+  } as ScheduleTerms);
+  const next = periods.find((p) => p.start > input.today.slice(0, 10));
+  return next ? { start: next.start, end: next.end, due: next.due, amount: next.amount } : null;
+}
+
 /* ------------------------------------------------- a room change mid-period */
 
 /**

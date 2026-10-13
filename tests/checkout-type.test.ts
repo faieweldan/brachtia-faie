@@ -21,3 +21,14 @@ describe("checkoutTypeFor", () => {
     expect(checkoutTypeFor("", "", "2027-01-01")).toBe("end_of_tenancy");
   });
 });
+
+describe("the statement's sums - one rule for the card, the server and the PDF", () => {
+  test("held less deducted, to the sen", async () => {
+    const { checkoutTotals, checkoutDocKind } = await import("@/lib/checkout-types");
+    const t = checkoutTotals([{ amount: 1000 }, { amount: 200.1 }], [{ amount: 12.5 }, { amount: 0.2 }]);
+    expect(t).toEqual({ held: 1200.1, deducted: 12.7, net: 1187.4 });
+    expect(checkoutDocKind(t.net)).toBe("Credit note");
+    expect(checkoutDocKind(0)).toBe("Credit note");
+    expect(checkoutDocKind(-0.01)).toBe("Invoice");
+  });
+});

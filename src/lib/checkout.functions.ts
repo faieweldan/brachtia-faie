@@ -58,8 +58,10 @@ async function moneyNow(residentId: string, type?: CheckoutType) {
    * tenancy start when they never chose one.
    */
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data: who } = await (supabaseAdmin as any).from("residents").select("checkin_on").eq("id", residentId).maybeSingle();
-  const moveIn = String(who?.checkin_on ?? "").slice(0, 10) || String(first?.tenancy_start ?? "").slice(0, 10);
+  // the check-in appointment, as rescheduled (10 Oct 2026)
+  const { checkInFor } = await import("@/lib/checkin.server");
+  const booked = await checkInFor(supabaseAdmin as any, residentId);
+  const moveIn = booked.on.slice(0, 10) || String(first?.tenancy_start ?? "").slice(0, 10);
   const suggested = checkoutTypeFor(moveIn, String(first?.tenancy_end ?? "").slice(0, 10));
   const kind = type ?? suggested;
   // the initial payment, paid in full
@@ -235,7 +237,7 @@ export const saveCheckoutDraft = createServerFn({ method: "POST" })
     const { readStatement, writeStatement } = await import("@/lib/checkout.server");
     const s = await readStatement(sb, data.residentId);
     if (!s) throw new Error("Start the statement first.");
-    if (s.refund || s.settled) throw new Error("This statement is signed and settled - it can no longer change.");
+    if (s.refund || s.settled) throw new Error("This statement is signed and paid - it can no longer change.");
     const folder = `checkout/${data.residentId}/photos/`;
     const type = data.type ?? s.draft.type;
     // a new kind of checkout keeps different things: its lines come again from the money
@@ -285,7 +287,7 @@ export const issueCheckout = createServerFn({ method: "POST" })
     const { buildStatementPdf, putFile, readStatement, sha256, totals, writeStatement } = await import("@/lib/checkout.server");
     const s = await readStatement(sb, data.residentId);
     if (!s) throw new Error("Start the statement first.");
-    if (s.refund || s.settled) throw new Error("This statement is signed and settled - it can no longer change.");
+    if (s.refund || s.settled) throw new Error("This statement is signed and paid - it can no longer change.");
     const { loadSignatory } = await import("@/lib/signatory.server");
     if (!(await loadSignatory(sb))?.token) throw new Error("Save the signatory's signature in Settings → Signatory first.");
     const now = await moneyNow(data.residentId, s.draft.type);

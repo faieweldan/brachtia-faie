@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { cleanPhone } from "@/lib/reference-data";
 import { company, formatDate, formatRM, inBillingOrder } from "@/data/properties";
 import { nextRentalPayment, cycleEnd } from "@/lib/rental-schedule";
 import { stayLength } from "@/lib/stay-length";
@@ -289,7 +290,8 @@ async function buildInvoice(inv: InvoiceDoc) {
     [
       inv.number,
       `Invoice date: ${invDate.toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" })}`,
-      `Due date: ${due.toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" })} (${terms})`,
+      // the date only - "NET 15" is never printed (Dani, 9 Oct 2026)
+      `Due date: ${due.toLocaleDateString("en-MY", { day: "numeric", month: "long", year: "numeric" })}`,
       inv.reference ? `Booking ${inv.reference}` : "",
     ].filter(Boolean) as string[],
   );
@@ -305,7 +307,8 @@ async function buildInvoice(inv: InvoiceDoc) {
   y += 12;
   // the resident ID used to sit here, in the grey line - it is a row in the
   // details below now, where it is read rather than skimmed past
-  doc.text([inv.email, inv.phone].filter(Boolean).join("  ·  "), M, y);
+  // written the one right way, whatever was stored ("+60 6012…" had the code twice)
+  doc.text([inv.email, inv.phone ? cleanPhone(inv.phone) : ""].filter(Boolean).join("  ·  "), M, y);
 
   /*
    * Where they work, or where they study, under their contact and not among
@@ -660,7 +663,8 @@ async function buildReceipt(rec: ReceiptDoc) {
     body: [
       ["Received from", rec.full_name || "—"],
       ...(rec.resident_code ? [["Resident ID", rec.resident_code]] : []),
-      ...(rec.description ? [["For", rec.description]] : []),
+      // the description staff wrote when recording the payment - named as the upload window names it
+      ...(rec.description ? [["Description", rec.description]] : []),
       ["Invoice", rec.invoiceNumber],
       ["Payment date", formatDate(rec.paid_on ?? "")],
       ["Method", rec.method || "—"],

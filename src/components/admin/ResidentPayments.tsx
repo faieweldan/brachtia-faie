@@ -1,4 +1,5 @@
 import { loadProofFile } from "@/lib/payment-proof";
+import { MIGRATED, MIGRATED_MEANING } from "@/lib/migration/import-plan";
 import { toast } from "sonner";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -236,6 +237,7 @@ export function ResidentPayments({
       .filter(Boolean)
       .sort()
       .at(-1) ?? "";
+  const creditAhead = new Map<string, number>();
   const rentRows = [...issuedRent, ...scheduledRent].sort((x, y) =>
     (x.periodStart || x.issuedAt).localeCompare(y.periodStart || y.issuedAt),
   );
@@ -394,6 +396,18 @@ export function ResidentPayments({
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
+                {/* account credit is used on each bill as it is billed, oldest first - shown
+                    ahead on the scheduled rows so the credit is visible where it will go (10 Oct 2026) */}
+                {(() => {
+                  let left = Math.max(0, b?.accountCredit?.balance ?? 0);
+                  for (const r of rentRows) {
+                    if (!r.scheduled || left <= 0.005) continue;
+                    const use = Math.min(left, r.total);
+                    creditAhead.set(r.id, use);
+                    left -= use;
+                  }
+                  return null;
+                })()}
                 {rentRows.map((inv) => {
                   const state = rentState(inv, today);
                   return (
@@ -406,6 +420,11 @@ export function ResidentPayments({
                       </td>
                       <td className="whitespace-nowrap px-3 py-2 tabular-nums">
                         {money(inv.total)}
+                        {creditAhead.get(inv.id) ? (
+                          <span className="block text-xs text-emerald-700">
+                            −{money(creditAhead.get(inv.id)!)} credit · {money(inv.total - creditAhead.get(inv.id)!)} to pay
+                          </span>
+                        ) : null}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
                         {inv.scheduled ? "—" : fmtDate(inv.issuedAt)}
@@ -460,7 +479,7 @@ export function ResidentPayments({
             icon={Receipt}
             title="Additional charges"
             tone={chargeDue > 0 ? "due" : charges.length ? "done" : "idle"}
-            status={chargeDue > 0 ? `${money(chargeDue)} due` : charges.length ? "Settled" : "None"}
+            status={chargeDue > 0 ? `${money(chargeDue)} due` : charges.length ? "Paid" : "None"}
             detail={
               charges.length
                 ? `${charges.length} charge${charges.length === 1 ? "" : "s"} · ${money(
@@ -671,17 +690,36 @@ export function InvoiceDetail({ invoice, onPay }: { invoice: BillingInvoice; onP
         <p className="text-sm font-medium text-brand-deep">
           {invoice.number.startsWith("SCH-") || invoice.scheduled ? (invoice.type === "initial" ? "IP · not billed" : "Not billed yet") : invoiceRef(invoice.number, invoice.type)}
         </p>
-        <PdfPreviewButton
-          size="icon"
-          variant="ghost"
-          className="size-7"
-          aria-label={`View invoice ${invoice.number}`}
-          title={`Invoice ${invoice.number}`}
-          fileName={`Brachtia-${invoice.number}.pdf`}
-          build={async () => (await import("@/lib/invoice-pdf")).invoicePdfUrl(invoice.doc)}
-        >
-          <Eye className="size-4" />
-        </PdfPreviewButton>
+        {invoice.migrated ? (
+          // from before the system: the eye opens the original (QuickBooks) copy
+          <>
+            <a
+              href={invoice.migrated.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`View the original invoice ${invoice.number}`}
+              title="The original invoice, before the system"
+              className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <Eye className="size-4" />
+            </a>
+            <span title={MIGRATED_MEANING} className="rounded-full border border-border bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+              {MIGRATED}
+            </span>
+          </>
+        ) : (
+          <PdfPreviewButton
+            size="icon"
+            variant="ghost"
+            className="size-7"
+            aria-label={`View invoice ${invoice.number}`}
+            title={`Invoice ${invoice.number}`}
+            fileName={`Brachtia-${invoice.number}.pdf`}
+            build={async () => (await import("@/lib/invoice-pdf")).invoicePdfUrl(invoice.doc)}
+          >
+            <Eye className="size-4" />
+          </PdfPreviewButton>
+        )}
         {/* the same five words as the rental table and Collections - this said
             "Unpaid" where they said "Invoiced" for the very same invoice */}
         <TonePill tone={state.tone}>{state.status}</TonePill>
