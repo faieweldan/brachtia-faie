@@ -154,6 +154,8 @@ export async function residentFromBooking(supabase: any, enquiryId: string) {
         bed_id: null,
         start_date: moveIn || null,
         end_date: moveOut || null,
+        // the rent on the invoice they paid - the resident card reads it from here (13 Oct 2026)
+        ...(agreedRent > 0 ? { monthly_rent: agreedRent } : {}),
       })
       .select("id")
       .single();
@@ -400,7 +402,10 @@ export async function syncPaidStay(supabase: any, enquiryId: string, rentOverrid
   const now = new Date().toISOString();
   const months = monthsBetween(start, end);
   const writes = await Promise.all([
-    supabase.from("tenancies").update({ start_date: start, end_date: end, updated_at: now }).eq("id", t.id),
+    supabase
+      .from("tenancies")
+      .update({ start_date: start, end_date: end, ...((rentOverride || rent) > 0 ? { monthly_rent: rentOverride || rent } : {}), updated_at: now })
+      .eq("id", t.id),
     // the bed they are assigned to and have not moved into
     supabase
       .from("beds")

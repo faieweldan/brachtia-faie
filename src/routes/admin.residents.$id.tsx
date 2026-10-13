@@ -469,10 +469,12 @@ function ResidentProfilePage() {
     // the rent terms' rent in force today wins - the page's own copy can be stale (7 Oct 2026)
     rent:
       tenancyEvents.data?.rentToday ||
-      // the tenancies table's rent - the resident's own, ahead of the browser's copy and the room price
+      // the tenancies table's rent - the resident's own
       saved?.rent ||
-      tenancy?.rent ||
+      // then their bed's (a stay to come: the invoice they paid)
       (upcoming ? placed?.bed.upcoming?.find((u) => u.residentId === form.id)?.rent : placed?.bed.rent) ||
+      // the browser's own copy only after every server record - it can be days old (13 Oct 2026)
+      tenancy?.rent ||
       placed?.room.rent ||
       0,
     status: (upcoming ? "booked" : (placed?.bed.status ?? "vacant")) as BedStatus,
