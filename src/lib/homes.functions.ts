@@ -107,6 +107,8 @@ async function attachUpcoming(supabase: any, beds: any[]) {
       list.push({
         enquiryId: e.id,
         reference: e.reference || undefined,
+        // made a resident at the booking fee: their page finds the room by this (13 Oct 2026)
+        ...(e.resident_id ? { residentId: e.resident_id } : {}),
         name: String(e.full_name ?? ""),
         gender: e.gender || undefined,
         university: e.university || undefined,
