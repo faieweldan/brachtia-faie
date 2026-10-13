@@ -16,8 +16,6 @@ import type { ScheduleTerms } from "@/lib/rental-schedule";
  */
 
 async function admin(): Promise<any> {
-  const { requireAdminSession } = await import("@/lib/admin-session.server");
-  await requireAdminSession();
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   return supabaseAdmin as any;
 }
