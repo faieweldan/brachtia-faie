@@ -41,7 +41,8 @@ import {
 } from "@/components/ui/select";
 import { fullAgreementPdf, uploadExistingAgreement, uploadStampPage } from "@/lib/agreement-files.functions";
 import { EmptyState, Panel, Select, StatusPill } from "@/components/admin/ops-ui";
-import { fmtDate, money, type Resident, type Tenancy } from "@/lib/ops-store";
+import { fmtDate, money, type Resident } from "@/lib/ops-store";
+import type { ServerTenancy } from "@/lib/rental-schedule.functions";
 import {
   ACCESS_CARD_END_STATES,
   ACCESS_CARD_REASONS,
@@ -746,7 +747,7 @@ export function TenancyDocs({
   place,
 }: {
   resident: Resident;
-  tenancy?: Tenancy | undefined;
+  tenancy?: ServerTenancy | undefined;
   /** where they are placed now, for spotting a pack made for another room */
   place?: { unitNo: string; room: string } | undefined;
   checklist?: React.ReactNode;
@@ -836,7 +837,7 @@ export function TenancyDocs({
  * 1 Oct 2026): upload the scans and the pack is recorded as already signed.
  * The Tenancy Agreement is needed; the schedules are added when there are any.
  */
-function UploadExisting({ resident, tenancy, onDone }: { resident: Resident; tenancy?: Tenancy | undefined; onDone: () => void }) {
+function UploadExisting({ resident, tenancy, onDone }: { resident: Resident; tenancy?: ServerTenancy | undefined; onDone: () => void }) {
   const [open, setOpen] = useState(false);
   const [files, setFiles] = useState<Partial<Record<AgreementDocType, File>>>({});
   // who is uploading it - required (Dani, 6 Oct 2026)
@@ -930,7 +931,7 @@ function UploadExisting({ resident, tenancy, onDone }: { resident: Resident; ten
 /** merge values from the current records, for revisions and renewals */
 export function currentMergeValues(
   resident: Resident,
-  tenancy: Tenancy | undefined,
+  tenancy: ServerTenancy | undefined,
   placed:
     | { unit: { unitNo: string; residenceName: string }; room: { letter: string }; bed: { label: string; rent?: number | undefined } }
     | undefined,

@@ -163,26 +163,84 @@ export const saveRentalSchedule = createServerFn({ method: "POST" })
     return { tenancyId };
   });
 
+/** A resident's tenancy as every screen reads it - only ever from the tenancies table. */
+export type ServerTenancy = { id: string; start: string; end: string; rent: number };
+
 /**
- * Every resident's latest tenancy dates, from the tenancies table (Dani, 4 Oct
- * 2026). The resident pages kept their own browser copy, and "Start tenancy"
- * wrote it with the end date = the move-in date - so every stay read as 0
- * days. The table is the truth; the copy is only a fallback.
+ * Every resident's latest tenancy, from the tenancies table - the ONE place the
+ * screens read a tenancy from (13 Oct 2026).
+ *
+ * The pages used to keep their own browser copy too (Lovable's front-end
+ * tenancies, before this table existed). Each time the two disagreed one field
+ * was patched to prefer the table - the dates on 4 Oct (end = start), the rent
+ * on 13 Oct (RM400 against an invoice of RM850) - and the next field slipped
+ * through. The copy is gone; this is the only source.
+ *
+ * Rent is not a column of tenancies (one fact, one place - see
+ * 20260915130000): it is the rent terms' (rental_schedules), and before those
+ * exist the rent on the initial invoice they paid - decided here, once.
  */
 export const tenancyDatesByResident = createServerFn({ method: "GET" }).handler(async () => {
   const supabase = await admin();
   const { data, error } = await supabase
     .from("tenancies")
-    .select("id, resident_id, start_date, end_date, monthly_rent, created_at")
+    .select("id, resident_id, enquiry_id, start_date, end_date, created_at")
     .order("start_date", { ascending: true, nullsFirst: true })
     .order("created_at", { ascending: true });
   if (error) throw new Error(error.message);
-  // rent: the rent agreed with this resident - an existing resident keeps theirs, whatever the Website price is now
-  const out: Record<string, { id: string; start: string; end: string; rent: number }> = {};
   // the latest tenancy wins - a renewal is the newest
-  for (const t of (data ?? []) as any[]) {
-    if (!t.resident_id) continue;
-    out[String(t.resident_id)] = { id: String(t.id), start: day(t.start_date), end: day(t.end_date), rent: Number(t.monthly_rent) || 0 };
+  const latest = new Map<string, any>();
+  for (const t of (data ?? []) as any[]) if (t.resident_id) latest.set(String(t.resident_id), t);
+
+  // two whole reads - an id list of every resident would not fit in the request's address
+  const [{ data: rs }, { data: inv }] = await Promise.all([
+    supabase.from("rental_schedules").select("tenancy_id, monthly_rent"),
+    supabase
+      .from("invoices")
+      .select("enquiry_id, monthly_rent, created_at")
+      .eq("invoice_type", "initial")
+      .neq("status", "void")
+      .not("enquiry_id", "is", null)
+      .order("created_at", { ascending: true }),
+  ]);
+  const scheduleRent = new Map<string, number>();
+  for (const r of (rs ?? []) as any[]) if (Number(r.monthly_rent) > 0) scheduleRent.set(String(r.tenancy_id), Number(r.monthly_rent));
+  // the newest initial invoice wins
+  const invoiceRent = new Map<string, number>();
+  for (const r of (inv ?? []) as any[]) if (Number(r.monthly_rent) > 0) invoiceRent.set(String(r.enquiry_id), Number(r.monthly_rent));
+
+  const out: Record<string, ServerTenancy> = {};
+  for (const [residentId, t] of latest) {
+    const rent = scheduleRent.get(String(t.id)) || invoiceRent.get(String(t.enquiry_id ?? "")) || 0;
+    out[residentId] = { id: String(t.id), start: day(t.start_date), end: day(t.end_date), rent };
   }
   return out;
 });
+
+/**
+ * "Create tenancy" for a resident who has none (not made from a paid booking):
+ * a real row in the tenancies table, so the document pack, rent and Update
+ * Tenancy all point at the same record. Its rent is set as its rent terms on
+ * the Payments tab. Refused if they already have one.
+ */
+export const createTenancyRecord = createServerFn({ method: "POST" })
+  .inputValidator((data: { residentId: string; start: string; end: string }) => data)
+  .handler(async ({ data }) => {
+    if (!data.residentId) throw new Error("No resident.");
+    if (!data.start || !data.end) throw new Error("Enter the move-in and move-out dates on the profile first.");
+    if (data.end < data.start) throw new Error("The tenancy ends before it starts.");
+    const supabase = await admin();
+    const { data: existing } = await supabase.from("tenancies").select("id").eq("resident_id", data.residentId).limit(1);
+    if ((existing ?? []).length) return { id: String(existing[0].id), created: false as const };
+    const { data: made, error } = await supabase
+      .from("tenancies")
+      .insert({
+        resident_id: data.residentId,
+        start_date: data.start,
+        end_date: data.end,
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    return { id: String(made.id), created: true as const };
+  });

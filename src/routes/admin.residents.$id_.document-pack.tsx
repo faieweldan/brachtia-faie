@@ -9,7 +9,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/admin/ops-ui";
-import { findBed, useOps } from "@/lib/ops-store";
+import { findBedForResident, useOps } from "@/lib/ops-store";
 import {
   DOC_TYPE_LABELS,
   type AgreementDocType,
@@ -59,14 +59,15 @@ function DocumentPackPage() {
   const { id } = Route.useParams();
   const { card } = Route.useSearch();
   const navigate = useNavigate();
-  const { residents, units, tenancies } = useOps();
+  const { residents, units } = useOps();
   const resident = residents.find((r) => r.id === id);
-  const tenancy = tenancies.find((t) => t.residentId === id);
-  // the stay's dates as the tenancies table has them - the browser copy said end = start,
-  // and packs made from it read "21 Oct 2026 - 21 Oct 2026" (Dani, 5 Oct 2026)
+  // the tenancy is the tenancies table's only - a browser copy put "21 Oct 2026 - 21 Oct 2026"
+  // on packs (5 Oct) and a stale rent on the card (13 Oct 2026)
   const savedDates = useQuery({ queryKey: ["tenancy-dates"], queryFn: () => tenancyDatesByResident() });
   const saved = savedDates.data?.[id];
-  const placed = resident ? findBed(units, resident.bedId || "") : undefined;
+  const tenancy = saved;
+  // their room as the resident page finds it - a Booked stay still held for them included
+  const placed = resident ? findBedForResident(units, resident) : undefined;
 
   const [selected, setSelected] = useState<DocKey>(card ? "access_card" : "agreement");
   // the list on the left folds away; remembered on this browser
@@ -105,9 +106,10 @@ function DocumentPackPage() {
   const defaults = useMemo<Record<string, string>>(() => {
     if (!resident) return {};
     const today = new Date().toISOString().slice(0, 10);
-    const start = saved?.start || tenancy?.start || resident.moveIn || "";
-    const end = saved?.end || placed?.bed.tenancyEnd || tenancy?.end || "";
-    const rent = tenancy?.rent || placed?.bed.rent || placed?.room.rent || 0;
+    const start = saved?.start || resident.moveIn || "";
+    const end = saved?.end || placed?.bed.tenancyEnd || "";
+    // the rent they agreed (rent terms, else the invoice they paid) - never the room's list price first
+    const rent = saved?.rent || placed?.bed.rent || placed?.room.rent || 0;
     return {
       agreement_date: today,
       resident_name: resident.fullName,
@@ -122,7 +124,7 @@ function DocumentPackPage() {
       payment_schedule: resident.paySchedule,
       deposit: "",
     };
-  }, [resident, tenancy, placed, saved]);
+  }, [resident, placed, saved]);
 
   const [values, setValues] = useState<Record<string, string> | null>(null);
   const vals = values ?? defaults;

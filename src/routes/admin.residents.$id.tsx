@@ -47,7 +47,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { UpdateTenancyDialog, type TenancyChangeResult } from "@/components/admin/UpdateTenancyDialog";
 import { getTenancyEvents } from "@/lib/tenancy-change.functions";
 import { EventStatusPill, TenancyEvents } from "@/components/admin/TenancyEvents";
-import { getResidentRent, tenancyDatesByResident } from "@/lib/rental-schedule.functions";
+import { createTenancyRecord, getResidentRent, tenancyDatesByResident } from "@/lib/rental-schedule.functions";
+import { shiftDate } from "@/lib/rental-schedule";
 import { ResidentPayments } from "@/components/admin/ResidentPayments";
 import { RESIDENT_DOCS, residentDocsFor, residentDocLabel } from "@/lib/resident-documents";
 import { compressImage } from "@/lib/compress";
@@ -61,14 +62,12 @@ import {
   fmtDate,
   fmtDateTime,
   money,
-  createTenancy,
   deleteResident,
   findBed,
   findBedForResident,
   refreshResidents,
   refreshUnits,
   saveResidentRecord,
-  saveTenancy,
   stayDates,
   updateBed,
   useOps,
@@ -204,7 +203,7 @@ function DeclarationStatus({ residentId }: { residentId: string }) {
 function ResidentProfilePage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
-  const { residents, units, tenancies } = useOps();
+  const { residents, units } = useOps();
   // "new" is a resident that does not exist yet: the form is filled in first and
   // the row is only created on save, so an abandoned form leaves nothing behind
   const isNew = id === "new";
@@ -287,36 +286,12 @@ function ResidentProfilePage() {
   }, [stored, form]);
 
   /*
-   * The tenancy is in the database, but this browser has no copy of it - a new
-   * computer, or the site at a new address (Dani, 5 Oct 2026: the Vercel site
-   * said "No tenancy yet"). The copy is made from the database, once.
-   */
-  const dbTenancy = form ? savedDates.data?.[form.id] : undefined;
-  const hasLocal = !!form && tenancies.some((t) => t.residentId === form.id);
-  useEffect(() => {
-    if (!form || hasLocal || !dbTenancy?.id) return;
-    const row = findBedForResident(units, form);
-    createTenancy({
-      id: dbTenancy.id,
-      residentId: form.id,
-      unitId: row?.unit.id,
-      roomId: row?.room.id,
-      bedId: row?.bed.id ?? form.bedId,
-      start: dbTenancy.start,
-      end: dbTenancy.end,
-      // their own agreed rent first - the room's Website price only when none is recorded
-      rent: dbTenancy.rent || row?.bed.rent || row?.room.rent || 0,
-      schedule: form.paySchedule,
-    });
-  }, [form, hasLocal, dbTenancy, units]);
-
-  /*
    * Update Tenancy's events (7 Oct 2026): each moves on by itself on the server -
    * settled when its IP is, effective on its day (the daily job moves the bed).
    * Read here for the Tenancy tab; once one has taken effect, the page's own
    * copy of the beds and the rent is brought up to date.
    */
-  const hasTenancy = !!form?.id && tenancies.some((t) => t.residentId === form.id);
+  const hasTenancy = !!form?.id && !!savedDates.data?.[form.id];
   const tenancyEvents = useQuery({
     queryKey: ["tenancy-events", form?.id],
     queryFn: () => getTenancyEvents({ data: { residentId: form!.id } }),
@@ -327,8 +302,6 @@ function ResidentProfilePage() {
     if (!lastEffective || !form) return;
     void refreshUnits();
     void queryClient.invalidateQueries({ queryKey: ["tenancy-dates"] });
-    const local = tenancies.find((t) => t.residentId === form.id);
-    if (local && lastEffective.rent && Math.abs(local.rent - lastEffective.rent) > 0.005) saveTenancy({ ...local, rent: lastEffective.rent });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastEffective?.eventId]);
 
@@ -368,10 +341,9 @@ function ResidentProfilePage() {
         appliesTo: "any" as const,
       })),
   ];
-  // the browser's copy of the tenancy, with the dates the tenancies table has (Dani, 4 Oct 2026)
-  const localTenancy = tenancies.find((t) => t.residentId === form.id);
+  // the tenancy is the tenancies table's, nothing else (13 Oct 2026 - the browser copy is gone)
   const saved = savedDates.data?.[form.id];
-  const tenancy = localTenancy && saved ? { ...localTenancy, start: saved.start || localTenancy.start, end: saved.end || localTenancy.end, rent: saved.rent || localTenancy.rent } : localTenancy;
+  const tenancy = saved;
   const placed = findBedForResident(units, form);
 
   async function save() {
@@ -407,34 +379,33 @@ function ResidentProfilePage() {
     toast.success("Resident saved");
   }
 
-  function startTenancy() {
+  /** A real tenancy row (13 Oct 2026) - the pages no longer keep their own copy. */
+  async function startTenancy() {
     if (!form) return;
     if (pct < 100) {
       toast.error("Complete the required fields first");
       return;
     }
     const row = findBed(units, form.bedId);
-    const t = createTenancy({
-      residentId: form.id,
-      unitId: row?.unit.id,
-      roomId: row?.room.id,
-      bedId: form.bedId,
-      start: form.moveIn,
-      // not the move-in date again: that read as a stay of 0 days (Dani, 4 Oct 2026)
-      end: row?.bed.tenancyEnd ?? "",
-      rent: row?.room.rent ?? 0,
-      schedule: form.paySchedule,
-    });
-    addTask({
-      type: "agreement",
-      title: "Review & sign tenancy agreement",
-      refLabel: form.fullName || "Resident",
-      refId: t.id,
-      dueDate: form.moveIn,
-      link: `/admin/residents/${form.id}`,
-    });
-    toast.success("Tenancy created");
-    setTab("tenancy");
+    // not the move-in date again: that read as a stay of 0 days (Dani, 4 Oct 2026)
+    const months = Number(form.leaseMonths) || 0;
+    const end = row?.bed.tenancyEnd || (form.moveIn && months ? shiftDate(form.moveIn, { months, days: -1 }) : "");
+    try {
+      const t = await createTenancyRecord({ data: { residentId: form.id, start: form.moveIn, end } });
+      addTask({
+        type: "agreement",
+        title: "Review & sign tenancy agreement",
+        refLabel: form.fullName || "Resident",
+        refId: t.id,
+        dueDate: form.moveIn,
+        link: `/admin/residents/${form.id}`,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["tenancy-dates"] });
+      toast.success("Tenancy created");
+      setTab("tenancy");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not create the tenancy");
+    }
   }
 
   // the stay summary: the tenancy record if there is one, otherwise whatever the
@@ -469,12 +440,10 @@ function ResidentProfilePage() {
     // the rent terms' rent in force today wins - the page's own copy can be stale (7 Oct 2026)
     rent:
       tenancyEvents.data?.rentToday ||
-      // the tenancies table's rent - the resident's own
+      // the tenancy's rent: its rent terms, or the initial invoice they paid (tenancyDatesByResident)
       saved?.rent ||
-      // then their bed's (a stay to come: the invoice they paid)
+      // no tenancy yet: their bed's
       (upcoming ? placed?.bed.upcoming?.find((u) => u.residentId === form.id)?.rent : placed?.bed.rent) ||
-      // the browser's own copy only after every server record - it can be days old (13 Oct 2026)
-      tenancy?.rent ||
       placed?.room.rent ||
       0,
     status: (upcoming ? "booked" : (placed?.bed.status ?? "vacant")) as BedStatus,

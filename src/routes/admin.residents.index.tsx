@@ -36,7 +36,7 @@ export const Route = createFileRoute("/admin/residents/")({
 
 function ResidentsListPage() {
   const navigate = useNavigate();
-  const { residents, units, tenancies } = useOps();
+  const { residents, units } = useOps();
   // what each resident owes, from the same invoices as Collections
   const { rows: ledger } = useBillingLedger();
   // each stay's dates as the tenancies table has them (the browser copy said end = start)
@@ -456,7 +456,7 @@ function ResidentsListPage() {
                   {rows.map((r) => {
                     const placed = findBedForResident(units, r);
                     const stay = stayDates(
-                      tenancies.find((t) => t.residentId === r.id),
+                      savedDates.data?.[r.id],
                       // a room booked for later still carries its current resident's dates
                       placed?.upcoming ? undefined : placed,
                       r,

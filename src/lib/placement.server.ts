@@ -17,6 +17,8 @@
  *      last resident left)
  *   2. the bed their latest tenancy names - a paid stay still to come on
  *      somebody else's bed, or, after they leave, where they lived
+ *   3. the bed their booking still holds - Booked, initial payment not yet
+ *      paid in full (13 Oct 2026)
  *
  * Server only - handed the service-role client by a server function.
  */
@@ -58,6 +60,26 @@ export async function placementForResident(sb: any, residentId: string): Promise
         bed = b;
         via = "tenancy";
         enquiryId = t.enquiry_id ?? null;
+      }
+    }
+  }
+  /*
+   * 3. Booked - the fee is in - but the initial payment is not paid in full,
+   * so the room is still their booking's hold, not yet a bed of theirs (13 Oct
+   * 2026: the document pack said Room "Missing" for UAT Faris).
+   */
+  if (!bed) {
+    const { data: es } = await sb.from("enquiries").select("id").eq("resident_id", residentId);
+    const ids = ((es ?? []) as any[]).map((e) => e.id);
+    const { data: h } = ids.length
+      ? await sb.from("placement_holds").select("enquiry_id, bed_id").in("enquiry_id", ids).limit(1).maybeSingle()
+      : { data: null };
+    if (h?.bed_id) {
+      const { data: b } = await sb.from("beds").select("*").eq("id", h.bed_id).maybeSingle();
+      if (b) {
+        bed = b;
+        via = "tenancy";
+        enquiryId = h.enquiry_id ?? null;
       }
     }
   }
