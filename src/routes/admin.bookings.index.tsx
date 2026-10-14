@@ -45,6 +45,7 @@ const PAGE_SIZE = 10;
  * one student become three the moment one of them is dealt with.
  */
 type Lookalike = { id: string; reference: string };
+import { StageStrip } from "@/components/admin/StageStrip";
 import { Input } from "@/components/ui/input";
 
 export const Route = createFileRoute("/admin/bookings/")({
@@ -192,31 +193,24 @@ function BookingsTable() {
     return { row: r, next, sla: slaText(next.due), viewing };
   });
 
-  const counters = [
-    { label: "New enquiries", value: decorated.filter((d) => d.row.status === "open").length },
-    {
-      label: "Overdue actions",
-      value: decorated.filter((d) => d.sla.tone === "over").length,
-    },
-    {
-      label: "Viewings upcoming",
-      value: decorated.filter(
-        (d) => d.viewing && new Date(d.viewing.starts_at).getTime() > Date.now(),
-      ).length,
-    },
-    {
-      /*
-       * Named by the one list the stage dropdown reads, and counting the stage
-       * that name belongs to. Written out by hand the two came apart: the box
-       * said "Awaiting payment" while counting awaiting_payment - the stage
-       * that list calls Awaiting balance - so it totted up part-paid bookings
-       * under the name of unpaid ones, and the bookings with nothing in at all
-       * were counted nowhere on the page.
-       */
-      label: stageLabel("awaiting_fee"),
-      value: decorated.filter((d) => d.row.status === "awaiting_fee").length,
-    },
-  ];
+  /*
+   * The stages in one row, each counted and clickable (Dani, 14 Oct 2026) - the
+   * same STAGES, names and STAGE_PILL colours the table and the stage filter
+   * use, so a number and the rows it stands for cannot come apart. Four boxes
+   * stood here, mostly 0, none clickable, while the booking that needed doing
+   * was not pointed at.
+   */
+  const live = decorated.filter((d) => !row_isClosed(d.row));
+  const stripStages = STAGES.filter((st) => st.value !== "closed").map((st) => ({
+    value: st.value,
+    label: st.label,
+    count: live.filter((d) => d.row.status === st.value).length,
+    pill: STAGE_PILL[st.value] ?? "",
+  }));
+  // what is due within a day, or overdue - the SLA column's own clock - soonest first
+  const dueNow = live
+    .filter((d) => d.next.action !== "none" && d.sla.remaining < 24 * 3600_000)
+    .sort((x, y) => x.sla.remaining - y.sla.remaining);
 
   /*
    * Everything the filters and the search agree on, closed or not. Counted
@@ -313,14 +307,33 @@ function BookingsTable() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {counters.map((c) => (
-          <div key={c.label} className="rounded-xl border border-border bg-card px-4 py-3">
-            <p className="text-xl font-bold text-brand-deep">{c.value}</p>
-            <p className="text-xs text-muted-foreground">{c.label}</p>
-          </div>
-        ))}
-      </div>
+      <StageStrip
+        stages={stripStages}
+        value={stageFilter}
+        onChange={setStageFilter}
+        alert={
+          dueNow.length ? (
+            <button
+              type="button"
+              onClick={() => runAction(dueNow[0]!.row, dueNow[0]!.next.action)}
+              className="flex w-full items-center gap-2 bg-amber-50 px-4 py-2.5 text-left text-sm text-amber-950 hover:bg-amber-100"
+            >
+              <span className="font-semibold">
+                {dueNow.length} need{dueNow.length === 1 ? "s" : ""} action today
+              </span>
+              <span className="min-w-0 flex-1 truncate">
+                ·{" "}
+                {dueNow
+                  .slice(0, 2)
+                  .map((d) => `${d.row.full_name} - ${listActionLabel(d.next.action)} (${d.sla.text})`)
+                  .join(" · ")}
+                {dueNow.length > 2 ? ` · +${dueNow.length - 2} more` : ""}
+              </span>
+              <ArrowRight className="size-4 shrink-0" />
+            </button>
+          ) : null
+        }
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[220px] flex-1">

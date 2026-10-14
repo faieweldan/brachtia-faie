@@ -35,6 +35,7 @@ and what is still duplicated: `docs/HANDOFF-REUSE.md`.
 | Payment methods and what each needs | `METHOD_RULES`, `ruleFor` (`src/lib/payment-methods.ts`) | `tests/payment-methods.test.ts` |
 | Shrink a photo before upload | `compressImage` (`src/lib/compress.ts`) | - |
 | Money on a document | `formatRM` (with sen). `money` in ops-store rounds to the ringgit - lists only | - |
+| A list's stages as clickable counts (filters the table) | `StageStrip` (`src/components/admin/StageStrip.tsx`) - pass the same stage list and pill colours the table uses | - |
 | A quiet line of news on a card (stays, or closes with ✕ and is remembered) | `Notice`, `DismissibleNotice`, `NOTICE_CLASS` (`src/components/ui/notice.tsx`) | `tests/one-rule.test.ts` |
 | A credit note's PDF look (checkout statement, room-change credit note) | `creditNoteFrame`, `creditNotePdf` (`src/lib/credit-note-pdf.ts`) | - |
 | Describe a placement (single / twin, bed) - as sold, not as built | `soldOccupancy`, `soldBedLabel` (`src/lib/placement.ts`); documents read `bedSurroundings` (`placement.server.ts`) | `tests/placement.test.ts` |
