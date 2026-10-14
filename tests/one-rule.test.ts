@@ -63,3 +63,20 @@ describe("money documents share one line editor", () => {
     expect(own).toEqual([]);
   });
 });
+
+/*
+ * One notice for quiet news on a card (Dani, 14 Oct 2026): the account credit
+ * strip and the Tenancy tab's room-change line were drawn apart, one with a
+ * close cross and one without. Both use src/components/ui/notice.tsx now; a new
+ * one does too, instead of copying the green strip.
+ */
+describe("quiet notices share one component", () => {
+  const NOTICE = "src/components/ui/notice.tsx";
+  const STRIP = /bg-emerald-50 px-3 py-2 text-xs text-emerald-900/;
+  test("only notice.tsx draws the notice strip", () => {
+    const own = [...files("src/routes"), ...files("src/components")].filter(
+      (f) => f !== NOTICE && STRIP.test(readFileSync(f, "utf8")),
+    );
+    expect(own).toEqual([]);
+  });
+});

@@ -1,5 +1,5 @@
 import { loadProofFile } from "@/lib/payment-proof";
-import { NOTICE_CLASS } from "@/components/admin/OnceNotice";
+import { DismissibleNotice } from "@/components/ui/notice";
 import { MIGRATED, MIGRATED_MEANING } from "@/lib/migration/import-plan";
 import { toast } from "sonner";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -285,13 +285,18 @@ export function ResidentPayments({
         </CollectedBar>
 
         {(b?.accountCredit?.given ?? 0) > 0 ? (
-          <p className={`mt-3 ${NOTICE_CLASS}`}>
+          // closed with the cross; shown again only when the figures change (Dani, 14 Oct 2026)
+          <DismissibleNotice
+            className="mt-3"
+            seenKey={`credit:${residentId}:${b!.accountCredit.given}:${b!.accountCredit.used}:${b!.accountCredit.noted}`}
+          >
             Account credit {money(b!.accountCredit.balance)} available · {money(b!.accountCredit.used)} applied to invoices
-            {b!.accountCredit.noted > 0 ? ` · ${money(b!.accountCredit.noted)} refunded on credit notes` : ""}
+            {/* moved onto a credit note - refunded only once its refund is paid (the Credit notes row says) */}
+            {b!.accountCredit.noted > 0 ? ` · ${money(b!.accountCredit.noted)} moved to credit notes` : ""}
             {b!.accountCredit.balance - b!.accountCredit.leftover > 0.005
               ? ` · ${money(b!.accountCredit.balance - b!.accountCredit.leftover)} comes off the next invoices`
               : ""}
-          </p>
+          </DismissibleNotice>
         ) : null}
         {(b?.credit ?? 0) > 0 ? (
           <p className="mt-3 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-900">

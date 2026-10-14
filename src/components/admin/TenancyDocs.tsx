@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { OnceNotice } from "@/components/admin/OnceNotice";
+import { DismissibleNotice } from "@/components/ui/notice";
 import { soldBedLabel } from "@/lib/placement";
 import { Dropdown, StaffPicker } from "@/components/admin/Dropdown";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -436,12 +436,12 @@ function AgreementBlock({
             });
         if (revised.length) {
           return (
-            <OnceNotice className="mx-4 mb-3" seenKey={`${agreement.id}:${now}`}>
+            <DismissibleNotice className="mx-4 mb-3" seenKey={`${agreement.id}:${now}`}>
               <span>
                 {was} → <strong>{now}</strong> ·{" "}
                 {revised.map((d) => DOC_TYPE_LABELS[d.docType].split(" – ")[0]).join(", ")} revised
               </span>
-            </OnceNotice>
+            </DismissibleNotice>
           );
         }
         return (

@@ -1,6 +1,13 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 
+/*
+ * Notices - a core piece (Dani, 14 Oct 2026). Every quiet line of news on a
+ * card uses these, so they look and behave as one kind of thing: the account
+ * credit strip on Payments, the room-change line on the Tenancy tab, and
+ * whatever comes next. See AGENTS.md "Shared pieces".
+ */
+
 /**
  * The look of a quiet notice on a card - "Account credit RM… available", the
  * Tenancy tab's "A-16-08 · Room C → A-15-05 · Room A · Schedule A revised".
@@ -16,7 +23,7 @@ export const NOTICE_CLASS = "rounded-lg bg-emerald-50 px-3 py-2 text-xs text-eme
  * Something admin must still act on is not this - leave it on the page until
  * it is done.
  */
-export function OnceNotice({
+export function DismissibleNotice({
   seenKey,
   children,
   className = "",
@@ -60,4 +67,9 @@ export function OnceNotice({
       </button>
     </div>
   );
+}
+
+/** A notice that stays - for something that is true for as long as it shows. */
+export function Notice({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return <div className={`${NOTICE_CLASS} ${className}`}>{children}</div>;
 }
