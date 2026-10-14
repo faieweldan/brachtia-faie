@@ -173,7 +173,7 @@ export async function inventoryPdf(input: InventoryPdfInput): Promise<Uint8Array
       lines.push({ kind: "item", name: it.name, detail: it.details ? (a?.detail ?? "") : "", qty: a?.qty?.trim() || String(it.qty), status: finalMark(a?.status ?? "", verdictOf(it.id)) });
     }
     for (const e of r.extras.filter((x) => x.areaId === area.id && x.name.trim()))
-      lines.push({ kind: "item", name: `${e.name.trim()} (added)`, detail: "", qty: e.qty, status: finalMark(e.status, verdictOf(e.id)) });
+      lines.push({ kind: "item", name: `${e.name.trim()} (added)`, detail: e.detail && e.detail !== "Other" ? e.detail : "", qty: e.qty, status: finalMark(e.status, verdictOf(e.id)) });
   }
   const LH = 10.2;
   const gap = 14;

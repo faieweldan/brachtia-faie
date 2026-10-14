@@ -178,7 +178,17 @@ export const STATUS_LABEL: Record<InventoryStatus, string> = {
  */
 export type InventoryAnswer = { status: InventoryStatus | ""; remark: string; qty?: string; detail?: string; photos?: string[] };
 /** An item the list did not name, added by the resident in that area. */
-export type ExtraItem = { id: string; areaId: string; name: string; qty: string; status: InventoryStatus | ""; remark: string; photos?: string[] };
+export type ExtraItem = {
+  id: string;
+  areaId: string;
+  name: string;
+  qty: string;
+  status: InventoryStatus | "";
+  remark: string;
+  photos?: string[];
+  /** its brand, from the same list as the fixed rows (BRANDS) - optional: not everything added has one (Dani, 14 Oct 2026) */
+  detail?: string;
+};
 
 /** At most this many photos on one defect. */
 export const MAX_PHOTOS = 4;
@@ -225,7 +235,8 @@ export function inventoryGaps(r: InventoryRecord): InventoryGap[] {
     }
     for (const e of r.extras)
       if (e.areaId === area.id && e.name.trim())
-        rows.push({ id: e.id, status: e.status, remark: e.remark, photos: e.photos?.length ?? 0, needsDetail: false, extra: true });
+        // a brand is optional on an added item - but "Other" picked and no name typed is unfinished
+        rows.push({ id: e.id, status: e.status, remark: e.remark, photos: e.photos?.length ?? 0, needsDetail: e.status !== "not_provided" && e.detail === OTHER, extra: true });
   }
   const gap = (label: (n: number) => string, pick: (x: (typeof rows)[number]) => boolean): InventoryGap[] => {
     const hit = rows.filter(pick).map((x) => x.id);

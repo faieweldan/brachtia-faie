@@ -471,7 +471,7 @@ function InventoryReviewDialog({
                                   {e.name} <span className="text-muted-foreground">(added)</span>
                                 </td>
                                 <td className="px-2 py-1.5 tabular-nums">{e.qty}</td>
-                                <td className="px-2 py-1.5 text-muted-foreground">—</td>
+                                <td className="px-2 py-1.5 text-muted-foreground">{e.detail || "—"}</td>
                                 <td className={`px-2 py-1.5 ${TONE[e.status] ?? "text-muted-foreground"}`}>
                                   {e.status ? STATUS_LABEL[e.status as InventoryStatus] : "—"}
                                 </td>

@@ -320,6 +320,8 @@ const recordSchema = z.object({
         status: z.union([statusSchema, z.literal("")]),
         remark: z.string().max(500),
         photos: z.array(z.string().max(300)).max(4).optional(),
+        // its brand, as the fixed rows' detail - without it here, it was dropped on save
+        detail: z.string().max(80).optional(),
       }),
     )
     .max(60),

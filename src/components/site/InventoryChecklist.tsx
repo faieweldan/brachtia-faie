@@ -24,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import {
   ALL_ITEMS,
+  BRANDS,
   INVENTORY,
   MAX_PHOTOS,
   OTHER,
@@ -369,8 +370,28 @@ export function InventoryChecklist({
                       </div>
                     }
                     qty={<Qty value={e.qty} onChange={(qty) => setExtra(e.id, { qty })} label={e.name || "added item"} />}
-                    details={<span className="hidden text-sm text-muted-foreground md:inline">—</span>}
-                    status={<StatusPicker value={e.status} onPick={(status) => setExtra(e.id, { status })} label={e.name || "added item"} />}
+                    details={
+                      // the same brand list as the fixed rows - optional, not everything added has a brand (Dani, 14 Oct 2026)
+                      e.status === "not_provided" ? (
+                        <span className="hidden text-sm text-muted-foreground md:inline">—</span>
+                      ) : (
+                        <DetailSelect
+                          options={BRANDS}
+                          value={e.detail ?? ""}
+                          needed={false}
+                          onChange={(detail) => setExtra(e.id, { detail })}
+                          label={e.name || "added item"}
+                        />
+                      )
+                    }
+                    status={
+                      <StatusPicker
+                        value={e.status}
+                        // marked not there: a brand given before goes with it, as on the fixed rows
+                        onPick={(status) => setExtra(e.id, status === "not_provided" ? { status, detail: "" } : { status })}
+                        label={e.name || "added item"}
+                      />
+                    }
                     remarks={
                       <>
                         <Remark defect={e.status === "defect"} value={e.remark} onChange={(remark) => setExtra(e.id, { remark })} label={e.name} />
