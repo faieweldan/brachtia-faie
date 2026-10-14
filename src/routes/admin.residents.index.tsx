@@ -16,7 +16,7 @@ import { useBillingLedger } from "@/lib/billing-client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { tenancyDatesByResident } from "@/lib/rental-schedule.functions";
 import { klToday } from "@/lib/kl-date";
-import { personStatus, timingLine, timingTone } from "@/lib/placement";
+import { personStatus, soldBedLabel, timingLine, timingTone } from "@/lib/placement";
 import {
   blankResident,
   findBedForResident,
@@ -525,7 +525,7 @@ function ResidentsListPage() {
                               <span className="whitespace-nowrap text-foreground underline-offset-2 group-hover:text-brand-deep group-hover:underline">
                                 {placed.unit.unitNo} · Room {placed.room.letter}
                               </span>
-                              <span className="text-xs">{placed.bed.label}</span>
+                              <span className="text-xs">{soldBedLabel(placed.room, placed.bed)}</span>
                             </Link>
                           ) : (
                             "No room"

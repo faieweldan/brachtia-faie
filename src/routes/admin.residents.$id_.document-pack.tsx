@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { soldBedLabel } from "@/lib/placement";
 import { Dropdown } from "@/components/admin/Dropdown";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -117,7 +118,7 @@ function DocumentPackPage() {
       residence: placed?.unit.residenceName ?? "",
       unit_no: placed?.unit.unitNo ?? "",
       room: placed ? `Room ${placed.room.letter}` : "",
-      bed: placed?.bed.label ?? "",
+      bed: placed ? soldBedLabel(placed.room, placed.bed) : "",
       tenancy_start: start,
       tenancy_end: end,
       monthly_rent: rent ? String(rent) : "",

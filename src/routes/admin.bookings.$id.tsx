@@ -50,7 +50,7 @@ import {
   roomCountFor,
 } from "@/lib/ops-store";
 
-import { occupiedNote, placementConflict } from "@/lib/placement";
+import { occupiedNote, placementConflict, soldBedLabel, soldOccupancyLabel } from "@/lib/placement";
 import { roomOffer, type Sharing } from "@/lib/room-offer";
 import { placeStay } from "@/lib/homes.functions";
 import { klToday } from "@/lib/kl-date";
@@ -1493,8 +1493,7 @@ function BookingDetail() {
                       Unit {assignedBed.unit.unitNo} · Room {assignedBed.room.letter}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {assignedBed.room.occupancy === "twin" ? "Twin sharing" : "Single"} ·{" "}
-                      {assignedBed.bed.label}
+                      {soldOccupancyLabel(assignedBed.room)} · {soldBedLabel(assignedBed.room, assignedBed.bed)}
                     </p>
                     {/* Reserved until the booking fee is in, Booked after */}
                     <span className="inline-flex w-fit items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
@@ -1757,7 +1756,7 @@ function BookingDetail() {
                     key={picked.bedId}
                     enquiryId={id}
                     residentId={r.resident_id || undefined}
-                    current={`${assignedBed.unit.unitNo} · Room ${assignedBed.room.letter}${assignedBed.room.occupancy === "twin" ? ` · ${assignedBed.bed.label}` : ""}`}
+                    current={`${assignedBed.unit.unitNo} · Room ${assignedBed.room.letter} · ${soldBedLabel(assignedBed.room, assignedBed.bed)}`}
                     picked={picked}
                     onCancel={() => setPicked(null)}
                     onDone={(res) => {

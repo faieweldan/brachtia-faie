@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { soldBedLabel } from "@/lib/placement";
 import { Dropdown, StaffPicker } from "@/components/admin/Dropdown";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -973,7 +974,12 @@ export function currentMergeValues(
   resident: Resident,
   tenancy: ServerTenancy | undefined,
   placed:
-    | { unit: { unitNo: string; residenceName: string }; room: { letter: string }; bed: { label: string; rent?: number | undefined } }
+    | {
+        unit: { unitNo: string; residenceName: string };
+        // its beds too: a twin room let whole is written as the single it was sold as
+        room: { letter: string; occupancy?: string | undefined; beds?: { holdFor?: string | undefined }[] | undefined };
+        bed: { label: string; rent?: number | undefined };
+      }
     | undefined,
   overrides: Record<string, string> = {},
 ): Record<string, string> {
@@ -985,7 +991,7 @@ export function currentMergeValues(
     residence: placed?.unit.residenceName ?? "",
     unit_no: placed?.unit.unitNo ?? "",
     room: placed ? `Room ${placed.room.letter}` : "",
-    bed: placed?.bed.label ?? "",
+    bed: placed ? soldBedLabel(placed.room, placed.bed) : "",
     tenancy_start: tenancy?.start || resident.moveIn || "",
     tenancy_end: tenancy?.end || "",
     monthly_rent: rent ? String(rent) : "",

@@ -15,6 +15,37 @@ import type { Bed, Resident, Unit, UnitRoom } from "@/lib/ops-store";
 
 export const SOLD_AS_SINGLE_MARK = "Sold as single";
 
+/**
+ * How a placement was SOLD, not how the room is built (Dani, 14 Oct 2026).
+ *
+ * A twin room nobody was in can be let whole as one single (roomOffer
+ * "whole"): the resident has Twin 1, and Twin 2 is marked Sold as single. The
+ * room is still built as a twin, so every screen that read room.occupancy said
+ * "Twin sharing · Twin 1" for a resident paying the single rate - the booking
+ * card, the resident page, and the Occupancy in their agreement. Every place
+ * that describes a placement asks here instead.
+ */
+type SoldRoom = {
+  occupancy?: string | null | undefined;
+  beds?: { holdFor?: string | null | undefined; hold_for?: string | null | undefined }[] | null | undefined;
+};
+
+/** the room is let whole: its other bed carries the Sold-as-single mark */
+export const soldWhole = (room: SoldRoom | null | undefined) =>
+  !!room?.beds?.some((b) => (b.holdFor ?? b.hold_for) === SOLD_AS_SINGLE_MARK);
+
+/** "single" for a twin room let whole; otherwise the room's own occupancy */
+export const soldOccupancy = (room: SoldRoom | null | undefined) =>
+  room?.occupancy === "twin" && soldWhole(room) ? "single" : String(room?.occupancy ?? "");
+
+/** "Twin sharing" or "Single", as sold */
+export const soldOccupancyLabel = (room: SoldRoom | null | undefined) =>
+  soldOccupancy(room) === "twin" ? "Twin sharing" : "Single";
+
+/** the bed as the resident has it: "Single" for a twin room let whole, else its label ("Twin 1") */
+export const soldBedLabel = (room: SoldRoom | null | undefined, bed: { label?: string | null | undefined } | null | undefined) =>
+  room?.occupancy === "twin" && soldWhole(room) ? "Single" : String(bed?.label ?? "");
+
 export type Claim = {
   bedId: string;
   roomId: string;

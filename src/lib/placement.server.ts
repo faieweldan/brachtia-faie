@@ -80,7 +80,12 @@ export async function placementForResident(sb: any, residentId: string): Promise
     };
   }
 
-  const { data: room } = await sb.from("rooms").select("*").eq("id", bed.room_id).maybeSingle();
+  const [{ data: roomRow }, { data: siblings }] = await Promise.all([
+    sb.from("rooms").select("*").eq("id", bed.room_id).maybeSingle(),
+    // the room's beds, so a twin room let whole reads as the single it was sold as (soldOccupancy)
+    sb.from("beds").select("id, label, hold_for").eq("room_id", bed.room_id),
+  ]);
+  const room = roomRow ? { ...roomRow, beds: siblings ?? [] } : null;
   const { data: unit } = room
     ? await sb.from("units").select("*").eq("id", room.unit_id).maybeSingle()
     : { data: null };

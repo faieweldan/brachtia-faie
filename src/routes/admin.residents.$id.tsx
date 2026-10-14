@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { klToday } from "@/lib/kl-date";
-import { PERSON_LABEL, personStatus, timingLine, timingTone } from "@/lib/placement";
+import { PERSON_LABEL, personStatus, soldBedLabel, timingLine, timingTone } from "@/lib/placement";
 import { ResidentLabelPicker } from "@/components/admin/ResidentLabels";
 import { beforeTenancyStart } from "@/lib/room-change";
 import { isSandboxClient } from "@/lib/sandbox";
@@ -745,7 +745,7 @@ function ResidentProfilePage() {
                   search={{ residence: placed.unit.residenceName, unit: placed.unit.id }}
                   className="text-brand-deep underline-offset-2 hover:underline"
                 >
-                  Room {placed.room.letter} · {placed.bed.label}
+                  Room {placed.room.letter} · {soldBedLabel(placed.room, placed.bed)}
                 </Link>
               ) : undefined,
             },

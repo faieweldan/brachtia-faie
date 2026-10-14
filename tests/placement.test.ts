@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { Bed, Resident, Unit, UnitRoom } from "../src/lib/ops-store";
 import { findBedForResident } from "../src/lib/ops-store";
+import { soldBedLabel, soldOccupancy, soldOccupancyLabel } from "../src/lib/placement";
 import {
   PERSON_LABEL,
   dayBefore,
@@ -369,5 +370,30 @@ describe("a booked check-in day", () => {
   });
   test("the booked day has passed and nobody recorded it: overdue", () => {
     expect(timingLine("booked", "2026-09-22", undefined, "2026-10-10", "2026-10-09")).toBe("Check-in overdue");
+  });
+});
+
+/*
+ * A twin room let whole is described as the single it was sold as (Dani, 14 Oct
+ * 2026): A-15-05 Room A, Twin 1 booked, Twin 2 "Sold as single", read "Twin
+ * sharing · Twin 1" on the booking card at the single rate.
+ */
+describe("a placement is described as sold, not as built", () => {
+  const letWhole = { occupancy: "twin", beds: [{ label: "Twin 1" }, { label: "Twin 2", holdFor: "Sold as single" }] };
+  const shared = { occupancy: "twin", beds: [{ label: "Twin 1" }, { label: "Twin 2" }] };
+  const single = { occupancy: "single", beds: [{ label: "Single" }] };
+  test("a twin room let whole is a single", () => {
+    expect(soldOccupancy(letWhole)).toBe("single");
+    expect(soldOccupancyLabel(letWhole)).toBe("Single");
+    expect(soldBedLabel(letWhole, letWhole.beds[0])).toBe("Single");
+  });
+  test("the server's rows (hold_for) read the same", () => {
+    expect(soldOccupancy({ occupancy: "twin", beds: [{ hold_for: null }, { hold_for: "Sold as single" }] })).toBe("single");
+  });
+  test("a twin room shared stays twin, a single stays single", () => {
+    expect(soldOccupancyLabel(shared)).toBe("Twin sharing");
+    expect(soldBedLabel(shared, shared.beds[1])).toBe("Twin 2");
+    expect(soldOccupancy(single)).toBe("single");
+    expect(soldBedLabel(single, single.beds[0])).toBe("Single");
   });
 });
