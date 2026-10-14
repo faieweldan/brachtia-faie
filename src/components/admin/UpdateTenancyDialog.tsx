@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { UnitBeds } from "@/components/admin/UnitBeds";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ArrowRight, BedDouble, CalendarDays, Check, ChevronDown, Search } from "lucide-react";
@@ -1026,21 +1027,8 @@ function RoomList({
                     .filter(Boolean)
                     .join(" · ")}
                 </p>
-                {b.unit.rooms.map((rm) => (
-                  <div key={rm.id} className="rounded-md border border-border bg-background p-2">
-                    <p className="font-medium text-foreground">
-                      Room {rm.letter} · {rm.occupancy === "twin" ? "Twin" : "Single"}
-                    </p>
-                    {rm.beds.map((bd) => (
-                      <p key={bd.id} className="text-muted-foreground">
-                        {bd.label}:{" "}
-                        {bd.residentName || bd.holdFor
-                          ? `${bd.residentName ?? bd.holdFor}${bd.university ? ` · ${bd.university}` : ""}${bd.nationality ? ` · ${bd.nationality}` : ""}${bd.tenancyStart || bd.tenancyEnd ? ` · ${fmtDate(bd.tenancyStart ?? "")} – ${fmtDate(bd.tenancyEnd ?? "")}` : ""}`
-                          : "Vacant"}
-                      </p>
-                    ))}
-                  </div>
-                ))}
+                {/* who is in the unit - Reserved and Booked too, as Homes shows it (UnitBeds) */}
+                <UnitBeds unit={b.unit} residents={residents} />
               </div>
             ) : null}
           </div>

@@ -119,3 +119,18 @@ describe("credit note numbers", () => {
     expect(readFileSync("supabase/migrations/20261021100000_credit_note_numbers.sql", "utf8")).toContain("'CN/CS/'");
   });
 });
+
+/*
+ * Who is in a unit is read one way (Dani, 14 Oct 2026): bedStays in
+ * placement.ts, drawn by UnitBeds. The booking's room picker and Update
+ * Tenancy's each read only the bed row and called a bed a booking held
+ * "Vacant"; Homes knew better. No screen reads the bed row for it again.
+ */
+describe("who is in a unit", () => {
+  test("no screen lists a unit's people from the bed row alone", () => {
+    const own = [...files("src/routes"), ...files("src/components")].filter((f) =>
+      /bd\.residentName \|\| bd\.holdFor|: "Vacant"\}/.test(readFileSync(f, "utf8")),
+    );
+    expect(own).toEqual([]);
+  });
+});

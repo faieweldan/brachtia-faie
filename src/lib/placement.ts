@@ -1,4 +1,6 @@
 import type { Bed, Resident, Unit, UnitRoom } from "@/lib/ops-store";
+import { residentForBed, residentIdOf, sponsorLabel } from "@/lib/ops-store";
+import { universityAbbr } from "@/data/form-options";
 
 /**
  * Who has a claim on a unit, and when (Dani, 8 Oct 2026).
@@ -332,3 +334,84 @@ export function roomActions(p: {
   if (p.started) return ["update_tenancy"] as const;
   return p.paid ? (["change"] as const) : (["choose", "release"] as const);
 }
+
+/** One person on a bed: whoever lives there now, then each stay to come. */
+export type BedStay = {
+  key: string;
+  name: string;
+  residentId?: string | undefined;
+  enquiryId?: string | undefined;
+  reference?: string | undefined;
+  code?: string | undefined;
+  university?: string | undefined;
+  nationality?: string | undefined;
+  sponsor?: string | undefined;
+  start?: string | undefined;
+  end?: string | undefined;
+  /** their rent, when known - Homes falls back to the room's */
+  rent?: number | undefined;
+  status: PersonStatus;
+  /** "Next ·" - after somebody else on the same bed */
+  later: boolean;
+};
+
+/**
+ * Who is on a bed, and when (Dani, 14 Oct 2026) - the person living there,
+ * then every Reserved and Booked stay to come (bed.upcoming: holds and paid
+ * tenancies). Homes worked this out on its own screen while the booking's room
+ * picker and Update Tenancy's each read only the bed row, and called a bed
+ * Vacant that a booking held. Every screen that shows who is in a unit reads
+ * this; tests/one-rule.test.ts fails if one goes back to the bed row.
+ */
+export function bedStays(bed: Bed, residents: Resident[]): BedStay[] {
+  const stays: BedStay[] = [];
+  const person = residentForBed(residents, bed);
+  if (bed.status !== "vacant" && (bed.residentId || bed.residentName || bed.holdFor)) {
+    stays.push({
+      key: "now",
+      name: person?.fullName || bed.residentName || bed.holdFor || "—",
+      residentId: person?.id,
+      // the bed's own resident's booking - where their room is changed
+      enquiryId: person?.enquiryId,
+      code: person ? residentIdOf(person) : undefined,
+      university: person?.university || bed.university,
+      nationality: person?.nationality || bed.nationality,
+      sponsor: person ? sponsorLabel(person.payerName || person.sponsor) : undefined,
+      // an older hold kept only the move-in date, in hold_until
+      start: bed.tenancyStart || (bed.status === "held" ? bed.holdUntil?.slice(0, 10) : undefined),
+      end: bed.tenancyEnd,
+      rent: bed.rent,
+      status: personStatus({ bedStatus: bed.status }),
+      later: false,
+    });
+  }
+  for (const [i, u] of (bed.upcoming ?? []).entries()) {
+    const who = u.residentId ? residents.find((r) => r.id === u.residentId) : undefined;
+    stays.push({
+      key: `later-${i}`,
+      name: u.name,
+      residentId: u.residentId,
+      enquiryId: u.enquiryId,
+      reference: u.reference,
+      code: u.code,
+      university: who?.university || universityAbbr(u.university) || undefined,
+      nationality: who?.nationality,
+      sponsor: who ? sponsorLabel(who.payerName || who.sponsor) : undefined,
+      start: u.start,
+      end: u.end,
+      rent: u.rent,
+      status: personStatus({ upcomingAs: u.status }),
+      // "Next ·" only after somebody - the first stay on an empty bed is just theirs
+      later: stays.length > 0,
+    });
+  }
+  return stays;
+}
+
+/** A room as sold, for a list of who is in it: "Single (whole room)", "Twin" or "Single". */
+export const roomShapeLabel = (room: { occupancy?: string | null | undefined; beds?: { holdFor?: string | null | undefined }[] | null | undefined }) =>
+  room.occupancy === "twin" && soldWhole(room) ? "Single (whole room)" : room.occupancy === "twin" ? "Twin" : "Single";
+
+/** The beds people can be in - a room let whole's other bed only carries the Sold-as-single mark. */
+export const bedsForPeople = <B extends { holdFor?: string | null | undefined }>(room: { beds: B[] }) =>
+  room.beds.filter((b) => b.holdFor !== SOLD_AS_SINGLE_MARK);

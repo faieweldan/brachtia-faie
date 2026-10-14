@@ -38,7 +38,7 @@ import {
 } from "@/lib/ops-store";
 import { DateInput } from "@/components/ui/date-input";
 import { klToday } from "@/lib/kl-date";
-import { PERSON_LABEL, personStatus, roomStatusOf, timingLine, timingTone, type PersonStatus } from "@/lib/placement";
+import { PERSON_LABEL, bedStays, personStatus, roomStatusOf, timingLine, timingTone, type BedStay, type PersonStatus } from "@/lib/placement";
 import { universityAbbr } from "@/data/form-options";
 
 /**
@@ -550,21 +550,7 @@ function InventoryPage() {
 /* ---------------- one bed: who is in it, and who comes next ---------------- */
 
 /** One person's line in a bed's row - the bed's own, or a stay still to come. */
-type Stay = {
-  key: string;
-  name: string;
-  residentId?: string | undefined;
-  enquiryId?: string | undefined;
-  reference?: string | undefined;
-  code?: string | undefined;
-  university?: string | undefined;
-  sponsor?: string | undefined;
-  start?: string | undefined;
-  end?: string | undefined;
-  rent: number;
-  status: PersonStatus;
-  later: boolean;
-};
+type Stay = BedStay & { rent: number };
 
 /**
  * A bed's row (Dani, 9 Oct 2026). One physical row, however many people are
@@ -603,45 +589,8 @@ function BedLine({
   checkInDays?: Record<string, string> | undefined;
 }) {
   const today = klToday();
-  const person = residentForBed(residents, bed);
-  const stays: Stay[] = [];
-  if (bed.status !== "vacant" && (bed.residentId || bed.residentName || bed.holdFor)) {
-    stays.push({
-      key: "now",
-      name: person?.fullName || bed.residentName || bed.holdFor || "—",
-      residentId: person?.id,
-      // the bed's own resident's booking - where their room is changed
-      enquiryId: person?.enquiryId,
-      code: person ? residentIdOf(person) : undefined,
-      university: person?.university || bed.university,
-      sponsor: person ? sponsorLabel(person.payerName || person.sponsor) : undefined,
-      // an older hold kept only the move-in date, in hold_until
-      start: bed.tenancyStart || (bed.status === "held" ? bed.holdUntil?.slice(0, 10) : undefined),
-      end: bed.tenancyEnd,
-      rent,
-      status: personStatus({ bedStatus: bed.status }),
-      later: false,
-    });
-  }
-  for (const [i, u] of (bed.upcoming ?? []).entries()) {
-    const who = u.residentId ? residents.find((r) => r.id === u.residentId) : undefined;
-    stays.push({
-      key: `later-${i}`,
-      name: u.name,
-      residentId: u.residentId,
-      enquiryId: u.enquiryId,
-      reference: u.reference,
-      code: u.code,
-      university: who?.university || universityAbbr(u.university) || undefined,
-      sponsor: who ? sponsorLabel(who.payerName || who.sponsor) : undefined,
-      start: u.start,
-      end: u.end,
-      rent: u.rent || rent,
-      status: personStatus({ upcomingAs: u.status }),
-      // "Next ·" only after somebody - the first stay on an empty bed is just theirs
-      later: stays.length > 0,
-    });
-  }
+  // who is on the bed, and when - the shared reader (placement.ts bedStays)
+  const stays: Stay[] = bedStays(bed, residents).map((st) => ({ ...st, rent: st.key === "now" ? rent : st.rent || rent }));
 
   // the room's own status: whoever is physically in it decides
   const roomStatus = roomStatusOf(bed);

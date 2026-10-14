@@ -586,7 +586,7 @@ function AccessCardTable({
   return (
     <Panel
       title="Access Card"
-      description="Made by Brachtia and handed to ARC. Each form is a new record - nothing is overwritten."
+      description="Made by Brachtia and handed to ARC."
       action={
         <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
           <Plus className="mr-1 size-3.5" /> New Access Card Form

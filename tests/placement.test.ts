@@ -405,3 +405,22 @@ describe("a placement is described as sold, not as built", () => {
     expect(soldBedLabel(single, single.beds[0])).toBe("Single");
   });
 });
+
+describe("bedStays - who is on a bed, and when", () => {
+  const { bedStays } = require("../src/lib/placement");
+  test("a booking's hold on an empty bed is Reserved, never Vacant", () => {
+    const bed = { id: "b1", label: "Twin 1", status: "vacant", upcoming: [{ enquiryId: "e1", name: "Aisyah", status: "reserved", start: "2026-10-30", end: "2027-06-30" }] };
+    const stays = bedStays(bed, []);
+    expect(stays.map((s: any) => [s.name, s.status, s.later])).toEqual([["Aisyah", "held", false]]);
+  });
+  test("someone living there, then a paid stay to come - Occupied, then Next · Booked", () => {
+    const bed = {
+      id: "b2", label: "Twin 1", status: "active", residentName: "Vedanta", tenancyStart: "2026-09-14", tenancyEnd: "2027-06-30",
+      upcoming: [{ residentId: "r2", name: "Hakim", status: "booked", start: "2027-07-01", end: "2027-12-31" }],
+    };
+    expect(bedStays(bed, []).map((s: any) => [s.name, s.status, s.later])).toEqual([["Vedanta", "active", false], ["Hakim", "booked", true]]);
+  });
+  test("an empty bed has nobody", () => {
+    expect(bedStays({ id: "b3", label: "Twin 2", status: "vacant" }, [])).toEqual([]);
+  });
+});

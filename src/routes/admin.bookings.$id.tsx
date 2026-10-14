@@ -115,6 +115,7 @@ import { SlaCountdown } from "@/components/admin/SlaCountdown";
 
 import { fetchDaySlots } from "@/lib/public.functions";
 import { formatSlot } from "@/lib/slots";
+import { UnitBeds } from "@/components/admin/UnitBeds";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -1717,27 +1718,8 @@ function BookingDetail() {
                               {b.unit.notes ? (
                                 <p className="text-muted-foreground">{b.unit.notes}</p>
                               ) : null}
-                              <div className="space-y-1">
-                                {b.unit.rooms.map((rm) => (
-                                  <div
-                                    key={rm.id}
-                                    className="rounded-md border border-border bg-background p-2"
-                                  >
-                                    <p className="font-medium text-foreground">
-                                      Room {rm.letter} ·{" "}
-                                      {rm.occupancy === "twin" ? "Twin" : "Single"}
-                                    </p>
-                                    {rm.beds.map((bd) => (
-                                      <p key={bd.id} className="text-muted-foreground">
-                                        {bd.label}:{" "}
-                                        {bd.residentName || bd.holdFor
-                                          ? `${bd.residentName ?? bd.holdFor}${bd.university ? ` · ${bd.university}` : ""}${bd.nationality ? ` · ${bd.nationality}` : ""}${bd.tenancyStart || bd.tenancyEnd ? ` · ${fmtDate(bd.tenancyStart)} – ${fmtDate(bd.tenancyEnd)}` : ""}`
-                                          : "Vacant"}
-                                      </p>
-                                    ))}
-                                  </div>
-                                ))}
-                              </div>
+                              {/* who is in the unit - Reserved and Booked too, as Homes shows it (UnitBeds) */}
+                              <UnitBeds unit={b.unit} residents={ops.residents} />
                               <Button
                                 size="sm"
                                 disabled={!!c.blocked}
