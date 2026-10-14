@@ -358,6 +358,8 @@ function BookingDetail() {
     [beds, id, row?.resident_id],
   );
   const assignedBed = linkedBeds[0];
+  // how this booking's stay on it was sold - its own record (let_whole)
+  const assignedLetWhole = assignedBed?.bed.upcoming?.find((u) => u.enquiryId === id)?.letWhole;
   // one room reservation at a time - set by assignRoom (hooks stay above the loading return)
   const reservingRef = useRef(false);
   const [reserving, setReserving] = useState<string | null>(null);
@@ -1493,7 +1495,8 @@ function BookingDetail() {
                       Unit {assignedBed.unit.unitNo} · Room {assignedBed.room.letter}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {soldOccupancyLabel(assignedBed.room)} · {soldBedLabel(assignedBed.room, assignedBed.bed)}
+                      {soldOccupancyLabel(assignedBed.room, assignedLetWhole)} ·{" "}
+                      {soldBedLabel(assignedBed.room, assignedBed.bed, assignedLetWhole)}
                     </p>
                     {/* Reserved until the booking fee is in, Booked after */}
                     <span className="inline-flex w-fit items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
@@ -1756,7 +1759,7 @@ function BookingDetail() {
                     key={picked.bedId}
                     enquiryId={id}
                     residentId={r.resident_id || undefined}
-                    current={`${assignedBed.unit.unitNo} · Room ${assignedBed.room.letter} · ${soldBedLabel(assignedBed.room, assignedBed.bed)}`}
+                    current={`${assignedBed.unit.unitNo} · Room ${assignedBed.room.letter} · ${soldBedLabel(assignedBed.room, assignedBed.bed, assignedLetWhole)}`}
                     picked={picked}
                     onCancel={() => setPicked(null)}
                     onDone={(res) => {

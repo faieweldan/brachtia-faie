@@ -46,6 +46,8 @@ export type Bed = {
 /** A stay still to come on a bed: its booking, and its resident once the fee is paid. */
 export type UpcomingStay = {
   enquiryId?: string | undefined;
+  /** a twin room let whole as one single - the placement's own record (let_whole) */
+  letWhole?: boolean | undefined;
   /** the booking's reference, shown and linked to the booking */
   reference?: string | undefined;
   residentId?: string | undefined;

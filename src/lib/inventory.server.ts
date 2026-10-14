@@ -162,7 +162,8 @@ export async function buildInventoryPdf(
       residence: String(rs?.name ?? ""),
       unitNo: String(un?.unit_no ?? ""),
       room: rm?.letter ? `Room ${rm.letter}` : "",
-      bed: String(bed?.label ?? ""),
+      // as sold: a twin room let whole is a single (placement.ts soldBedLabel)
+      bed: bed ? (await import("@/lib/placement")).soldBedLabel(rm, bed, placed?.letWhole) : "",
     },
     resident: {
       name: String(res?.full_name ?? sign.resident?.typedName ?? ""),

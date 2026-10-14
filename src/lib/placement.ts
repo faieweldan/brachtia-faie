@@ -30,21 +30,29 @@ type SoldRoom = {
   beds?: { holdFor?: string | null | undefined; hold_for?: string | null | undefined }[] | null | undefined;
 };
 
-/** the room is let whole: its other bed carries the Sold-as-single mark */
-export const soldWhole = (room: SoldRoom | null | undefined) =>
-  !!room?.beds?.some((b) => (b.holdFor ?? b.hold_for) === SOLD_AS_SINGLE_MARK);
+/**
+ * The room is let whole. `letWhole` is the placement's own record of it
+ * (placement_holds / tenancies .let_whole, 20261019100000_let_whole.sql) and
+ * wins whenever the caller has it; only a placement read without it (a
+ * resident seated on the bed) falls back to the mark on the other bed.
+ */
+export const soldWhole = (room: SoldRoom | null | undefined, letWhole?: boolean | undefined) =>
+  letWhole ?? !!room?.beds?.some((b) => (b.holdFor ?? b.hold_for) === SOLD_AS_SINGLE_MARK);
 
 /** "single" for a twin room let whole; otherwise the room's own occupancy */
-export const soldOccupancy = (room: SoldRoom | null | undefined) =>
-  room?.occupancy === "twin" && soldWhole(room) ? "single" : String(room?.occupancy ?? "");
+export const soldOccupancy = (room: SoldRoom | null | undefined, letWhole?: boolean | undefined) =>
+  room?.occupancy === "twin" && soldWhole(room, letWhole) ? "single" : String(room?.occupancy ?? "");
 
 /** "Twin sharing" or "Single", as sold */
-export const soldOccupancyLabel = (room: SoldRoom | null | undefined) =>
-  soldOccupancy(room) === "twin" ? "Twin sharing" : "Single";
+export const soldOccupancyLabel = (room: SoldRoom | null | undefined, letWhole?: boolean | undefined) =>
+  soldOccupancy(room, letWhole) === "twin" ? "Twin sharing" : "Single";
 
 /** the bed as the resident has it: "Single" for a twin room let whole, else its label ("Twin 1") */
-export const soldBedLabel = (room: SoldRoom | null | undefined, bed: { label?: string | null | undefined } | null | undefined) =>
-  room?.occupancy === "twin" && soldWhole(room) ? "Single" : String(bed?.label ?? "");
+export const soldBedLabel = (
+  room: SoldRoom | null | undefined,
+  bed: { label?: string | null | undefined } | null | undefined,
+  letWhole?: boolean | undefined,
+) => (room?.occupancy === "twin" && soldWhole(room, letWhole) ? "Single" : String(bed?.label ?? ""));
 
 export type Claim = {
   bedId: string;

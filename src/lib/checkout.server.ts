@@ -287,7 +287,8 @@ export async function residentParticulars(sb: any, residentId: string) {
     code: String(res?.resident_code ?? ""),
     residence: String(rs?.name ?? ""),
     unit: String(un?.unit_no ?? ""),
-    room: [rm2?.letter ? `Room ${rm2.letter}` : "", bed?.label ?? ""].filter(Boolean).join(", "),
+    // as sold: a twin room let whole is a single (placement.ts soldBedLabel)
+    room: [rm2?.letter ? `Room ${rm2.letter}` : "", bed ? (await import("@/lib/placement")).soldBedLabel(rm2, bed, placed?.letWhole) : ""].filter(Boolean).join(", "),
     tenancyStart: String(doc?.[0]?.period_start ?? ""),
     tenancyEnd: String(doc?.[0]?.period_end ?? ""),
   };

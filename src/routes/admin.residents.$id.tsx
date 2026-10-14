@@ -745,7 +745,8 @@ function ResidentProfilePage() {
                   search={{ residence: placed.unit.residenceName, unit: placed.unit.id }}
                   className="text-brand-deep underline-offset-2 hover:underline"
                 >
-                  Room {placed.room.letter} · {soldBedLabel(placed.room, placed.bed)}
+                  Room {placed.room.letter} ·{" "}
+                  {soldBedLabel(placed.room, placed.bed, placed.bed.upcoming?.find((u) => u.residentId === form.id)?.letWhole)}
                 </Link>
               ) : undefined,
             },

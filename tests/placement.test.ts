@@ -390,6 +390,14 @@ describe("a placement is described as sold, not as built", () => {
   test("the server's rows (hold_for) read the same", () => {
     expect(soldOccupancy({ occupancy: "twin", beds: [{ hold_for: null }, { hold_for: "Sold as single" }] })).toBe("single");
   });
+  test("the placement's own record wins over the mark on the other bed", () => {
+    // stored let_whole: single, even with no mark (and twin, even with one)
+    expect(soldOccupancy(shared, true)).toBe("single");
+    expect(soldBedLabel(shared, shared.beds[0], true)).toBe("Single");
+    expect(soldOccupancy(letWhole, false)).toBe("twin");
+    // a single room is never made twin by it
+    expect(soldOccupancy(single, true)).toBe("single");
+  });
   test("a twin room shared stays twin, a single stays single", () => {
     expect(soldOccupancyLabel(shared)).toBe("Twin sharing");
     expect(soldBedLabel(shared, shared.beds[1])).toBe("Twin 2");

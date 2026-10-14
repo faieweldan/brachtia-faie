@@ -90,7 +90,8 @@ async function attachUpcoming(supabase: any, beds: any[], unitIds: string[]) {
   );
   const enquiryIds = [...new Set(claims.map((c) => c.enquiry_id).filter(Boolean))] as string[];
   const residentIds = [...new Set(claims.map((c) => c.resident_id).filter(Boolean))] as string[];
-  const [{ data: enquiries }, { data: residents }, { data: invoices }] = await Promise.all([
+  const claimBeds = [...new Set(claims.map((c) => String(c.bed_id)))];
+  const [{ data: enquiries }, { data: residents }, { data: invoices }, { data: holdRows }, { data: tenancyRows }] = await Promise.all([
     enquiryIds.length
       ? supabase.from("enquiries").select("id, reference, status, full_name, gender, university, move_in, move_out, monthly_rent, resident_id").in("id", enquiryIds)
       : { data: [] },
@@ -100,7 +101,23 @@ async function attachUpcoming(supabase: any, beds: any[], unitIds: string[]) {
     enquiryIds.length
       ? supabase.from("invoices").select("enquiry_id, monthly_rent, created_at").in("enquiry_id", enquiryIds).neq("status", "void").order("created_at", { ascending: false })
       : { data: [] },
+    // how each stay was sold - a twin room let whole (let_whole, 14 Oct 2026); no rows before that migration
+    claimBeds.length
+      ? supabase.from("placement_holds").select("bed_id, enquiry_id, resident_id, let_whole").in("bed_id", claimBeds)
+      : { data: [] },
+    claimBeds.length
+      ? supabase.from("tenancies").select("bed_id, enquiry_id, resident_id, let_whole").in("bed_id", claimBeds)
+      : { data: [] },
   ]);
+  const letWholeOf = (c: { bed_id: string; enquiry_id: string | null; resident_id: string | null; source: string }) => {
+    const rows = ((c.source === "tenancy" ? tenancyRows : holdRows) ?? []) as any[];
+    const row = rows.find(
+      (r) =>
+        String(r.bed_id) === String(c.bed_id) &&
+        ((c.enquiry_id && r.enquiry_id === c.enquiry_id) || (c.resident_id && r.resident_id === c.resident_id)),
+    );
+    return typeof row?.let_whole === "boolean" ? (row.let_whole as boolean) : undefined;
+  };
   const enq = new Map(((enquiries ?? []) as any[]).map((e) => [e.id, e]));
   const res = new Map(((residents ?? []) as any[]).map((r) => [r.id, r]));
   const rentOf = (id?: string | null) =>
@@ -118,8 +135,10 @@ async function attachUpcoming(supabase: any, beds: any[], unitIds: string[]) {
         // a booking's unpaid hold
         const e = enq.get(c.enquiry_id);
         if (!e) continue;
+        const lw = letWholeOf(c);
         list.push({
           enquiryId: e.id,
+          ...(lw === undefined ? {} : { letWhole: lw }),
           reference: e.reference || undefined,
           // made a resident at the booking fee: their page finds the room by this (13 Oct 2026)
           ...(e.resident_id ? { residentId: e.resident_id } : {}),
@@ -139,8 +158,10 @@ async function attachUpcoming(supabase: any, beds: any[], unitIds: string[]) {
       // a resident's own bed held on for their extension is still theirs - not a second person
       if (c.source === "move" && c.resident_id === b.resident_id) continue;
       const te = enq.get(c.enquiry_id ?? "");
+      const lw = letWholeOf(c);
       list.push({
         ...(c.enquiry_id ? { enquiryId: c.enquiry_id } : {}),
+        ...(lw === undefined ? {} : { letWhole: lw }),
         reference: te?.reference || undefined,
         residentId: r.id,
         name: String(r.full_name || te?.full_name || ""),

@@ -535,6 +535,38 @@ d("change room before the tenancy starts (test-bratchia)", () => {
     expect(held.bed_id).toBe(beds["Y"]);
   }, 60000);
 
+  /*
+   * How a placement was sold is the placement's own fact (20261019100000_let_whole.sql):
+   * a twin room let whole writes let_whole on the hold and, once paid, the tenancy -
+   * in the same step that marks the other bed Sold as single.
+   */
+  test("a twin room let whole is recorded on the hold and the tenancy", async () => {
+    const room = await one(sb.from("rooms").insert({ unit_id: made.unit, letter: "TW", occupancy: "twin", sort_order: 99 }).select("id"));
+    const twin = await ok<any[]>(
+      sb.from("beds").insert([{ room_id: room.id, label: "Twin 1", sort_order: 0 }, { room_id: room.id, label: "Twin 2", sort_order: 1 }]).select("id, label"),
+    );
+    const t1 = twin.find((b) => b.label === "Twin 1").id;
+    const t2 = twin.find((b) => b.label === "Twin 2").id;
+    const b = await booking(beds["Q"]!, 650, 0);
+    const placed = await ok<any>(sb.rpc("place_stay", { p_enquiry: b.enquiry, p_resident: null, p_bed: t1, p_whole: true }));
+    expect(placed.ok).toBe(true);
+    expect((await one(sb.from("placement_holds").select("let_whole").eq("enquiry_id", b.enquiry))).let_whole).toBe(true);
+    expect((await one(sb.from("beds").select("hold_for").eq("id", t2))).hold_for).toBe("Sold as single");
+    // the documents' reader says Single
+    const { placementForResident } = await import("../src/lib/placement.server");
+    const r = await one(sb.from("residents").insert({ full_name: `${tag} lw`, gender: "Male", enquiry_id: b.enquiry }).select("id"));
+    made.residents.push(r.id);
+    await ok(sb.from("tenancies").insert({ resident_id: r.id, enquiry_id: b.enquiry, bed_id: t1, start_date: START, end_date: END }));
+    await ok(sb.rpc("place_stay", { p_enquiry: b.enquiry, p_resident: r.id, p_bed: t1, p_whole: true }));
+    expect((await one(sb.from("tenancies").select("let_whole").eq("enquiry_id", b.enquiry))).let_whole).toBe(true);
+    const p = await placementForResident(sb, r.id);
+    expect(p?.letWhole).toBe(true);
+    const { soldOccupancy } = await import("../src/lib/placement");
+    expect(soldOccupancy(p?.room, p?.letWhole)).toBe("single");
+    // clean up the room's beds before the unit goes
+    await sb.from("placement_holds").delete().eq("enquiry_id", b.enquiry);
+  }, 60000);
+
   async function pack(resident: string, status: string) {
     const ag = await one(
       sb

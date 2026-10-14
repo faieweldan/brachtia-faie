@@ -525,7 +525,7 @@ function ResidentsListPage() {
                               <span className="whitespace-nowrap text-foreground underline-offset-2 group-hover:text-brand-deep group-hover:underline">
                                 {placed.unit.unitNo} · Room {placed.room.letter}
                               </span>
-                              <span className="text-xs">{soldBedLabel(placed.room, placed.bed)}</span>
+                              <span className="text-xs">{soldBedLabel(placed.room, placed.bed, placed.bed.upcoming?.find((u) => u.residentId === r.id)?.letWhole)}</span>
                             </Link>
                           ) : (
                             "No room"

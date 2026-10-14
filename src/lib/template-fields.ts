@@ -26,6 +26,8 @@ export type MappingContext = {
   cardReason?: string;
   /** the stay's official dates (tenancy-facts.server officialStay) - before any copy */
   stay?: { start: string; end: string } | null;
+  /** a twin room let whole as one single - the placement's own record (placementForResident) */
+  letWhole?: boolean | undefined;
   /** the rent in force (tenancy-facts.server rentInForce) - before any copy; unset without rent terms */
   rentInForce?: number | null;
 };
@@ -165,8 +167,8 @@ export const TEMPLATE_FIELDS: TemplateField[] = [
   { key: "unit_no", label: "Unit no.", source: "Room Record", get: (c) => c.unit?.["unit_no"] },
   { key: "room_no", label: "Room", source: "Room Record", get: (c) => (c.room ? `Room ${c.room["letter"]}` : "") },
   // as sold: a twin room let whole is a single (placement.ts soldOccupancy, 14 Oct 2026)
-  { key: "bed", label: "Bed", source: "Room Record", get: (c) => (c.bed ? soldBedLabel(c.room as any, c.bed as any) : undefined) },
-  { key: "occupancy", label: "Occupancy", source: "Room Record", get: (c) => (c.room ? soldOccupancy(c.room as any) : undefined) ?? c.resident?.["occupancy"] },
+  { key: "bed", label: "Bed", source: "Room Record", get: (c) => (c.bed ? soldBedLabel(c.room as any, c.bed as any, c.letWhole) : undefined) },
+  { key: "occupancy", label: "Occupancy", source: "Room Record", get: (c) => (c.room ? soldOccupancy(c.room as any, c.letWhole) : undefined) ?? c.resident?.["occupancy"] },
   { key: "unit_type", label: "Unit type", source: "Room Record", get: (c) => c.unit?.["unit_type"] },
   { key: "inclusions", label: "Inclusions", source: "Room Record", get: (c) => rentalTermList(c, "included") },
   { key: "exclusions", label: "Exclusions", source: "Room Record", get: (c) => rentalTermList(c, "excluded") },

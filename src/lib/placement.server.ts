@@ -30,6 +30,8 @@ export type Placement = {
   residence: { id: string; name: string; slug: string } | null;
   /** "tenancy": a room they are not the resident of now - still to come, or left */
   via: "live" | "tenancy";
+  /** a twin room let whole as one single - the placement's own record (let_whole) */
+  letWhole: boolean;
 };
 
 export async function placementForResident(sb: any, residentId: string): Promise<Placement | null> {
@@ -92,5 +94,13 @@ export async function placementForResident(sb: any, residentId: string): Promise
   const { data: residence } = unit
     ? await sb.from("residences").select("id, name, slug").eq("id", unit.residence_id).maybeSingle()
     : { data: null };
-  return { bed, room: room ?? null, unit: unit ?? null, residence: residence ?? null, via };
+  // how it was sold: the tenancy's record for this bed, else the booking's hold
+  const [{ data: ten }, { data: hold }] = await Promise.all([
+    sb.from("tenancies").select("let_whole").eq("resident_id", residentId).eq("bed_id", String(bed.id)).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    sb.from("placement_holds").select("let_whole").eq("bed_id", bed.id).or(`resident_id.eq.${residentId}${enquiryId ? `,enquiry_id.eq.${enquiryId}` : ""}`).limit(1).maybeSingle(),
+  ]);
+  const { soldWhole } = await import("@/lib/placement");
+  const stored = (ten as any)?.let_whole ?? (hold as any)?.let_whole;
+  const letWhole = soldWhole(room, typeof stored === "boolean" ? stored : undefined);
+  return { bed, room: room ?? null, unit: unit ?? null, residence: residence ?? null, via, letWhole };
 }

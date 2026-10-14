@@ -335,6 +335,7 @@ async function buildContext(db: any, residentId: string, opts: { newAgreement?: 
     agreement,
     signatory,
     stay: { start: stay.start, end: stay.end },
+    letWhole: placed?.letWhole,
     rentInForce: now.hasSchedule && now.rent > 0 ? now.rent : null,
   };
   return { resident, ctx };
