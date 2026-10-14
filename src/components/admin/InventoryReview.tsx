@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { StaffPicker } from "@/components/admin/Dropdown";
+import { StatusPill } from "@/components/admin/ops-ui";
+import { COMING_DUE_DAYS_BEFORE_END } from "@/lib/placement";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, Download, FileText, PackageX } from "lucide-react";
 import { ReturnMessage } from "@/components/admin/InventoryReturnMessage";
@@ -43,18 +45,19 @@ import {
  *                       Brachtia's answers and signing
  *   Pending Approval    with Brachtia - answering the defects, or approving
  *   Valid               approved, and the tenancy is running
- *   Coming Due          within 60 days of the tenancy's end
+ *   Coming Due          within COMING_DUE_DAYS_BEFORE_END (60) days of the tenancy's end
  *   Expired             the tenancy's end date has passed
  *   Terminated          ended early - not recorded anywhere yet, so not shown
  * Whose turn it is shows on the button: Review, Approve, or View.
  */
-const STATE: Record<string, { label: string; tone: string }> = {
-  pending_submission: { label: "Pending Submission", tone: "border-border bg-muted text-muted-foreground" },
-  pending_approval: { label: "Pending Approval", tone: "border-amber-200 bg-amber-100 text-amber-900" },
-  valid: { label: "Valid", tone: "border-emerald-200 bg-emerald-100 text-emerald-900" },
-  coming_due: { label: "Coming Due", tone: "border-orange-200 bg-orange-100 text-orange-900" },
-  expired: { label: "Expired", tone: "border-slate-300 bg-slate-200 text-slate-700" },
-  terminated: { label: "Terminated", tone: "border-red-200 bg-red-100 text-red-900" },
+// the colours are StatusPill's, the one map every document uses (13 Oct 2026)
+const STATE: Record<string, string> = {
+  pending_submission: "Pending Submission",
+  pending_approval: "Pending Approval",
+  valid: "Valid",
+  coming_due: "Coming Due",
+  expired: "Expired",
+  terminated: "Terminated",
 };
 
 /** The check's stage, and the tenancy's end, as one of the statuses above. */
@@ -65,7 +68,7 @@ export function scheduleCStatus(stage: string, periodEnd?: string): string {
   if (Number.isNaN(end)) return "valid";
   const left = end - Date.now();
   if (left < 0) return "expired";
-  return left <= 60 * 86400000 ? "coming_due" : "valid";
+  return left <= COMING_DUE_DAYS_BEFORE_END * 86400000 ? "coming_due" : "valid";
 }
 
 /** the status column: a defect and a missing item each stand out (Dani, 2 Oct 2026) */
@@ -75,12 +78,8 @@ const TONE: Record<string, string> = {
 };
 
 export function InventoryPill({ stage, periodEnd }: { stage: string; periodEnd?: string | undefined }) {
-  const s = STATE[scheduleCStatus(stage, periodEnd)]!;
-  return (
-    <span className={`inline-flex items-center justify-center whitespace-nowrap rounded-full border px-2 py-0.5 text-center text-[11px] font-semibold ${s.tone}`}>
-      {s.label}
-    </span>
-  );
+  const status = scheduleCStatus(stage, periodEnd);
+  return <StatusPill status={status} label={STATE[status]} />;
 }
 
 /** The row's actions: View (the review), and what comes next. */

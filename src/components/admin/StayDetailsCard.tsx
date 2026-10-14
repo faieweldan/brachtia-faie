@@ -24,6 +24,7 @@ import { roomFitChanged } from "@/lib/stay-fit";
 import { bookingAddonNames, selectedBookingAddons, quoteAmountsMatch } from "@/lib/booking-quote";
 import { stayLength } from "@/lib/stay-length";
 import { DateInput } from "@/components/ui/date-input";
+import { RoomChangeReview, roomChangeMessage } from "@/components/admin/RoomChangeReview";
 import { BOOKING_FEE, discountPerMonth } from "@/lib/invoices";
 import { firstInvoiceLines } from "@/lib/invoice-lines";
 
@@ -129,6 +130,8 @@ export function StayDetailsCard({
   onSave,
   invoice,
   onQuoteUpdated,
+  tenancyDates,
+  onStayChanged,
 }: {
   row: any;
   /** residence rows and room type rows - listResidences */
@@ -154,6 +157,10 @@ export function StayDetailsCard({
     | undefined;
   /** after Update quote: bring that invoice into line with the new quote */
   onQuoteUpdated?: (() => Promise<unknown>) | undefined;
+  /** the paid stay's tenancy dates - what new dates are read against once the invoice is locked */
+  tenancyDates?: { start: string; end: string } | null | undefined;
+  /** new dates applied to a paid stay (changeStayDatesBeforeStart) */
+  onStayChanged?: ((message: string) => void) | undefined;
 }) {
   /*
    * Update quote changes the invoice too, while it can still be changed: no
@@ -170,6 +177,17 @@ export function StayDetailsCard({
    * after the quote is spotted, not a fault.
    */
   const invoiceStage = Boolean(invoice);
+  /*
+   * Paid past the booking fee and not moved in yet: new dates are not lost
+   * (Dani, 13 Oct 2026). Saved here, then applied through the room change's
+   * own path - the stay priced again, the invoice, rent and TA following.
+   */
+  const [applyingDates, setApplyingDates] = useState(false);
+  const datesMoved =
+    invoiceLocked &&
+    !!tenancyDates?.start &&
+    (String(row.move_in ?? "").slice(0, 10) !== tenancyDates.start.slice(0, 10) ||
+      String(row.move_out ?? "").slice(0, 10) !== tenancyDates.end.slice(0, 10));
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Stay>(() => fromRow(row));
   const datesBackwards = !!draft.moveIn && !!draft.moveOut && draft.moveOut <= draft.moveIn;
@@ -599,7 +617,9 @@ export function StayDetailsCard({
             The reason it cannot be priced wins, because that is the thing to
             act on.
           */}
-          {!editing && priceProblem ? (
+          {!editing && datesMoved ? (
+            <p className="text-[11px] font-medium text-amber-700">New dates saved - not applied to the paid stay yet</p>
+          ) : !editing && priceProblem ? (
             <p className="text-[11px] font-medium text-amber-700">{priceProblem}</p>
           ) : !editing && invoiceBehind ? (
             <p className="text-[11px] font-medium text-amber-700">
@@ -617,7 +637,11 @@ export function StayDetailsCard({
               saved without updating it. With nothing different, pressing it
               only saved the same invoice again as a new version (Dani, 29 Sep
               2026) */}
-          {invoiceBehind ? (
+          {datesMoved && !editing ? (
+            <Button size="sm" variant="outline" onClick={() => (canEdit ? setApplyingDates(true) : onBlocked())}>
+              <RefreshCw className="size-4" /> Apply new dates
+            </Button>
+          ) : invoiceBehind ? (
             <Button
               size="sm"
               variant="outline"
@@ -700,6 +724,26 @@ export function StayDetailsCard({
             <span>{note}</span>
           </p>
         ))}
+
+      {applyingDates && datesMoved && tenancyDates ? (
+        <div className="mb-3">
+          <RoomChangeReview
+            enquiryId={String(row.id)}
+            residentId={row.resident_id || undefined}
+            current={assignedBed ? `${assignedBed.unit.unitNo} · Room ${assignedBed.room.letter}` : String(row.room_name ?? "")}
+            dates={{
+              from: `${fmtDate(tenancyDates.start)} – ${fmtDate(tenancyDates.end)}`,
+              to: `${fmtDate(row.move_in)} – ${fmtDate(row.move_out)} (${stayLength(row.move_in, row.move_out)})`,
+              rent: Number(row.monthly_rent || 0),
+            }}
+            onCancel={() => setApplyingDates(false)}
+            onDone={(res) => {
+              setApplyingDates(false);
+              onStayChanged?.(roomChangeMessage(res, "", "Dates changed"));
+            }}
+          />
+        </div>
+      ) : null}
 
       {releasesRoom && assignedBed ? (
         // said before it happens: saving undoes the reservation and what was built on it

@@ -127,6 +127,7 @@ export type Resident = {
   maritalStatus: string;
   race: string;
   religion: string;
+  referralSource: string;
   /** "student" | "employed" - decides whether academic or employment is asked */
   currentStatus: string;
   // academic
@@ -795,6 +796,7 @@ export function blankResident(partial: Partial<Resident> = {}): Resident {
     maritalStatus: "",
     race: "",
     religion: "",
+    referralSource: "",
     currentStatus: "",
     university: "",
     levelOfStudy: "",

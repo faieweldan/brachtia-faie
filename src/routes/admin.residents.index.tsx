@@ -9,13 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState, Panel, Select, StatusPill } from "@/components/admin/ops-ui";
 import { MigrationPanel } from "@/components/admin/MigrationPanel";
+import { LabelChips, useLabels } from "@/components/admin/ResidentLabels";
 import { completeness } from "@/lib/resident-fields";
 import { rowsFromGrid } from "@/lib/master-list";
 import { useBillingLedger } from "@/lib/billing-client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { tenancyDatesByResident } from "@/lib/rental-schedule.functions";
 import { klToday } from "@/lib/kl-date";
-import { personStatus, timingLine } from "@/lib/placement";
+import { personStatus, timingLine, timingTone } from "@/lib/placement";
 import {
   blankResident,
   findBedForResident,
@@ -62,6 +63,9 @@ function ResidentsListPage() {
   const [view, setView] = useState<"active" | "upcoming" | "inactive" | "all">("active");
   const [university, setUniversity] = useState("");
   const [residence, setResidence] = useState("");
+  // admin's own labels (13 Oct 2026): show only residents carrying this one
+  const [labelId, setLabelId] = useState("");
+  const labels = useLabels();
 
   const universities = useMemo(
     () => Array.from(new Set(residents.map((r) => universityAbbr(r.university)).filter(Boolean))),
@@ -113,6 +117,7 @@ function ResidentsListPage() {
   const rows = residents.filter((r) => {
     if (view !== "all" && phases.get(r.id) !== view) return false;
     if (university && universityAbbr(r.university) !== university) return false;
+    if (labelId && !(labels.data?.byResident[r.id] ?? []).includes(labelId)) return false;
     if (residence) {
       const placed = findBedForResident(units, r);
       if (placed?.unit.residenceName !== residence) return false;
@@ -351,6 +356,14 @@ function ResidentsListPage() {
         description="Profiles built from the housing application form."
         action={
           <div className="flex flex-wrap items-center gap-2">
+            {/* the blank file Bulk upload reads - built from the same column list (13 Oct 2026) */}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => void import("@/lib/migration/upload-template").then((m) => m.downloadUploadTemplate())}
+            >
+              <Download className="mr-1 size-4" /> Download template
+            </Button>
             <Button
               size="sm"
               variant="outline"
@@ -413,7 +426,7 @@ function ResidentsListPage() {
               ))}
             </div>
 
-            <div className="mb-4 grid gap-3 sm:grid-cols-3">
+            <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground">Search</p>
                 <Input
@@ -434,6 +447,13 @@ function ResidentsListPage() {
                 value={residence}
                 onChange={setResidence}
                 options={residences}
+                placeholder="All"
+              />
+              <Select
+                label="Label"
+                value={labelId}
+                onChange={setLabelId}
+                options={(labels.data?.labels ?? []).map((l) => ({ value: l.id, label: l.name }))}
                 placeholder="All"
               />
             </div>
@@ -474,6 +494,9 @@ function ResidentsListPage() {
                           >
                             {r.fullName || "Untitled resident"}
                           </Link>
+                          <span className="mt-0.5 block">
+                            <LabelChips residentId={r.id} />
+                          </span>
                         </td>
                         {/* The two IDs are kept apart, each in its own column: the
                             resident ID this system gives, and the QuickBooks ID an
@@ -536,7 +559,7 @@ function ResidentsListPage() {
                                 );
                                 return when ? (
                                   <span
-                                    className={`block text-xs ${when.endsWith("overdue") ? "text-rose-700" : ""}`}
+                                    className={`block text-xs ${timingTone(when)}`}
                                   >
                                     {when}
                                   </span>

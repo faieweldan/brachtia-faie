@@ -39,7 +39,7 @@ import {
 } from "@/lib/ops-store";
 import { DateInput } from "@/components/ui/date-input";
 import { klToday } from "@/lib/kl-date";
-import { PERSON_LABEL, personStatus, roomStatusOf, timingLine, type PersonStatus } from "@/lib/placement";
+import { PERSON_LABEL, personStatus, roomStatusOf, timingLine, timingTone, type PersonStatus } from "@/lib/placement";
 import { universityAbbr } from "@/data/form-options";
 
 /**
@@ -713,7 +713,7 @@ function BedLine({
                 {st.start ? `${fmtDate(st.start)} → ${fmtDate(st.end)}` : "—"}
               </span>
               {when ? (
-                <span className={`block text-xs ${when .endsWith("overdue") ? "font-medium text-rose-700" : ""}`}>
+                <span className={`block text-xs ${timingTone(when)}`}>
                   {when}
                 </span>
               ) : null}

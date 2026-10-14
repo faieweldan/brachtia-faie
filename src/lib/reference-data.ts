@@ -9,7 +9,7 @@
  * CHN, FRA), so nothing needs translating on import.
  */
 
-import { UNIVERSITIES } from "@/data/form-options";
+import { HEARD_ABOUT, UNIVERSITIES } from "@/data/form-options";
 
 export type Country = { code: string; name: string; dial: string };
 
@@ -596,6 +596,23 @@ export function normLevel(raw: string): Normalised {
     undergrad: "Undergraduate",
     dip: "Diploma",
     found: "Foundation",
+  });
+}
+
+/**
+ * How they heard about Brachtia - the booking form's own list (HEARD_ABOUT), so
+ * the booking, the resident profile and the migration store one set of answers
+ * (Dani, 13 Oct 2026). "Other" is a complete answer, as for race.
+ */
+export const REFERRAL_OPTIONS = HEARD_ABOUT.map((v) => ({ value: v, label: v }));
+
+export function normReferral(raw: string): Normalised {
+  return normFromList(raw, REFERRAL_OPTIONS, {
+    google: "Google Search",
+    website: "Google Search",
+    instagram: "Social Media",
+    facebook: "Social Media",
+    tiktok: "Social Media",
   });
 }
 

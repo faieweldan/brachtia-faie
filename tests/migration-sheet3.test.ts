@@ -10,8 +10,16 @@ const headers = [
   "Mobile Number",
   "Email",
   "Nationality",
+  "Referral Source",
+  "Marital status",
   "Race",
   "Religion",
+  "Address",
+  "Postal Code",
+  "State / Region / Province",
+  "Country",
+  "Medical Condition",
+  "Medical Condition - Remarks",
   "Residence",
   "Unit no. ",
   "Room",
@@ -31,6 +39,9 @@ const headers = [
   "Total Initial Payment",
   "Copy of Tenancy Agreement",
   "Copy of Invoice",
+  "Photograph",
+  "NRIC / Passport Copy",
+  "Offer Letter",
 ];
 
 const base: Record<string, unknown> = {
@@ -40,8 +51,16 @@ const base: Record<string, unknown> = {
   "Mobile Number": "9855075409",
   Email: "vedanta@example.test",
   Nationality: "IND",
+  "Referral Source": "University",
+  "Marital status": "Single",
   Race: "Other",
   Religion: "Other",
+  Address: "1 Test Street",
+  "Postal Code": "12345",
+  "State / Region / Province": "Punjab",
+  Country: "India",
+  "Medical Condition": "No",
+  "Medical Condition - Remarks": "",
   Residence: "The Arc, Cyberjaya",
   "Unit no. ": "A-12-10",
   Room: "C",
@@ -61,6 +80,9 @@ const base: Record<string, unknown> = {
   "Total Initial Payment": 5000,
   "Copy of Tenancy Agreement": "https://example.test/ta.pdf",
   "Copy of Invoice": "https://example.test/invoice.pdf",
+  Photograph: "https://example.test/photo.jpg",
+  "NRIC / Passport Copy": "https://example.test/passport.pdf",
+  "Offer Letter": "https://example.test/offer.pdf",
 };
 
 const unit = {
@@ -126,6 +148,32 @@ describe("Migration 1 Sheet3 readiness", () => {
     expect(
       result.rows[0]!.issues.some((issue) => issue.field === "Race" || issue.field === "Religion"),
     ).toBe(false);
+  });
+
+  test("application details and document links are carried into the import record", () => {
+    const result = preview(grid());
+    expect(result.rows[0]!.record).toMatchObject({
+      referralSource: "University",
+      maritalStatus: "Single",
+      race: "Other",
+      religion: "Other",
+      address: "1 Test Street",
+      postcode: "12345",
+      state: "Punjab",
+      country: "India",
+      medicalCondition: "no",
+    });
+    expect(result.rows[0]!.record.documents.map((document) => [document.key, document.url])).toEqual([
+      ["photo", "https://example.test/photo.jpg"],
+      ["id", "https://example.test/passport.pdf"],
+      ["offer", "https://example.test/offer.pdf"],
+    ]);
+  });
+
+  test("a missing application document blocks the resident", () => {
+    const result = preview(grid({ Photograph: "" }));
+    expect(result.rows[0]!.status).toBe("blocked");
+    expect(result.rows[0]!.issues.some((issue) => issue.field === "Passport size photo")).toBe(true);
   });
 
   test("an unknown country code blocks the row", () => {

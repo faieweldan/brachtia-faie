@@ -2,6 +2,7 @@
   "_about": "The upload contract for migrating existing residents. Sheet3 of Data Labelling.xlsx is the column order; this file says what each column means, where it comes from in 'Migration Batch 1', and where it lands in the database. Headers are matched exactly - no fuzzy matching.",
   "sourceSheet": "Migration Batch 1",
   "targetSheet": "Sheet3",
+  "applicationSheet": "gform responses",
   "tenancyEndAfter": "2026-09-30",
   "columns": [
     {
@@ -113,9 +114,10 @@
       "key": "referral_source",
       "sheet3": "Referral Source",
       "source": null,
-      "db": null,
+      "applicationSource": "How did you hear about us",
+      "db": "residents.referral_source",
       "required": false,
-      "kind": "manual"
+      "kind": "application"
     },
     {
       "key": "nric",
@@ -142,17 +144,22 @@
       "key": "marital_status",
       "sheet3": "Marital status",
       "source": null,
+      "applicationSource": "Marital Status",
       "db": "residents.marital_status",
       "required": false,
-      "kind": "manual"
+      "kind": "application"
     },
     {
       "key": "race",
       "sheet3": "Race",
       "source": null,
+      "applicationSource": [
+        "Race 2",
+        "Race"
+      ],
       "db": "residents.race",
       "required": false,
-      "kind": "manual",
+      "kind": "application",
       "validation": "fixed app list or Other",
       "notes": "Other is a complete answer; no follow-up text"
     },
@@ -160,9 +167,10 @@
       "key": "religion",
       "sheet3": "Religion",
       "source": null,
+      "applicationSource": "Religion",
       "db": "residents.religion",
       "required": false,
-      "kind": "manual",
+      "kind": "application",
       "validation": "fixed app list or Other",
       "notes": "Other is a complete answer; no follow-up text"
     },
@@ -170,49 +178,55 @@
       "key": "address",
       "sheet3": "Address",
       "source": null,
+      "applicationSource": "Residential Address",
       "db": "residents.address",
       "required": false,
-      "kind": "manual"
+      "kind": "application"
     },
     {
       "key": "postcode",
       "sheet3": "Postal Code",
       "source": null,
+      "applicationSource": "Postal Code",
       "db": "residents.postcode",
       "required": false,
-      "kind": "manual"
+      "kind": "application"
     },
     {
       "key": "state",
       "sheet3": "State / Region / Province",
       "source": null,
+      "applicationSource": "State/ Region/ Province",
       "db": "residents.state",
       "required": false,
-      "kind": "manual"
+      "kind": "application"
     },
     {
       "key": "country",
       "sheet3": "Country",
       "source": null,
+      "applicationSource": "Country",
       "db": "residents.country",
       "required": false,
-      "kind": "manual"
+      "kind": "application"
     },
     {
       "key": "medical_condition",
       "sheet3": "Medical Condition",
       "source": null,
+      "applicationSource": "Do you have any medical conditions we should be aware of?",
       "db": "residents.medical_condition",
       "required": false,
-      "kind": "manual"
+      "kind": "application"
     },
     {
       "key": "medical_detail",
       "sheet3": "Medical Condition - Remarks",
       "source": null,
+      "applicationSource": "If you answered \"Yes\" to the question above, please specify",
       "db": "residents.medical_detail",
       "required": false,
-      "kind": "manual"
+      "kind": "application"
     },
     {
       "key": "internal_notes",
@@ -342,11 +356,15 @@
     {
       "key": "agreement_no",
       "sheet3": "Agreement No.",
-      "source": null,
-      "db": null,
+      "source": [
+        "Tenancy Start",
+        "Unit",
+        "StudentID"
+      ],
+      "db": "tenancy_agreements.agreement_no",
       "required": false,
-      "kind": "manual",
-      "notes": "No source - left blank, never taken from a file name"
+      "kind": "transformed",
+      "transform": "TA<tenancy start year>_<unit>_<QuickBooks ID>, e.g. TA2025_A-18-05_00724 (Rina, 13 Oct 2026)"
     },
     {
       "key": "agreement_date",
@@ -364,7 +382,7 @@
       "db": "beds.status",
       "required": true,
       "kind": "direct",
-      "validation": "= Active",
+      "validation": "Active",
       "notes": "The FIRST Status column. The second (TRUE/FALSE) is ignored."
     },
     {
@@ -541,6 +559,39 @@
       "validation": "http(s) URL or an existing local file"
     },
     {
+      "key": "application_photo",
+      "sheet3": "Photograph",
+      "source": null,
+      "applicationSource": "Please upload a colour passport size photograph of yourself",
+      "db": "residents.docs[photo]",
+      "required": true,
+      "kind": "application document",
+      "addedToSheet3": true,
+      "validation": "http(s) URL"
+    },
+    {
+      "key": "application_id_copy",
+      "sheet3": "NRIC / Passport Copy",
+      "source": null,
+      "applicationSource": "Please upload a colour copy of your NRIC (for Malaysians only) or Passport Information Page",
+      "db": "residents.docs[id]",
+      "required": true,
+      "kind": "application document",
+      "addedToSheet3": true,
+      "validation": "http(s) URL"
+    },
+    {
+      "key": "application_offer",
+      "sheet3": "Offer Letter",
+      "source": null,
+      "applicationSource": "Please upload your university offer letter",
+      "db": "residents.docs[offer]",
+      "required": true,
+      "kind": "application document",
+      "addedToSheet3": true,
+      "validation": "http(s) URL"
+    },
+    {
       "sheet3": "Expected graduation year",
       "key": "graduationYear",
       "source": null,
@@ -585,6 +636,20 @@
       "source": null,
       "kind": "calculated",
       "notes": "Row number in Migration Batch 1, for tracing"
+    },
+    {
+      "key": "application_source_row",
+      "sheet3": "Application Source Row",
+      "source": null,
+      "kind": "calculated",
+      "notes": "Matched row number in gform responses, for tracing"
+    },
+    {
+      "key": "application_match",
+      "sheet3": "Application Match",
+      "source": null,
+      "kind": "calculated",
+      "notes": "Identity evidence used to connect Migration Batch 1 to gform responses"
     }
   ],
   "unmapped": {

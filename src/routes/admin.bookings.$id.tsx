@@ -736,12 +736,20 @@ function BookingDetail() {
       const id = String(invoice?.id ?? voidedInvoice?.id ?? "");
       return id ? listInvoiceVersions({ data: { invoiceId: id } }) : [];
     },
-    buildVersion: async (v) => {
+    buildVersion: async (v, latest) => {
       const { invoicePdfUrl } = await import("@/lib/invoice-pdf");
       // the document as it was stored, under the reference that version read
       return invoicePdfUrl({
         ...(v.body as any),
         reference: r.reference ?? null,
+        /*
+         * The newest version of a live invoice is the invoice today, and the
+         * money paid before it was changed (a room or date change) still
+         * counts against it. A saved version never stores payments, so the eye
+         * showed the new total with no "Paid to date" or "Balance due" while
+         * the card beside it said RM500 was in. Older versions stay as issued.
+         */
+        ...(latest && invoice ? { paid: paidTotal } : {}),
         number: referenceFor(String(v.reference || invoice?.number || ""), v.version),
       });
     },
@@ -1234,7 +1242,7 @@ function BookingDetail() {
           ["university", "University", "text"],
           ["intake", "Intake", "text"],
         ] as const)),
-    ["heard_about", "Referral Source", "heard"],
+    ["heard_about", "How did you hear about us?", "heard"],
   ] as const;
 
   return (
@@ -1408,6 +1416,13 @@ function BookingDetail() {
                   }
                 : null
             }
+            tenancyDates={(billing as any)?.tenancyDates ?? null}
+            onStayChanged={(message) => {
+              toast.success(message);
+              void refreshUnits();
+              void queryClient.invalidateQueries({ queryKey: ["admin"] });
+              void queryClient.invalidateQueries({ queryKey: ["billing-ledger"] });
+            }}
             onQuoteUpdated={async () => {
               try {
                 await syncInvoiceWithQuote({ data: { enquiryId: id } });
@@ -2353,6 +2368,7 @@ function BookingDetail() {
               phone={row.phone ?? ""}
               // the fee is in, so what is left is the balance rather than the lot
               isBalance={paidTotal > 0}
+              paidBefore={Number((billing as any)?.paidBefore ?? 0)}
               attachments={[
                 {
                   label: `Invoice ${invoice.number}`,

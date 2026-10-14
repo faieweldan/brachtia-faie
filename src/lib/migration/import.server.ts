@@ -11,15 +11,17 @@ import type { MigrationPreviewRow } from "@/lib/migration/sheet3";
  * booking-lifecycle.ts), so an imported resident and a new one look and act the
  * same on every screen:
  *
- *   1 the resident            residents (with the payor)
+ *   1 the resident            residents (with the payor, the application form's
+ *                             answers and its document links)
  *   1b the agreement          the old TA as their first agreement, Signed,
- *                             TA-<Resident ID>-01, opening the Drive copy - in
+ *                             under its own number (TA2025_A-18-05_00724; else
+ *                             TA-<Resident ID>-01), opening the Drive copy - in
  *                             the Tenancy tab, so a renewal attaches to it
  *   2 the tenancy             tenancies
  *   3 the initial payment     an "initial" invoice with its lines, paid, under
  *                             its QuickBooks number (INV:IP_00894), its eye on
- *                             the original copy; its payment and receipt dated
- *                             the day it was paid. All tagged "Migrated".
+ *                             the original copy; its payment dated the day it
+ *                             was paid, with no receipt of ours. All tagged "Migrated".
  *   4 the rent from now on    rental_schedules - starting at the next period
  *                             after today: they are paid up to the current one
  *   5 the bed                 place_stay (a "Single" in a twin room takes the
@@ -53,6 +55,15 @@ export async function importResident(sb: any, row: MigrationPreviewRow, today: s
   try {
     /* ---- 1. the resident ---- */
     const now = new Date().toISOString();
+    const migratedDocs = rec.documents
+      .filter((document) => document.url)
+      .map((document) => ({
+        key: document.key,
+        label: document.label,
+        fileName: `${document.label} (migrated link)`,
+        path: document.url,
+        uploadedAt: now,
+      }));
     const made = await must<{ id: string }>(
       sb
         .from("residents")
@@ -66,6 +77,17 @@ export async function importResident(sb: any, row: MigrationPreviewRow, today: s
           id_number: rec.nric || rec.passport,
           university: normUniversity(rec.university).value,
           current_status: rec.residentType,
+          referral_source: rec.referralSource,
+          marital_status: rec.maritalStatus,
+          race: rec.race,
+          religion: rec.religion,
+          address: rec.address,
+          postcode: rec.postcode,
+          state: rec.state,
+          country: normCountry(rec.country).value,
+          medical_condition: rec.medicalCondition,
+          medical_detail: rec.medicalDetail,
+          docs: migratedDocs,
           occupancy: rec.occupancy,
           move_in: row.tenancyStart,
           pay_schedule: rec.schedule,
@@ -104,7 +126,7 @@ export async function importResident(sb: any, row: MigrationPreviewRow, today: s
       const agreement = await must<{ id: string }>(
         sb
           .from("tenancy_agreements")
-          .insert({ resident_id: residentId, tenancy_id: tenancy.id, agreement_no: await nextAgreementNo(sb, residentId), kind: "initial" })
+          .insert({ resident_id: residentId, tenancy_id: tenancy.id, agreement_no: rec.agreementNo || (await nextAgreementNo(sb, residentId)), kind: "initial" })
           .select("id")
           .single(),
         "Agreement",
@@ -173,7 +195,12 @@ export async function importResident(sb: any, row: MigrationPreviewRow, today: s
     }
     const paid = r2(Math.min(rec.totalPaid || total, total));
     if (paid > 0) {
-      const payment = await must<{ id: string }>(
+      /*
+       * No receipt (Dani, 13 Oct 2026). A receipt made today would carry today's
+       * date and number, not the day they paid. The original invoice link -
+       * the eye on the Payments tab - already shows what was paid.
+       */
+      await must(
         sb
           .from("payments")
           .insert({
@@ -185,24 +212,8 @@ export async function importResident(sb: any, row: MigrationPreviewRow, today: s
             method: "",
             reference: row.quickbooksId,
             description: `${MIGRATED} · initial payment from before the system`,
-          })
-          .select("id")
-          .single(),
+          }),
         "Payment",
-      );
-      await must(
-        sb.from("receipts").insert({
-          payment_id: payment.id,
-          invoice_id: invoice.id,
-          enquiry_id: null,
-          resident_id: residentId,
-          amount: paid,
-          balance_after: r2(total - paid),
-          paid_to_date: paid,
-          // the day it was paid, not the day it was imported
-          issued_at: `${row.tenancyStart}T00:00:00+08:00`,
-        }),
-        "Receipt",
       );
     }
 

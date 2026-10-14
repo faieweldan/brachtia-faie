@@ -222,7 +222,15 @@ const days = (from: string, to: string) =>
   );
 
 /**
- * The line under the dates: "Upcoming · in 11 days", "Current · ends in 3 days",
+ * Coming Due: the tenancy ends within this many days (Dani, 13 Oct 2026). One
+ * number for the resident's timing line and Schedule C's status - they were
+ * 30 and 60, so a resident could read "Current" while their Schedule C said
+ * "Coming Due".
+ */
+export const COMING_DUE_DAYS_BEFORE_END = 60;
+
+/**
+ * The line under the dates: "Upcoming · in 11 days", "Coming due · ends in 3 days",
  * "Checkout overdue", "Former". Empty for somebody with no room.
  */
 export function timingLine(
@@ -247,10 +255,18 @@ export function timingLine(
     if (end && end < today) return "Checkout overdue";
     if (end) {
       const n = days(today, end);
-      if (n <= 30) return n === 0 ? "Current · ends today" : `Current · ends in ${n} day${n === 1 ? "" : "s"}`;
+      if (n <= COMING_DUE_DAYS_BEFORE_END)
+        return n === 0 ? "Coming due · ends today" : `Coming due · ends in ${n} day${n === 1 ? "" : "s"}`;
     }
     return "Current";
   }
+  return "";
+}
+
+/** The timing line's colour, the same on every list: red when late, orange when coming due. */
+export function timingTone(line: string) {
+  if (line.endsWith("overdue")) return "font-medium text-rose-700";
+  if (line.startsWith("Coming due")) return "font-medium text-orange-700";
   return "";
 }
 

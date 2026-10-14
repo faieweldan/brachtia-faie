@@ -246,6 +246,9 @@ function ResidentLine({ row, today, open, onToggle }: { row: MigrationPreviewRow
                 {money(r.monthlyRent)} / month · {SCHEDULES.find((x) => x.value === r.schedule)?.label ?? r.schedule}
               </span>
             </Field>
+            <Field label="Agreement No.">
+              <span className="tabular-nums">{r.agreementNo || "Made by the system on import"}</span>
+            </Field>
             <Field label="TA copy">
               <DocLink url={r.taUrl} marked={mark("Copy of Tenancy Agreement")} />
             </Field>

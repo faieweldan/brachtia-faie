@@ -169,6 +169,12 @@ export function planRoomChangeMoney(p: {
   return { kind: "credit", oldTotal, newTotal, difference: -difference, parts };
 }
 
+/**
+ * A credit part as the review and the credit note both name it (14 Oct 2026):
+ * a deposit that went down says which, the rest is the initial payment.
+ */
+export const creditPartLabel = (p: CreditPart) => (p.deposit ? `${p.label} - difference` : p.label);
+
 /** Before the tenancy starts and before check-in - after that it is Update Tenancy's. */
 export function beforeTenancyStart(
   start: string | null | undefined,
@@ -184,5 +190,13 @@ export const ROOM_CHANGE_REASONS = [
   "Upgrade",
   "Downgrade",
   "Operational reassignment",
+  "Other",
+] as const;
+
+/** Why a paid stay's dates moved before move-in (13 Oct 2026). */
+export const STAY_DATE_REASONS = [
+  "Semester dates changed",
+  "Resident requested new dates",
+  "Operational",
   "Other",
 ] as const;

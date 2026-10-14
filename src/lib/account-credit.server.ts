@@ -29,7 +29,8 @@ export type CreditEntry = {
   amount: number;
   /** "Security deposit reduced - room change 11 Nov 2026" */
   reason: string;
-  kind: "deposit" | "rent" | "cancel";
+  /** note: a credit note - credit with nothing left to bill, paid back (13 Oct 2026); its amount is negative */
+  kind: "deposit" | "rent" | "cancel" | "note";
   /** a deposit reclassified: which one - checkout takes it off what is held */
   depositKey?: string;
   depositLabel?: string;
@@ -38,6 +39,20 @@ export type CreditEntry = {
   /** the event was cancelled: the credit is taken back, kept here for the record */
   reversedAt?: string;
   reversedReason?: string;
+  /** a credit note: its number (CN/AC/00001), who issued it, and the refund once paid */
+  number?: string;
+  issuedBy?: string;
+  refund?: CreditRefund;
+};
+
+export type CreditRefund = {
+  amount: number;
+  paidOn: string;
+  method: string;
+  reference: string;
+  proofPath: string;
+  recordedBy: string;
+  recordedAt: string;
 };
 
 const path = (residentId: string) => `account-credit/${residentId}.json`;
@@ -80,8 +95,11 @@ export async function addCredit(sb: any, residentId: string, entries: Omit<Credi
  * cancelled event's IP - is the resident's again.
  */
 export async function creditBalance(sb: any, residentId: string) {
-  const given = r2((await creditEntries(sb, residentId)).filter((e) => !e.reversedAt).reduce((n, e) => n + e.amount, 0));
-  if (!given) return { given: 0, used: 0, balance: 0 };
+  const entries = (await creditEntries(sb, residentId)).filter((e) => !e.reversedAt);
+  const given = r2(entries.filter((e) => e.kind !== "note").reduce((n, e) => n + e.amount, 0));
+  // paid back on a credit note: no longer the resident's to use (13 Oct 2026)
+  const noted = r2(entries.filter((e) => e.kind === "note").reduce((n, e) => n - e.amount, 0));
+  if (!given) return { given: 0, used: 0, noted: 0, balance: 0 };
   const { data } = await sb.from("payments").select("amount, invoice_id").eq("resident_id", residentId).eq("method", CREDIT_METHOD);
   const rows = (data ?? []) as any[];
   const { data: voided } = rows.length
@@ -89,7 +107,86 @@ export async function creditBalance(sb: any, residentId: string) {
     : { data: [] };
   const off = new Set(((voided ?? []) as any[]).map((v) => v.id));
   const used = r2(rows.filter((p) => !off.has(p.invoice_id)).reduce((n, p) => n + Number(p.amount || 0), 0));
-  return { given, used, balance: r2(Math.max(0, given - used)) };
+  return { given, used, noted, balance: r2(Math.max(0, given - used - noted)) };
+}
+
+/**
+ * Where the credit left will go (planCredit): the invoices still to pay -
+ * rent not billed yet included - oldest first, as applyAccountCredit takes
+ * them; and the leftover no invoice can take. Read-only.
+ */
+export async function creditOutlook(sb: any, residentId: string) {
+  const { planCredit } = await import("@/lib/credit-plan");
+  const { balance } = await creditBalance(sb, residentId);
+  const { data: rows } = await sb
+    .from("invoices")
+    .select("id, total, status")
+    .eq("resident_id", residentId)
+    .not("status", "in", "(void,paid)")
+    .order("invoice_date", { ascending: true })
+    .order("issued_at", { ascending: true });
+  const open = (rows ?? []) as any[];
+  const { data: pays } = open.length ? await sb.from("payments").select("invoice_id, amount").in("invoice_id", open.map((r) => r.id)) : { data: [] };
+  const paid = new Map<string, number>();
+  for (const p of (pays ?? []) as any[]) paid.set(p.invoice_id, (paid.get(p.invoice_id) ?? 0) + Number(p.amount || 0));
+  return { balance, ...planCredit(balance, open.map((r) => ({ id: r.id, owing: Number(r.total || 0) - (paid.get(r.id) ?? 0) }))) };
+}
+
+/** Credit notes are their own series: CN/AC/00001 - credit note, account credit. */
+async function nextCreditNoteNumber(sb: any) {
+  const counter = (await readJson<{ next: number }>(sb, "account-credit/_counter.json"))?.next ?? 1;
+  await writeJson(sb, "account-credit/_counter.json", { next: counter + 1 });
+  return `CN/AC/${String(counter).padStart(5, "0")}`;
+}
+
+/**
+ * Issue a credit note for the credit no invoice can take (Dani, 13 Oct 2026).
+ * Only that leftover - while rent is still to be billed the credit goes there.
+ * It is written into the same ledger as a negative entry, so the balance,
+ * checkout's "Account credit not used" and the Payables list all read one fact.
+ */
+export async function issueCreditNote(sb: any, residentId: string, issuedBy: string) {
+  const { leftover } = await creditOutlook(sb, residentId);
+  if (leftover <= 0.005) throw new Error("There is no credit left over - it goes onto the rent still to be billed.");
+  const number = await nextCreditNoteNumber(sb);
+  const list = await creditEntries(sb, residentId);
+  const entry: CreditEntry = {
+    id: crypto.randomUUID().slice(0, 8),
+    at: new Date().toISOString(),
+    amount: -leftover,
+    reason: "Credit note - account credit with no invoice left to use it on",
+    kind: "note",
+    number,
+    issuedBy,
+  };
+  list.push(entry);
+  await writeJson(sb, path(residentId), list);
+  return { number, amount: leftover };
+}
+
+/** A resident's credit notes, newest first. */
+export async function creditNotes(sb: any, residentId: string) {
+  return (await creditEntries(sb, residentId)).filter((e) => e.kind === "note" && !e.reversedAt).reverse();
+}
+
+/** The residents who have, or had, account credit - where credit notes can be. */
+export async function creditResidents(sb: any) {
+  return (await readJson<string[]>(sb, INDEX)) ?? [];
+}
+
+/** The refund of a credit note is paid: recorded on the note, once. */
+export async function recordCreditNoteRefund(sb: any, residentId: string, number: string, refund: CreditRefund) {
+  const list = await creditEntries(sb, residentId);
+  const note = list.find((e) => e.kind === "note" && e.number === number);
+  if (!note) throw new Error(`Credit note ${number} not found`);
+  if (note.refund) throw new Error("The refund is already recorded.");
+  note.refund = refund;
+  await writeJson(sb, path(residentId), list);
+}
+
+export async function putCreditFile(sb: any, p: string, bytes: Uint8Array, type: string) {
+  const { error } = await sb.storage.from(BUCKET).upload(p, bytes, { upsert: true, contentType: type });
+  if (error) throw new Error(`Could not save the proof: ${error.message}`);
 }
 
 /** the deposits reclassified as credit, by deposit - checkout holds that much less */

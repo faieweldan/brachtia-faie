@@ -464,14 +464,12 @@ async function raiseAdjustment(sb: any, residentId: string, tenancyId: string, l
 }
 
 /**
- * An event's IP, beside the move-in one (agreed 7 Oct 2026): made now as a
- * scheduled invoice - listed on Payments with its amount fixed - and billed on
- * its day, 14 days before the event. A day already passed bills it now.
+ * The Initial Payment invoice raiseIp writes, before it is written - so the
+ * room-change review's draft is the row Confirm inserts (14 Oct 2026).
  */
-export async function raiseIp(
+export async function ipInvoiceRow(
   sb: any,
   residentId: string,
-  tenancyId: string,
   lines: { label: string; amount: number; kind: string }[],
   o: { billOn: string; note: string; tenancyEnd: string; rent: number; roomName: string; occupancy: string },
 ) {
@@ -484,20 +482,12 @@ export async function raiseIp(
     .limit(1)
     .maybeSingle();
   const total = r2(lines.reduce((n, l) => n + l.amount, 0));
-  const id = crypto.randomUUID();
-  const { error } = await sb.from("invoices").insert({
+  return {
     ...(first ?? {}),
     ...(o.roomName ? { room_name: o.roomName } : {}),
     ...(o.occupancy ? { occupancy: o.occupancy } : {}),
     ...(o.tenancyEnd ? { tenancy_end: o.tenancyEnd } : {}),
     ...(o.rent ? { monthly_rent: o.rent } : {}),
-    id,
-    // a placeholder: the number is given when it is billed
-    number: `SCH-${id}`,
-    status: "scheduled",
-    auto_scheduled: false,
-    resident_id: residentId,
-    tenancy_id: tenancyId,
     invoice_type: "initial",
     bill_on: o.billOn,
     invoice_date: o.billOn,
@@ -506,6 +496,31 @@ export async function raiseIp(
     total,
     deposits_total: lines.filter((l) => l.kind === "refundable").reduce((n, l) => n + l.amount, 0),
     notes: o.note,
+  };
+}
+
+/**
+ * An event's IP, beside the move-in one (agreed 7 Oct 2026): made now as a
+ * scheduled invoice - listed on Payments with its amount fixed - and billed on
+ * its day, 14 days before the event. A day already passed bills it now.
+ */
+export async function raiseIp(
+  sb: any,
+  residentId: string,
+  tenancyId: string,
+  lines: { label: string; amount: number; kind: string }[],
+  o: { billOn: string; note: string; tenancyEnd: string; rent: number; roomName: string; occupancy: string },
+) {
+  const id = crypto.randomUUID();
+  const { error } = await sb.from("invoices").insert({
+    ...(await ipInvoiceRow(sb, residentId, lines, o)),
+    id,
+    // a placeholder: the number is given when it is billed
+    number: `SCH-${id}`,
+    status: "scheduled",
+    auto_scheduled: false,
+    resident_id: residentId,
+    tenancy_id: tenancyId,
   });
   if (error) throw new Error(error.message);
   const { error: iErr } = await sb

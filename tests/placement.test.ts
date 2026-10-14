@@ -268,9 +268,12 @@ describe("status and timing are two answers, never stored", () => {
     );
     expect(timingLine("active", "2025-08-01", "2026-09-30", "2026-10-09")).toBe("Checkout overdue");
     expect(timingLine("active", "2025-08-01", "2026-10-12", "2026-10-09")).toBe(
-      "Current · ends in 3 days",
+      "Coming due · ends in 3 days",
     );
     expect(timingLine("active", "2025-08-01", "2027-06-30", "2026-10-09")).toBe("Current");
+    // 60 days before the end, as Schedule C's Coming Due (13 Oct 2026)
+    expect(timingLine("active", "2025-08-01", "2026-12-08", "2026-10-09")).toBe("Coming due · ends in 60 days");
+    expect(timingLine("active", "2025-08-01", "2026-12-09", "2026-10-09")).toBe("Current");
     expect(timingLine("inactive", "2025-08-01", "2026-09-30", "2026-10-09")).toBe("Former");
     expect(timingLine("none", undefined, undefined, "2026-10-09")).toBe("");
   });
