@@ -132,7 +132,8 @@ function DocumentPackPage() {
   const fetchPack = useServerFn(getPackTemplates);
   const pack = useQuery({
     queryKey: ["pack-templates", id, card ?? ""],
-    queryFn: () => fetchPack({ data: { residentId: id, ...(card ? { cardReason: card } : {}) } }),
+    // a new pack: its values carry the agreement number it will get, as the preview does
+    queryFn: () => fetchPack({ data: { residentId: id, ...(card ? { cardReason: card } : { newAgreement: true }) } }),
   });
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const tpl = pack.data?.[TEMPLATE_KEY[selected]!] ?? null;

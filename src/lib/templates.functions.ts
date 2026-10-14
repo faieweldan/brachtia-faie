@@ -341,6 +341,32 @@ async function buildContext(db: any, residentId: string, opts: { newAgreement?: 
   return { resident, ctx };
 }
 
+/**
+ * After a pack is numbered: the value of every placeholder mapped to the
+ * agreement number (a field, or a formula that uses it), read from the
+ * agreement now on record (Dani, 14 Oct 2026). The pack page showed the number
+ * the pack would get but saved the values without it, so a generated
+ * document had no Agreement No. Generate writes these over what it was sent -
+ * the number the pack actually got, whatever the page last saw.
+ */
+export async function agreementNoValues(db: any, residentId: string, versionIds: string[]): Promise<Record<string, string>> {
+  const ids = versionIds.filter(Boolean);
+  if (!ids.length) return {};
+  const { mappingFor } = await import("@/lib/template-fields");
+  const { ctx } = await buildContext(db, residentId);
+  const { data: rows } = await db.from("template_versions").select("id, content_html, file_path, boxes, mappings").in("id", ids);
+  const out: Record<string, string> = {};
+  for (const row of (rows ?? []) as any[]) {
+    const placeholders = await placeholdersOf(db, row);
+    const usesNo = placeholders.filter((ph) => {
+      const m = mappingFor(ph, row.mappings ?? {});
+      return (m?.kind === "field" && m.key === "agreement_no") || (m?.kind === "formula" && /\[agreement_no\]/.test(m.expr));
+    });
+    for (const r of testMappingFor(usesNo, ctx, row.mappings ?? {})) if (r.value) out[r.key] = r.value;
+  }
+  return out;
+}
+
 /** Read-only: gathers a resident's linked records and checks each placeholder. Writes nothing. */
 export const testMapping = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ residentId: z.string().uuid(), placeholders: z.array(z.string().max(80)).max(300), mappings: mappingSchema.optional() }).parse(d))
@@ -413,10 +439,13 @@ export function pickForResidence<T extends { document_templates: { doc_key: stri
 
 /** The Active template per document in the pack, filled with this resident's details. Read-only. */
 export const getPackTemplates = createServerFn({ method: "GET" })
-  .inputValidator((d) => z.object({ residentId: z.string().uuid(), cardReason: z.string().max(40).optional() }).parse(d))
+  .inputValidator((d) =>
+    z.object({ residentId: z.string().uuid(), cardReason: z.string().max(40).optional(), newAgreement: z.boolean().optional() }).parse(d),
+  )
   .handler(async ({ data }) => {
     const db = await admin();
-    const { ctx } = await buildContext(db, data.residentId);
+    // a new pack: the agreement number it will get - as the preview shows it, so what is saved is what was seen
+    const { ctx } = await buildContext(db, data.residentId, { newAgreement: data.newAgreement });
     // a replacement access card form: its ticks follow the reason
     if (data.cardReason) ctx.cardReason = data.cardReason;
     const { data: rows } = await db

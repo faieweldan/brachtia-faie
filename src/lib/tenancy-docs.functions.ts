@@ -247,6 +247,9 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
     const docTypes = await docTypesInUse(db);
     const today = new Date().toISOString().slice(0, 10);
     const tv = await versions(db, data.residentId);
+    // the number this pack got, in every place its documents print it (agreementNoValues)
+    const { agreementNoValues } = await import("@/lib/templates.functions");
+    const numbered = await agreementNoValues(db, data.residentId, docTypes.map((t) => tv[t] ?? ""));
     const { error: dErr } = !docTypes.length ? { error: null } : await db.from("agreement_documents").insert(
       docTypes.map((t) => ({
         agreement_id: agreement.id,
@@ -257,7 +260,7 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
         period_start: data.periodStart || null,
         period_end: data.periodEnd || null,
         // who made it, and when - the audit trail, beside the values it was made from
-        merge_values: { ...data.mergeValues, prepared_by: data.preparedBy, prepared_at: new Date().toISOString() },
+        merge_values: { ...data.mergeValues, ...numbered, prepared_by: data.preparedBy, prepared_at: new Date().toISOString() },
         template_version_id: tv[t] || null,
       })),
     );
@@ -394,6 +397,9 @@ export async function renewAgreementWith(db: any, data: RenewInput) {
     const docTypes = await docTypesInUse(db);
     const today = new Date().toISOString().slice(0, 10);
     const tv = await versions(db, data.residentId);
+    // the number this pack got, in every place its documents print it (agreementNoValues)
+    const { agreementNoValues } = await import("@/lib/templates.functions");
+    const numbered = await agreementNoValues(db, data.residentId, docTypes.map((t) => tv[t] ?? ""));
     const { error: dErr } = !docTypes.length ? { error: null } : await db.from("agreement_documents").insert(
       docTypes.map((t) => ({
         agreement_id: agreement.id,
@@ -403,7 +409,7 @@ export async function renewAgreementWith(db: any, data: RenewInput) {
         effective_date: today,
         period_start: data.periodStart || null,
         period_end: data.periodEnd || null,
-        merge_values: data.mergeValues,
+        merge_values: { ...data.mergeValues, ...numbered },
         template_version_id: tv[t] || null,
       })),
     );
