@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { ipDifferenceNote } from "@/lib/invoice-category";
 import { klToday } from "@/lib/kl-date";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -24,8 +25,6 @@ import { klToday } from "@/lib/kl-date";
  *   tenancy-change/<resident>/<time>.json        each request, as it was made
  */
 const BUCKET = "resident-documents";
-/** how an Update Tenancy IP is told apart from the move-in invoice */
-export const TOP_UP_NOTE = "Initial payment difference";
 
 async function admin(): Promise<any> {
   const { requireAdminSession } = await import("@/lib/admin-session.server");
@@ -361,7 +360,7 @@ export async function applyTenancyChangeWith(sb: any, data: TenancyChangeRequest
       if (ip.total > 0) {
         invoice = await E.raiseIp(sb, data.residentId, data.tenancyId, ip.lines, {
           billOn,
-          note: `${TOP_UP_NOTE} - ${name} ${p.date}`,
+          note: ipDifferenceNote(name, p.date),
           tenancyEnd: e.periodEnd,
           rent: rentAfter,
           roomName: e.roomName,

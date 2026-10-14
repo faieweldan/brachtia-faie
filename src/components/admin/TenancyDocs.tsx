@@ -4,7 +4,7 @@ import { soldBedLabel } from "@/lib/placement";
 import { Dropdown, StaffPicker } from "@/components/admin/Dropdown";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, Check, ChevronDown, ChevronRight, FileStack, Plus, Stamp, Undo2, Upload } from "lucide-react";
+import { ExternalLink, Check, ChevronDown, ChevronRight, FileStack, Plus, RefreshCw, Stamp, Undo2, Upload } from "lucide-react";
 import { MIGRATED, MIGRATED_MEANING } from "@/lib/migration/import-plan";
 import { SigningMessageCard } from "@/components/admin/SigningMessageCard";
 import { STAFF } from "@/data/form-options";
@@ -61,6 +61,7 @@ import {
   createAccessCardForm,
   getTenancyDocs,
   setDocumentStatus,
+  regenerateAgreement,
   undoDocumentPack,
   updateAccessCard,
 } from "@/lib/tenancy-docs.functions";
@@ -295,6 +296,15 @@ function AgreementBlock({
    */
   // until anything is signed - a sent link or an unconfirmed inventory check does not stop it
   const untouched = docs.length > 0 && agreement.documents.every((d) => ["generated", "pending_signature", "submitted"].includes(d.status));
+  /*
+   * What an Update Tenancy change made belongs to it while it stands (Dani, 14
+   * Oct 2026): a second agreement is never reset away - it is made again in
+   * place, same number (regenerateAgreement) - and a first pack with a schedule
+   * the change revised cannot be reset. Cancelling the change takes them away.
+   */
+  const byChange = agreement.kind === "renewal";
+  const revisedByChange = agreement.documents.some((d) => d.version > 1 && d.status !== "cancelled");
+  const canRedo = untouched && (byChange || !revisedByChange);
   const [undoing, setUndoing] = useState(false);
   const [busy, setBusy] = useState(false);
   // every document signed: the whole agreement opens as one PDF
@@ -316,8 +326,13 @@ function AgreementBlock({
   async function undo() {
     setBusy(true);
     try {
-      await undoDocumentPack({ data: { agreementId: agreement.id } });
-      toast.success(`${agreement.agreementNo} reset - generate the pack again when ready`);
+      if (byChange) {
+        await regenerateAgreement({ data: { agreementId: agreement.id } });
+        toast.success(`${agreement.agreementNo} generated again`);
+      } else {
+        await undoDocumentPack({ data: { agreementId: agreement.id } });
+        toast.success(`${agreement.agreementNo} reset - generate the pack again when ready`);
+      }
       setUndoing(false);
       onChanged();
     } catch (e) {
@@ -369,23 +384,28 @@ function AgreementBlock({
         url={full}
         onClose={() => setFull(null)}
       />
-      {untouched ? (
+      {canRedo ? (
         <Button type="button" size="sm" variant="ghost" className="h-7 shrink-0 px-2 text-xs text-muted-foreground" onClick={() => setUndoing(true)}>
-          <Undo2 className="mr-1 size-3.5" /> Reset
+          {byChange ? <RefreshCw className="mr-1 size-3.5" /> : <Undo2 className="mr-1 size-3.5" />} {byChange ? "Generate again" : "Reset"}
         </Button>
       ) : null}
       </div>
       <Dialog open={undoing} onOpenChange={(o) => !busy && setUndoing(o)}>
         <DialogContent className="max-w-xs">
           <DialogHeader>
-            <DialogTitle>Reset {agreement.agreementNo}?</DialogTitle>
+            <DialogTitle>{byChange ? `Generate ${agreement.agreementNo} again?` : `Reset ${agreement.agreementNo}?`}</DialogTitle>
           </DialogHeader>
+          {byChange ? (
+            <p className="text-sm text-muted-foreground">
+              Made again from the Update Tenancy change, with the same number. The unsigned documents are replaced.
+            </p>
+          ) : null}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" size="sm" className="h-7 px-3 text-xs" disabled={busy} onClick={() => setUndoing(false)}>
               Keep it
             </Button>
-            <Button type="button" variant="destructive" size="sm" className="h-7 px-3 text-xs" disabled={busy} onClick={() => void undo()}>
-              {busy ? "Resetting…" : "Reset"}
+            <Button type="button" variant={byChange ? "default" : "destructive"} size="sm" className="h-7 px-3 text-xs" disabled={busy} onClick={() => void undo()}>
+              {byChange ? (busy ? "Generating…" : "Generate again") : busy ? "Resetting…" : "Reset"}
             </Button>
           </div>
         </DialogContent>
@@ -400,6 +420,9 @@ function AgreementBlock({
         const made = parent ?? docs[0];
         if (!stay?.start || !stay.end || !made?.periodStart || !made.periodEnd) return null;
         if (agreement.documents.every((d) => d.status === "cancelled")) return null;
+        // a second agreement is for its change's room and dates, not today's stay - read against
+        // the tenancy it always looked out of date, and invited a reset (14 Oct 2026)
+        if (byChange) return null;
         // the room it names: a booking moved to another room before check-in needs it made again too
         const v = made.mergeValues;
         const madeUnit = String(v["Unit_no"] || v["unit_no"] || "").trim();
@@ -448,13 +471,15 @@ function AgreementBlock({
           <div className="mx-4 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
             <span>
               Made for {was}. The stay is now <strong>{now}</strong>.{" "}
-              {untouched
-                ? "Reset the pack and generate it again - the access card form is made again with it."
+              {canRedo
+                ? byChange
+                  ? "Generate it again - the same agreement, from the change that made it."
+                  : "Reset the pack and generate it again - the access card form is made again with it."
                 : "Signed documents stay as they are: issue a revised pack, and a new Access Card Form below."}
             </span>
-            {untouched ? (
+            {canRedo ? (
               <Button type="button" size="sm" variant="outline" className="h-7 bg-white px-3 text-xs" onClick={() => setUndoing(true)}>
-                Reset and generate again
+                {byChange ? "Generate again" : "Reset and generate again"}
               </Button>
             ) : null}
           </div>

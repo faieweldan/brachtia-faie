@@ -263,6 +263,8 @@ export function ResidentInvoiceDialog({
       items: lines,
       kind: isRental ? "rental" : "charge",
       heading: isRental ? "Rental" : "Charges",
+      // the account credit it will take when billed, as its Payments row shows
+      ...(editing?.doc.credit_planned ? { credit_planned: Math.min(editing.doc.credit_planned, total) } : {}),
       ...(isRental && periodStart && periodEnd
         ? { period: `${short(periodStart)} – ${short(periodEnd)}` }
         : {}),

@@ -516,3 +516,40 @@ describe("9. before the start is a room change; after it, Update Tenancy - uncha
     expect(beforeTenancyStart(start, true, "2026-06-30")).toBe(false);
   });
 });
+
+describe("what an Update Tenancy change made stays while the change does (14 Oct 2026)", () => {
+  // a stand-in database: one agreement, and its documents; any delete is recorded
+  const fakeDb = (agreement: any, docs: any[]) => {
+    const deleted: string[] = [];
+    const q = (table: string) => {
+      const chain: any = {
+        select: () => chain,
+        eq: () => chain,
+        in: () => chain,
+        maybeSingle: async () => ({ data: agreement }),
+        delete: () => {
+          deleted.push(table);
+          return chain;
+        },
+        then: (ok: any) => ok({ data: table === "agreement_documents" ? docs : [], error: null }),
+      };
+      return chain;
+    };
+    return { db: { from: q, storage: { from: () => ({ remove: async () => ({}) }) } }, deleted };
+  };
+  test("a second agreement is never reset away", async () => {
+    const { resetDocumentPack } = await import("../src/lib/tenancy-docs.functions");
+    const { db, deleted } = fakeDb({ id: "a2", resident_id: "r", kind: "renewal" }, [{ id: "d", doc_type: "agreement", status: "generated", version: 1 }]);
+    await expect(resetDocumentPack(db, "a2")).rejects.toThrow(/Update Tenancy change/);
+    expect(deleted).toEqual([]);
+  });
+  test("a first pack with a schedule the change revised is not reset either", async () => {
+    const { resetDocumentPack } = await import("../src/lib/tenancy-docs.functions");
+    const { db, deleted } = fakeDb({ id: "a1", resident_id: "r", kind: "initial" }, [
+      { id: "d1", doc_type: "sched_a", status: "generated", version: 1 },
+      { id: "d2", doc_type: "sched_a", status: "generated", version: 2 },
+    ]);
+    await expect(resetDocumentPack(db, "a1")).rejects.toThrow(/revised by an Update Tenancy change/);
+    expect(deleted).toEqual([]);
+  });
+});

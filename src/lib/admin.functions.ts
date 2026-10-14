@@ -3,6 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { NEED_STAFF, logBookingEvent, rm, staffFor, when, words } from "@/lib/booking-events";
 
 import { BOOKING_FEE, discountPerMonth, lineQty, liveInvoices } from "@/lib/invoices";
+import { ipDifferenceNote } from "@/lib/invoice-category";
 import { residentCodeFor } from "@/lib/resident-billing.functions";
 import { cleanPhone } from "@/lib/reference-data";
 import { addDays, CHECKIN_WINDOW_DAYS, needsCheckInBooking, todayISO } from "@/lib/checkin";
@@ -2056,10 +2057,10 @@ function roomChangeIpOptions(
   dates: { end: string },
   today: string,
 ) {
-  const what = input.bedId ? "room change" : "dates changed";
+  const what = input.bedId ? "Room change" : "Date change";
   return {
     billOn: today,
-    note: `Initial payment difference - ${what} ${input.fromLabel ?? ""} to ${input.toLabel ?? ""}`,
+    note: ipDifferenceNote(what, `${input.fromLabel ?? ""} to ${input.toLabel ?? ""}`),
     tenancyEnd: dates.end || plan.end,
     rent: input.newRent,
     roomName: placeName ?? "",

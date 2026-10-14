@@ -59,6 +59,8 @@ export type TenancyEvent = {
   mergeValues: Record<string, string>;
   /** the agreement a revised schedule belongs to, fixed on confirm */
   agreementId?: string;
+  /** the second agreement a renewal made - it stays while the event does (14 Oct 2026) */
+  madeAgreementId?: string;
   at: string;
   settledAt?: string;
   effectiveAt?: string;
@@ -311,6 +313,29 @@ async function applyRent(sb: any, residentId: string, ev: TenancyEvent) {
 /** each document once: a new agreement, or a revised Schedule A / C; and the access card form */
 async function makeDocuments(sb: any, residentId: string, ev0: TenancyEvent) {
   const { renewAgreementWith, reviseScheduleWith } = await import("@/lib/tenancy-docs.functions");
+  const ev = { ...ev0, mergeValues: await eventMergeValues(sb, residentId, ev0) };
+  if (ev.plan.newAgreement) {
+    const made = await renewAgreementWith(sb, { residentId, tenancyId: ev.tenancyId, mergeValues: ev.mergeValues, periodStart: ev.date, periodEnd: ev.periodEnd });
+    ev0.madeAgreementId = made.agreementId;
+  } else if (ev.plan.scheduleA || ev.plan.scheduleC) {
+    // fixed on confirm - a renewal earlier in the request leaves its own agreement as the latest
+    const { data: latest } = ev.agreementId
+      ? { data: null }
+      : await sb.from("tenancy_agreements").select("id").eq("resident_id", residentId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const agreementId = ev.agreementId || latest?.id;
+    if (agreementId) {
+      if (ev.plan.scheduleA) await reviseScheduleWith(sb, { agreementId, docType: "sched_a", mergeValues: ev.mergeValues, periodEnd: ev.periodEnd });
+      if (ev.plan.scheduleC) await reviseScheduleWith(sb, { agreementId, docType: "sched_c", mergeValues: ev.mergeValues });
+    }
+  }
+  if (ev.plan.accessCard) {
+    const { makeCardForm } = await import("@/lib/access-card.functions");
+    await makeCardForm(sb, residentId, "Unit Change");
+  }
+}
+
+/** an event's document values - made on settling, and made again (regenerateEventAgreement) */
+async function eventMergeValues(sb: any, residentId: string, ev0: TenancyEvent) {
   /*
    * The documents' values, built like the first pack's: every placeholder through
    * its mapping, with this event's bed, dates and rent (10 Oct 2026). What the
@@ -337,24 +362,45 @@ async function makeDocuments(sb: any, residentId: string, ev0: TenancyEvent) {
   // a revised schedule takes effect on the event's date, not the date the first one did
   const { fmtTemplateDate } = await import("@/lib/template-fields");
   for (const k of Object.keys(mapped)) if (/^(schedule_a_effective_date|effective_date)$/i.test(k)) mapped[k] = fmtTemplateDate(ev0.date);
-  const ev = { ...ev0, mergeValues: { ...ev0.mergeValues, ...mapped } };
-  if (ev.plan.newAgreement) {
-    await renewAgreementWith(sb, { residentId, tenancyId: ev.tenancyId, mergeValues: ev.mergeValues, periodStart: ev.date, periodEnd: ev.periodEnd });
-  } else if (ev.plan.scheduleA || ev.plan.scheduleC) {
-    // fixed on confirm - a renewal earlier in the request leaves its own agreement as the latest
-    const { data: latest } = ev.agreementId
-      ? { data: null }
-      : await sb.from("tenancy_agreements").select("id").eq("resident_id", residentId).order("created_at", { ascending: false }).limit(1).maybeSingle();
-    const agreementId = ev.agreementId || latest?.id;
-    if (agreementId) {
-      if (ev.plan.scheduleA) await reviseScheduleWith(sb, { agreementId, docType: "sched_a", mergeValues: ev.mergeValues, periodEnd: ev.periodEnd });
-      if (ev.plan.scheduleC) await reviseScheduleWith(sb, { agreementId, docType: "sched_c", mergeValues: ev.mergeValues });
-    }
+  return { ...ev0.mergeValues, ...mapped };
+}
+
+/**
+ * The second agreement a renewal made, made again from its event (Dani, 14 Oct
+ * 2026): the same agreement and Agreement No., its unsigned documents replaced
+ * - after a template changed, say. It belongs to the event: never deleted while
+ * the event stands (resetDocumentPack refuses it); cancelling the event is what
+ * takes it away.
+ */
+export async function regenerateEventAgreement(sb: any, agreementId: string) {
+  const { data: ag } = await sb.from("tenancy_agreements").select("id, resident_id, kind, created_at").eq("id", agreementId).maybeSingle();
+  if (!ag) throw new Error("This agreement no longer exists.");
+  if (ag.kind !== "renewal") throw new Error("Only an agreement made by Update Tenancy is made again here.");
+  const residentId = String(ag.resident_id);
+  const list = await readEvents(sb, residentId);
+  // the event that made it - recorded since 14 Oct 2026; before, the last renewal confirmed before it was made
+  const ev =
+    list.find((e) => e.madeAgreementId === agreementId) ??
+    list
+      .filter((e) => e.plan.newAgreement && e.docsMade && !e.madeAgreementId && e.at <= String(ag.created_at))
+      .sort((a, b) => a.at.localeCompare(b.at))
+      .at(-1);
+  if (!ev) throw new Error("The Update Tenancy change that made this agreement was not found.");
+  if (ev.cancelled) throw new Error("The change that made this agreement was cancelled.");
+  const { renewAgreementWith } = await import("@/lib/tenancy-docs.functions");
+  const made = await renewAgreementWith(sb, {
+    residentId,
+    agreementId,
+    tenancyId: ev.tenancyId,
+    mergeValues: await eventMergeValues(sb, residentId, ev),
+    periodStart: ev.date,
+    periodEnd: ev.periodEnd,
+  });
+  if (!ev.madeAgreementId) {
+    ev.madeAgreementId = agreementId;
+    await writeEvents(sb, residentId, list);
   }
-  if (ev.plan.accessCard) {
-    const { makeCardForm } = await import("@/lib/access-card.functions");
-    await makeCardForm(sb, residentId, "Unit Change");
-  }
+  return made;
 }
 
 /* --------------------------------------------------------------- effective */

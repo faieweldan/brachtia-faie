@@ -53,7 +53,9 @@ import { TONE, sumBy, type Tone } from "@/lib/billing-tone";
 import {
   INVOICE_CATEGORIES,
   categoryOf,
+  invoiceKind,
   invoiceRef,
+  invoiceState,
   type InvoiceCategory,
 } from "@/lib/invoice-category";
 import { fmtDate, money } from "@/lib/ops-store";
@@ -193,7 +195,7 @@ function CollectionsPage() {
       (!from || r.date >= from) &&
       (!to || r.date <= to) &&
       (!needle ||
-        `${invoiceRef(r.number, r.type)} ${r.residentName} ${r.residentCode} ${r.quickbooksId}`
+        `${invoiceRef(r.number, r.type)} ${r.purpose} ${r.residentName} ${r.residentCode} ${r.quickbooksId}`
           .toLowerCase()
           .includes(needle));
     return { billed: rows.filter(keep), scheduled: scheduled.filter(keep) };
@@ -521,7 +523,7 @@ function CollectionsPage() {
                 {shown.map((r) => {
                   const state = paymentStateOf(r, today);
                   const opened = openInvoice === r.invoiceId;
-                  const ref = r.scheduled ? "Not billed yet" : invoiceRef(r.number, r.type);
+                  const ref = invoiceState(r);
                   const unpaid = r.paid === 0;
                   // Partially paid's pill is normally sky - but once it's close to or
                   // past its due date, the pill itself should say so (Dani, 1 Oct 2026)
@@ -550,7 +552,7 @@ function CollectionsPage() {
                           <Who row={r} />
                         </td>
                         <td className="px-3 py-3">
-                          <CategoryTag type={r.type} />
+                          <CategoryTag type={r.type} purpose={r.purpose} />
                         </td>
                         <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">
                           {money(r.total)}
@@ -745,14 +747,14 @@ function SortHead({
 }
 
 /** The category's code, then its name - the code is what the invoice number carries. */
-function CategoryTag({ type }: { type: string }) {
-  const { code, label } = INVOICE_CATEGORIES[categoryOf(type)];
+function CategoryTag({ type, purpose }: { type: string; purpose?: string }) {
+  const { code } = INVOICE_CATEGORIES[categoryOf(type)];
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-foreground">
       <span className="rounded bg-brand-tint px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-brand-deep">
         {code}
       </span>
-      {label}
+      {invoiceKind({ type, purpose })}
     </span>
   );
 }

@@ -40,6 +40,8 @@ and what is still duplicated: `docs/HANDOFF-REUSE.md`.
 | Who is in a unit (Vacant / Reserved / Booked / Occupied, with Next) | `bedStays` (`src/lib/placement.ts`), drawn by `UnitBeds` (`src/components/admin/UnitBeds.tsx`) | `tests/one-rule.test.ts` |
 | A list's stages as clickable counts (filters the table) | `StageStrip` (`src/components/admin/StageStrip.tsx`) - pass the same stage list and pill colours the table uses | - |
 | A quiet line of news on a card (stays, or closes with ✕ and is remembered) | `Notice`, `DismissibleNotice`, `NOTICE_CLASS` (`src/components/ui/notice.tsx`) | `tests/one-rule.test.ts` |
+| Name an invoice where a person reads it - kind in words, what a later IP is for, number or "Not billed yet" | `invoiceTitle`, `invoiceKind`, `invoiceState`; the reason is written by `ipDifferenceNote` and read once on the server by `ipPurpose` (`src/lib/invoice-category.ts`) | `tests/invoice-title.test.ts` |
+| A second agreement an Update Tenancy change made - made again in place, same number; never reset away while the change stands | `regenerateEventAgreement` (`tenancy-events.server.ts`), `renewAgreementWith({ agreementId })`, `clearPackDocuments` (`tenancy-docs.functions.ts`) | `tests/update-tenancy-safety.test.ts` |
 | A credit note's PDF look (checkout statement, room-change credit note) | `creditNoteFrame`, `creditNotePdf` (`src/lib/credit-note-pdf.ts`) | - |
 | Describe a placement (single / twin, bed) - as sold, not as built | `soldOccupancy`, `soldBedLabel` (`src/lib/placement.ts`); documents read `bedSurroundings` (`placement.server.ts`) | `tests/placement.test.ts` |
 | Money in a tenancy document (no amount is 0.00) | `money` (`src/lib/template-fields.ts`) | `tests/template-money.test.ts` |

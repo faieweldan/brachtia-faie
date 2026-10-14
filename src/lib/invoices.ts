@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { IP_DIFFERENCE_NOTE } from "@/lib/invoice-category";
+
 /**
  * The invoices that still stand.
  *
@@ -38,7 +40,7 @@ export async function billDueInvoices(supabase: any) {
     .select("id, total")
     .eq("status", "issued")
     .eq("invoice_type", "initial")
-    .like("notes", "Initial payment difference%");
+    .like("notes", `${IP_DIFFERENCE_NOTE}%`);
   const ids = ((issued ?? []) as any[]).map((i) => i.id);
   if (!ids.length) return;
   const { data: pays } = await supabase.from("payments").select("invoice_id, amount").in("invoice_id", ids);

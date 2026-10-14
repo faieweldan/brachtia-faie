@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { migratedOriginal } from "@/lib/migration/import-plan";
 
+import { ipPurpose } from "@/lib/invoice-category";
 import { billDueInvoices, discountLabel, lineQty, liveInvoices } from "@/lib/invoices";
 import type { InvoiceDoc } from "@/lib/invoice-pdf";
 import { DOC_BUCKET, DOC_MIME_TYPES, MAX_DOC_BYTES, safeExt } from "@/lib/resident-documents";
@@ -46,6 +47,8 @@ export type BillingInvoice = {
   periodEnd: string;
   /** the tenancy a rent invoice was issued for; empty for older invoices */
   tenancyId: string;
+  /** what a later Initial Payment is for - "Room change" (ipPurpose); "" for any other */
+  purpose: string;
   total: number;
   paid: number;
   outstanding: number;
@@ -223,6 +226,7 @@ export const getResidentBilling = createServerFn({ method: "GET" })
         payments.get(raw.id) ?? [],
         receipts.get(raw.id) ?? [],
         residentCode,
+        accountCredit.plan[raw.id] ?? 0,
       );
 
       if (invoice.scheduled) {
@@ -275,6 +279,8 @@ export type LedgerInvoice = {
   residentRef: string;
   /** the name it was raised in, for a booking that is not a resident yet */
   invoiceName: string;
+  /** what a later Initial Payment is for - "Room change" (ipPurpose); "" for any other */
+  purpose: string;
   enquiryId: string;
   /** rent made ahead, not billed yet - Collections lists it apart and counts it in no total */
   scheduled: boolean;
@@ -353,6 +359,7 @@ export const listBillingLedger = createServerFn({ method: "GET" }).handler(
         type,
         residentRef: String(raw.resident_id ?? ""),
         invoiceName: String(raw.full_name ?? ""),
+        purpose: ipPurpose(raw.notes),
         enquiryId: String(raw.enquiry_id ?? ""),
         scheduled,
         billOn: String(raw.bill_on ?? ""),
@@ -617,6 +624,8 @@ function toBillingInvoice(
   receiptRows: any[],
   /** the ID the resident goes by, printed on the invoice - blank before they are a resident */
   residentCode = "",
+  /** account credit the plan will use on it when it is billed (creditOutlook) - a scheduled invoice only */
+  creditPlanned = 0,
 ): BillingInvoice {
   const myItems = itemRows.map((i: any) => ({
     label: String(i.label ?? ""),
@@ -677,6 +686,7 @@ function toBillingInvoice(
     periodStart: String(raw.period_start ?? ""),
     periodEnd: String(raw.period_end ?? ""),
     tenancyId: String(raw.tenancy_id ?? ""),
+    purpose: ipPurpose(raw.notes),
     total,
     paid,
     outstanding: Math.max(0, total - paid),
@@ -738,6 +748,9 @@ function toBillingInvoice(
       items: myItems,
       paid,
       ...(type !== "initial" ? { heading: HEADINGS[type] } : {}),
+      ...(ipPurpose(raw.notes) ? { purpose: ipPurpose(raw.notes) } : {}),
+      // not billed yet: the credit it will take, so its preview says what the row says (14 Oct 2026)
+      ...(scheduled && creditPlanned > 0 ? { credit_planned: Math.min(creditPlanned, total) } : {}),
       ...(raw.period_start
         ? {
             period: [raw.period_start, raw.period_end].filter(Boolean).map(dayLabel).join(" – "),
@@ -782,12 +795,19 @@ export const getInvoiceBilling = createServerFn({ method: "GET" })
       supabase.from("payments").select("*").eq("invoice_id", raw.id).order("paid_on"),
       supabase.from("receipts").select("*").eq("invoice_id", raw.id).order("issued_at"),
     ]);
+    // not billed yet: the credit the resident's plan will use on it, as on their Payments tab
+    let creditPlanned = 0;
+    if (raw.status === "scheduled" && raw.resident_id) {
+      const { creditOutlook } = await import("@/lib/account-credit.server");
+      creditPlanned = (await creditOutlook(supabase, String(raw.resident_id))).plan.find((p) => p.id === raw.id)?.credit ?? 0;
+    }
     return toBillingInvoice(
       raw,
       itemsRes.data ?? [],
       paymentsRes.data ?? [],
       receiptsRes.data ?? [],
       await residentCodeFor(supabase, String(raw.resident_id ?? "")),
+      creditPlanned,
     );
   });
 

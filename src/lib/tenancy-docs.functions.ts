@@ -362,6 +362,12 @@ export async function reviseScheduleWith(db: any, data: ReviseInput) {
 /** a renewal is a brand-new Agreement No. with a fresh set of four documents */
 type RenewInput = {
   residentId: string;
+  /**
+   * The agreement an Update Tenancy event already made, made again in place -
+   * its row and Agreement No. kept, its unsigned documents replaced
+   * (regenerateEventAgreement, 14 Oct 2026). Absent: a new agreement.
+   */
+  agreementId?: string | undefined;
   tenancyId?: string | undefined;
   mergeValues: Record<string, string>;
   periodStart?: string | undefined;
@@ -376,23 +382,32 @@ export const renewAgreement = createServerFn({ method: "POST" })
 export async function renewAgreementWith(db: any, data: RenewInput) {
   {
     await requireFiles(db, data.residentId, [...(await docTypesInUse(db))]);
-    // TA + Resident ID + their own sequence (agreement-no.ts, 12 Oct 2026)
-    const { nextAgreementNo } = await import("@/lib/agreement-no");
-    const agreementNo = await nextAgreementNo(db, data.residentId);
-    // the new number goes on its own documents - the values were built before it existed (10 Oct 2026)
+    let agreement: any;
+    if (data.agreementId) {
+      // made again: the same agreement and number; what it held goes, unless signed
+      const { data: found } = await db.from("tenancy_agreements").select("*").eq("id", data.agreementId).maybeSingle();
+      if (!found || found.resident_id !== data.residentId) throw new Error("This agreement no longer exists.");
+      await clearPackDocuments(db, found);
+      agreement = found;
+    } else {
+      // TA + Resident ID + their own sequence (agreement-no.ts, 12 Oct 2026)
+      const { nextAgreementNo } = await import("@/lib/agreement-no");
+      const { data: made, error: aErr } = await db
+        .from("tenancy_agreements")
+        .insert({
+          resident_id: data.residentId,
+          tenancy_id: tenancyRef(data.tenancyId),
+          agreement_no: await nextAgreementNo(db, data.residentId),
+          kind: "renewal",
+        })
+        .select()
+        .single();
+      if (aErr) throw new Error(aErr.message);
+      agreement = made;
+    }
+    const agreementNo = String(agreement.agreement_no);
+    // the number goes on its own documents - the values were built before it existed (10 Oct 2026)
     for (const k of Object.keys(data.mergeValues)) if (/^agreement_(id|no)$/i.test(k)) data.mergeValues[k] = agreementNo;
-
-    const { data: agreement, error: aErr } = await db
-      .from("tenancy_agreements")
-      .insert({
-        resident_id: data.residentId,
-        tenancy_id: tenancyRef(data.tenancyId),
-        agreement_no: agreementNo,
-        kind: "renewal",
-      })
-      .select()
-      .single();
-    if (aErr) throw new Error(aErr.message);
 
     const docTypes = await docTypesInUse(db);
     const today = new Date().toISOString().slice(0, 10);
@@ -688,16 +703,58 @@ export const getDocumentView = createServerFn({ method: "GET" })
 /** What a document can be while its pack may still be reset: not signed. */
 export const RESETTABLE = new Set(["generated", "pending_signature", "submitted"]);
 
+/** A second agreement made again from the Update Tenancy change that made it - same number (regenerateEventAgreement) */
+export const regenerateAgreement = createServerFn({ method: "POST" })
+  .inputValidator((data: { agreementId: string }) => data)
+  .handler(async ({ data }) => {
+    const { regenerateEventAgreement } = await import("@/lib/tenancy-events.server");
+    return regenerateEventAgreement(await admin(), data.agreementId);
+  });
+
 export const undoDocumentPack = createServerFn({ method: "POST" })
   .inputValidator((data: { agreementId: string }) => data)
   .handler(async ({ data }) => resetDocumentPack(await admin(), data.agreementId));
+
+/**
+ * A pack's documents taken away, the agreement kept - the reset and a second
+ * agreement made again (renewAgreementWith) both do it. Refused once anything
+ * is signed: that is a record. An inventory check sent in goes with its Schedule C.
+ */
+async function clearPackDocuments(db: any, agreement: { id: string; resident_id: string }) {
+  const { data: docs } = await db.from("agreement_documents").select("id, doc_type, status").eq("agreement_id", agreement.id);
+  if ((docs ?? []).some((d: any) => !RESETTABLE.has(d.status))) {
+    throw new Error("A document in this pack is already signed, so it is a record and can no longer be made again.");
+  }
+  for (const d of (docs ?? []) as any[]) {
+    if (d.doc_type !== "sched_c") continue;
+    const files = ["in", "out"].flatMap((m) => ["json", "pdf"].map((x) => `inventory/${agreement.resident_id}/${d.id}-${m}.${x}`).concat(`inventory/${agreement.resident_id}/${d.id}-${m}-signature.png`));
+    await db.storage.from("resident-documents").remove(files);
+    const { removePhotos } = await import("@/lib/inventory.server");
+    await removePhotos(db, agreement.resident_id, d.id);
+  }
+  const { error } = await db.from("agreement_documents").delete().eq("agreement_id", agreement.id);
+  if (error) throw new Error(error.message);
+}
 
 /** The reset itself - also run by a room change before the tenancy starts. Throws when anything is signed. */
 export async function resetDocumentPack(db: any, agreementId: string) {
     const data = { agreementId };
     const { data: agreement } = await db.from("tenancy_agreements").select("id, resident_id, kind").eq("id", data.agreementId).maybeSingle();
     if (!agreement) throw new Error("This pack no longer exists.");
-    const { data: docs } = await db.from("agreement_documents").select("id, doc_type, status").eq("agreement_id", agreement.id);
+    /*
+     * What an Update Tenancy change made belongs to that change (Dani, 14 Oct
+     * 2026): a second agreement, or a revised schedule on the first, stays as
+     * long as the change does. Removing it here left the change going ahead
+     * with no agreement, and nothing could make it again. It goes only when
+     * the change is cancelled; until signed it can be made again in place.
+     */
+    if (agreement.kind !== "initial") {
+      throw new Error("This agreement was made by an Update Tenancy change. Generate it again, or cancel the change to remove it.");
+    }
+    const { data: docs } = await db.from("agreement_documents").select("id, doc_type, status, version").eq("agreement_id", agreement.id);
+    if ((docs ?? []).some((d: any) => Number(d.version ?? 1) > 1 && d.status !== "cancelled")) {
+      throw new Error("A schedule in this pack was revised by an Update Tenancy change. Cancel that change before resetting the pack.");
+    }
     if ((docs ?? []).some((d: any) => !RESETTABLE.has(d.status))) {
       throw new Error("A document in this pack is already signed, so it is a record and can no longer be reset.");
     }
@@ -712,16 +769,7 @@ export async function resetDocumentPack(db: any, agreementId: string) {
       }
       cardIds = (cards ?? []).map((c: any) => c.id);
     }
-    // an inventory check sent in goes with its Schedule C
-    for (const d of (docs ?? []) as any[]) {
-      if (d.doc_type !== "sched_c") continue;
-      const files = ["in", "out"].flatMap((m) => ["json", "pdf"].map((x) => `inventory/${agreement.resident_id}/${d.id}-${m}.${x}`).concat(`inventory/${agreement.resident_id}/${d.id}-${m}-signature.png`));
-      await db.storage.from("resident-documents").remove(files);
-      const { removePhotos } = await import("@/lib/inventory.server");
-      await removePhotos(db, agreement.resident_id, d.id);
-    }
-    const { error: dErr } = await db.from("agreement_documents").delete().eq("agreement_id", agreement.id);
-    if (dErr) throw new Error(dErr.message);
+    await clearPackDocuments(db, agreement);
     if (cardIds.length) {
       const { error: cErr } = await db.from("access_card_forms").delete().in("id", cardIds);
       if (cErr) throw new Error(cErr.message);

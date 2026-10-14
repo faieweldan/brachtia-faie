@@ -1,4 +1,5 @@
 import { billDueInvoices, liveInvoices } from "@/lib/invoices";
+import { IP_DIFFERENCE_NOTE } from "@/lib/invoice-category";
 import {
   billOnFor,
   daysBetween,
@@ -55,7 +56,8 @@ export async function initialInvoiceFor(supabase: any, tenancy: Tenancy) {
   // (an invoice with no notes at all is kept - "not like" alone would drop it)
   const query = liveInvoices(supabase)
     .eq("invoice_type", "initial")
-    .or('notes.is.null,notes.not.like."Initial payment difference*"');
+    // the note every later IP is written with (ipDifferenceNote)
+    .or(`notes.is.null,notes.not.like."${IP_DIFFERENCE_NOTE}*"`);
   const { data: invoice } = await (
     tenancy.enquiry_id
       ? query.eq("enquiry_id", tenancy.enquiry_id)

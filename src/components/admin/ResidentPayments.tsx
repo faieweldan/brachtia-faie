@@ -27,7 +27,7 @@ import {
   type ResidentDetails,
 } from "@/components/admin/ResidentInvoiceDialog";
 import { TONE, sumBy, type Tone } from "@/lib/billing-tone";
-import { invoiceRef } from "@/lib/invoice-category";
+import { invoiceRef, invoiceTitle } from "@/lib/invoice-category";
 import { getResidentRent } from "@/lib/rental-schedule.functions";
 import { RentalScheduleDialog } from "@/components/admin/RentalScheduleDialog";
 import { fmtDate, money } from "@/lib/ops-store";
@@ -722,7 +722,7 @@ export function InvoiceDetail({ invoice, onPay }: { invoice: BillingInvoice; onP
     <div className="scroll-mt-24 space-y-3 p-5" data-invoice={invoice.number}>
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-sm font-medium text-brand-deep">
-          {invoice.number.startsWith("SCH-") || invoice.scheduled ? (invoice.type === "initial" ? "IP · not billed" : "Not billed yet") : invoiceRef(invoice.number, invoice.type)}
+          {invoiceTitle(invoice)}
         </p>
         {invoice.migrated ? (
           // from before the system: the eye opens the original (QuickBooks) copy

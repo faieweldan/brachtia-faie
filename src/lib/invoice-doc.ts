@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { ipPurpose } from "@/lib/invoice-category";
 import { discountLabel } from "@/lib/invoices";
 import type { InvoiceDoc } from "@/lib/invoice-pdf";
 import { cleanPhone } from "@/lib/reference-data";
@@ -45,6 +46,8 @@ export function invoiceDocFromRow(row: any, items: any[]): InvoiceDoc {
     total: Number(row?.total ?? 0),
     deposits_total: Number(row?.deposits_total ?? 0),
     notes: row?.notes ?? "",
+    // what a later initial payment is for - "Initial payment – Room change"
+    ...(ipPurpose(row?.notes) ? { purpose: ipPurpose(row?.notes) } : {}),
     items: (items ?? []).map((i: any) => ({
       label: i.label,
       kind: i.kind,

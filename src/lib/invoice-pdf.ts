@@ -60,6 +60,10 @@ export type InvoiceDoc = {
   paid?: number;
   /** what the invoice is for - "Rental", "Charges". The initial payment by default */
   heading?: string;
+  /** not billed yet: the account credit that will be used on it when it is (creditOutlook) */
+  credit_planned?: number;
+  /** what a later initial payment is for - "Room change" - printed after the heading (ipPurpose, 14 Oct 2026) */
+  purpose?: string;
   /** the period a rental invoice covers, already written out */
   period?: string;
   /** print the standard terms, and what falls due next - Lav, 21 Sept 2026 */
@@ -401,7 +405,7 @@ async function buildInvoice(inv: InvoiceDoc) {
   doc.setTextColor(...GREEN);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10.5);
-  doc.text(inv.heading ?? "Initial payment", M, y);
+  doc.text([inv.heading ?? "Initial payment", inv.purpose].filter(Boolean).join(" – "), M, y);
   y += 6;
 
   /*
@@ -495,6 +499,20 @@ async function buildInvoice(inv: InvoiceDoc) {
     doc.setTextColor(...MUTED);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
+  } else if (inv.credit_planned && inv.credit_planned > 0) {
+    // not billed yet: what the Payments row says - the credit it takes, and what is left to pay (14 Oct 2026)
+    if (showsDeposits) y += 16;
+    doc.setTextColor(...GREEN);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.text(`Less account credit: -${formatRM(inv.credit_planned)}`, M, y);
+    y += 13;
+    doc.text(`To pay: ${formatRM(Math.max(inv.total - inv.credit_planned, 0))}`, M, y);
+    y += 12;
+    doc.setTextColor(...MUTED);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text("Your account credit is used on this invoice when it is billed.", M, y);
   }
   if (inv.notes) {
     y += 11;
