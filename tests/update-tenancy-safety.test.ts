@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { STAFF } from "../src/data/form-options";
 import {
   applyTenancyChangeWith,
   type TenancyChangeRequest,
@@ -133,6 +134,8 @@ function extension(
     },
     moveOn: "",
     moveTo: null,
+    // who approved it - required (Dani, 14 Oct 2026)
+    approvedBy: STAFF[0]!,
     events: [
       {
         date: "2027-07-01",
@@ -319,6 +322,11 @@ describe("1-4. the document preflight", () => {
 });
 
 describe("4. a refused request writes nothing - no invoice, credit, event, room or tenancy", () => {
+  test("a request with no approver, or one not on the staff list, is refused before anything is written", async () => {
+    await expect(applyTenancyChangeWith({} as any, { ...extension(), approvedBy: "" })).rejects.toThrow("Choose who approved the change.");
+    await expect(applyTenancyChangeWith({} as any, { ...extension(), approvedBy: "Somebody" })).rejects.toThrow("Choose who approved the change.");
+  });
+
   const nothingWritten = (db: ReturnType<typeof fakeDb>) => {
     expect(db.writes).toEqual([]);
     expect(db.rpcs.filter((r) => r !== "resident_placements")).toEqual([]);

@@ -38,6 +38,8 @@ export type TenancyEvent = {
   eventId: string;
   /** the request it belongs to - events of one request settle in order */
   requestId: string;
+  /** who approved starting it (14 Oct 2026) - older events have none */
+  approvedBy?: string;
   name: string;
   /** yyyy-mm-dd - the effective date */
   date: string;

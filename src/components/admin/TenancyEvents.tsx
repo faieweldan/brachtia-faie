@@ -26,6 +26,9 @@ type EventRow = {
   state: "scheduled" | "overdue" | "needs_date" | "settled" | "effective" | "cancelled";
   moves?: boolean;
   cancelled: { at: string; reason: string; approvedBy: string; toCredit: number; withEvent?: string } | null;
+  /** who approved starting it, and when */
+  approvedBy: string;
+  at: string;
   waitingFor: string;
   adjustment: string;
   credit: number;
@@ -134,6 +137,14 @@ export function TenancyEvents({ events, residentId, onChanged }: { events: Event
                     <dt className="inline">Documents </dt>
                     <dd className="inline text-foreground">{e.state === "settled" ? (e.documents.length ? "made" : "none") : "after the IP is fully paid"}</dd>
                   </div>
+                  {e.approvedBy ? (
+                    <div>
+                      <dt className="inline">Approved by </dt>
+                      <dd className="inline text-foreground">
+                        {e.approvedBy} · {stamp(e.at)}
+                      </dd>
+                    </div>
+                  ) : null}
                 </dl>
               )}
               {e.state === "overdue" ? (

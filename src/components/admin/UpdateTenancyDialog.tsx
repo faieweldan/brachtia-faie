@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { StaffPicker } from "@/components/admin/Dropdown";
 import { UnitBeds } from "@/components/admin/UnitBeds";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -135,6 +136,8 @@ export function UpdateTenancyDialog({
   const [requiredTyped, setRequiredTyped] = useState<Record<string, string>>({});
   const [waived, setWaived] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  // who decided it - asked on Confirm, as a cancellation asks (Dani, 14 Oct 2026)
+  const [approvedBy, setApprovedBy] = useState("");
   const resetMoney = () => {
     setRentTyped({});
     setRequiredTyped({});
@@ -327,6 +330,7 @@ export function UpdateTenancyDialog({
             newEnd: end,
           },
           moveOn: moved ? effectiveMove : "",
+          approvedBy,
           moveTo: moved && target ? { bedId: target.bed.id, roomId: target.room.id, unitId: target.unit.id, occupancy: target.room.occupancy } : null,
           events: events.map((e) => ({
             date: e.date,
@@ -574,6 +578,11 @@ export function UpdateTenancyDialog({
                 </ul>
               </div>
               <p className="text-xs text-muted-foreground">Old-room inspection charges are added later on Payments → Add charge.</p>
+              {/* who decided it - kept on each event, shown in the tenancy change history */}
+              <label className="block space-y-1.5">
+                <span className="text-xs font-medium text-foreground">Approved by</span>
+                <StaffPicker value={approvedBy} onChange={setApprovedBy} className="w-full sm:w-64" />
+              </label>
             </div>
           ) : null}
         </div>
@@ -604,7 +613,7 @@ export function UpdateTenancyDialog({
               Next <ArrowRight className="ml-1 size-4" />
             </Button>
           ) : (
-            <Button disabled={busy || !!openEvents.length || !events.length} onClick={() => void confirm()}>
+            <Button disabled={busy || !!openEvents.length || !events.length || !approvedBy} onClick={() => void confirm()}>
               {busy ? "Saving…" : action}
             </Button>
           )}

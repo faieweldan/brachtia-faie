@@ -166,6 +166,8 @@ const changeRequest = z.object({
     )
     .min(1)
     .max(2),
+  /** who approved the change - required, as for a cancellation (Dani, 14 Oct 2026) */
+  approvedBy: z.string().min(1).max(80),
 });
 export type TenancyChangeRequest = z.infer<typeof changeRequest>;
 
@@ -190,6 +192,9 @@ export async function applyTenancyChangeWith(sb: any, data: TenancyChangeRequest
   const T = await import("@/lib/tenancy-change");
   const E = await import("@/lib/tenancy-events.server");
   const flags = T.changeFlags(data.change);
+  // who decided it - a staff member, the same list a cancellation is approved from
+  const { STAFF } = await import("@/data/form-options");
+  if (!STAFF.includes(data.approvedBy)) throw new Error("Choose who approved the change.");
   if (data.change.newEnd < data.change.oldEnd)
     throw new Error("A shorter tenancy is a checkout - Early termination.");
   if (!T.anyChange(flags)) throw new Error("Nothing has changed.");
@@ -366,6 +371,7 @@ export async function applyTenancyChangeWith(sb: any, data: TenancyChangeRequest
       events.push({
         eventId,
         requestId,
+        approvedBy: data.approvedBy,
         name,
         date: p.date,
         flags: p.flags,
@@ -492,6 +498,8 @@ export const getTenancyEvents = createServerFn({ method: "GET" })
                     : ("scheduled" as const),
           moves: !!e.moveTo,
           cancelled: e.cancelled ?? null,
+          approvedBy: e.approvedBy ?? "",
+          at: e.at,
           waitingFor: e.waitingFor ?? "",
           adjustment: e.adjustment ?? "",
           credit: e.credit ?? 0,
