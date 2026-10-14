@@ -125,8 +125,34 @@ export const getEnquiry = createServerFn({ method: "GET" })
       .eq("id", data.id)
       .maybeSingle();
     if (error) throw new Error(error.message);
-    return row ?? null;
+    if (!row) return null;
+    // how they heard about us: the resident's answer once there is one (heardAboutOf)
+    const heard = await heardAboutOf(supabase, row);
+    return { ...row, heard_about: heard };
   });
+
+/*
+ * "How did you hear about us?" is one fact (Dani, 14 Oct 2026). The booking
+ * form asks it (enquiries.heard_about); the resident record and the profile
+ * form keep it (residents.referral_source). They were joined by one copy when
+ * the resident was made - a resident made before that copy existed stayed
+ * blank, and an edit on either side never reached the other. Now the
+ * resident's answer IS the answer once a resident exists: the booking page
+ * reads it and writes it; before then the booking's answer is the only one,
+ * and it is carried over when the resident is made.
+ */
+async function residentOfBooking(supabase: any, enquiry: { id: string; resident_id?: string | null }) {
+  const byLink = String(enquiry.resident_id ?? "");
+  const { data } = byLink
+    ? await supabase.from("residents").select("id, referral_source").eq("id", byLink).maybeSingle()
+    : await supabase.from("residents").select("id, referral_source").eq("enquiry_id", enquiry.id).limit(1).maybeSingle();
+  return (data as { id: string; referral_source: string | null } | null) ?? null;
+}
+
+async function heardAboutOf(supabase: any, enquiry: any): Promise<string> {
+  const resident = await residentOfBooking(supabase, enquiry);
+  return String(resident?.referral_source || enquiry.heard_about || "");
+}
 
 export const updateEnquiry = createServerFn({ method: "POST" })
   .inputValidator(
@@ -217,7 +243,19 @@ export const updateEnquiry = createServerFn({ method: "POST" })
     if (data.addons !== undefined) patch["addons"] = data.addons;
     if (data.quoteSnapshot !== undefined) patch["quote_snapshot"] = data.quoteSnapshot;
     if (data.message !== undefined) patch["message"] = data.message;
-    if (data.heardAbout !== undefined) patch["heard_about"] = data.heardAbout;
+    if (data.heardAbout !== undefined) {
+      // a resident's answer is theirs: written there, not to a second copy here (heardAboutOf)
+      const { data: enq } = await supabase.from("enquiries").select("id, resident_id").eq("id", data.id).maybeSingle();
+      const resident = enq ? await residentOfBooking(supabase, enq as any) : null;
+      if (resident) {
+        const { normReferral } = await import("@/lib/reference-data");
+        const { error: rErr } = await supabase
+          .from("residents")
+          .update({ referral_source: normReferral(data.heardAbout).value } as any)
+          .eq("id", resident.id);
+        if (rErr) throw new Error(rErr.message);
+      } else patch["heard_about"] = data.heardAbout;
+    }
     if (data.heardAboutOther !== undefined) patch["heard_about_other"] = data.heardAboutOther;
 
     const stayChanged = [
