@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { PdfPreviewButton } from "@/components/admin/PdfPreview";
@@ -14,13 +13,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { ChargeInput } from "@/components/admin/ChargePicker";
+import { LineItemsEditor } from "@/components/admin/LineItemsEditor";
 import { Textarea } from "@/components/ui/textarea";
 import { refreshMoney } from "@/lib/billing-client";
 import type { InvoiceDoc } from "@/lib/invoice-pdf";
 import { lineQty } from "@/lib/invoices";
-import { fmtDate, money } from "@/lib/ops-store";
+import { fmtDate } from "@/lib/ops-store";
 import { SCHEDULES } from "@/lib/reference-data";
 import {
   createResidentInvoice,
@@ -226,9 +224,6 @@ export function ResidentInvoiceDialog({
     setLines([rent.line]);
   }
 
-  const edit = (i: number, patch: Partial<Line>) =>
-    setLines((rows) => rows.map((row, j) => (j === i ? { ...row, ...patch } : row)));
-
   const values = {
     full_name: details.fullName,
     email: details.email,
@@ -405,111 +400,22 @@ export function ResidentInvoiceDialog({
           ) : null}
         </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">Items</p>
-            {/*
-              What a scheduled invoice charges is the period's rent, worked out
-              from the schedule - so there is nothing to add to it or take off
-              it here. A one-off charge is built line by line and keeps both.
-            */}
-            {editing?.scheduled ? null : (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() =>
-                  setLines((rows) => [
-                    ...rows,
-                    { label: "", kind: "charge", amount: 0, quantity: 1 },
-                  ])
-                }
-              >
-                <Plus className="size-4" /> Add line
-              </Button>
-            )}
-          </div>
-          <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
-            {/* the boxes below are unlabelled on their own - this names them */}
-            <div className="flex items-center gap-2 bg-muted/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              <span className="flex-1">Item</span>
-              {editing?.scheduled ? null : (
-                <>
-                  <span className="w-24 text-right">Price (RM)</span>
-                  <span className="w-16 text-right">Qty</span>
-                </>
-              )}
-              <span className="w-24 text-right">Amount (RM)</span>
-              <span className="size-8 shrink-0" aria-hidden />
-            </div>
-            {lines.map((l, i) =>
-              /*
-               * Read as a line of the invoice rather than a row of boxes: a
-               * scheduled period's rent is the schedule's, and editing it here
-               * put one invoice out of step with every other period. Laid out
-               * on the same columns as the header above, so the figures still
-               * line up under Amount.
-               */
-              editing?.scheduled ? (
-                <div key={i} className="flex items-center gap-2 px-3 py-2 text-sm">
-                  <span className="flex-1">{l.label || "—"}</span>
-                  <span className="w-24 text-right tabular-nums">
-                    {money((Number(l.amount) || 0) * lineQty(l.quantity))}
-                  </span>
-                  <span className="size-8 shrink-0" aria-hidden />
-                </div>
-              ) : (
-                <div key={i} className="flex items-center gap-2 px-3 py-2">
-                  {/* an additional charge: Schedule B's list is the box's own dropdown */}
-                  {kind === "charge" ? (
-                    <ChargeInput
-                      value={l.label}
-                      onChange={(label) => edit(i, { label })}
-                      onPick={(label, amount) => edit(i, { label, ...(amount != null ? { amount } : {}) })}
-                    />
-                  ) : (
-                    <Input
-                      value={l.label}
-                      placeholder="Description"
-                      className="h-8 flex-1"
-                      onChange={(e) => edit(i, { label: e.target.value })}
-                    />
-                  )}
-                  {/* Item | Price | Qty | Amount - the amount is price x quantity */}
-                  <Input
-                    type="number"
-                    value={l.amount}
-                    aria-label="Price"
-                    className="h-8 w-24 text-right tabular-nums"
-                    onChange={(e) => edit(i, { amount: Number(e.target.value) })}
-                  />
-                  <Input
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={l.quantity}
-                    aria-label="Quantity"
-                    className="h-8 w-16 text-right tabular-nums"
-                    onChange={(e) => edit(i, { quantity: Math.max(1, Math.round(Number(e.target.value) || 1)) })}
-                  />
-                  <span className="w-24 text-right text-sm tabular-nums">{money((Number(l.amount) || 0) * lineQty(l.quantity))}</span>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="size-8 shrink-0 text-muted-foreground"
-                    aria-label="Remove line"
-                    onClick={() => setLines((rows) => rows.filter((_, j) => j !== i))}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </div>
-              ),
-            )}
-            <div className="flex items-center justify-between bg-muted px-3 py-2 text-sm font-medium">
-              <span>Total</span>
-              <span className="tabular-nums">{money(total)}</span>
-            </div>
-          </div>
-        </div>
+        {/*
+          The same line editor as the checkout statement and the booking's
+          invoice. A scheduled invoice charges the period's rent, worked out
+          from the schedule - so its lines are shown, not edited: typing over
+          one put that invoice out of step with every other period.
+        */}
+        <LineItemsEditor
+          title="Items"
+          lines={lines}
+          onChange={setLines}
+          newLine={() => ({ label: "", kind: "charge", amount: 0, quantity: 1 })}
+          quantity
+          readOnly={Boolean(editing?.scheduled)}
+          // an additional charge: Schedule B's list is the box's own dropdown
+          describe={() => (kind === "charge" ? "charge" : "text")}
+        />
 
         {/* the description belongs to the schedule too, for the same reason */}
         {editing?.scheduled ? (

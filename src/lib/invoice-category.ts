@@ -32,5 +32,7 @@ export function categoryOf(invoiceType: string): InvoiceCategory {
 export function invoiceRef(number: string, invoiceType: string) {
   if (!number) return "—";
   if (/^INV\/[A-Z]{2}\//.test(number)) return number;
+  // a QuickBooks number brought in by Migration 1 is shown as written: INV:IP_00894
+  if (/^INV:[A-Z]{2}_/.test(number)) return number;
   return `${number}/${INVOICE_CATEGORIES[categoryOf(invoiceType)].code}`;
 }

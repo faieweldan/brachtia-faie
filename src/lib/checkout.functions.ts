@@ -58,8 +58,10 @@ async function moneyNow(residentId: string, type?: CheckoutType) {
    * tenancy start when they never chose one.
    */
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data: who } = await (supabaseAdmin as any).from("residents").select("checkin_on").eq("id", residentId).maybeSingle();
-  const moveIn = String(who?.checkin_on ?? "").slice(0, 10) || String(first?.tenancy_start ?? "").slice(0, 10);
+  // the check-in appointment, as rescheduled (10 Oct 2026)
+  const { checkInFor } = await import("@/lib/checkin.server");
+  const booked = await checkInFor(supabaseAdmin as any, residentId);
+  const moveIn = booked.on.slice(0, 10) || String(first?.tenancy_start ?? "").slice(0, 10);
   const suggested = checkoutTypeFor(moveIn, String(first?.tenancy_end ?? "").slice(0, 10));
   const kind = type ?? suggested;
   // the initial payment, paid in full
@@ -235,7 +237,7 @@ export const saveCheckoutDraft = createServerFn({ method: "POST" })
     const { readStatement, writeStatement } = await import("@/lib/checkout.server");
     const s = await readStatement(sb, data.residentId);
     if (!s) throw new Error("Start the statement first.");
-    if (s.refund || s.settled) throw new Error("This statement is signed and settled - it can no longer change.");
+    if (s.refund || s.settled) throw new Error("This statement is signed and paid - it can no longer change.");
     const folder = `checkout/${data.residentId}/photos/`;
     const type = data.type ?? s.draft.type;
     // a new kind of checkout keeps different things: its lines come again from the money
@@ -285,7 +287,7 @@ export const issueCheckout = createServerFn({ method: "POST" })
     const { buildStatementPdf, putFile, readStatement, sha256, totals, writeStatement } = await import("@/lib/checkout.server");
     const s = await readStatement(sb, data.residentId);
     if (!s) throw new Error("Start the statement first.");
-    if (s.refund || s.settled) throw new Error("This statement is signed and settled - it can no longer change.");
+    if (s.refund || s.settled) throw new Error("This statement is signed and paid - it can no longer change.");
     const { loadSignatory } = await import("@/lib/signatory.server");
     if (!(await loadSignatory(sb))?.token) throw new Error("Save the signatory's signature in Settings → Signatory first.");
     const now = await moneyNow(data.residentId, s.draft.type);
@@ -514,41 +516,44 @@ export const signCheckout = createServerFn({ method: "POST" })
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-/** A payment and its receipt on an invoice - the same records a payment admin records makes. */
+/** what a signed statement counted as paid on one invoice - its deposit lines for it, added up */
+export const statementPaidFor = (
+  deposits: { amount: number; invoiceNumber: string }[],
+  invoiceNumber: string,
+) =>
+  round2(
+    deposits
+      .filter((d) => invoiceNumber && d.invoiceNumber === invoiceNumber)
+      .reduce((n, d) => n + Number(d.amount || 0), 0),
+  );
+
+/**
+ * The deposit applied to an invoice: a payment and its receipt, saved the way
+ * every payment is (recordInvoicePayment, 15 Oct 2026) - never more than the
+ * invoice owes when it is saved, and once per statement and invoice however
+ * often settling is run. Returns what was applied.
+ */
 async function applyPayment(sb: any, inv: any, amount: number, reference: string) {
-  const { data: existing } = await sb.from("payments").select("amount").eq("invoice_id", inv.id);
-  const paidBefore = ((existing ?? []) as any[]).reduce((n, p) => n + Number(p.amount || 0), 0);
-  const balance = round2(Number(inv.total || 0) - paidBefore - amount);
-  const today = klToday();
-  const row: Record<string, unknown> = {
-    invoice_id: inv.id,
-    enquiry_id: inv.enquiry_id,
-    resident_id: inv.resident_id ?? "",
-    amount,
-    paid_on: today,
-    method: "Deposit applied",
-    reference,
-    proof_path: "",
-    description: "Deposit applied at checkout",
-    recorded_by: "Checkout",
-  };
-  let { data: payment, error } = await sb.from("payments").insert(row).select("*").maybeSingle();
-  if (error && /recorded_by/.test(error.message)) {
-    delete row["recorded_by"];
-    ({ data: payment, error } = await sb.from("payments").insert(row).select("*").maybeSingle());
+  const { recordInvoicePayment, PaymentRefused } = await import("@/lib/payments.server");
+  try {
+    const saved = await recordInvoicePayment(sb, {
+      invoiceId: inv.id,
+      amount,
+      paidOn: klToday(),
+      method: "Deposit applied",
+      reference,
+      proofPath: "",
+      description: "Deposit applied at checkout",
+      recordedBy: "Checkout",
+      requestKey: `checkout:${reference}:${inv.id}`,
+      capToOwing: true,
+    });
+    return Number(saved.payment.amount);
+  } catch (err) {
+    // paid in full since the statement was read: nothing to apply
+    if (err instanceof PaymentRefused && err.code === "nothing_owing") return 0;
+    throw err;
   }
-  if (error) throw new Error(error.message);
-  const { error: recErr } = await sb.from("receipts").insert({
-    payment_id: payment.id,
-    invoice_id: inv.id,
-    enquiry_id: inv.enquiry_id,
-    resident_id: inv.resident_id ?? "",
-    amount,
-    balance_after: balance,
-    paid_to_date: round2(paidBefore + amount),
-  });
-  if (recErr) throw new Error(recErr.message);
-  await sb.from("invoices").update({ status: balance <= 0 ? "paid" : "part_paid", updated_at: new Date().toISOString() }).eq("id", inv.id);
 }
 
 /**
@@ -567,9 +572,10 @@ async function settle(sb: any, residentId: string, s: import("@/lib/checkout.ser
     const owing = round2(Number(inv.total || 0) - ((pays ?? []) as any[]).reduce((n, p) => n + Number(p.amount || 0), 0));
     const amount = round2(Math.min(left, owing));
     if (amount <= 0) continue;
-    await applyPayment(sb, inv, amount, s.number);
-    applied.push({ invoiceNumber: String(inv.number), amount });
-    left = round2(left - amount);
+    const done = await applyPayment(sb, inv, amount, s.number);
+    if (done <= 0) continue;
+    applied.push({ invoiceNumber: String(inv.number), amount: done });
+    left = round2(left - done);
   }
   // what admin added, and what the kind of checkout keeps
   const deductions = v.lines.filter((x) => x.source !== "outstanding");
@@ -615,10 +621,23 @@ async function settle(sb: any, residentId: string, s: import("@/lib/checkout.ser
   }
   // a cancellation: the initial invoice is not chased any more - what was paid on it is on this statement
   if (v.type === "cancellation") {
-    const { data: initial } = await sb.from("invoices").select("id, total, status").eq("resident_id", residentId).eq("invoice_type", "initial");
+    const { data: initial } = await sb.from("invoices").select("id, number, total, status").eq("resident_id", residentId).eq("invoice_type", "initial");
     for (const inv of (initial ?? []) as any[]) {
       if (inv.status === "paid" || inv.status === "void") continue;
-      await sb.from("invoices").update({ status: "void", updated_at: new Date().toISOString() }).eq("id", inv.id);
+      /*
+       * Voided only while what is paid on it is what the signed statement counted
+       * (its deposit lines for this invoice) - checked with the invoice locked
+       * (16 Oct 2026). A payment saved since is not on the statement, so the
+       * invoice is left live for admin to look at, never silently dropped.
+       */
+      const paid = statementPaidFor(v.deposits, String(inv.number ?? ""));
+      const { data: r, error } = await sb.rpc("void_invoice_if_unpaid", {
+        p_invoice: inv.id,
+        p_expect_paid: paid,
+      });
+      if (error) throw new Error(error.message);
+      if (!r?.ok && r?.error !== "already_void")
+        console.warn(`checkout cancellation: ${inv.id} not voided - paid on since the statement`);
     }
   }
   const { writeStatement } = await import("@/lib/checkout.server");

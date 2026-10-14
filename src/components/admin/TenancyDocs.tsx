@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Dropdown, StaffPicker } from "@/components/admin/Dropdown";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronRight, FileStack, Plus, Stamp, Undo2, Upload } from "lucide-react";
+import { ExternalLink, Check, ChevronDown, ChevronRight, FileStack, Plus, Stamp, Undo2, Upload } from "lucide-react";
+import { MIGRATED, MIGRATED_MEANING } from "@/lib/migration/import-plan";
 import { SigningMessageCard } from "@/components/admin/SigningMessageCard";
 import { STAFF } from "@/data/form-options";
 import { StaffTag } from "@/components/admin/RecordPaymentDialog";
@@ -40,7 +41,8 @@ import {
 } from "@/components/ui/select";
 import { fullAgreementPdf, uploadExistingAgreement, uploadStampPage } from "@/lib/agreement-files.functions";
 import { EmptyState, Panel, Select, StatusPill } from "@/components/admin/ops-ui";
-import { fmtDate, money, type Resident, type Tenancy } from "@/lib/ops-store";
+import { fmtDate, money, type Resident } from "@/lib/ops-store";
+import type { ServerTenancy } from "@/lib/rental-schedule.functions";
 import {
   ACCESS_CARD_END_STATES,
   ACCESS_CARD_REASONS,
@@ -184,7 +186,17 @@ function DocumentRow({
             ) : null}
             <span className={depth ? "text-sm text-foreground" : "text-sm font-medium text-foreground"}>
               {/* a paper agreement, uploaded whole: it is the full agreement, not only the General Terms */}
-              {doc.mergeValues["source"] === "uploaded" && doc.docType === "agreement" ? "Tenancy Agreement (uploaded, all pages)" : DOC_TYPE_LABELS[doc.docType]}
+              {doc.mergeValues["source"] === "uploaded" && doc.docType === "agreement"
+                ? "Tenancy Agreement (uploaded, all pages)"
+                : doc.mergeValues["source"] === "migrated"
+                  ? "Tenancy Agreement (signed, all pages)"
+                  : DOC_TYPE_LABELS[doc.docType]}
+              {/* signed before the system: the same "Migrated" tag the invoice carries */}
+              {doc.mergeValues["source"] === "migrated" ? (
+                <span title={MIGRATED_MEANING} className="ml-1.5 rounded-full border border-border bg-muted px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground">
+                  {MIGRATED}
+                </span>
+              ) : null}
               {doc.version > 1 ? (
                 <span className="ml-1.5 text-xs text-muted-foreground">v{doc.version}</span>
               ) : null}
@@ -212,9 +224,18 @@ function DocumentRow({
               <InventoryActions docId={doc.id} stage={doc.stage ?? "open"} periodEnd={doc.periodEnd} onChanged={onChanged} />
             ) : (
             <>
-            <Button size="sm" variant="ghost" onClick={() => setViewing({ kind: "agreement", id: doc.id, title: DOC_TYPE_LABELS[doc.docType] })}>
-              View
-            </Button>
+            {doc.mergeValues["source"] === "migrated" ? (
+              // the signed original lives on Google Drive - there is no template to show
+              <Button size="sm" variant="ghost" asChild>
+                <a href={doc.mergeValues["original_url"]} target="_blank" rel="noopener noreferrer">
+                  Open original <ExternalLink className="ml-1 size-3.5" />
+                </a>
+              </Button>
+            ) : (
+              <Button size="sm" variant="ghost" onClick={() => setViewing({ kind: "agreement", id: doc.id, title: DOC_TYPE_LABELS[doc.docType] })}>
+                View
+              </Button>
+            )}
             {/*
               No "Mark ..." buttons (Dani, 2 Oct 2026): Pending Signature comes
               from sending the link, Signed from signing, Stamped from the stamp
@@ -253,9 +274,12 @@ function DocumentRow({
 function AgreementBlock({
   agreement,
   onChanged,
+  stay,
 }: {
   agreement: TenancyAgreement;
   onChanged: () => void;
+  /** the tenancy as it is now - its dates and room - the pack says which it was made for */
+  stay?: { start: string; end: string; unitNo?: string | undefined; room?: string | undefined } | undefined;
 }) {
   const [expanded, setExpanded] = useState(true);
   const docs = latestDocs(agreement);
@@ -312,7 +336,7 @@ function AgreementBlock({
         {agreement.agreementNo}
       </button>
       {/* the stamp is for the agreement as a whole: one upload, beside its number (Dani, 2 Oct 2026) */}
-      {parent && DONE.includes(parent.status) ? <StampUpload doc={parent} onChanged={onChanged} /> : null}
+      {parent && DONE.includes(parent.status) && parent.mergeValues?.["source"] !== "migrated" ? <StampUpload doc={parent} onChanged={onChanged} /> : null}
       {agreement.kind === "renewal" ? (
         <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Renewal</span>
       ) : null}
@@ -363,6 +387,49 @@ function AgreementBlock({
           </div>
         </DialogContent>
       </Dialog>
+      {/*
+        The stay changed after this pack was made - the booking's dates moved
+        and Update invoice carried them to the tenancy (Dani, 9 Oct 2026). The
+        documents still say the old dates, and so does the access card form
+        made with them. Nothing signed is ever rewritten.
+      */}
+      {(() => {
+        const made = parent ?? docs[0];
+        if (!stay?.start || !stay.end || !made?.periodStart || !made.periodEnd) return null;
+        if (agreement.documents.every((d) => d.status === "cancelled")) return null;
+        // the room it names: a booking moved to another room before check-in needs it made again too
+        const v = made.mergeValues;
+        const madeUnit = String(v["Unit_no"] || v["unit_no"] || "").trim();
+        const madeRoom = String(v["Room_no"] || v["room"] || "").replace(/^room\s*/i, "").trim();
+        const roomMoved =
+          (!!stay.unitNo && !!madeUnit && madeUnit !== stay.unitNo) ||
+          (!!stay.room && !!madeRoom && madeRoom.toUpperCase() !== stay.room.toUpperCase());
+        const datesMoved = made.periodStart !== stay.start || made.periodEnd !== stay.end;
+        if (!datesMoved && !roomMoved) return null;
+        const was = [
+          roomMoved ? `${madeUnit} · Room ${madeRoom}` : "",
+          datesMoved ? `${fmtDate(made.periodStart)} – ${fmtDate(made.periodEnd)}` : "",
+        ].filter(Boolean).join(", ");
+        const now = [
+          roomMoved ? `${stay.unitNo} · Room ${stay.room}` : "",
+          datesMoved ? `${fmtDate(stay.start)} – ${fmtDate(stay.end)}` : "",
+        ].filter(Boolean).join(", ");
+        return (
+          <div className="mx-4 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <span>
+              Made for {was}. The stay is now <strong>{now}</strong>.{" "}
+              {untouched
+                ? "Reset the pack and generate it again - the access card form is made again with it."
+                : "Signed documents stay as they are: issue a revised pack, and a new Access Card Form below."}
+            </span>
+            {untouched ? (
+              <Button type="button" size="sm" variant="outline" className="h-7 bg-white px-3 text-xs" onClick={() => setUndoing(true)}>
+                Reset and generate again
+              </Button>
+            ) : null}
+          </div>
+        );
+      })()}
       {expanded ? (
         <div className="overflow-x-auto px-4 pb-3">
           <table className="w-full min-w-[640px] border-collapse">
@@ -677,9 +744,12 @@ export function TenancyDocs({
   checklist,
   onCardCharge,
   onOpenInvoice,
+  place,
 }: {
   resident: Resident;
-  tenancy?: Tenancy | undefined;
+  tenancy?: ServerTenancy | undefined;
+  /** where they are placed now, for spotting a pack made for another room */
+  place?: { unitNo: string; room: string } | undefined;
   checklist?: React.ReactNode;
   /** a lost or damaged card's invoice, opened on Payments */
   onCardCharge?: (line: { label: string; amount: number }) => void;
@@ -732,6 +802,9 @@ export function TenancyDocs({
         description="Legal agreement records and revisions. Earlier versions are always kept."
       >
         <div className="space-y-3">
+          {/* a migrated pack was signed before the system: nothing to send until
+              the system adds a document of its own, e.g. Schedule v1 (Dani, 12 Oct 2026) */}
+          {data.agreements[0]!.documents.some((d: AgreementDoc) => d.mergeValues?.["source"] !== "migrated") ? (
           <SigningMessageCard
             residentId={resident.id}
             phone={resident.mobile}
@@ -739,8 +812,18 @@ export function TenancyDocs({
             // nothing signed in the latest pack yet: the message is still to send
             fresh={!data.agreements[0]!.documents.some((d: AgreementDoc) => ["signed", "pending_stamping", "stamped"].includes(d.status))}
           />
+          ) : null}
           {(data.agreements as TenancyAgreement[]).map((a) => (
-            <AgreementBlock key={a.id} agreement={a} onChanged={refresh} />
+            <AgreementBlock
+              key={a.id}
+              agreement={a}
+              onChanged={refresh}
+              stay={
+                tenancy?.start && tenancy.end
+                  ? { start: tenancy.start, end: tenancy.end, unitNo: place?.unitNo, room: place?.room }
+                  : undefined
+              }
+            />
           ))}
         </div>
       </Panel>
@@ -754,7 +837,7 @@ export function TenancyDocs({
  * 1 Oct 2026): upload the scans and the pack is recorded as already signed.
  * The Tenancy Agreement is needed; the schedules are added when there are any.
  */
-function UploadExisting({ resident, tenancy, onDone }: { resident: Resident; tenancy?: Tenancy | undefined; onDone: () => void }) {
+function UploadExisting({ resident, tenancy, onDone }: { resident: Resident; tenancy?: ServerTenancy | undefined; onDone: () => void }) {
   const [open, setOpen] = useState(false);
   const [files, setFiles] = useState<Partial<Record<AgreementDocType, File>>>({});
   // who is uploading it - required (Dani, 6 Oct 2026)
@@ -848,7 +931,7 @@ function UploadExisting({ resident, tenancy, onDone }: { resident: Resident; ten
 /** merge values from the current records, for revisions and renewals */
 export function currentMergeValues(
   resident: Resident,
-  tenancy: Tenancy | undefined,
+  tenancy: ServerTenancy | undefined,
   placed:
     | { unit: { unitNo: string; residenceName: string }; room: { letter: string }; bed: { label: string; rent?: number | undefined } }
     | undefined,

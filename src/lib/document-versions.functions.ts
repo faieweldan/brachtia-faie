@@ -18,9 +18,10 @@ import { referenceFor, type DocumentVersion } from "@/lib/document-versions";
  * the invoice - a new row per version would leave the money on the old one.
  */
 
+/** the service-role client - only after the admin session is checked (adminDb) */
 async function admin(): Promise<any> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin as any;
+  const { adminDb } = await import("@/lib/admin-session.server");
+  return adminDb();
 }
 
 const rowToVersion = (row: any, refKey: string, bodyKey: string): DocumentVersion => ({
@@ -206,9 +207,9 @@ async function freeze(
   body: unknown,
   extra: Record<string, unknown>,
   issuedAs: string,
-  client?: any,
+  /** always given: the admin's client, or the caller's own - never looked up here, so this stays out of the browser's bundle */
+  supabase: any,
 ): Promise<number> {
-  const supabase = client ?? (await admin());
   const { data: rows, error } = await supabase
     .from(table)
     .select(`version, ${bodyColumn}`)
@@ -261,6 +262,7 @@ export const freezeQuoteVersion = createServerFn({ method: "POST" })
       data.snapshot,
       { total_upfront: data.totalUpfront, monthly_rent: data.monthlyRent },
       data.issuedAs ?? "downloaded",
+      await admin(),
     );
     return { version, reference: referenceFor(data.reference, version) };
   });
@@ -287,6 +289,7 @@ export const freezeInvoiceVersion = createServerFn({ method: "POST" })
       data.document,
       { total: data.total },
       data.issuedAs ?? "downloaded",
+      await admin(),
     );
     return { version, reference: referenceFor(data.number, version) };
   });

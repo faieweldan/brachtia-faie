@@ -95,7 +95,12 @@ function BookingsTable() {
   const beds = useMemo(() => allBeds(ops.units), [ops.units]);
 
   function roomAssigned(row: any) {
-    const hit = beds.find((b) => b.bed.enquiryId === row.id);
+    // its hold or paid stay still to come, or - moved in or first assigned - the bed it is the resident of
+    const hit = beds.find(
+      (b) =>
+        b.bed.upcoming?.some((u) => u.enquiryId === row.id) ||
+        (!!row.resident_id && b.bed.residentId === row.resident_id),
+    );
     if (!hit) return "—";
     return `${hit.unit.unitNo} ${hit.room.letter}`;
   }

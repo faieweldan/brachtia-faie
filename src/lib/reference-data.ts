@@ -9,6 +9,8 @@
  * CHN, FRA), so nothing needs translating on import.
  */
 
+import { UNIVERSITIES } from "@/data/form-options";
+
 export type Country = { code: string; name: string; dial: string };
 
 /** Malaysia first, then the nationalities the master list actually contains,
@@ -241,15 +243,15 @@ export const MARITAL_OPTIONS = [
   { value: "Widowed", label: "Widowed" },
 ];
 
-/** The universities in the master list today, plus a way out. CTU is City
- *  University; the master list writes the short code, so that is what is kept. */
+/**
+ * The universities - ONE list, the application form's (UNIVERSITIES in
+ * form-options.ts; Dani, 12 Oct 2026). This used to be a second list with its
+ * own values (UOC, CTU, UM, MITRA), so a student who picked "UoC" on the form
+ * was saved as "UOC" once they became a resident, and the two kept drifting.
+ * "OTHER" is only the picker's way out to a typed answer.
+ */
 export const UNIVERSITY_OPTIONS = [
-  { value: "MMU", label: "MMU - Multimedia University" },
-  { value: "HWUM", label: "HWUM - Heriot-Watt University Malaysia" },
-  { value: "CTU", label: "CityU - City University Malaysia" },
-  { value: "UOC", label: "UOC - University of Cyberjaya" },
-  { value: "UM", label: "UM - Universiti Malaya" },
-  { value: "MITRA", label: "MITRA" },
+  ...UNIVERSITIES.filter((u) => u.value !== "Other"),
   { value: "OTHER", label: "Other - I will type it" },
 ];
 
@@ -364,7 +366,12 @@ export function cleanPhone(raw: string, fallbackDial = "+60"): string {
   if (!v) return "";
   if (v.startsWith("+")) {
     const { dial, rest } = splitPhone(v);
-    return dial ? joinPhone(dial, rest) : v;
+    if (!dial) return v;
+    // the code typed again after it - "+60 601111110101" - comes off (10 Oct 2026)
+    let n = rest.replace(/\D/g, "");
+    const code = dial.slice(1);
+    if (n.startsWith(code) && n.length > 10) n = n.slice(code.length);
+    return joinPhone(dial, n || rest);
   }
   let digits = v.replace(/\D/g, "");
   if (!digits) return v;
@@ -406,16 +413,14 @@ const UNIVERSITY_ALIASES: Record<string, string> = {
   "heriot-watt": "HWUM",
   "heriot watt university malaysia": "HWUM",
   "heriot-watt university malaysia": "HWUM",
-  ctu: "CTU",
-  cityu: "CTU",
-  "city university": "CTU",
-  "city university malaysia": "CTU",
-  uoc: "UOC",
-  "university of cyberjaya": "UOC",
-  um: "UM",
-  "universiti malaya": "UM",
-  "university of malaya": "UM",
-  mitra: "MITRA",
+  // older answers, written the way the one list writes them
+  cu: "CU",
+  ctu: "CU",
+  cityu: "CU",
+  "city university": "CU",
+  "city university malaysia": "CU",
+  uoc: "UoC",
+  "university of cyberjaya": "UoC",
 };
 
 export function normUniversity(raw: string): Normalised {
@@ -424,7 +429,8 @@ export function normUniversity(raw: string): Normalised {
   const key = v.toLowerCase().replace(/\s+/g, " ");
   const code = UNIVERSITY_ALIASES[key];
   if (code) return hit(code);
-  if (UNIVERSITY_OPTIONS.some((o) => o.value === v.toUpperCase())) return hit(v.toUpperCase());
+  const listed = UNIVERSITY_OPTIONS.find((o) => o.value !== "OTHER" && o.value.toLowerCase() === key);
+  if (listed) return hit(listed.value);
   return keep(v);
 }
 

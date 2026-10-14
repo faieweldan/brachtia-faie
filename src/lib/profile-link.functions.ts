@@ -17,9 +17,16 @@ import type { Resident } from "@/lib/ops-store";
  *     passport number but can never touch rent, a tenancy or another resident
  */
 
-async function admin(): Promise<any> {
+/** for the token-link functions: each checks its own token before reading anything */
+async function db(): Promise<any> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   return supabaseAdmin as any;
+}
+
+/** for the admin functions: the client only after the admin session is checked */
+async function admin(): Promise<any> {
+  const { adminDb } = await import("@/lib/admin-session.server");
+  return adminDb();
 }
 
 /** Exactly the profile fields a student may see and change. Nothing else. */
@@ -142,7 +149,7 @@ export async function residentForToken(supabase: any, token: string) {
 export const getProfileByToken = createServerFn({ method: "GET" })
   .inputValidator((data: { token: string }) => data)
   .handler(async ({ data }) => {
-    const supabase = await admin();
+    const supabase = await db();
     const found = await residentForToken(supabase, data.token);
     if ("error" in found) return { ok: false as const, error: found.error };
 
@@ -221,7 +228,7 @@ export const getProfileByToken = createServerFn({ method: "GET" })
       residenceName = String((enq as any)?.residence_name ?? "");
     }
     const { heldPlace, placeLabel } = await import("@/lib/held-place");
-    const place = row.enquiry_id ? await heldPlace(supabase, row.enquiry_id) : null;
+    const place = await heldPlace(supabase, String(row.enquiry_id ?? ""), String(row.id));
     const placeName = place ? placeLabel(place.unitNo, place.roomLetter) : "";
 
     return {
@@ -234,11 +241,12 @@ export const getProfileByToken = createServerFn({ method: "GET" })
       moveIn,
       residenceName,
       placeName,
-      checkIn: {
-        on: String((row as any).checkin_on ?? ""),
-        slot: String((row as any).checkin_slot ?? ""),
-        remind: Boolean((row as any).checkin_remind),
-      },
+      // what they see is the appointment as it stands - moved by admin or not (10 Oct 2026)
+      checkIn: await (async () => {
+        const { checkInFor } = await import("@/lib/checkin.server");
+        const c = await checkInFor(supabase, String(row.id));
+        return { on: c.on, slot: c.slot, remind: c.status === "remind" };
+      })(),
     };
   });
 
@@ -358,7 +366,7 @@ export const submitProfileByToken = createServerFn({ method: "POST" })
     }) => data,
   )
   .handler(async ({ data }) => {
-    const supabase = await admin();
+    const supabase = await db();
     const found = await residentForToken(supabase, data.token);
     if ("error" in found) return { ok: false as const, error: found.error };
 
@@ -433,7 +441,7 @@ export const submitProfileByToken = createServerFn({ method: "POST" })
 export const uploadDocumentByToken = createServerFn({ method: "POST" })
   .inputValidator((data: FormData) => data)
   .handler(async ({ data }) => {
-    const supabase = await admin();
+    const supabase = await db();
     const token = String(data.get("token") ?? "");
     const key = String(data.get("key") ?? "");
     const file = data.get("file");

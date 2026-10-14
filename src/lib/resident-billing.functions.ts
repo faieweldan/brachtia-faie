@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { migratedOriginal } from "@/lib/migration/import-plan";
 
 import { billDueInvoices, discountLabel, lineQty, liveInvoices } from "@/lib/invoices";
 import type { InvoiceDoc } from "@/lib/invoice-pdf";
@@ -16,14 +17,17 @@ import { DOC_BUCKET, DOC_MIME_TYPES, MAX_DOC_BYTES, safeExt } from "@/lib/reside
  * charges, and checkout.
  */
 
+/** the service-role client - only after the admin session is checked (adminDb) */
 async function admin(): Promise<any> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin as any;
+  const { adminDb } = await import("@/lib/admin-session.server");
+  return adminDb();
 }
 
 export type BillingInvoice = {
   id: string;
   number: string;
+  /** brought in by Migration 1: the original copy (QuickBooks) its eye opens */
+  migrated?: { url: string } | undefined;
   type: "initial" | "rental" | "charge" | "checkout";
   status: string;
   /** rent made ahead: listed, not owed, no number until it is billed */
@@ -117,13 +121,13 @@ const dayLabel = (iso: string) =>
   });
 
 /** A deposit is money held, not earned - it comes back at checkout. */
-const isDeposit = (kind: string, label: string) => /deposit/i.test(kind) || /deposit/i.test(label);
+export const isDeposit = (kind: string, label: string) => /deposit/i.test(kind) || /deposit/i.test(label);
 
 /**
  * When an invoice falls due: its date plus the days its terms give ("NET15"),
  * or the invoice date itself when the terms name no days.
  */
-function dueDateOf(raw: any) {
+export function dueDateOf(raw: any) {
   const date = String(raw.invoice_date ?? "");
   const days = Number(/NET\s*(\d+)/i.exec(String(raw.payment_terms ?? ""))?.[1] ?? 0);
   if (!date || !days) return date;
@@ -645,6 +649,7 @@ function toBillingInvoice(
 
   return {
     id: String(raw.id),
+    migrated: migratedOriginal(raw.notes) ?? undefined,
     // a scheduled invoice's number is only a placeholder until it is billed
     number: scheduled ? "" : String(raw.number ?? ""),
     type,

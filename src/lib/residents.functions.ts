@@ -36,9 +36,10 @@ import type { Resident, ResidentDoc } from "@/lib/ops-store";
  * creating a second copy.
  */
 
+/** the service-role client - only after the admin session is checked (adminDb) */
 async function admin(): Promise<any> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin as any;
+  const { adminDb } = await import("@/lib/admin-session.server");
+  return adminDb();
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -240,7 +241,9 @@ export const deleteFormerResident = createServerFn({ method: "POST" })
       throw new Error("Only a former resident can be deleted. Deactivate them first.");
     }
     // quickbooks_id is still legacy_id on a database that has not had its rename
-    if (str(row.quickbooks_id ?? row.legacy_id).trim()) {
+    // real residents are protected - except in Dani's sandbox, where any can be tested (10 Oct 2026)
+    const { isSandboxServer } = await import("@/lib/sandbox");
+    if (!isSandboxServer() && str(row.quickbooks_id ?? row.legacy_id).trim()) {
       throw new Error(
         "This resident has a QuickBooks ID - a real record, so it cannot be deleted.",
       );
@@ -299,25 +302,11 @@ export const deleteFormerResident = createServerFn({ method: "POST" })
 
     // a bed they still hold is emptied properly, university and all - left to
     // the database, it would only lose the link and keep their details
-    const { error: bedErr } = await supabase
-      .from("beds")
-      .update({
-        status: "vacant",
-        resident_id: null,
-        resident_name: null,
-        student_id: null,
-        university: null,
-        nationality: null,
-        gender: null,
-        hold_for: null,
-        hold_until: null,
-        enquiry_id: null,
-        tenancy_start: null,
-        tenancy_end: null,
-        rent: null,
-      })
-      .eq("resident_id", row.id);
-    if (bedErr) throw new Error(bedErr.message);
+    const { data: theirs } = await supabase.from("beds").select("id").eq("resident_id", row.id);
+    for (const b of (theirs ?? []) as any[]) {
+      const { error: bedErr } = await supabase.rpc("empty_bed", { p_bed: b.id });
+      if (bedErr) throw new Error(bedErr.message);
+    }
 
     // their profile link and signature go with them
     const { error } = await supabase.from("residents").delete().eq("id", row.id);
@@ -388,6 +377,9 @@ export const importResidents = createServerFn({ method: "POST" })
     const { data: beds } = await supabase
       .from("beds")
       .select("id, room_id, label, resident_id, enquiry_id");
+    // a bed an unpaid booking holds is taken too (placement_holds, 10 Oct 2026)
+    const { data: holdRows } = await (supabase as any).from("placement_holds").select("bed_id");
+    const held = new Set(((holdRows ?? []) as any[]).map((h) => String(h.bed_id)));
     const bedIdByKey = new Map<string, string>();
     for (const b of beds ?? []) {
       const room = roomById.get((b as any).room_id);
@@ -409,7 +401,7 @@ export const importResidents = createServerFn({ method: "POST" })
         id: (b as any).id,
         label: String((b as any).label),
         // someone living there, or a booking holding it
-        taken: !!(b as any).resident_id || !!(b as any).enquiry_id,
+        taken: !!(b as any).resident_id || !!(b as any).enquiry_id || held.has(String((b as any).id)),
       });
       bedsByRoom.set((b as any).room_id, list);
     }
@@ -800,26 +792,48 @@ export const importResidents = createServerFn({ method: "POST" })
       }
       claimedBy.set(bedId, { quickbooksId, row: i + 2 });
 
-      const { error: bedErr } = await supabase
-        .from("beds")
-        .update({
-          // "Booked" is a letting agreed but not moved into
-          status: /^booked$/i.test(rawStatus) ? "booked" : "active",
-          resident_id: (saved as { id: string }).id,
-          resident_name: name,
-          university: university.value || null,
-          nationality: nationality.value || null,
-          gender: toGender(pick(row, "gender")) || null,
-          tenancy_start: tenancyStart || null,
-          tenancy_end: tenancyEnd || null,
-          rent,
-          import_batch_id: batchId ?? null,
-        } as any)
-        .eq("id", bedId);
-      if (bedErr) {
-        report.problems.push({ row: i + 2, quickbooksId, reason: bedErr.message });
+      /*
+       * Placed like every other stay (14 Oct 2026): place_stay, under the unit's
+       * lock, checked against everybody's dates - never written over somebody
+       * already in the bed. "Booked" is a letting agreed but not moved into;
+       * anything else has moved in.
+       */
+      const residentId = (saved as { id: string }).id;
+      const { data: placedRes, error: placeErr } = await supabase.rpc("place_stay", {
+        p_enquiry: null,
+        p_resident: residentId,
+        p_bed: bedId,
+        p_start: tenancyStart || null,
+        p_end: tenancyEnd || null,
+        p_by: "Master list",
+      });
+      const placedOut = placedRes as {
+        ok?: boolean;
+        placed?: string;
+        error?: string;
+        detail?: string;
+      } | null;
+      if (placeErr || !placedOut?.ok || placedOut.placed !== "now") {
+        report.problems.push({
+          row: i + 2,
+          quickbooksId,
+          reason: `${unitNo} / ${letter} / ${label}: ${placeErr?.message || placedOut?.detail || placedOut?.error || "somebody else is in this bed"} - resident saved, placement skipped`,
+        });
         continue;
       }
+      if (!/^booked$/i.test(rawStatus)) {
+        const { data: live } = await supabase.rpc("activate_at_checkin", {
+          p_resident: residentId,
+        });
+        if ((live as any)?.ok === false)
+          report.problems.push({ row: i + 2, quickbooksId, reason: String((live as any).error) });
+      }
+      // the master list's own rent for them, and the upload it came in
+      await supabase
+        .from("beds")
+        .update({ rent, import_batch_id: batchId ?? null } as any)
+        .eq("id", bedId)
+        .eq("resident_id", residentId);
       report.placed += 1;
     }
 
@@ -827,24 +841,37 @@ export const importResidents = createServerFn({ method: "POST" })
     // so a bed a current resident took in this upload is never emptied by the
     // older row for it
     const toClear = [...new Set(bedsToClear)].filter((id) => !claimedBy.has(id));
-    if (toClear.length) {
-      const { error } = await supabase
+    /*
+     * Only a bed whose own resident has left (Inactive) is let go - by the same
+     * step a checkout uses, so whoever has it next takes it - or a bed held by
+     * hand with nobody behind it. A bed somebody current is in, holds or is
+     * coming to is never emptied by an older row (14 Oct 2026).
+     */
+    let cleared = 0;
+    for (const id of toClear) {
+      const { data: b } = await supabase
         .from("beds")
-        .update({
-          status: "vacant",
-          resident_id: null,
-          resident_name: null,
-          student_id: null,
-          university: null,
-          nationality: null,
-          gender: null,
-          tenancy_start: null,
-          tenancy_end: null,
-          rent: null,
-        } as any)
-        .in("id", toClear);
-      if (!error) report.cleared = toClear.length;
+        .select("resident_id, status")
+        .eq("id", id)
+        .maybeSingle();
+      if (!b) continue;
+      if (b.resident_id) {
+        const { data: who } = await supabase
+          .from("residents")
+          .select("status")
+          .eq("id", b.resident_id)
+          .maybeSingle();
+        if (String((who as any)?.status ?? "").toLowerCase() !== "inactive") continue;
+        const { error } = await supabase.rpc("release_after_checkout", {
+          p_resident: b.resident_id,
+        });
+        if (!error) cleared += 1;
+      } else if (b.status === "held") {
+        const { data: out } = await supabase.rpc("release_hand_hold", { p_bed: id });
+        if ((out as any)?.released) cleared += 1;
+      }
     }
+    if (cleared) report.cleared = cleared;
 
     return report;
   });
@@ -875,6 +902,10 @@ export const residentDocUrl = createServerFn({ method: "GET" })
         ok: false as const,
         error: "There is no stored file for this one - only its name was noted. Upload it again.",
       };
+    // a copy kept as a link (a migrated TA or invoice on Google Drive, 12 Oct 2026)
+    if (/^https?:\/\//i.test(String(doc.path))) {
+      return { ok: true as const, url: String(doc.path), external: true as const };
+    }
     const { data: signed, error } = await supabase.storage
       .from(DOC_BUCKET)
       .createSignedUrl(String(doc.path), 300);

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Bed, Resident, Unit, UnitRoom } from "../src/lib/ops-store";
-import { bedFreeForPeriod, findBedForResident } from "../src/lib/ops-store";
+import { findBedForResident } from "../src/lib/ops-store";
 import {
   PERSON_LABEL,
   dayBefore,
@@ -9,6 +9,8 @@ import {
   overlaps,
   personStatus,
   placementConflict,
+  roomActions,
+  roomStatusOf,
   timingLine,
 } from "../src/lib/placement";
 
@@ -127,10 +129,6 @@ describe("dates decide, not the bed row", () => {
     const other = { start: "2026-11-01", end: "2027-01-31", gender: "Female", enquiryId: "ez" };
     expect(placementConflict(u, rc, rc.beds[0]!, other, [muhammad, aishaRes])).toContain(
       "Reserved for Aisha",
-    );
-    // and the browser's quick check agrees
-    expect(bedFreeForPeriod({ ...rc.beds[0]!, status: "vacant" }, "2026-11-01", "2027-01-31")).toBe(
-      false,
     );
     // Aisha's own reservation never blocks Aisha
     expect(placementConflict(u, rc, rc.beds[0]!, aisha, [muhammad, aishaRes])).toBe("");
@@ -271,5 +269,102 @@ describe("status and timing are two answers, never stored", () => {
     expect(timingLine("active", "2025-08-01", "2027-06-30", "2026-10-09")).toBe("Current");
     expect(timingLine("inactive", "2025-08-01", "2026-09-30", "2026-10-09")).toBe("Former");
     expect(timingLine("none", undefined, undefined, "2026-10-09")).toBe("");
+  });
+});
+
+describe("Room assignment actions (10 Oct 2026)", () => {
+  test("Reserved: choose another room or release - never Change room", () => {
+    expect(roomActions({ closed: false, hasRoom: true, paid: false, started: false })).toEqual([
+      "choose",
+      "release",
+    ]);
+  });
+  test("Booked before the stay: Change room", () => {
+    expect(roomActions({ closed: false, hasRoom: true, paid: true, started: false })).toEqual([
+      "change",
+    ]);
+  });
+  test("started: Update Tenancy only", () => {
+    expect(roomActions({ closed: false, hasRoom: true, paid: true, started: true })).toEqual([
+      "update_tenancy",
+    ]);
+  });
+  test("closed, or no room yet: nothing on the card", () => {
+    expect(roomActions({ closed: true, hasRoom: true, paid: true, started: false })).toEqual([]);
+    expect(roomActions({ closed: false, hasRoom: false, paid: false, started: false })).toEqual([]);
+  });
+});
+
+describe("a bed's room status follows who is in it, then who comes first", () => {
+  const empty = (upcoming?: Bed["upcoming"]): Bed => ({
+    id: "x",
+    label: "Single",
+    status: "vacant",
+    upcoming,
+  });
+  test("nobody coming: Vacant", () => expect(roomStatusOf(empty())).toBe("vacant"));
+  test("an unpaid hold first: Reserved", () =>
+    expect(roomStatusOf(empty([{ name: "Hakim", status: "reserved", start: "2027-01-10" }]))).toBe(
+      "held",
+    ));
+  test("a paid stay first: Booked", () =>
+    expect(roomStatusOf(empty([{ name: "Faris", status: "booked", start: "2026-10-20" }]))).toBe(
+      "booked",
+    ));
+  test("somebody in it: their status, whatever is coming", () =>
+    expect(
+      roomStatusOf({
+        ...empty([{ name: "Hakim", status: "reserved" }]),
+        status: "active",
+        residentId: "m",
+      }),
+    ).toBe("active"));
+  test("Faris then Hakim on one bed: no clash, and each is free of the other", () => {
+    const bedC = bed("c", "Single", {
+      upcoming: [
+        {
+          enquiryId: "ef",
+          name: "Faris",
+          gender: "Male",
+          status: "reserved",
+          start: "2026-10-20",
+          end: "2026-12-31",
+        },
+      ],
+    });
+    const rc = room("rc", "C", "single", [bedC]);
+    const u = unit([rc]);
+    expect(
+      placementConflict(u, rc, bedC, {
+        start: "2027-01-10",
+        end: "2027-02-27",
+        gender: "Male",
+        enquiryId: "eh",
+      }),
+    ).toBe("");
+    expect(
+      placementConflict(u, rc, bedC, {
+        start: "2026-12-01",
+        end: "2027-02-27",
+        gender: "Male",
+        enquiryId: "eh",
+      }),
+    ).toContain("Faris");
+  });
+});
+
+describe("timing past the start date", () => {
+  test("booked, start passed, not checked in: Check-in overdue - not 'Upcoming'", () => {
+    expect(timingLine("booked", "2025-10-01", undefined, "2026-10-10")).toBe("Check-in overdue");
+  });
+});
+
+describe("a booked check-in day", () => {
+  test("booked for after the start: expected that day, not overdue", () => {
+    expect(timingLine("booked", "2026-09-22", undefined, "2026-10-10", "2026-10-12")).toBe("Upcoming · check-in in 2 days");
+    expect(timingLine("booked", "2026-09-22", undefined, "2026-10-10", "2026-10-10")).toBe("Upcoming · check-in today");
+  });
+  test("the booked day has passed and nobody recorded it: overdue", () => {
+    expect(timingLine("booked", "2026-09-22", undefined, "2026-10-10", "2026-10-09")).toBe("Check-in overdue");
   });
 });

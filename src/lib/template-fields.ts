@@ -23,6 +23,10 @@ export type MappingContext = {
   signatory?: { name: string; title: string; token: string } | null;
   /** an access card form made on its own - "Lost Card", "Damaged Card" - not with the pack */
   cardReason?: string;
+  /** the stay's official dates (tenancy-facts.server officialStay) - before any copy */
+  stay?: { start: string; end: string } | null;
+  /** the rent in force (tenancy-facts.server rentInForce) - before any copy; unset without rent terms */
+  rentInForce?: number | null;
 };
 
 export type TemplateField = {
@@ -38,9 +42,20 @@ const fmtDate = (v: unknown) => {
   if (Number.isNaN(d.getTime())) return String(v);
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 };
-const rent = (c: MappingContext) => c.bed?.["rent"] ?? c.room?.["rent"] ?? c.enquiry?.["monthly_rent"] ?? "";
-const start = (c: MappingContext) => c.tenancy?.["start_date"] ?? c.bed?.["tenancy_start"] ?? c.resident?.["move_in"];
-const end = (c: MappingContext) => c.tenancy?.["end_date"] ?? c.bed?.["tenancy_end"] ?? c.enquiry?.["move_out"];
+/** a date as the templates print it - for values set outside a mapping */
+export const fmtTemplateDate = (v: unknown) => fmtDate(v);
+// the official dates and the rent in force first (14 Oct 2026); the copies only when neither is known
+const rent = (c: MappingContext) =>
+  (c.rentInForce || null) ??
+  c.bed?.["rent"] ??
+  c.room?.["rent"] ??
+  c.enquiry?.["monthly_rent"] ??
+  "";
+const start = (c: MappingContext) =>
+  c.stay?.start ||
+  (c.tenancy?.["start_date"] ?? c.bed?.["tenancy_start"] ?? c.resident?.["move_in"]);
+const end = (c: MappingContext) =>
+  c.stay?.end || (c.tenancy?.["end_date"] ?? c.bed?.["tenancy_end"] ?? c.enquiry?.["move_out"]);
 const r = (k: string) => (c: MappingContext) => c.resident?.[k];
 /** The resident has uploaded this document (a key from resident-documents). */
 const hasDoc = (c: MappingContext, key: string) =>

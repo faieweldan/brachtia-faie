@@ -83,9 +83,9 @@ export const uploadExistingAgreement = createServerFn({ method: "POST" })
     const pdfs: [string, Uint8Array][] = [];
     for (const t of ORDER) if (files[t]) pdfs.push([t, await asPdf(files[t]!)]);
 
-    const { data: seqRow, error: seqErr } = await db.rpc("next_agreement_no" as never);
-    if (seqErr) throw new Error(seqErr.message ?? "Could not number the agreement");
-    const agreementNo = `TA-${String(seqRow).padStart(4, "0")}`;
+    // TA + Resident ID + their own sequence (agreement-no.ts, 12 Oct 2026)
+    const { nextAgreementNo } = await import("@/lib/agreement-no");
+    const agreementNo = await nextAgreementNo(db, residentId);
     const { data: agreement, error: aErr } = await db
       .from("tenancy_agreements")
       .insert({ resident_id: residentId, agreement_no: agreementNo, kind: "initial" })

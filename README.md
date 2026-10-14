@@ -34,3 +34,19 @@ cd <repository-name>
 npm i
 npm run dev
 ```
+
+## Word → PDF conversion (agreement templates)
+
+General Terms, Schedule A and Schedule B are Word templates. They are turned
+into PDFs by LibreOffice (`src/lib/docx-to-pdf.server.ts`):
+
+| Variable | Where | Meaning |
+|---|---|---|
+| `GOTENBERG_URL` | server only | Base URL of the Gotenberg service, e.g. `https://<service>.run.app` (no trailing path). When set, every conversion goes to `{GOTENBERG_URL}/forms/libreoffice/convert`. When absent, LibreOffice on this machine (`soffice`) is used. |
+| `GOTENBERG_USERNAME` | server only | Basic Auth user name of the service. |
+| `GOTENBERG_PASSWORD` | server only | Basic Auth password. Keep it in the host's secret settings (Vercel → Environment Variables) - never in the repository, never logged. |
+| `SOFFICE_PATH` | optional, local | Path to `soffice` if it is not in a usual place. |
+
+Never prefix these with `VITE_`: they must not reach the browser. Fixed PDF
+forms (Access Card Form), Schedule C, invoices and quotes are drawn directly
+and do not use this service.

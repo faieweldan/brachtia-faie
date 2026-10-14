@@ -1,0 +1,596 @@
+{
+  "_about": "The upload contract for migrating existing residents. Sheet3 of Data Labelling.xlsx is the column order; this file says what each column means, where it comes from in 'Migration Batch 1', and where it lands in the database. Headers are matched exactly - no fuzzy matching.",
+  "sourceSheet": "Migration Batch 1",
+  "targetSheet": "Sheet3",
+  "tenancyEndAfter": "2026-09-30",
+  "columns": [
+    {
+      "key": "full_name",
+      "sheet3": "Resident name",
+      "source": "StudentName",
+      "db": "residents.full_name",
+      "required": true,
+      "kind": "direct",
+      "transform": "trim",
+      "validation": "not blank"
+    },
+    {
+      "key": "gender",
+      "sheet3": "Gender",
+      "source": "Gender",
+      "db": "residents.gender",
+      "required": false,
+      "kind": "transformed",
+      "transform": "F -> Female, M -> Male",
+      "validation": "Female | Male"
+    },
+    {
+      "key": "country_code",
+      "sheet3": "Country code",
+      "source": "MobileNumber",
+      "db": "residents.mobile (prefix)",
+      "required": true,
+      "kind": "transformed",
+      "transform": "split international prefix; a local 01x number is Malaysian (+60)",
+      "validation": "known calling code",
+      "notes": "A local number getting +60 is a Warning so staff can confirm"
+    },
+    {
+      "key": "mobile",
+      "sheet3": "Mobile number",
+      "source": "MobileNumber",
+      "db": "residents.mobile",
+      "required": true,
+      "kind": "transformed",
+      "transform": "digits only, kept as text",
+      "validation": "6-12 digits"
+    },
+    {
+      "key": "email",
+      "sheet3": "Email",
+      "source": "Email",
+      "db": "residents.email",
+      "required": true,
+      "kind": "direct",
+      "transform": "trim, lowercase",
+      "validation": "email format"
+    },
+    {
+      "key": "nationality",
+      "sheet3": "Nationality",
+      "source": "Nationality",
+      "db": "residents.nationality",
+      "required": true,
+      "kind": "direct",
+      "transform": "trim, uppercase ISO-3",
+      "validation": "3 letters; decides NRIC vs passport"
+    },
+    {
+      "key": "resident_type",
+      "sheet3": "Resident type",
+      "source": "University",
+      "db": "residents.current_status",
+      "required": false,
+      "kind": "transformed",
+      "transform": "student when a University is given (Batch 1 is all students)",
+      "validation": "Allowed values: Resident type"
+    },
+    {
+      "key": "university",
+      "sheet3": "University",
+      "source": "University",
+      "db": "residents.university",
+      "required": false,
+      "kind": "transformed",
+      "transform": "UOC -> UoC, CTU -> CU (the application form list)",
+      "validation": "Allowed values: University (application form)"
+    },
+    {
+      "key": "intake",
+      "sheet3": "Intake",
+      "source": null,
+      "db": null,
+      "required": false,
+      "kind": "manual"
+    },
+    {
+      "key": "company",
+      "sheet3": "Company",
+      "source": null,
+      "db": "residents.company",
+      "required": false,
+      "kind": "manual"
+    },
+    {
+      "key": "job_title",
+      "sheet3": "Job Title",
+      "source": null,
+      "db": "residents.occupation",
+      "required": false,
+      "kind": "manual"
+    },
+    {
+      "key": "referral_source",
+      "sheet3": "Referral Source",
+      "source": null,
+      "db": null,
+      "required": false,
+      "kind": "manual"
+    },
+    {
+      "key": "nric",
+      "sheet3": "NRIC number",
+      "source": "IDNumber",
+      "db": "residents.id_number",
+      "required": false,
+      "kind": "transformed",
+      "transform": "only when Nationality = MYS; kept as text",
+      "validation": "12 digits (dashes allowed)",
+      "notes": "A number cell with fewer than 12 digits lost a leading zero - flagged, never padded"
+    },
+    {
+      "key": "passport",
+      "sheet3": "Passport number",
+      "source": "IDNumber",
+      "db": "residents.id_number",
+      "required": false,
+      "kind": "transformed",
+      "transform": "only when Nationality is not MYS; kept as text",
+      "validation": "not blank"
+    },
+    {
+      "key": "marital_status",
+      "sheet3": "Marital status",
+      "source": null,
+      "db": "residents.marital_status",
+      "required": false,
+      "kind": "manual"
+    },
+    {
+      "key": "race",
+      "sheet3": "Race",
+      "source": null,
+      "db": "residents.race",
+      "required": false,
+      "kind": "manual",
+      "validation": "fixed app list or Other",
+      "notes": "Other is a complete answer; no follow-up text"
+    },
+    {
+      "key": "religion",
+      "sheet3": "Religion",
+      "source": null,
+      "db": "residents.religion",
+      "required": false,
+      "kind": "manual",
+      "validation": "fixed app list or Other",
+      "notes": "Other is a complete answer; no follow-up text"
+    },
+    {
+      "key": "address",
+      "sheet3": "Address",
+      "source": null,
+      "db": "residents.address",
+      "required": false,
+      "kind": "manual"
+    },
+    {
+      "key": "postcode",
+      "sheet3": "Postal Code",
+      "source": null,
+      "db": "residents.postcode",
+      "required": false,
+      "kind": "manual"
+    },
+    {
+      "key": "state",
+      "sheet3": "State / Region / Province",
+      "source": null,
+      "db": "residents.state",
+      "required": false,
+      "kind": "manual"
+    },
+    {
+      "key": "country",
+      "sheet3": "Country",
+      "source": null,
+      "db": "residents.country",
+      "required": false,
+      "kind": "manual"
+    },
+    {
+      "key": "medical_condition",
+      "sheet3": "Medical Condition",
+      "source": null,
+      "db": "residents.medical_condition",
+      "required": false,
+      "kind": "manual"
+    },
+    {
+      "key": "medical_detail",
+      "sheet3": "Medical Condition - Remarks",
+      "source": null,
+      "db": "residents.medical_detail",
+      "required": false,
+      "kind": "manual"
+    },
+    {
+      "key": "internal_notes",
+      "sheet3": "Internal Notes",
+      "source": null,
+      "db": null,
+      "required": false,
+      "kind": "manual"
+    },
+    {
+      "key": "residence",
+      "sheet3": "Residence",
+      "source": "Residence",
+      "db": "units.residence_id (lookup only)",
+      "required": true,
+      "kind": "transformed",
+      "transform": "ARC / The Arc -> The Arc, Cyberjaya; Solstice -> Solstice Residence, Cyberjaya",
+      "validation": "Allowed values: Residence"
+    },
+    {
+      "key": "unit_code",
+      "sheet3": "Unit ID",
+      "source": "UnitID",
+      "db": null,
+      "required": false,
+      "kind": "direct",
+      "notes": "Legacy trace only. It is not a system unit lookup key."
+    },
+    {
+      "key": "unit_type",
+      "sheet3": "Unit Type",
+      "source": null,
+      "db": "units.unit_type (read, never written)",
+      "required": false,
+      "kind": "system"
+    },
+    {
+      "key": "occupancy",
+      "sheet3": "Occupancy",
+      "source": null,
+      "db": "rooms.occupancy (read, never written)",
+      "required": false,
+      "kind": "system"
+    },
+    {
+      "key": "tenancy_start",
+      "sheet3": "Tenancy Start",
+      "source": "Tenancy Start",
+      "db": "tenancies.start_date",
+      "required": true,
+      "kind": "direct",
+      "validation": "real date, before Tenancy End"
+    },
+    {
+      "key": "tenancy_end",
+      "sheet3": "Tenancy End",
+      "source": "Tenancy End",
+      "db": "tenancies.end_date",
+      "required": true,
+      "kind": "direct",
+      "validation": "real date, after 30 Sep 2026"
+    },
+    {
+      "key": "term",
+      "sheet3": "Term",
+      "source": null,
+      "db": null,
+      "required": false,
+      "kind": "calculated",
+      "transform": "Long Term when end is at least six months after start; otherwise Short Term"
+    },
+    {
+      "key": "stay_duration",
+      "sheet3": "Stay Duration",
+      "source": null,
+      "db": "residents.lease_months",
+      "required": false,
+      "kind": "calculated",
+      "transform": "whole months + days between the dates, same as the sheet's DATEDIF - the formula itself is never run"
+    },
+    {
+      "key": "monthly_rent",
+      "sheet3": "Monthly rent",
+      "source": "Monthly Rent",
+      "db": "beds.rent",
+      "required": true,
+      "kind": "direct",
+      "validation": "number > 0"
+    },
+    {
+      "key": "pay_schedule",
+      "sheet3": "Payment frequency",
+      "source": "Payment Frequency",
+      "db": "residents.pay_schedule",
+      "required": true,
+      "kind": "transformed",
+      "transform": "MONTHLY -> monthly, BI-MONTHLY -> bimonthly, HALF-YEARLY -> semiannual, FULLY -> full",
+      "validation": "Allowed values: Payment frequency"
+    },
+    {
+      "key": "unit_no",
+      "sheet3": "Unit no. ",
+      "source": "Unit",
+      "db": "units.unit_no (lookup only)",
+      "required": true,
+      "kind": "transformed",
+      "transform": "lookup together with Residence; Unit ID is ignored for matching"
+    },
+    {
+      "key": "room",
+      "sheet3": "Room",
+      "source": "Room",
+      "db": "rooms.letter (lookup only)",
+      "required": true,
+      "kind": "transformed",
+      "transform": "room matching"
+    },
+    {
+      "key": "bed",
+      "sheet3": "Bed",
+      "source": "Bed",
+      "db": "beds.label (lookup only)",
+      "required": true,
+      "kind": "transformed",
+      "transform": "room matching"
+    },
+    {
+      "key": "agreement_no",
+      "sheet3": "Agreement No.",
+      "source": null,
+      "db": null,
+      "required": false,
+      "kind": "manual",
+      "notes": "No source - left blank, never taken from a file name"
+    },
+    {
+      "key": "agreement_date",
+      "sheet3": "Agreement Date",
+      "source": null,
+      "db": null,
+      "required": false,
+      "kind": "manual"
+    },
+    {
+      "key": "tenancy_status",
+      "sheet3": "Agreement Status",
+      "source": "Status",
+      "sourceOccurrence": 1,
+      "db": "beds.status",
+      "required": true,
+      "kind": "direct",
+      "validation": "= Active",
+      "notes": "The FIRST Status column. The second (TRUE/FALSE) is ignored."
+    },
+    {
+      "key": "ta_copy",
+      "sheet3": "Copy of Tenancy Agreement",
+      "source": "TACopy",
+      "db": "residents.docs (legacy TA link)",
+      "required": true,
+      "kind": "document",
+      "transform": "hyperlink target, not the display text",
+      "validation": "http(s) URL or an existing local file"
+    },
+    {
+      "key": "invoice_no",
+      "sheet3": "Invoice No.",
+      "source": null,
+      "db": null,
+      "required": false,
+      "kind": "manual",
+      "notes": "Never read from the invoice file name"
+    },
+    {
+      "key": "invoice_date",
+      "sheet3": "Invoice Date",
+      "source": null,
+      "db": null,
+      "required": false,
+      "kind": "manual"
+    },
+    {
+      "key": "invoice_due",
+      "sheet3": "Invoice Due Date",
+      "source": null,
+      "db": null,
+      "required": false,
+      "kind": "manual"
+    },
+    {
+      "key": "quickbooks_id",
+      "sheet3": "QuickBooks ID",
+      "source": "StudentID",
+      "db": "residents.quickbooks_id",
+      "required": true,
+      "kind": "direct",
+      "transform": "trim, kept as text",
+      "validation": "not blank, unique in the file",
+      "notes": "StudentID IS the Brachtia/QuickBooks ID - the one matching key"
+    },
+    {
+      "key": "first_month_rent",
+      "sheet3": "First month rent - pro-rated x/x days",
+      "source": "Differential Rental (QB)",
+      "db": "legacy invoice line",
+      "required": false,
+      "kind": "direct",
+      "charge": "flow",
+      "notes": "Blank means RM0. This and advance rent determine the next billing period."
+    },
+    {
+      "key": "advance_rental",
+      "sheet3": "Advance rental (RM)",
+      "source": "Advance Rental",
+      "db": "legacy invoice line",
+      "required": false,
+      "kind": "direct",
+      "charge": "flow",
+      "notes": "Blank means RM0."
+    },
+    {
+      "key": "security_deposit",
+      "sheet3": "Security Deposit (RM) (refundable) ",
+      "source": "Security Deposit",
+      "db": "legacy invoice line",
+      "required": false,
+      "kind": "direct",
+      "charge": "refundable",
+      "notes": "Blank means RM0; preserved for future refund flow."
+    },
+    {
+      "key": "utility_deposit",
+      "sheet3": "Utilities deposit (RM) (refundable) ",
+      "source": "Utility Deposit",
+      "db": "legacy invoice line",
+      "required": false,
+      "kind": "direct",
+      "charge": "refundable",
+      "notes": "Blank means RM0; preserved for future refund flow."
+    },
+    {
+      "key": "access_card_deposit",
+      "sheet3": "Access card deposit (refundable)",
+      "source": "Access Card Deposit",
+      "db": "legacy invoice line",
+      "required": false,
+      "kind": "direct",
+      "charge": "refundable",
+      "notes": "Blank means RM0."
+    },
+    {
+      "key": "resident_card_charges",
+      "sheet3": "Resident card charges",
+      "source": "Personalised Tag",
+      "db": "legacy invoice line",
+      "required": false,
+      "kind": "direct",
+      "charge": "other",
+      "notes": "Blank means RM0. ASSUMED: Personalised Tag is the resident card charge - confirm."
+    },
+    {
+      "key": "admin_agreement_charges",
+      "sheet3": "Admin + agreement charges",
+      "source": [
+        "Admin Charges",
+        "Agreement Charges"
+      ],
+      "db": "legacy invoice line",
+      "required": false,
+      "kind": "calculated",
+      "transform": "Admin Charges + Agreement Charges; blanks mean RM0",
+      "charge": "other"
+    },
+    {
+      "key": "initial_payment_paid",
+      "sheet3": "Total Initial Payment",
+      "source": "Total Initial Payment Made",
+      "db": "payments.amount",
+      "required": true,
+      "kind": "direct",
+      "notes": "The amount COLLECTED, not an invoiced total"
+    },
+    {
+      "key": "payment_status",
+      "sheet3": "Payment Status",
+      "source": null,
+      "db": "invoices.status",
+      "required": true,
+      "kind": "calculated",
+      "transform": "Paid when Total Initial Payment Made is present",
+      "notes": "Do not reconcile against the listed lines: the legacy invoice can contain extra charges such as utilities."
+    },
+    {
+      "key": "next_billing_period",
+      "sheet3": "Next billing period",
+      "source": null,
+      "db": null,
+      "required": false,
+      "kind": "system",
+      "notes": "Worked out by the app's billing engine at preview time"
+    },
+    {
+      "key": "next_payment_due",
+      "sheet3": "Next payment due",
+      "source": null,
+      "db": null,
+      "required": false,
+      "kind": "system"
+    },
+    {
+      "key": "next_payment_amount",
+      "sheet3": "Next payment amount",
+      "source": null,
+      "db": null,
+      "required": false,
+      "kind": "system"
+    },
+    {
+      "key": "invoice_copy",
+      "sheet3": "Copy of Invoice",
+      "source": "Initial Payment Invoice Copy",
+      "db": "residents.docs (legacy invoice link)",
+      "required": true,
+      "kind": "document",
+      "transform": "hyperlink target",
+      "validation": "http(s) URL or an existing local file"
+    },
+    {
+      "sheet3": "Expected graduation year",
+      "key": "graduationYear",
+      "source": null,
+      "db": "residents.graduation_year",
+      "kind": "manual",
+      "required": false
+    },
+    {
+      "sheet3": "Add on: Starter pack",
+      "key": "starterPack",
+      "source": "Starter Pack",
+      "db": "legacy invoice line",
+      "kind": "direct",
+      "required": false,
+      "notes": "blank means RM0"
+    },
+    {
+      "sheet3": "Paid by",
+      "key": "payerRelationship",
+      "source": "PAYOR?",
+      "db": "residents.payer_relationship",
+      "kind": "transformed",
+      "required": false,
+      "transform": "SELF -> Self, SPONSOR -> Sponsor",
+      "validation": "Allowed values: Paid by",
+      "notes": "added to Sheet3 on 12 Oct 2026"
+    },
+    {
+      "sheet3": "Payor name",
+      "key": "payerName",
+      "source": "SPONSOR NAME",
+      "db": "residents.payer_name",
+      "kind": "direct",
+      "required": false,
+      "notes": "blank when Paid by is Self"
+    }
+  ],
+  "migrationOnly": [
+    {
+      "key": "source_row",
+      "sheet3": "Source Row",
+      "source": null,
+      "kind": "calculated",
+      "notes": "Row number in Migration Batch 1, for tracing"
+    }
+  ],
+  "unmapped": {
+    "Remarks": "Not carried (free text). A row with remarks is flagged for someone to read.",
+    "Contracting Entity": "Same value on every row; no Sheet3 column.",
+    "Duration": "A formula - replaced by the calculated Stay Duration.",
+    "Status (2nd)": "Meaning unconfirmed - ignored."
+  }
+}

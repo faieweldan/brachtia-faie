@@ -6,6 +6,7 @@ import type {
   AgreementDocType,
   TenancyAgreement,
 } from "@/lib/tenancy-docs";
+import type { DocumentPlan } from "@/lib/tenancy-change";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -18,9 +19,10 @@ import type {
  * functions do.
  */
 
+/** the service-role client - only after the admin session is checked (adminDb) */
 async function admin(): Promise<any> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin as any;
+  const { adminDb } = await import("@/lib/admin-session.server");
+  return adminDb();
 }
 
 const str = (v: unknown) => (v == null ? "" : String(v));
@@ -55,11 +57,21 @@ async function versions(db: any, residentId: string): Promise<Record<string, str
  * blank page in the resident's record (Dani, 30 Sep 2026).
  */
 async function requireFiles(db: any, residentId: string, types: string[]) {
+  const missing = await missingFiles(db, residentId, types);
+  if (missing) throw new Error(missing);
+}
+
+/** requireFiles' check, said instead of thrown - "" when every file is there */
+async function missingFiles(db: any, residentId: string, types: string[]) {
   const { activeVersions, residenceIdOf } = await import("@/lib/template-versions.server");
   const byKey = await activeVersions(db, await residenceIdOf(db, residentId));
   // Schedule C is a checklist the resident answers on their signing page - no file (1 Oct 2026)
-  const missing = types.filter((t) => t !== "sched_c" && !byKey[TEMPLATE_KEY[t] ?? t]?.hasFile).map((t) => DOC_LABEL[t] ?? t);
-  if (missing.length) throw new Error(`No file uploaded yet for: ${missing.join(", ")}. Upload and activate it in Settings → Templates first.`);
+  const missing = types
+    .filter((t) => t !== "sched_c" && !byKey[TEMPLATE_KEY[t] ?? t]?.hasFile)
+    .map((t) => DOC_LABEL[t] ?? t);
+  return missing.length
+    ? `No file uploaded yet for: ${missing.join(", ")}. Upload and activate it in Settings → Templates first.`
+    : "";
 }
 
 const DOC_LABEL: Record<string, string> = {
@@ -216,9 +228,9 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
       await requireFiles(db, data.residentId, types);
     }
 
-    const { data: seqRow, error: seqErr } = await db.rpc("next_agreement_no" as never);
-    if (seqErr) throw new Error((seqErr as any).message ?? "Could not number the agreement");
-    const agreementNo = `TA-${String(seqRow).padStart(4, "0")}`;
+    // TA + Resident ID + their own sequence (agreement-no.ts, 12 Oct 2026)
+    const { nextAgreementNo } = await import("@/lib/agreement-no");
+    const agreementNo = await nextAgreementNo(db, data.residentId);
 
     const { data: agreement, error: aErr } = await db
       .from("tenancy_agreements")
@@ -275,18 +287,21 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
  * Issue a revised schedule under the same Agreement No. The previous version
  * is kept and linked through `supersedes`.
  */
+type ReviseInput = {
+  agreementId: string;
+  docType: AgreementDocType;
+  mergeValues: Record<string, string>;
+  periodStart?: string;
+  periodEnd?: string;
+};
+
 export const reviseSchedule = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: {
-      agreementId: string;
-      docType: AgreementDocType;
-      mergeValues: Record<string, string>;
-      periodStart?: string;
-      periodEnd?: string;
-    }) => data,
-  )
-  .handler(async ({ data }) => {
-    const db = await admin();
+  .inputValidator((data: ReviseInput) => data)
+  .handler(async ({ data }) => reviseScheduleWith(await admin(), data));
+
+/** reviseSchedule's body - handed the client, so Update Tenancy's daily job (no admin session) can run it */
+export async function reviseScheduleWith(db: any, data: ReviseInput) {
+  {
     const { data: current, error } = await db
       .from("agreement_documents")
       .select("*")
@@ -296,7 +311,30 @@ export const reviseSchedule = createServerFn({ method: "POST" })
       .limit(1)
       .maybeSingle();
     if (error) throw new Error(error.message);
-    if (!current) throw new Error("No existing schedule to revise");
+    /*
+     * A migrated agreement (Migration 1) holds only the old signed TA as one
+     * file - there is no schedule of ours to revise. Its first extension or
+     * room change makes version 1 of that schedule under the same Agreement
+     * No., next to the old TA (Dani, 12 Oct 2026). Any other agreement without
+     * the schedule is still refused.
+     */
+    let base: { id: string | null; version: number; period_start: string | null; period_end: string | null } | null = current;
+    if (!base) {
+      const { data: migrated } = await db
+        .from("agreement_documents")
+        .select("period_start, period_end, merge_values")
+        .eq("agreement_id", data.agreementId)
+        .eq("doc_type", "agreement")
+        .limit(1)
+        .maybeSingle();
+      if (
+        agreementSource(
+          migrated ? [{ doc_type: "agreement", merge_values: migrated.merge_values }] : [],
+        ) !== "migrated"
+      )
+        throw new Error("No existing schedule to revise");
+      base = { id: null, version: 0, period_start: migrated?.period_start ?? null, period_end: migrated?.period_end ?? null };
+    }
 
     const today = new Date().toISOString().slice(0, 10);
     const { data: ag } = await db.from("tenancy_agreements").select("resident_id").eq("id", data.agreementId).maybeSingle();
@@ -304,36 +342,42 @@ export const reviseSchedule = createServerFn({ method: "POST" })
     const { error: iErr } = await db.from("agreement_documents").insert({
       agreement_id: data.agreementId,
       doc_type: data.docType,
-      version: (current.version ?? 1) + 1,
+      version: (base.version ?? 0) + 1,
       status: "generated",
       effective_date: today,
-      period_start: data.periodStart || current.period_start,
-      period_end: data.periodEnd || current.period_end,
+      period_start: data.periodStart || base.period_start,
+      period_end: data.periodEnd || base.period_end,
       merge_values: data.mergeValues,
-      supersedes: current.id,
+      supersedes: base.id,
       template_version_id: tv[data.docType] || null,
     });
     if (iErr) throw new Error(iErr.message);
     return { ok: true as const };
-  });
+  }
+}
 
 /** a renewal is a brand-new Agreement No. with a fresh set of four documents */
+type RenewInput = {
+  residentId: string;
+  tenancyId?: string | undefined;
+  mergeValues: Record<string, string>;
+  periodStart?: string | undefined;
+  periodEnd?: string | undefined;
+};
+
 export const renewAgreement = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: {
-      residentId: string;
-      tenancyId?: string | undefined;
-      mergeValues: Record<string, string>;
-      periodStart?: string | undefined;
-      periodEnd?: string | undefined;
-    }) => data,
-  )
-  .handler(async ({ data }) => {
-    const db = await admin();
+  .inputValidator((data: RenewInput) => data)
+  .handler(async ({ data }) => renewAgreementWith(await admin(), data));
+
+/** renewAgreement's body - handed the client, so Update Tenancy's daily job (no admin session) can run it */
+export async function renewAgreementWith(db: any, data: RenewInput) {
+  {
     await requireFiles(db, data.residentId, [...(await docTypesInUse(db))]);
-    const { data: seqRow, error: seqErr } = await db.rpc("next_agreement_no" as never);
-    if (seqErr) throw new Error((seqErr as any).message ?? "Could not number the agreement");
-    const agreementNo = `TA-${String(seqRow).padStart(4, "0")}`;
+    // TA + Resident ID + their own sequence (agreement-no.ts, 12 Oct 2026)
+    const { nextAgreementNo } = await import("@/lib/agreement-no");
+    const agreementNo = await nextAgreementNo(db, data.residentId);
+    // the new number goes on its own documents - the values were built before it existed (10 Oct 2026)
+    for (const k of Object.keys(data.mergeValues)) if (/^agreement_(id|no)$/i.test(k)) data.mergeValues[k] = agreementNo;
 
     const { data: agreement, error: aErr } = await db
       .from("tenancy_agreements")
@@ -365,7 +409,200 @@ export const renewAgreement = createServerFn({ method: "POST" })
     );
     if (dErr) throw new Error(dErr.message);
     return { ok: true as const, agreementId: agreement.id, agreementNo };
+  }
+}
+
+/* ------------------------------------------------- Update Tenancy preflight */
+
+/**
+ * How an agreement came to be on file: made here from the templates, migrated
+ * from the master list (the old signed TA as one file), or uploaded as the
+ * scans of a paper agreement.
+ */
+export type AgreementSource = "generated" | "migrated" | "uploaded";
+
+/** read from what the documents say about themselves - set by migration/import.server.ts and uploadExistingAgreement */
+export function agreementSource(docs: { doc_type: string; merge_values?: any }[]): AgreementSource {
+  if (docs.some((d) => d.doc_type === "agreement" && d.merge_values?.source === "migrated"))
+    return "migrated";
+  if (docs.some((d) => d.merge_values?.source === "uploaded")) return "uploaded";
+  return "generated";
+}
+
+export type DocumentStep = {
+  /** the event's date */
+  date: string;
+  document: string;
+  /** a new agreement; a new version of a schedule; its first version (a migrated agreement); a new form */
+  action: "new_agreement" | "revise" | "first_version" | "new_form";
+  /** null: the agreement a renewal earlier in the request makes */
+  agreementId: string | null;
+  agreementNo: string;
+  source: AgreementSource | "renewal";
+  version?: number;
+};
+
+export type DocumentPreflight =
+  | { ok: true; agreementId: string | null; steps: DocumentStep[] }
+  | { ok: false; error: string; steps: DocumentStep[] };
+
+type AgreementOnFile = {
+  id: string;
+  agreementNo: string;
+  docs: { doc_type: string; version?: number | null; merge_values?: any }[];
+};
+
+/**
+ * The documents an Update Tenancy request will make, event by event, checked
+ * against the agreement on file with the rules that make them later
+ * (renewAgreementWith, reviseScheduleWith, makeCardForm) - so a request whose
+ * documents cannot be made is refused before anything is saved (14 Oct 2026).
+ * Before, it was found out only once the IP was paid: the invoice, the credit,
+ * the room held and the rent change were all made, and the documents never.
+ *   - a renewal: a new agreement - every document in use needs its file
+ *   - Schedule A / C: a new version of the one on the agreement; a migrated
+ *     agreement has none, and gets version 1 next to the old TA (12 Oct 2026);
+ *     any other agreement without it - a paper one uploaded without that
+ *     schedule - cannot be revised
+ *   - the access card form: always a new form
+ * A later event starts from what the earlier one leaves - after a renewal, its
+ * new agreement.
+ */
+export function planDocumentSteps(
+  agreement: AgreementOnFile | null,
+  events: { date: string; name?: string; plan: DocumentPlan }[],
+  renewal: { docTypes: AgreementDocType[]; missingFiles: string },
+): DocumentPreflight {
+  const steps: DocumentStep[] = [];
+  const fail = (why: string): DocumentPreflight => ({
+    ok: false,
+    error: `Update Tenancy cannot be confirmed: ${why} Nothing was saved.`,
+    steps,
   });
+  let current: {
+    id: string | null;
+    no: string;
+    source: AgreementSource | "renewal";
+    versions: Map<string, number>;
+  } | null = agreement
+    ? {
+        id: agreement.id,
+        no: agreement.agreementNo,
+        source: agreementSource(agreement.docs),
+        versions: new Map(
+          agreement.docs.map((d) => [
+            d.doc_type,
+            Math.max(
+              ...agreement.docs
+                .filter((x) => x.doc_type === d.doc_type)
+                .map((x) => Number(x.version ?? 1)),
+            ),
+          ]),
+        ),
+      }
+    : null;
+
+  for (const e of events) {
+    const what = (e.name || "change").toLowerCase();
+    if (e.plan.newAgreement) {
+      if (renewal.missingFiles) return fail(renewal.missingFiles);
+      steps.push({
+        date: e.date,
+        document: "New agreement",
+        action: "new_agreement",
+        agreementId: null,
+        agreementNo: "",
+        source: "renewal",
+      });
+      current = {
+        id: null,
+        no: "",
+        source: "renewal",
+        versions: new Map(renewal.docTypes.map((t) => [t, 1])),
+      };
+    }
+    for (const t of [
+      ...(e.plan.scheduleA ? ["sched_a"] : []),
+      ...(e.plan.scheduleC ? ["sched_c"] : []),
+    ]) {
+      const label = DOC_LABEL[t]!;
+      if (!current)
+        return fail(
+          `there is no tenancy agreement on record, so ${label} cannot be revised for the ${what}. Generate or upload the agreement on the Tenancy tab first.`,
+        );
+      const v = current.versions.get(t);
+      const step = {
+        date: e.date,
+        document: label,
+        agreementId: current.id,
+        agreementNo: current.no,
+        source: current.source,
+      };
+      if (v) {
+        steps.push({ ...step, action: "revise", version: v + 1 });
+        current.versions.set(t, v + 1);
+      } else if (current.source === "migrated") {
+        steps.push({ ...step, action: "first_version", version: 1 });
+        current.versions.set(t, 1);
+      } else if (current.source === "uploaded") {
+        return fail(
+          `agreement ${current.no} was uploaded as a signed paper agreement without its own ${label}, so there is no ${label} to revise for the ${what}.`,
+        );
+      } else if (current.source === "renewal") {
+        return fail(
+          `the new agreement the renewal makes will have no ${label} (its template is deactivated), so the ${what} after it cannot revise one.`,
+        );
+      } else {
+        return fail(`agreement ${current.no} has no ${label} to revise for the ${what}.`);
+      }
+    }
+    if (e.plan.accessCard)
+      steps.push({
+        date: e.date,
+        document: DOC_LABEL["access_card"]!,
+        action: "new_form",
+        agreementId: null,
+        agreementNo: "",
+        source: current?.source ?? "generated",
+      });
+  }
+  return { ok: true, agreementId: agreement?.id ?? null, steps };
+}
+
+/**
+ * The preflight for Update Tenancy (applyTenancyChangeWith): reads the agreement
+ * on file - the latest, the one a schedule revision goes on - and writes nothing.
+ */
+export async function updateTenancyDocumentPreflight(
+  db: any,
+  residentId: string,
+  events: { date: string; name?: string; plan: DocumentPlan }[],
+): Promise<DocumentPreflight> {
+  const { data: ag, error } = await db
+    .from("tenancy_agreements")
+    .select("id, agreement_no")
+    .eq("resident_id", residentId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const { data: docs, error: dErr } = ag
+    ? await db
+        .from("agreement_documents")
+        .select("doc_type, version, merge_values")
+        .eq("agreement_id", ag.id)
+    : { data: [], error: null };
+  if (dErr) throw new Error(dErr.message);
+  const renewing = events.some((e) => e.plan.newAgreement);
+  const docTypes = renewing ? await docTypesInUse(db) : [];
+  return planDocumentSteps(
+    ag
+      ? { id: String(ag.id), agreementNo: str(ag.agreement_no), docs: (docs ?? []) as any[] }
+      : null,
+    events,
+    { docTypes, missingFiles: renewing ? await missingFiles(db, residentId, docTypes) : "" },
+  );
+}
 
 export const setDocumentStatus = createServerFn({ method: "POST" })
   .inputValidator((data: { documentId: string; status: string }) => data)
@@ -447,8 +684,11 @@ export const RESETTABLE = new Set(["generated", "pending_signature", "submitted"
 
 export const undoDocumentPack = createServerFn({ method: "POST" })
   .inputValidator((data: { agreementId: string }) => data)
-  .handler(async ({ data }) => {
-    const db = await admin();
+  .handler(async ({ data }) => resetDocumentPack(await admin(), data.agreementId));
+
+/** The reset itself - also run by a room change before the tenancy starts. Throws when anything is signed. */
+export async function resetDocumentPack(db: any, agreementId: string) {
+    const data = { agreementId };
     const { data: agreement } = await db.from("tenancy_agreements").select("id, resident_id, kind").eq("id", data.agreementId).maybeSingle();
     if (!agreement) throw new Error("This pack no longer exists.");
     const { data: docs } = await db.from("agreement_documents").select("id, doc_type, status").eq("agreement_id", agreement.id);
@@ -458,8 +698,10 @@ export const undoDocumentPack = createServerFn({ method: "POST" })
     // the first pack brought the first access card form with it; it goes too
     let cardIds: string[] = [];
     if (agreement.kind === "initial") {
-      const { data: cards } = await db.from("access_card_forms").select("id, status").eq("resident_id", agreement.resident_id);
-      if ((cards ?? []).some((c: any) => c.status !== "generated")) {
+      const { data: cards } = await db.from("access_card_forms").select("id, status, card_no").eq("resident_id", agreement.resident_id);
+      // not handed to ARC yet - no serial number given back - it can still be made again
+      const untouchedCard = (c: any) => c.status === "generated" || (c.status === "pending_approval" && !c.card_no);
+      if ((cards ?? []).some((c: any) => !untouchedCard(c))) {
         throw new Error("The access card form has moved on (signed or submitted), so this pack can no longer be reset.");
       }
       cardIds = (cards ?? []).map((c: any) => c.id);
@@ -481,4 +723,4 @@ export const undoDocumentPack = createServerFn({ method: "POST" })
     const { error: aErr } = await db.from("tenancy_agreements").delete().eq("id", agreement.id);
     if (aErr) throw new Error(aErr.message);
     return { ok: true as const };
-  });
+}

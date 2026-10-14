@@ -273,23 +273,59 @@ export const searchResidents = createServerFn({ method: "GET" })
 
 async function buildContext(db: any, residentId: string) {
   const data = { residentId };
-    const { data: resident } = await db.from("residents").select("*").eq("id", data.residentId).maybeSingle();
-    if (!resident) throw new Error("Resident not found");
-    // where they are placed - a room booked for after its current resident leaves included
-    const { placementForResident } = await import("@/lib/placement.server");
-    const [placed, { data: tenancy }, { data: enquiry }] = await Promise.all([
-      placementForResident(db, data.residentId),
-      db.from("tenancies").select("*").eq("resident_id", data.residentId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-      resident.enquiry_id ? db.from("enquiries").select("*").eq("id", resident.enquiry_id).maybeSingle() : Promise.resolve({ data: null }),
-    ]);
-    const bed = placed?.bed ?? null;
-    const room = placed?.room ?? null;
-    const unit = placed?.unit ?? null;
-    const residence = placed?.residence ?? null;
-    const { data: agreement } = await db.from("tenancy_agreements").select("agreement_no, created_at").eq("resident_id", data.residentId).order("created_at", { ascending: false }).limit(1).maybeSingle();
-    const { loadSignatory } = await import("@/lib/signatory.server");
-    const signatory = await loadSignatory(db);
-    const ctx: MappingContext = { resident, enquiry, bed, room, unit, residence, tenancy, agreement, signatory };
+  const { data: resident } = await db
+    .from("residents")
+    .select("*")
+    .eq("id", data.residentId)
+    .maybeSingle();
+  if (!resident) throw new Error("Resident not found");
+  // where they are placed - a room booked for after its current resident leaves included
+  const { placementForResident } = await import("@/lib/placement.server");
+  // the stay's official dates and the rent in force - the tenancy's, else the booking's (tenancy-facts, 14 Oct 2026)
+  const { officialStay, rentInForce } = await import("@/lib/tenancy-facts.server");
+  const [placed, stay, { data: enquiry }] = await Promise.all([
+    placementForResident(db, data.residentId),
+    officialStay(db, { residentId: data.residentId, enquiryId: resident.enquiry_id ?? null }),
+    resident.enquiry_id
+      ? db.from("enquiries").select("*").eq("id", resident.enquiry_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  const tenancy = stay.tenancy;
+  // the rent on the day the stay starts, or today once it has
+  const { klToday } = await import("@/lib/kl-date");
+  const today = klToday();
+  const now = await rentInForce(
+    db,
+    data.residentId,
+    stay.tenancyId,
+    stay.start > today ? stay.start : today,
+  );
+  const bed = placed?.bed ?? null;
+  const room = placed?.room ?? null;
+  const unit = placed?.unit ?? null;
+  const residence = placed?.residence ?? null;
+  const { data: agreement } = await db
+    .from("tenancy_agreements")
+    .select("agreement_no, created_at")
+    .eq("resident_id", data.residentId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const { loadSignatory } = await import("@/lib/signatory.server");
+  const signatory = await loadSignatory(db);
+  const ctx: MappingContext = {
+    resident,
+    enquiry,
+    bed,
+    room,
+    unit,
+    residence,
+    tenancy,
+    agreement,
+    signatory,
+    stay: { start: stay.start, end: stay.end },
+    rentInForce: now.hasSchedule && now.rent > 0 ? now.rent : null,
+  };
   return { resident, ctx };
 }
 
@@ -824,3 +860,66 @@ export const listRetiredPackDocs = createServerFn({ method: "GET" }).handler(asy
   // retired only when every template for that document is deactivated
   return keys.filter((k) => rows.filter((r) => r.doc_key === k).every((r) => r.deactivated_at));
 });
+
+/**
+ * The values an Update Tenancy event's documents are made from (Dani, 10 Oct
+ * 2026) - the same way the first pack is: every placeholder of every active
+ * pack template, filled through its mappings, from the resident's records with
+ * what the event changes put in their place (the new bed, the new dates, the
+ * new rent). Values that belong to the document itself - ticks, typed fields -
+ * are carried over from the version it replaces.
+ *
+ * It sent twelve older keys instead, which no template placeholder is named
+ * after, so a regenerated Schedule A showed its {{placeholders}} unfilled.
+ */
+export async function eventDocumentValues(
+  db: any,
+  residentId: string,
+  change: { bedId?: string | undefined; start?: string | undefined; end?: string | undefined; rent?: number | undefined },
+  previous: Record<string, string> = {},
+): Promise<Record<string, string>> {
+  const { ctx } = await buildContext(db, residentId);
+  if (change.bedId) {
+    const { data: bed } = await db.from("beds").select("*").eq("id", change.bedId).maybeSingle();
+    const { data: room } = bed ? await db.from("rooms").select("*").eq("id", bed.room_id).maybeSingle() : { data: null };
+    const { data: unit } = room ? await db.from("units").select("*").eq("id", room.unit_id).maybeSingle() : { data: null };
+    const { data: residence } = unit ? await db.from("residences").select("id, name, slug").eq("id", unit.residence_id).maybeSingle() : { data: null };
+    // the new bed is somebody else's row until the move - none of their details are this resident's
+    if (bed) ctx.bed = { ...bed, resident_id: residentId, resident_name: null, tenancy_start: null, tenancy_end: null, rent: null };
+    if (room) ctx.room = room;
+    if (unit) ctx.unit = unit;
+    if (residence) ctx.residence = residence;
+  }
+  if (change.start || change.end) {
+    ctx.tenancy = {
+      ...(ctx.tenancy ?? {}),
+      ...(change.start ? { start_date: change.start } : {}),
+      ...(change.end ? { end_date: change.end } : {}),
+    };
+    ctx.stay = {
+      start: change.start || ctx.stay?.start || "",
+      end: change.end || ctx.stay?.end || "",
+    };
+  }
+  if (change.rent && change.rent > 0) {
+    ctx.bed = { ...(ctx.bed ?? {}), rent: change.rent };
+    ctx.rentInForce = change.rent;
+  }
+
+  const { data: rows } = await db
+    .from("template_versions")
+    .select("id, version, content_html, file_path, mappings, boxes, document_templates!inner(doc_key, name, residence_id, category, deactivated_at)")
+    .eq("status", "active")
+    .is("document_templates.deactivated_at", null);
+  const out: Record<string, string> = {};
+  for (const k of PACK_KEYS) {
+    const row = pickForResidence((rows ?? []) as any[], k, ctx.residence?.["id"]);
+    if (!row) continue;
+    const placeholders = await placeholdersOf(db, row);
+    for (const r of testMappingFor(placeholders, ctx, row.mappings ?? {})) {
+      const kept = isDocumentOwn(r.key) || isTickResult(r) ? previous[r.key] : undefined;
+      out[r.key] = kept ?? (r.result === "mapped" ? String(r.value ?? "") : (previous[r.key] ?? ""));
+    }
+  }
+  return out;
+}

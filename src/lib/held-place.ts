@@ -21,27 +21,47 @@
 export async function heldPlace(
   supabase: any,
   enquiryId: string,
+  /** the resident, when the caller knows them - their place is the one every screen shows */
+  residentId?: string,
 ): Promise<{ unitNo: string; roomLetter: string }> {
   let unitNo = "";
   let roomLetter = "";
-  if (!enquiryId) return { unitNo, roomLetter };
+  if (!enquiryId && !residentId) return { unitNo, roomLetter };
 
-  const { data: beds, error: bedError } = await supabase
-    .from("beds")
-    .select("room_id, status")
-    .eq("enquiry_id", enquiryId);
-  if (bedError) console.warn("unit lookup failed at beds", bedError.message);
-  // paid for a room somebody else still lives in: the tenancy names the bed
-  let later: { room_id: string } | null = null;
-  const own = ((beds ?? []) as { room_id: string; status: string }[]).find((b) => b.status !== "vacant");
-  if (!own) {
-    const { data: t } = await supabase.from("tenancies").select("bed_id").eq("enquiry_id", enquiryId).maybeSingle();
-    if (t?.bed_id) {
-      const { data: b } = await supabase.from("beds").select("room_id").eq("id", t.bed_id).maybeSingle();
-      later = b ?? null;
-    }
+  /*
+   * A resident's place is SQL resident_placements - the same answer the admin
+   * pages give (14 Oct 2026). Before, this read the booking's own tenancy, so
+   * after an Update Tenancy move the student's link still named the old room.
+   * A booking with nobody made from it yet: its unpaid hold.
+   */
+  let who = residentId ?? "";
+  if (!who && enquiryId) {
+    const { data: e } = await supabase
+      .from("enquiries")
+      .select("resident_id")
+      .eq("id", enquiryId)
+      .maybeSingle();
+    who = /^[0-9a-f-]{36}$/i.test(String((e as any)?.resident_id ?? ""))
+      ? String((e as any).resident_id)
+      : "";
   }
-  const held = own ?? later;
+  let bedId: string | null = null;
+  if (who) {
+    const { data: rows, error } = await supabase.rpc("resident_placements", { p_residents: [who] });
+    if (error) console.warn("unit lookup failed at resident_placements", error.message);
+    bedId = ((rows ?? []) as any[])[0]?.bed_id ?? null;
+  } else {
+    const { data: hold, error: bedError } = await supabase
+      .from("placement_holds")
+      .select("bed_id")
+      .eq("enquiry_id", enquiryId)
+      .maybeSingle();
+    if (bedError) console.warn("unit lookup failed at holds", bedError.message);
+    bedId = (hold as any)?.bed_id ?? null;
+  }
+  const { data: held } = bedId
+    ? await supabase.from("beds").select("room_id").eq("id", bedId).maybeSingle()
+    : { data: null };
   if (!held?.room_id) return { unitNo, roomLetter };
 
   const { data: theRoom, error: roomError } = await supabase

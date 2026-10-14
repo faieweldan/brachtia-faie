@@ -33,7 +33,7 @@ import {
 } from "@/lib/admin.functions";
 import { fetchDaySlots } from "@/lib/public.functions";
 import { formatSlot } from "@/lib/slots";
-import { useOps } from "@/lib/ops-store";
+import { residentIdOf, useOps } from "@/lib/ops-store";
 import { CheckInPanel } from "@/components/admin/CheckInPanel";
 import { statusWhenOpened } from "@/lib/appointment-status";
 import { Button } from "@/components/ui/button";
@@ -312,6 +312,10 @@ function AppointmentsPage() {
             a.enquiry_id,
             a.resident_id,
             a.resident_id ? `resident ${a.resident_id}` : "",
+            // the linked resident's name and IDs, so a resident ID finds their appointments
+            a.resident_id && residentById.get(a.resident_id)
+              ? `${residentById.get(a.resident_id)!.fullName} ${residentIdOf(residentById.get(a.resident_id)!)}`
+              : "",
           ]
             .filter(Boolean)
             .join(" ")
@@ -453,13 +457,72 @@ function AppointmentsPage() {
       resident_id: a.resident_id ?? "",
       history: Array.isArray(a.history) ? a.history : [],
       starts_at: a.starts_at,
+      // linked to a resident but saved without their details: filled from the resident
+      ...(!a.full_name && a.resident_id && residentById.get(a.resident_id)
+        ? personFromResident(residentById.get(a.resident_id)!)
+        : {}),
     });
     setRescheduling(false);
     setLinkEditing(false);
   }
 
+  const [linkQuery, setLinkQuery] = useState("");
+
   function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
+  }
+
+  /*
+   * Linked to a resident or a booking: the person is that resident or that
+   * booking's student, so their details are filled from it - nobody types a
+   * name the system already has (Dani, 10 Oct 2026).
+   */
+  function personFromResident(r: (typeof ops.residents)[number]) {
+    return {
+      full_name: r.fullName || "",
+      email: r.email || "",
+      phone: r.mobile || "",
+      university: r.university || "",
+      nationality: r.nationality || "",
+      gender: r.gender || "",
+    };
+  }
+  function personFromBooking(e: any) {
+    return {
+      full_name: String(e.full_name ?? ""),
+      email: String(e.email ?? ""),
+      phone: String(e.phone ?? ""),
+      university: String(e.university ?? ""),
+      nationality: String(e.nationality ?? ""),
+      gender: String(e.gender ?? ""),
+    };
+  }
+  function linkTo(kind: "booking" | "resident", id: string) {
+    setForm((prev) => {
+      if (!prev) return prev;
+      if (kind === "resident") {
+        const r = residentById.get(id);
+        return {
+          ...prev,
+          resident_id: id,
+          enquiry_id: "",
+          ...(r ? personFromResident(r) : {}),
+          // a resident already has a room: a new appointment for them is a check-in,
+          // not the form's default viewing (Ali's was saved as a viewing, 10 Oct 2026)
+          ...(!prev.id && prev.type_slug.startsWith("viewing") ? { type_slug: "check-in", mode: "in_person" } : {}),
+        };
+      }
+      const e = enquiryById.get(id);
+      return {
+        ...prev,
+        enquiry_id: id,
+        resident_id: "",
+        ...(e ? personFromBooking(e) : {}),
+        ...(e?.residence_slug && !prev.residence_slugs.length ? { residence_slugs: [String(e.residence_slug)] } : {}),
+      };
+    });
+    setLinkEditing(false);
+    setLinkQuery("");
   }
 
   function submit(overrides?: Partial<Record<string, unknown>>) {
@@ -602,7 +665,8 @@ function AppointmentsPage() {
           onClick={(e) => e.stopPropagation()}
           className="font-semibold text-brand-deep hover:underline"
         >
-          Resident · {a.resident_id}
+          Resident · {residentById.get(a.resident_id)!.fullName || "Unnamed"}
+          {residentIdOf(residentById.get(a.resident_id)!) ? ` · ${residentIdOf(residentById.get(a.resident_id)!)}` : ""}
         </Link>
       );
     }
@@ -1142,7 +1206,10 @@ function AppointmentsPage() {
                                     params={{ id: form.resident_id }}
                                     className="font-semibold text-brand-deep hover:underline"
                                   >
-                                    Resident · {form.resident_id}
+                                    Resident · {residentById.get(form.resident_id)?.fullName || "Unnamed"}
+                                    {residentById.get(form.resident_id) && residentIdOf(residentById.get(form.resident_id)!)
+                                      ? ` · ${residentIdOf(residentById.get(form.resident_id)!)}`
+                                      : ""}
                                   </Link>
                                 ) : (
                                   <span className="text-muted-foreground">Not linked</span>
@@ -1175,43 +1242,57 @@ function AppointmentsPage() {
                               </span>
                             </div>
                             {linkEditing ? (
-                              <div className="grid gap-2 pt-2 sm:grid-cols-2">
-                                <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                                  Booking
-                                  <Dropdown
-                                    className={`${selectClass} w-full`}
-                                    value={form.enquiry_id}
-                                    onChange={(e) => {
-                                      setField("enquiry_id", e.target.value);
-                                      if (e.target.value) setField("resident_id", "");
-                                    }}
-                                  >
-                                    <option value="">—</option>
-                                    {(enquiries as any[]).map((e) => (
-                                      <option key={e.id} value={e.id}>
-                                        {e.reference} · {e.full_name}
-                                      </option>
-                                    ))}
-                                  </Dropdown>
-                                </label>
-                                <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                                  Resident
-                                  <Dropdown
-                                    className={`${selectClass} w-full`}
-                                    value={form.resident_id}
-                                    onChange={(e) => {
-                                      setField("resident_id", e.target.value);
-                                      if (e.target.value) setField("enquiry_id", "");
-                                    }}
-                                  >
-                                    <option value="">—</option>
-                                    {ops.residents.map((r) => (
-                                      <option key={r.id} value={r.id}>
-                                        {r.id} · {r.fullName}
-                                      </option>
-                                    ))}
-                                  </Dropdown>
-                                </label>
+                              /* one search for both - by name, resident ID, QuickBooks ID, booking reference, email or phone */
+                              <div className="space-y-1 pt-2">
+                                <Input
+                                  autoFocus
+                                  value={linkQuery}
+                                  onChange={(e) => setLinkQuery(e.target.value)}
+                                  placeholder="Search name, resident ID, booking reference, email, phone…"
+                                />
+                                {linkQuery.trim() ? (
+                                  <ul className="max-h-60 divide-y divide-border overflow-auto rounded-md border border-border bg-background">
+                                    {(() => {
+                                      const words = linkQuery.trim().toLowerCase().split(/\s+/);
+                                      const hit = (hay: string) => words.every((w) => hay.toLowerCase().includes(w));
+                                      const people = ops.residents
+                                        .filter((r) => hit(`${r.fullName} ${r.residentCode} ${r.quickbooksId} ${r.email} ${r.mobile}`))
+                                        .slice(0, 8)
+                                        .map((r) => ({
+                                          key: `r-${r.id}`,
+                                          kind: "resident" as const,
+                                          id: r.id,
+                                          title: r.fullName || "Unnamed resident",
+                                          sub: ["Resident", residentIdOf(r), r.status].filter(Boolean).join(" · "),
+                                        }));
+                                      const bookings = (enquiries as any[])
+                                        .filter((e) => hit(`${e.full_name} ${e.reference} ${e.email} ${e.phone}`))
+                                        .slice(0, 8)
+                                        .map((e) => ({
+                                          key: `b-${e.id}`,
+                                          kind: "booking" as const,
+                                          id: String(e.id),
+                                          title: String(e.full_name || "Unnamed booking"),
+                                          sub: `Booking · ${e.reference}`,
+                                        }));
+                                      const rows = [...people, ...bookings];
+                                      if (!rows.length)
+                                        return <li className="px-3 py-2 text-xs text-muted-foreground">Nobody matches that search.</li>;
+                                      return rows.map((row) => (
+                                        <li key={row.key}>
+                                          <button
+                                            type="button"
+                                            onClick={() => linkTo(row.kind, row.id)}
+                                            className="flex w-full flex-col px-3 py-2 text-left hover:bg-muted"
+                                          >
+                                            <span className="text-sm font-medium text-foreground">{row.title}</span>
+                                            <span className="text-xs text-muted-foreground">{row.sub}</span>
+                                          </button>
+                                        </li>
+                                      ));
+                                    })()}
+                                  </ul>
+                                ) : null}
                               </div>
                             ) : null}
                           </div>

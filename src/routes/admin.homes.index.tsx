@@ -31,14 +31,14 @@ import {
   fmtDate,
   money,
   useOps,
-  vacateBed,
+  refreshUnits,
   type BedStatus,
   sponsorLabel,
   residentIdOf,
 } from "@/lib/ops-store";
 import { DateInput } from "@/components/ui/date-input";
 import { klToday } from "@/lib/kl-date";
-import { PERSON_LABEL, dayBefore, personStatus, timingLine, type PersonStatus } from "@/lib/placement";
+import { PERSON_LABEL, personStatus, roomStatusOf, timingLine, type PersonStatus } from "@/lib/placement";
 import { universityAbbr } from "@/data/form-options";
 
 /**
@@ -83,8 +83,6 @@ const PILLS: { value: string; label: string }[] = [
   ...STATUSES.slice(1),
 ];
 
-/** The four inventory statuses: a bed still marked "notice" counts as occupied. */
-const inventoryStatus = (status: BedStatus) => (status === "notice" ? "active" : status);
 
 function UnitGenderChip({ unit, residents }: { unit: Unit; residents: Resident[] }) {
   return <UnitGenderMark unit={unit} residents={residents} empty={<span>Any</span>} />;
@@ -123,11 +121,35 @@ function InventoryPage() {
       );
       return;
     }
-    vacateBed(bed.id);
+    // held by hand, nobody behind it: let go in the database, under the unit's lock (14 Oct 2026)
+    const { releaseHandHold } = await import("@/lib/homes.functions");
+    const res = await releaseHandHold({ data: { bedId: bed.id } });
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    await refreshUnits();
     toast.success("Bed released");
+  }
+
+  /** One unpaid booking's hold, and nobody else's - the bed row is not touched (10 Oct 2026). */
+  async function releaseHold(enquiryId: string) {
+    const released = await releaseBookingFor(
+      queryClient,
+      enquiryId,
+      "This booking has paid, so its room is kept. Change its room from the booking instead.",
+    );
+    if (!released) return;
+    await refreshUnits();
+    toast.success("Hold released");
   }
   // the price list lives in Website; inventory quotes it rather than keeping
   // its own copy
+  // booked check-in days - arriving on the booked day is not overdue (10 Oct 2026)
+  const checkInDays = useQuery({
+    queryKey: ["admin", "check-in-days"],
+    queryFn: async () => (await import("@/lib/admin.functions")).listCheckInDays(),
+  });
   const { data: site } = useQuery({
     queryKey: ["admin", "residences"],
     queryFn: () => listResidences(),
@@ -182,7 +204,7 @@ function InventoryPage() {
       if (occupancy && room.occupancy !== occupancy) return false;
       if (gender && unit.gender !== gender) return false;
       const [wantStatus, wantOccupancy] = status.split(":");
-      if (wantStatus && inventoryStatus(bed.status) !== wantStatus) return false;
+      if (wantStatus && roomStatusOf(bed) !== wantStatus) return false;
       if (wantOccupancy && room.occupancy !== wantOccupancy) return false;
       if (from && bed.tenancyEnd && bed.tenancyEnd < from) return false;
       if (to && bed.tenancyStart && bed.tenancyStart > to) return false;
@@ -237,11 +259,12 @@ function InventoryPage() {
     for (const { unit, room, bed } of allBeds(units)) {
       if (residence && unit.residenceName !== residence) continue;
       c["all"] = (c["all"] ?? 0) + 1;
-      const s = inventoryStatus(bed.status);
+      // an empty bed with a stay coming counts as Reserved or Booked, not Vacant
+      const s = roomStatusOf(bed);
       c[s] = (c[s] ?? 0) + 1;
       // every vacant bed falls in one split, whatever its room is sold as, so
       // the splits add up to Vacant
-      if (bed.status === "vacant" && room.occupancy) {
+      if (s === "vacant" && room.occupancy) {
         const key = `vacant:${room.occupancy}`;
         c[key] = (c[key] ?? 0) + 1;
       }
@@ -490,6 +513,8 @@ function InventoryPage() {
                           rent={bedRent(roomTypes, unit, room, bed, asSingle)}
                           onReserve={() => setReserving({ unit, room, bed, asSingle })}
                           onRelease={() => void release(bed)}
+                          onReleaseHold={(enquiryId) => void releaseHold(enquiryId)}
+                          checkInDays={checkInDays.data}
                         />
                       ))}
                     </tbody>
@@ -563,6 +588,8 @@ function BedLine({
   rent,
   onReserve,
   onRelease,
+  onReleaseHold,
+  checkInDays,
 }: {
   unit: Unit;
   room: BedRow["room"];
@@ -572,6 +599,8 @@ function BedLine({
   rent: number;
   onReserve: () => void;
   onRelease: () => void;
+  onReleaseHold: (enquiryId: string) => void;
+  checkInDays?: Record<string, string> | undefined;
 }) {
   const today = klToday();
   const person = residentForBed(residents, bed);
@@ -581,11 +610,13 @@ function BedLine({
       key: "now",
       name: person?.fullName || bed.residentName || bed.holdFor || "—",
       residentId: person?.id,
-      enquiryId: bed.residentId ? undefined : bed.enquiryId,
+      // the bed's own resident's booking - where their room is changed
+      enquiryId: person?.enquiryId,
       code: person ? residentIdOf(person) : undefined,
       university: person?.university || bed.university,
       sponsor: person ? sponsorLabel(person.payerName || person.sponsor) : undefined,
-      start: bed.tenancyStart,
+      // an older hold kept only the move-in date, in hold_until
+      start: bed.tenancyStart || (bed.status === "held" ? bed.holdUntil?.slice(0, 10) : undefined),
       end: bed.tenancyEnd,
       rent,
       status: personStatus({ bedStatus: bed.status }),
@@ -607,13 +638,13 @@ function BedLine({
       end: u.end,
       rent: u.rent || rent,
       status: personStatus({ upcomingAs: u.status }),
-      later: true,
+      // "Next ·" only after somebody - the first stay on an empty bed is just theirs
+      later: stays.length > 0,
     });
   }
 
   // the room's own status: whoever is physically in it decides
-  const roomStatus = inventoryStatus(bed.status);
-  const arriving = bed.status === "booked" && !!bed.tenancyStart && bed.tenancyStart > today;
+  const roomStatus = roomStatusOf(bed);
 
   /** a column's blocks, stacked: the bed's own first, then each later stay under a hairline */
   const col = (render: (s: Stay) => React.ReactNode) =>
@@ -630,21 +661,28 @@ function BedLine({
       <span className="text-muted-foreground">—</span>
     );
 
-  const muted = "block text-xs text-muted-foreground";
   // the bed's own booking, for a resident who has not checked in yet - moved from there
-  const ownBooking = !stays[0]?.later && bed.status === "booked" ? bed.enquiryId : undefined;
 
   return (
     <tr className="align-top">
       <td className="px-4 py-2 font-medium">{isUnitSlot(room) ? "Whole unit" : `Room ${room.letter}`}</td>
-      <td className="px-4 py-2">{asSingle ? "Single" : bed.label}</td>
+      {/* every column stacks one block per person, so a later stay reads across one line (Dani, 10 Oct 2026) */}
+      <td className="px-4 py-2">{stays.length ? col(() => (asSingle ? "Single" : bed.label)) : asSingle ? "Single" : bed.label}</td>
       <td className="px-4 py-2">
-        <StatusPill status={roomStatus} label={roomStatus === "active" ? "Occupied" : undefined} />
-        {bed.status === "held" && bed.holdUntil ? (
-          <span className={muted}>till {fmtDate(bed.holdUntil)}</span>
-        ) : arriving && bed.tenancyStart ? (
-          <span className={muted}>Vacant until {fmtDate(dayBefore(bed.tenancyStart))}</span>
-        ) : null}
+        {stays.length ? (
+          col((st) =>
+            st === stays[0] ? (
+              // the first block is the room's own status - whoever is in it decides
+              <StatusPill status={roomStatus} label={roomStatus === "active" ? "Occupied" : undefined} />
+            ) : (
+              <StatusPill status={st.status} label={PERSON_LABEL[st.status]} />
+            ),
+          )
+        ) : (
+          <StatusPill status={roomStatus} />
+        )}
+        {/* no "till": hold_until carries the move-in date, not an expiry - there is
+            no hold-expiry rule (9 Oct 2026). When they arrive is said under the dates */}
       </td>
       <td className="px-4 py-2">
         {col((st) => (
@@ -666,17 +704,6 @@ function BedLine({
             )}
             <span className="flex flex-wrap items-center gap-1.5 text-xs tabular-nums text-muted-foreground">
               {st.code ? <span>{st.code}</span> : null}
-              {st.enquiryId && st.later ? (
-                <Link
-                  to="/admin/bookings/$id"
-                  params={{ id: st.enquiryId }}
-                  className="underline-offset-2 hover:text-brand-deep hover:underline"
-                >
-                  {st.reference || "Booking"}
-                </Link>
-              ) : null}
-              {/* the room's pill already says the bed's own status - only a later stay needs its own */}
-              {st.later ? <StatusPill status={st.status} label={PERSON_LABEL[st.status]} /> : null}
             </span>
           </>
         ))}
@@ -685,14 +712,14 @@ function BedLine({
       <td className="px-4 py-2 text-muted-foreground">{col((st) => st.sponsor || "—")}</td>
       <td className="px-4 py-2 text-muted-foreground">
         {col((st) => {
-          const when = timingLine(st.status, st.start, st.end, today);
+          const when = timingLine(st.status, st.start, st.end, today, st.residentId ? checkInDays?.[st.residentId] : undefined);
           return (
             <>
               <span className="whitespace-nowrap">
                 {st.start ? `${fmtDate(st.start)} → ${fmtDate(st.end)}` : "—"}
               </span>
               {when ? (
-                <span className={`block text-xs ${when === "Checkout overdue" ? "font-medium text-rose-700" : ""}`}>
+                <span className={`block text-xs ${when .endsWith("overdue") ? "font-medium text-rose-700" : ""}`}>
                   {when}
                 </span>
               ) : null}
@@ -702,22 +729,29 @@ function BedLine({
       </td>
       <td className="px-4 py-2">{stays.length ? col((st) => money(st.rent)) : money(rent)}</td>
       <td className="px-4 py-2 text-right">
-        {col((st) =>
-          st.later || (st.key === "now" && ownBooking) ? (
-            // moved where every booking's room is chosen - the booking's own room picker
-            st.enquiryId || ownBooking ? (
-              <Button size="sm" variant="outline" asChild>
-                <Link
-                  to="/admin/bookings/$id"
-                  params={{ id: (st.enquiryId || ownBooking)! }}
-                  hash="booking-room"
-                  title={`Move ${st.name} to another room`}
-                >
-                  Change room
-                </Link>
-              </Button>
-            ) : null
-          ) : (
+        {/* an empty bed has nobody to act on - only Reserve, no "—" placeholder */}
+        {stays.length > 0 && col((st) =>
+          /*
+           * One action per person (10 Oct 2026): an unpaid hold is released on
+           * its own; a booked stay not moved into changes room from its booking;
+           * the person living here is checked out, not released.
+           */
+          st.status === "held" && st.enquiryId ? (
+            <Button size="sm" variant="ghost" onClick={() => onReleaseHold(st.enquiryId!)}>
+              Release
+            </Button>
+          ) : st.status === "booked" && st.enquiryId ? (
+            <Button size="sm" variant="outline" asChild>
+              <Link
+                to="/admin/bookings/$id"
+                params={{ id: st.enquiryId }}
+                hash="booking-room"
+                title={`Move ${st.name} to another room`}
+              >
+                Change room
+              </Link>
+            </Button>
+          ) : st.key === "now" ? (
             <Button
               size="sm"
               variant="ghost"
@@ -727,8 +761,10 @@ function BedLine({
             >
               Release
             </Button>
-          ),
+          ) : null,
         )}
+        {/* only a bed nobody is in or coming to - later stays are booked from the
+            booking, where the dates are (Dani, 10 Oct 2026) */}
         {!stays.length ? (
           <Button size="sm" variant="outline" onClick={onReserve}>
             Reserve

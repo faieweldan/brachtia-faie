@@ -6,11 +6,13 @@
  * background and reconcile with whatever the server saved.
  *
  * Residents are in Supabase too (residents.functions.ts), and so is money -
- * invoices and payments are read from resident-billing.functions.ts. Tenancies
- * and tasks are still front-end only, mirrored to localStorage until their
- * tables exist.
+ * invoices and payments are read from resident-billing.functions.ts, and
+ * tenancies (tenancyDatesByResident - the browser copy was removed 13 Oct
+ * 2026). Tasks are still front-end only, mirrored to localStorage.
  */
 import { useSyncExternalStore } from "react";
+
+import type { ResidentPlacement } from "@/lib/homes.functions";
 
 /* ---------------- Types ---------------- */
 
@@ -176,32 +178,6 @@ export type Resident = {
   docs: ResidentDoc[];
 };
 
-export type TenancyStage =
-  | "draft"
-  | "admin_signed"
-  | "sent"
-  | "student_signed"
-  | "checkin_scheduled"
-  | "checked_in"
-  | "stamped";
-
-export type Tenancy = {
-  id: string;
-  residentId: string;
-  unitId?: string | undefined;
-  roomId?: string | undefined;
-  bedId?: string | undefined;
-  start: string;
-  end: string;
-  rent: number;
-  schedule: string;
-  stage: TenancyStage;
-  checkinDate: string;
-  checklist: { key: string; label: string; done: boolean; date?: string | undefined }[];
-  agreementFile?: string | undefined;
-  stampedFile?: string | undefined;
-};
-
 export type Task = {
   id: string;
   type: "agreement" | "checkin" | "stamping" | "payment" | "hold";
@@ -215,8 +191,9 @@ export type Task = {
 
 export type OpsState = {
   units: Unit[];
+  /** where each resident is - SQL resident_placements, the one answer (14 Oct 2026); undefined until loaded */
+  placements?: Record<string, ResidentPlacement> | undefined;
   residents: Resident[];
-  tenancies: Tenancy[];
   tasks: Task[];
   taTemplate?: { fileName: string; uploadedAt: string } | undefined;
 };
@@ -224,7 +201,6 @@ export type OpsState = {
 const EMPTY: OpsState = {
   units: [],
   residents: [],
-  tenancies: [],
   tasks: [],
 };
 
@@ -239,7 +215,11 @@ function hydrate() {
   hydrated = true;
   try {
     const raw = window.localStorage.getItem(KEY);
-    if (raw) state = { ...EMPTY, ...(JSON.parse(raw) as OpsState), units: [], residents: [] };
+    if (raw) {
+      // an old "tenancies" list in the saved copy is dropped - the server has them (13 Oct 2026)
+      const { tenancies: _tenancies, ...saved } = JSON.parse(raw) as OpsState & { tenancies?: unknown };
+      state = { ...EMPTY, ...saved, units: [], residents: [], placements: undefined };
+    }
   } catch {
     /* ignore */
   }
@@ -247,12 +227,12 @@ function hydrate() {
   void refreshResidents();
 }
 
-/** Pull the full unit tree from Supabase and swap it into state. */
+/** Pull the full unit tree from Supabase and swap it into state - with where each resident is, read together. */
 export async function refreshUnits() {
   try {
-    const { listUnits } = await import("@/lib/homes.functions");
-    const units = await listUnits();
-    state = { ...state, units };
+    const { listUnits, listResidentPlacements } = await import("@/lib/homes.functions");
+    const [units, placements] = await Promise.all([listUnits(), listResidentPlacements()]);
+    state = { ...state, units, placements };
     listeners.forEach((l) => l());
   } catch {
     /* offline or not signed in: keep whatever is in memory */
@@ -275,7 +255,7 @@ function persist() {
   if (typeof window === "undefined") return;
   try {
     // units live in Supabase; never let a stale local copy shadow them
-    const { units: _units, residents: _residents, ...rest } = state;
+    const { units: _units, residents: _residents, placements: _placements, ...rest } = state;
     window.localStorage.setItem(KEY, JSON.stringify(rest));
   } catch {
     /* ignore */
@@ -313,8 +293,9 @@ export function setState(next: (prev: OpsState) => OpsState) {
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
+// always to the sen: rounding to the ringgit showed RM 2,549.67 as RM 2,550 (Dani, 12 Oct 2026)
 export const money = (n: number) =>
-  `RM ${Number(n || 0).toLocaleString("en-MY", { maximumFractionDigits: 0 })}`;
+  `RM ${Number(n || 0).toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const fmtDate = (d?: string) =>
   d
@@ -400,6 +381,8 @@ function mergeUnit(unit: Unit, replaceId = unit.id) {
  * the saved row (with real database ids) replaces the optimistic one.
  */
 export async function saveUnit(unit: Unit, importBatchId?: string) {
+  // a unit already listed is put back as it was if the save fails - not removed
+  const before = state.units.find((u) => u.id === unit.id);
   mergeUnit(unit);
   try {
     const { saveUnitRow } = await import("@/lib/homes.functions");
@@ -410,7 +393,12 @@ export async function saveUnit(unit: Unit, importBatchId?: string) {
     return saved;
   } catch (err) {
     // roll back so the UI never shows a unit the database does not have
-    setState((s) => ({ ...s, units: s.units.filter((u) => u.id !== unit.id) }));
+    setState((s) => ({
+      ...s,
+      units: before
+        ? s.units.map((u) => (u.id === unit.id ? before : u))
+        : s.units.filter((u) => u.id !== unit.id),
+    }));
     throw err;
   }
 }
@@ -476,113 +464,6 @@ export function isSoldAsSingle(bed: Bed) {
   return bed.holdFor === SOLD_AS_SINGLE;
 }
 
-export type BedPatch = { [K in keyof Bed]?: Bed[K] | undefined };
-
-export function updateBed(bedId: string, patch: BedPatch) {
-  void (async () => {
-    try {
-      const { updateBedRow } = await import("@/lib/homes.functions");
-      await updateBedRow({ data: { bedId, patch } });
-    } catch {
-      void refreshUnits();
-    }
-  })();
-  setState((s) => ({
-    ...s,
-    units: s.units.map((u) => ({
-      ...u,
-      rooms: u.rooms.map((r) => ({
-        ...r,
-        beds: r.beds.map((b) => (b.id === bedId ? ({ ...b, ...patch } as Bed) : b)),
-      })),
-    })),
-  }));
-}
-
-/** A bed with nobody in it: nothing held, and no student's details left behind. */
-const VACANT_BED: BedPatch = {
-  status: "vacant",
-  residentId: undefined,
-  residentName: undefined,
-  studentId: undefined,
-  university: undefined,
-  nationality: undefined,
-  gender: undefined,
-  holdFor: undefined,
-  holdUntil: undefined,
-  tenancyStart: undefined,
-  tenancyEnd: undefined,
-  rent: undefined,
-  // the booking it was held for, too - left behind, the booking still showed
-  // the released room as its own
-  enquiryId: undefined,
-};
-
-/**
- * Empty a bed. Releasing it, moving its student out and deactivating them all
- * come down to this, so it is written once.
- *
- * It was written out by hand in three places, and they had already drifted:
- * one left the student's university on the empty bed, another left a hold in
- * place. If the room had been let whole, the bed kept empty for it goes back on
- * sale too - otherwise it stays held for somebody who has gone.
- */
-export function vacateBed(bedId: string) {
-  const room = state.units.flatMap((u) => u.rooms).find((r) => r.beds.some((b) => b.id === bedId));
-  updateBed(bedId, VACANT_BED);
-  for (const other of room?.beds ?? []) {
-    if (other.id !== bedId && isSoldAsSingle(other)) updateBed(other.id, VACANT_BED);
-  }
-}
-
-/**
- * Re-configure a room: single <-> twin <-> whole unit. The beds are rebuilt to
- * match. An occupied bed is carried over into the first slot so a conversion
- * never loses a resident.
- *
- * `freeBed` is applied, in the same change and the same save, to the first bed
- * nobody is in - never over a resident carried into the first slot. Reserving a
- * single room as a twin needs this: the beds are rebuilt with new ids, so a hold
- * written separately afterwards landed on a bed that no longer existed.
- *
- * The save is returned, so a caller can wait for it and say when it failed -
- * before, a failed save quietly put the room back and the page still said done.
- */
-export function convertRoomOccupancy(
-  roomId: string,
-  occupancy: Occupancy,
-  freeBed?: BedPatch,
-): Promise<void> {
-  setState((s) => ({
-    ...s,
-    units: s.units.map((u) => ({
-      ...u,
-      rooms: u.rooms.map((r) => {
-        if (r.id !== roomId || r.occupancy === occupancy) return r;
-        const fresh = bedsFor(occupancy);
-        const keep = r.beds.find((b) => b.status !== "vacant");
-        const beds = [keep ? { ...keep, label: fresh[0]!.label } : fresh[0]!, ...fresh.slice(1)];
-        const free = keep ? 1 : 0;
-        if (freeBed && beds[free]) beds[free] = { ...beds[free], ...freeBed } as Bed;
-        return { ...r, occupancy, beds };
-      }),
-    })),
-  }));
-
-  const owner = state.units.find((u) => u.rooms.some((r) => r.id === roomId));
-  if (!owner) return Promise.resolve();
-  return (async () => {
-    try {
-      const { saveUnitRow } = await import("@/lib/homes.functions");
-      const saved = await saveUnitRow({ data: { unit: owner } });
-      mergeUnit(saved, owner.id);
-    } catch (err) {
-      void refreshUnits();
-      throw err;
-    }
-  })();
-}
-
 const TAKEN: BedStatus[] = ["held", "booked", "active", "notice"];
 const isTaken = (b: Bed) => TAKEN.includes(b.status);
 
@@ -613,21 +494,6 @@ export function bedBlockedBy(unit: Unit, room: UnitRoom, bed: Bed): string {
     if (t) return `Room ${r.letter} ${t.label} let`;
   }
   return "";
-}
-
-/** A bed is usable for a stay when it is free, or its tenancy does not overlap. */
-export function bedFreeForPeriod(bed: Bed, from?: string | null, to?: string | null) {
-  if (bed.enquiryId) return false;
-  // a stay to come on it: free only if this one is over before every one of them starts
-  if (bed.upcoming?.some((u) => !from || !u.start || (to ?? from) >= u.start)) return false;
-  if (bed.status === "vacant") return true;
-  if (!bed.tenancyEnd && !bed.tenancyStart) return false;
-  if (!from) return false;
-  const start = new Date(from).getTime();
-  const end = to ? new Date(to).getTime() : start;
-  const bStart = bed.tenancyStart ? new Date(bed.tenancyStart).getTime() : -Infinity;
-  const bEnd = bed.tenancyEnd ? new Date(bed.tenancyEnd).getTime() : Infinity;
-  return end < bStart || start > bEnd;
 }
 
 export type BedRow = {
@@ -745,16 +611,30 @@ export function unitAccepts(unit: Unit, residents: Resident[], gender: string | 
 }
 
 /**
- * Where a resident actually sleeps.
+ * Where a resident is - the one answer every screen gives (14 Oct 2026).
  *
- * beds.resident_id is the single record of a placement, so the lookup runs from
- * the bed side. A resident row carries no copy of it - two copies would drift.
- * bedId is still honoured for a placement made by hand before it is saved.
+ * It is SQL resident_placements (listResidentPlacements, loaded with the
+ * units): the bed they are the resident of, else the bed their tenancy names
+ * (still to come, or where they last lived), else their booking's hold. The
+ * documents ask the same function on the server (placementForResident), so the
+ * resident page, the list, Homes and the agreement cannot name different rooms.
+ * `upcoming`: a bed they are not the resident of - somebody else's until their
+ * stay starts, or one they have left.
+ *
+ * Until the placements have loaded, the bed rows are read the old way, so the
+ * page does not flash "No room".
  */
 export function findBedForResident(
   units: Unit[],
   resident: { id: string; quickbooksId?: string | undefined; bedId?: string | undefined },
+  placements: Record<string, ResidentPlacement> | undefined = state.placements,
 ): BedRow | undefined {
+  if (placements) {
+    const p = placements[resident.id];
+    if (!p) return undefined;
+    const row = findBed(units, p.bedId);
+    return row && p.via !== "seated" ? { ...row, upcoming: true } : row;
+  }
   const beds = allBeds(units);
   const byLink = beds.find((r) => r.bed.residentId === resident.id);
   if (byLink) return byLink;
@@ -773,7 +653,7 @@ export function findBedForResident(
  * one cannot show dates the other has not got.
  */
 export function stayDates(
-  tenancy: Pick<Tenancy, "start" | "end"> | undefined,
+  tenancy: { start: string; end: string } | undefined,
   placed: BedRow | undefined,
   resident: { moveIn?: string | undefined },
   /** the tenancies table's dates - the truth, ahead of the browser's own copy */
@@ -885,7 +765,6 @@ export async function deleteResident(id: string) {
   setState((s) => ({
     ...s,
     residents: s.residents.filter((r) => r.id !== id),
-    tenancies: s.tenancies.filter((t) => t.residentId !== id),
   }));
   try {
     const { deleteResidentRow } = await import("@/lib/residents.functions");
@@ -898,37 +777,7 @@ export async function deleteResident(id: string) {
 
 /* ---------------- Tenancy / task / payment helpers ---------------- */
 
-export const CHECKIN_CHECKLIST = [
-  { key: "keycard", label: "Prepare key card" },
-  { key: "clean", label: "Clean & set up room" },
-  { key: "residentcard", label: "Resident card application" },
-];
-
-export type TenancyPatch = { [K in keyof Tenancy]?: Tenancy[K] | undefined };
 export type ResidentPatch = { [K in keyof Resident]?: Resident[K] | undefined };
-
-export function createTenancy(input: TenancyPatch & { residentId: string }): Tenancy {
-  const tenancy: Tenancy = {
-    id: uid(),
-    start: "",
-    end: "",
-    rent: 0,
-    schedule: "",
-    stage: "draft",
-    checkinDate: "",
-    checklist: CHECKIN_CHECKLIST.map((c) => ({ ...c, done: false })),
-    ...input,
-  } as Tenancy;
-  setState((s) => ({ ...s, tenancies: [...s.tenancies, tenancy] }));
-  return tenancy;
-}
-
-export function saveTenancy(tenancy: Tenancy) {
-  setState((s) => ({
-    ...s,
-    tenancies: s.tenancies.map((t) => (t.id === tenancy.id ? tenancy : t)),
-  }));
-}
 
 export function addTask(task: Omit<Task, "id" | "status"> & { status?: Task["status"] }) {
   setState((s) => ({ ...s, tasks: [...s.tasks, { id: uid(), status: "open", ...task }] }));

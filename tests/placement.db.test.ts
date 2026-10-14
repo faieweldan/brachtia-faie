@@ -28,6 +28,8 @@ async function ok<T>(p: PromiseLike<{ data: T; error: any }>): Promise<T> {
 }
 const rpc = (fn: string, args: Record<string, unknown>) => ok<any>(sb.rpc(fn, args));
 const bed = (id: string) => ok<any>(sb.from("beds").select("*").eq("id", id).single());
+const hold = (enquiryId: string) =>
+  ok<any>(sb.from("placement_holds").select("*").eq("enquiry_id", enquiryId).maybeSingle());
 const tenancy = (enquiryId: string) =>
   ok<any>(sb.from("tenancies").select("*").eq("enquiry_id", enquiryId).single());
 
@@ -62,30 +64,12 @@ async function pay(enquiryId: string, name: string, gender: string, start: strin
   await ok(
     sb.from("enquiries").update({ resident_id: r.id, status: "booked" }).eq("id", enquiryId),
   );
-  const owned = await ok<any[]>(
-    sb.from("beds").select("id, resident_id").eq("enquiry_id", enquiryId),
-  );
-  const free = owned.find((b) => !b.resident_id);
-  if (free) {
-    await ok(
-      sb
-        .from("beds")
-        .update({
-          resident_id: r.id,
-          resident_name: `${tag} ${name}`,
-          status: "booked",
-          hold_for: null,
-          tenancy_start: start,
-          tenancy_end: end,
-        })
-        .eq("id", free.id),
-    );
-  }
+  // what residentFromBooking does: the tenancy with no bed, then the database converts the hold
   await ok(
     sb.from("tenancies").insert({
       resident_id: r.id,
       enquiry_id: enquiryId,
-      bed_id: free?.id ?? null,
+      bed_id: null,
       start_date: start,
       end_date: end,
     }),
@@ -153,6 +137,7 @@ d("placement in the database (test-bratchia)", () => {
 
   afterAll(async () => {
     if (!run) return;
+    await sb.from("placement_holds").delete().in("enquiry_id", made.enquiries);
     await sb.from("tenancies").delete().in("enquiry_id", made.enquiries);
     await sb.from("residents").delete().in("id", made.residents);
     await sb.from("units").delete().eq("id", made.unit); // rooms and beds go with it
@@ -165,8 +150,10 @@ d("placement in the database (test-bratchia)", () => {
     expect((await rpc("place_stay", { p_enquiry: e, p_resident: null, p_bed: ids["A"] })).ok).toBe(
       true,
     );
+    // the hold is the whole placement; the bed row is not touched
+    expect((await hold(e))?.bed_id).toBe(ids["A"]);
     const b = await bed(ids["A"]!);
-    expect([b.status, b.enquiry_id, b.resident_id]).toEqual(["held", e, null]);
+    expect([b.status, b.resident_id]).toEqual(["vacant", null]);
   });
 
   test("2. empty room + fee paid -> Booked", async () => {
@@ -174,6 +161,7 @@ d("placement in the database (test-bratchia)", () => {
     const b = await bed(ids["A"]!);
     expect([b.status, b.resident_id]).toEqual(["booked", r]);
     expect((await tenancy(ids["eU"]!)).bed_id).toBe(ids["A"]);
+    expect(await hold(ids["eU"]!)).toBeNull();
   });
 
   test("3. Aisha books Room C from 20 Oct while Muhammad is in it: both keep their place", async () => {
@@ -184,12 +172,14 @@ d("placement in the database (test-bratchia)", () => {
       (await rpc("place_stay", { p_enquiry: e, p_resident: null, p_bed: ids["C"] })).placed,
     ).toBe("later");
     let b = await bed(ids["C"]!);
-    expect([b.resident_id, b.status, b.enquiry_id]).toEqual([ids["M"], "active", e]);
+    expect([b.resident_id, b.status]).toEqual([ids["M"], "active"]);
+    expect((await hold(e))?.bed_id).toBe(ids["C"]);
     // paid: the tenancy takes the bed, the hold goes, Muhammad still untouched
     ids["A_"] = await pay(e, "Aisha", "Male", "2026-10-20", "2026-12-31");
     b = await bed(ids["C"]!);
-    expect([b.resident_id, b.status, b.enquiry_id]).toEqual([ids["M"], "active", null]);
+    expect([b.resident_id, b.status]).toEqual([ids["M"], "active"]);
     expect((await tenancy(e)).bed_id).toBe(ids["C"]);
+    expect(await hold(e)).toBeNull();
   });
 
   test("6/7. Muhammad's extension: before 20 Oct allowed, into her dates refused", async () => {
@@ -246,9 +236,7 @@ d("placement in the database (test-bratchia)", () => {
       rpc("place_stay", { p_enquiry: e2, p_resident: null, p_bed: ids["B2"] }),
     ]);
     expect([a.ok, b.ok].filter(Boolean).length).toBe(1);
-    expect([a, b].find((x) => !x.ok).error).toBe(
-      "This room was just reserved. Choose another room.",
-    );
+    expect([a, b].find((x) => !x.ok).error).toBe("This room is not free for these dates.");
     ids["eR"] = a.ok ? e1 : e2;
   });
 
@@ -259,10 +247,11 @@ d("placement in the database (test-bratchia)", () => {
     expect((await rpc("place_stay", { p_enquiry: e, p_resident: null, p_bed: ids["C"] })).ok).toBe(
       true,
     );
-    expect((await bed(ids["C"]!)).enquiry_id).toBe(e);
+    expect((await hold(e))?.bed_id).toBe(ids["C"]);
     expect((await releaseBooking(sb, e)).ok).toBe(true);
+    expect(await hold(e)).toBeNull();
     const c = await bed(ids["C"]!);
-    expect([c.resident_id, c.status, c.enquiry_id]).toEqual([ids["M"], "active", null]);
+    expect([c.resident_id, c.status]).toEqual([ids["M"], "active"]);
     expect((await tenancy(ids["eA"]!)).bed_id).toBe(ids["C"]);
   });
 

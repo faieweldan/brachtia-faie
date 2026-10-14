@@ -10,6 +10,7 @@ import {
   type RoomType,
   type StayQuote,
 } from "@/data/properties";
+import { cleanPhone } from "@/lib/reference-data";
 import { nextRentalPayment } from "@/lib/rental-schedule";
 import { SCHEDULES } from "@/lib/reference-data";
 import { stayLength } from "@/lib/stay-length";
@@ -275,7 +276,7 @@ function build(
     const work = employmentRow(lead)[0]?.[1] ?? "";
     pairs([
       [lead.name, work],
-      [`${lead.nationality}  ·  ${lead.gender}`, `${lead.email}  ·  ${lead.mobile}`],
+      [`${lead.nationality}  ·  ${lead.gender}`, `${lead.email}  ·  ${lead.mobile ? cleanPhone(lead.mobile) : ""}`],
     ]);
   }
 

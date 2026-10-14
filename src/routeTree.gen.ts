@@ -40,7 +40,6 @@ import { Route as AdminResidentsIndexRouteImport } from './routes/admin.resident
 import { Route as AdminResidentsIdRouteImport } from './routes/admin.residents.$id'
 import { Route as AdminResidentsPayablesRouteImport } from './routes/admin.residents.payables'
 import { Route as AdminResidentsPaymentsRouteImport } from './routes/admin.residents.payments'
-import { Route as AdminResidentsTenanciesRouteImport } from './routes/admin.residents.tenancies'
 import { Route as AdminWebsiteIndexRouteImport } from './routes/admin.website.index'
 import { Route as ApiCronTenancyEventsRouteImport } from './routes/api/cron/tenancy-events'
 import { Route as PropertiesSlugIndexRouteImport } from './routes/properties.$slug.index'
@@ -207,11 +206,6 @@ const AdminResidentsPaymentsRoute = AdminResidentsPaymentsRouteImport.update({
   path: '/payments',
   getParentRoute: () => AdminResidentsRoute,
 } as any)
-const AdminResidentsTenanciesRoute = AdminResidentsTenanciesRouteImport.update({
-  id: '/tenancies',
-  path: '/tenancies',
-  getParentRoute: () => AdminResidentsRoute,
-} as any)
 const AdminWebsiteIndexRoute = AdminWebsiteIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -290,7 +284,6 @@ export interface FileRoutesByFullPath {
   '/admin/residents/$id': typeof AdminResidentsIdRoute
   '/admin/residents/payables': typeof AdminResidentsPayablesRoute
   '/admin/residents/payments': typeof AdminResidentsPaymentsRoute
-  '/admin/residents/tenancies': typeof AdminResidentsTenanciesRoute
   '/api/cron/tenancy-events': typeof ApiCronTenancyEventsRoute
   '/admin/appointments/': typeof AdminAppointmentsIndexRoute
   '/admin/bookings/': typeof AdminBookingsIndexRoute
@@ -327,7 +320,6 @@ export interface FileRoutesByTo {
   '/admin/residents/$id': typeof AdminResidentsIdRoute
   '/admin/residents/payables': typeof AdminResidentsPayablesRoute
   '/admin/residents/payments': typeof AdminResidentsPaymentsRoute
-  '/admin/residents/tenancies': typeof AdminResidentsTenanciesRoute
   '/api/cron/tenancy-events': typeof ApiCronTenancyEventsRoute
   '/admin/appointments': typeof AdminAppointmentsIndexRoute
   '/admin/bookings': typeof AdminBookingsIndexRoute
@@ -371,7 +363,6 @@ export interface FileRoutesById {
   '/admin/residents/$id': typeof AdminResidentsIdRoute
   '/admin/residents/payables': typeof AdminResidentsPayablesRoute
   '/admin/residents/payments': typeof AdminResidentsPaymentsRoute
-  '/admin/residents/tenancies': typeof AdminResidentsTenanciesRoute
   '/api/cron/tenancy-events': typeof ApiCronTenancyEventsRoute
   '/admin/appointments/': typeof AdminAppointmentsIndexRoute
   '/admin/bookings/': typeof AdminBookingsIndexRoute
@@ -416,7 +407,6 @@ export interface FileRouteTypes {
     | '/admin/residents/$id'
     | '/admin/residents/payables'
     | '/admin/residents/payments'
-    | '/admin/residents/tenancies'
     | '/api/cron/tenancy-events'
     | '/admin/appointments/'
     | '/admin/bookings/'
@@ -453,7 +443,6 @@ export interface FileRouteTypes {
     | '/admin/residents/$id'
     | '/admin/residents/payables'
     | '/admin/residents/payments'
-    | '/admin/residents/tenancies'
     | '/api/cron/tenancy-events'
     | '/admin/appointments'
     | '/admin/bookings'
@@ -496,7 +485,6 @@ export interface FileRouteTypes {
     | '/admin/residents/$id'
     | '/admin/residents/payables'
     | '/admin/residents/payments'
-    | '/admin/residents/tenancies'
     | '/api/cron/tenancy-events'
     | '/admin/appointments/'
     | '/admin/bookings/'
@@ -750,13 +738,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminResidentsPaymentsRouteImport
       parentRoute: typeof AdminResidentsRoute
     }
-    '/admin/residents/tenancies': {
-      id: '/admin/residents/tenancies'
-      path: '/tenancies'
-      fullPath: '/admin/residents/tenancies'
-      preLoaderRoute: typeof AdminResidentsTenanciesRouteImport
-      parentRoute: typeof AdminResidentsRoute
-    }
     '/admin/website/': {
       id: '/admin/website/'
       path: '/'
@@ -870,7 +851,6 @@ interface AdminResidentsRouteChildren {
   AdminResidentsIdRoute: typeof AdminResidentsIdRoute
   AdminResidentsPayablesRoute: typeof AdminResidentsPayablesRoute
   AdminResidentsPaymentsRoute: typeof AdminResidentsPaymentsRoute
-  AdminResidentsTenanciesRoute: typeof AdminResidentsTenanciesRoute
   AdminResidentsIndexRoute: typeof AdminResidentsIndexRoute
   AdminResidentsIdDocumentPackRoute: typeof AdminResidentsIdDocumentPackRoute
 }
@@ -879,7 +859,6 @@ const AdminResidentsRouteChildren: AdminResidentsRouteChildren = {
   AdminResidentsIdRoute: AdminResidentsIdRoute,
   AdminResidentsPayablesRoute: AdminResidentsPayablesRoute,
   AdminResidentsPaymentsRoute: AdminResidentsPaymentsRoute,
-  AdminResidentsTenanciesRoute: AdminResidentsTenanciesRoute,
   AdminResidentsIndexRoute: AdminResidentsIndexRoute,
   AdminResidentsIdDocumentPackRoute: AdminResidentsIdDocumentPackRoute,
 }
