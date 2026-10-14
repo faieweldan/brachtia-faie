@@ -890,15 +890,25 @@ export const listRetiredPackDocs = createServerFn({ method: "GET" }).handler(asy
 export async function eventDocumentValues(
   db: any,
   residentId: string,
-  change: { bedId?: string | undefined; start?: string | undefined; end?: string | undefined; rent?: number | undefined },
+  change: {
+    bedId?: string | undefined;
+    /** the new room let whole as one single - the room change knows (place_stay p_whole) */
+    letWhole?: boolean | undefined;
+    start?: string | undefined;
+    end?: string | undefined;
+    rent?: number | undefined;
+  },
   previous: Record<string, string> = {},
 ): Promise<Record<string, string>> {
   const { ctx } = await buildContext(db, residentId);
   if (change.bedId) {
     const { data: bed } = await db.from("beds").select("*").eq("id", change.bedId).maybeSingle();
-    const { data: room } = bed ? await db.from("rooms").select("*").eq("id", bed.room_id).maybeSingle() : { data: null };
-    const { data: unit } = room ? await db.from("units").select("*").eq("id", room.unit_id).maybeSingle() : { data: null };
-    const { data: residence } = unit ? await db.from("residences").select("id, name, slug").eq("id", unit.residence_id).maybeSingle() : { data: null };
+    // the same reader as the first pack's - the room comes with its beds (placement.server)
+    const { bedSurroundings } = await import("@/lib/placement.server");
+    const { room, unit, residence } = await bedSurroundings(db, bed?.room_id);
+    // how the new room is sold: the change says, else the mark place_stay left on its other bed
+    const { soldWhole } = await import("@/lib/placement");
+    ctx.letWhole = soldWhole(room, change.letWhole);
     // the new bed is somebody else's row until the move - none of their details are this resident's
     if (bed) ctx.bed = { ...bed, resident_id: residentId, resident_name: null, tenancy_start: null, tenancy_end: null, rent: null };
     if (room) ctx.room = room;

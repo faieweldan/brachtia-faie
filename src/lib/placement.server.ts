@@ -34,6 +34,29 @@ export type Placement = {
   letWhole: boolean;
 };
 
+/**
+ * A bed's room (with its beds), unit and residence - the one way every
+ * document reads where a placement is (14 Oct 2026). The room carries its beds
+ * so a twin room let whole reads as the single it was sold as (soldOccupancy):
+ * a room change's documents read the new room by hand, without them, and the
+ * revised Schedule A said "twin" for a single.
+ */
+export async function bedSurroundings(sb: any, roomId: string | null | undefined) {
+  if (!roomId) return { room: null, unit: null, residence: null };
+  const [{ data: roomRow }, { data: siblings }] = await Promise.all([
+    sb.from("rooms").select("*").eq("id", roomId).maybeSingle(),
+    sb.from("beds").select("id, label, hold_for").eq("room_id", roomId),
+  ]);
+  const room = roomRow ? { ...roomRow, beds: siblings ?? [] } : null;
+  const { data: unit } = room
+    ? await sb.from("units").select("*").eq("id", room.unit_id).maybeSingle()
+    : { data: null };
+  const { data: residence } = unit
+    ? await sb.from("residences").select("id, name, slug").eq("id", unit.residence_id).maybeSingle()
+    : { data: null };
+  return { room, unit: unit ?? null, residence: residence ?? null };
+}
+
 export async function placementForResident(sb: any, residentId: string): Promise<Placement | null> {
   if (!residentId) return null;
   const { data: rows, error } = await sb.rpc("resident_placements", { p_residents: [residentId] });
@@ -82,18 +105,7 @@ export async function placementForResident(sb: any, residentId: string): Promise
     };
   }
 
-  const [{ data: roomRow }, { data: siblings }] = await Promise.all([
-    sb.from("rooms").select("*").eq("id", bed.room_id).maybeSingle(),
-    // the room's beds, so a twin room let whole reads as the single it was sold as (soldOccupancy)
-    sb.from("beds").select("id, label, hold_for").eq("room_id", bed.room_id),
-  ]);
-  const room = roomRow ? { ...roomRow, beds: siblings ?? [] } : null;
-  const { data: unit } = room
-    ? await sb.from("units").select("*").eq("id", room.unit_id).maybeSingle()
-    : { data: null };
-  const { data: residence } = unit
-    ? await sb.from("residences").select("id, name, slug").eq("id", unit.residence_id).maybeSingle()
-    : { data: null };
+  const { room, unit, residence } = await bedSurroundings(sb, bed.room_id);
   // how it was sold: the tenancy's record for this bed, else the booking's hold
   const [{ data: ten }, { data: hold }] = await Promise.all([
     sb.from("tenancies").select("let_whole").eq("resident_id", residentId).eq("bed_id", String(bed.id)).order("created_at", { ascending: false }).limit(1).maybeSingle(),

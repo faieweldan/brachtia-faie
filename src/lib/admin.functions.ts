@@ -2366,7 +2366,7 @@ export async function applyRoomChange(supabase: any, data: RoomChangeInput) {
             const { data: lastDocs } = await supabase.from("agreement_documents").select("merge_values").eq("agreement_id", ag.id).order("version", { ascending: true });
             const previous: Record<string, string> = Object.assign({}, ...((lastDocs ?? []) as any[]).map((d) => d.merge_values ?? {}));
             const { eventDocumentValues } = await import("@/lib/templates.functions");
-            const mapped = await eventDocumentValues(supabase, plan.residentId, { bedId: data.bedId, start: newStart, end: newEnd, rent: data.newRent }, previous);
+            const mapped = await eventDocumentValues(supabase, plan.residentId, { bedId: data.bedId, ...(data.bedId ? { letWhole: !!data.whole } : {}), start: newStart, end: newEnd, rent: data.newRent }, previous);
             const { reviseScheduleWith } = await import("@/lib/tenancy-docs.functions");
             await reviseScheduleWith(supabase, { agreementId: ag.id, docType: "sched_a", mergeValues: { ...previous, ...mapped }, periodStart: newStart, periodEnd: newEnd });
             ta = "revised";

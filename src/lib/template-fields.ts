@@ -70,11 +70,15 @@ const e = (k: string) => (c: MappingContext) => c.enquiry?.[k];
  * write "RM" themselves, right before the placeholder - "RM{{Security_deposit}}"
  * - so a value that brought its own printed "RM RM 800.00" (29 Sep 2026).
  */
-const money = (v: unknown) => {
-  if (v === null || v === undefined || v === "") return "";
-  const n = Number(v);
-  if (!Number.isFinite(n)) return "";
-  return n.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/*
+ * No amount is RM0.00, never a bare "RM" (Dani, 14 Oct 2026): a resident who
+ * paid the full term has no utilities deposit line, and Schedule A printed
+ * "Utilities deposit: RM". Every money field comes through here, in every
+ * template, so this is the one place it is decided.
+ */
+export const money = (v: unknown) => {
+  const n = v === null || v === undefined || v === "" ? 0 : Number(v);
+  return (Number.isFinite(n) ? n : 0).toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
 /** A country as a person reads it - "Belgium", not the "BEL" the record keeps. */
