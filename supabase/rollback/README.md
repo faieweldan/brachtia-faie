@@ -60,3 +60,23 @@ changes on this branch are recorded here too, so they travel with the code.
 | --- | --- |
 | test-bratchia (Dani) | not run yet |
 | Lovable Cloud (Lav) | not run - only after the code is approved and pushed there |
+
+## 20261017100000_placement_order_fix.sql - two corrections to one_placement (17 Oct 2026)
+
+- File: `supabase/migrations/20261017100000_placement_order_fix.sql`. One transaction.
+- Needs first: 20261014100000_one_placement.sql (it stops with an error and
+  changes nothing without it).
+- Fixes what the database tests found once 20261014100000 ran on test-bratchia:
+  - a resident moving room (Update Tenancy): the next paid resident booked on the
+    room they left is now seated in it (`place_stay` moves the mover's tenancy
+    first, then seats the next one);
+  - saving a unit no longer fails with "DELETE requires a WHERE clause"
+    (`sync_room_shapes` empties its temporary list with TRUNCATE).
+- Check afterwards: `tests/one-placement.db.test.ts` - tests 8 and 9 pass.
+- Undo: `supabase/rollback/20261017100000_placement_order_fix.down.sql` - puts both
+  functions back as 20261014100000 made them. No data is touched.
+
+| Database | Status |
+| --- | --- |
+| test-bratchia (Dani) | not run yet |
+| Lovable Cloud (Lav) | not run - only after the code is approved and pushed there |

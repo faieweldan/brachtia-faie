@@ -4,7 +4,8 @@ import { createClient } from "@supabase/supabase-js";
 
 /**
  * One placement system (Phase 2, 14 Oct 2026) - 20261014100000_one_placement.sql
- * and the code that uses it, on test-bratchia only, with a throwaway unit and
+ * with its corrections in 20261017100000_placement_order_fix.sql (both run
+ * first) and the code that uses it, on test-bratchia only, with a throwaway unit and
  * made-up people that are removed afterwards. Run with:
  *
  *   RUN_DB_TESTS=1 bun --env-file=.env test tests/one-placement.db.test.ts
