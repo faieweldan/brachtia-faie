@@ -205,7 +205,8 @@ export async function creditNotePdf(doc: CreditNoteDoc): Promise<Uint8Array> {
   });
   const total = Math.round(doc.lines.reduce((n, l) => n + l.amount, 0) * 100) / 100;
   f.section(doc.heading);
-  for (const l of doc.lines) f.row(l.label, rm(l.amount));
+  // what took from the credit is shown with its minus, as on the statement
+  for (const l of doc.lines) f.row(l.label, l.amount < 0 ? `- ${rm(l.amount)}` : rm(l.amount));
   f.row(doc.totalLabel, rm(total), { f: f.bold });
   f.y -= 8;
   f.result(doc.resultLabel, total, true);

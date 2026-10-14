@@ -12,7 +12,7 @@ import { StaffTag } from "@/components/admin/RecordPaymentDialog";
 import { StaffPicker } from "@/components/admin/Dropdown";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { checkoutPdf, creditNoteProofUrl, issueAccountCreditNote, listResidentPayables, refundProofUrl, type PayableRow } from "@/lib/checkout.functions";
+import { checkoutPdf, creditNoteDoc, creditNoteProofUrl, issueAccountCreditNote, listResidentPayables, refundProofUrl, type PayableRow } from "@/lib/checkout.functions";
 import { money } from "@/lib/ops-store";
 
 const TONE: Record<string, string> = {
@@ -42,7 +42,18 @@ export function PayablesTable({ rows, onChanged, hideResident = false }: { rows:
   const [open, setOpen] = useState<string | null>(null);
 
   async function view(r: PayableRow) {
-    if (r.kind !== "checkout" || r.version == null) return;
+    // an account credit note: the shared credit-note PDF, drawn here like an invoice
+    if (r.kind === "credit") {
+      try {
+        const doc = await creditNoteDoc({ data: { residentId: r.residentId, number: r.number } });
+        const { creditNotePdfUrl } = await import("@/lib/credit-note-pdf");
+        setPdf({ url: await creditNotePdfUrl(doc), title: r.number });
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not open the PDF");
+      }
+      return;
+    }
+    if (r.version == null) return;
     try {
       const { base64 } = await checkoutPdf({ data: { residentId: r.residentId, v: r.version } });
       const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
@@ -111,11 +122,9 @@ export function PayablesTable({ rows, onChanged, hideResident = false }: { rows:
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-52">
-                          {r.kind === "checkout" ? (
-                            <DropdownMenuItem onSelect={() => void view(r)}>
-                              <Download className="size-4" /> Download PDF
-                            </DropdownMenuItem>
-                          ) : null}
+                          <DropdownMenuItem onSelect={() => void view(r)}>
+                            <Download className="size-4" /> Download PDF
+                          </DropdownMenuItem>
                           <DropdownMenuItem disabled={r.status !== "To pay"} onSelect={() => setPaying(r)}>
                             <Plus className="size-4" /> Record payment
                           </DropdownMenuItem>
@@ -132,13 +141,10 @@ export function PayablesTable({ rows, onChanged, hideResident = false }: { rows:
                     <td colSpan={cols} className="bg-muted/20 px-4 py-4">
                       <div className="space-y-3">
                         <div className="flex flex-wrap items-center gap-2">
-                          {r.kind === "checkout" ? (
-                            <button type="button" className="inline-flex items-center gap-1.5 font-semibold text-brand-deep hover:underline" onClick={() => void view(r)}>
-                              {r.number} <Eye className="size-4" />
-                            </button>
-                          ) : (
-                            <span className="font-semibold text-brand-deep">{r.number}</span>
-                          )}
+                          {/* every credit note opens as its PDF, like an invoice */}
+                          <button type="button" className="inline-flex items-center gap-1.5 font-semibold text-brand-deep hover:underline" onClick={() => void view(r)}>
+                            {r.number} <Eye className="size-4" />
+                          </button>
                           <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${TONE[r.status] ?? ""}`}>{r.status}</span>
                           <span className="text-xs text-muted-foreground">
                             {r.version != null ? `Version ${r.version} · ` : ""}issued {dateOf(r.issuedAt)}
@@ -167,12 +173,20 @@ export function PayablesTable({ rows, onChanged, hideResident = false }: { rows:
                               ))}
                             </>
                           ) : (
-                            r.lines.map((l, i) => (
-                              <div key={`l${i}`} className="flex justify-between px-4 py-2">
-                                <span className="text-muted-foreground">{l.label}</span>
-                                <span className="tabular-nums">{money(l.amount)}</span>
-                              </div>
-                            ))
+                            <>
+                              {/* where the credit came from, then what took from it - kept with the note when issued */}
+                              <p className="px-4 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Account credit</p>
+                              {r.lines.map((l, i) => (
+                                <div key={`l${i}`} className="flex justify-between px-4 py-2">
+                                  <span className="text-muted-foreground">{l.label}</span>
+                                  {l.amount < 0 ? (
+                                    <span className="whitespace-nowrap tabular-nums text-rose-700">− {money(-l.amount)}</span>
+                                  ) : (
+                                    <span className="tabular-nums">{money(l.amount)}</span>
+                                  )}
+                                </div>
+                              ))}
+                            </>
                           )}
                           <div className="mt-2 flex justify-between border-t-2 border-border bg-muted/50 px-4 py-2.5 font-semibold">
                             <span>Refund to the resident</span>

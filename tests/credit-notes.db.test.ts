@@ -106,3 +106,17 @@ d("credit notes on the account-credit ledger (test-bratchia)", () => {
     expect(n?.refund?.amount).toBe(75);
   });
 });
+
+describe("a credit note keeps its breakdown (20261022100000_credit_note_lines.sql)", () => {
+  const run2 = process.env["RUN_DB_TESTS"] === "1" && (process.env["SUPABASE_URL"] ?? "").includes("zyuadtrqcgocottxyzpk");
+  (run2 ? test : test.skip)("the lines are the credit given, less what took from it, and add up to the note", async () => {
+    const r = resident();
+    await give(r, 300);
+    await invoice(r, 50, "scheduled");
+    const c = await credit();
+    const note = await c.issueCreditNote(sb, r, "Staff");
+    const [n] = await c.creditNotes(sb, r);
+    expect(n!.lines.map((l) => [l.label, l.amount])).toEqual([[`${tag}`, 300], ["Rent still to bill", -50]]);
+    expect(n!.lines.reduce((s, l) => s + l.amount, 0)).toBeCloseTo(note.amount, 2);
+  });
+});

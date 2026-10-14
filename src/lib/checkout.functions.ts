@@ -718,7 +718,8 @@ async function payableRows(sb: any, only?: string) {
         held: 0,
         deducted: 0,
         deposits: [] as { label: string; amount: number }[],
-        lines: [{ label: n.reason, amount: n.amount }],
+        // the breakdown kept with the note - credit given, then what took from it
+        lines: n.lines,
         issuedBy: n.issuedBy,
         refund: n.refund
           ? { amount: n.refund.amount, paidOn: n.refund.paidOn, method: n.refund.method, reference: n.refund.reference, recordedBy: n.refund.recordedBy, hasProof: !!n.refund.proofPath }
@@ -777,6 +778,41 @@ export const recordCreditNoteRefundFn = createServerFn({ method: "POST" })
     } else throw new Error("Attach the proof of the refund");
     await recordCreditNoteRefund(sb, residentId, number, { amount, paidOn, method, reference, proofPath, recordedBy, recordedAt: new Date().toISOString() });
     return { ok: true as const };
+  });
+
+/**
+ * An account credit note as its PDF prints it (Dani, 14 Oct 2026) - the shared
+ * credit-note design (credit-note-pdf.ts), its breakdown as kept when issued.
+ * The browser draws it, as it draws an invoice.
+ */
+export const creditNoteDoc = createServerFn({ method: "GET" })
+  .inputValidator((d) => z.object({ residentId: z.string().uuid(), number: z.string().min(1) }).parse(d))
+  .handler(async ({ data }) => {
+    const sb = await admin();
+    const { creditNotes } = await import("@/lib/account-credit.server");
+    const note = (await creditNotes(sb, data.residentId)).find((n) => n.number === data.number);
+    if (!note) throw new Error("Credit note not found");
+    const { residentParticulars } = await import("@/lib/checkout.server");
+    const p = await residentParticulars(sb, data.residentId);
+    const { CREDIT_NOTE_CATEGORIES } = await import("@/lib/invoice-category");
+    return {
+      number: note.number,
+      subtitle: CREDIT_NOTE_CATEGORIES.refund.label,
+      date: note.at,
+      resident: {
+        name: p.name || note.residentName,
+        code: p.code || note.residentCode,
+        residence: [p.residence, p.unit].filter(Boolean).join(" · "),
+        room: p.room,
+        tenancyStart: p.tenancyStart,
+        tenancyEnd: p.tenancyEnd,
+      },
+      heading: "ACCOUNT CREDIT",
+      lines: note.lines,
+      totalLabel: "Left over",
+      resultLabel: "REFUND TO THE RESIDENT",
+      notes: "Account credit no invoice can take - nothing is left to bill - paid back to the resident.",
+    };
   });
 
 export const creditNoteProofUrl = createServerFn({ method: "GET" })

@@ -75,6 +75,8 @@ export type CreditNote = {
   /** who it was issued to, as it says (20261021100000_credit_note_numbers.sql) */
   residentName: string;
   residentCode: string;
+  /** how the amount was reached, as it stood when issued: each credit given, then what took from it (negative) */
+  lines: { label: string; amount: number }[];
   refund?: CreditRefund | undefined;
 };
 
@@ -267,6 +269,10 @@ const toNote = (r: any): CreditNote => ({
   issuedBy: String(r.issued_by ?? ""),
   residentName: String(r.resident_name ?? ""),
   residentCode: String(r.resident_code ?? ""),
+  // a note from before its breakdown was kept: its one reason line
+  lines: Array.isArray(r.lines) && r.lines.length
+    ? (r.lines as any[]).map((l) => ({ label: String(l.label ?? ""), amount: Number(l.amount ?? 0) }))
+    : [{ label: String(r.reason ?? ""), amount: Number(r.amount) }],
   ...(r.refund ? { refund: r.refund as CreditRefund } : {}),
 });
 
