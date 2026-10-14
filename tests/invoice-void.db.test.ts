@@ -212,4 +212,26 @@ d("cancelling an invoice, on test-bratchia", () => {
     expect(s.notes.match(/moved to account credit/g)).toHaveLength(1);
     expect(s.notes).toContain("RM 90.00 moved to account credit");
   });
+
+  test("another resident's invoice is neither voided nor credited", async () => {
+    const inv = await invoice(300, { status: "scheduled", invoice_type: "initial" });
+    await pay(inv.id, 80);
+    const stranger = resident();
+    const r = await cancelCredit(stranger, inv.id, "evX");
+    expect(r).toMatchObject({ ok: false, error: "not_this_resident", voided: false });
+    expect((await state(inv.id)).status).toBe("scheduled");
+    expect(await cancelCredits(stranger)).toEqual([]);
+    expect(await cancelCredits(inv.residentId)).toEqual([]);
+  });
+
+  test("checkout cancellation: a payment after the statement keeps the invoice live", async () => {
+    const inv = await invoice(1000, { status: "part_paid", invoice_type: "initial" });
+    await pay(inv.id, 100); // on the signed statement
+    await pay(inv.id, 50); // after it
+    const r = await ok<any>(
+      sb.rpc("void_invoice_if_unpaid", { p_invoice: inv.id, p_expect_paid: 100 }),
+    );
+    expect(r).toMatchObject({ ok: false, error: "paid" });
+    expect((await state(inv.id)).status).toBe("part_paid");
+  });
 });

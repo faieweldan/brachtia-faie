@@ -200,3 +200,32 @@ describe("the migration guards itself", () => {
     );
   });
 });
+
+describe("checkout cancellation: what the signed statement counted", () => {
+  const deposits = [
+    { label: "Booking fee", amount: 60, invoiceNumber: "INV/IP/00001" },
+    { label: "Advance rent", amount: 40, invoiceNumber: "INV/IP/00001" },
+    { label: "Other booking", amount: 25, invoiceNumber: "INV/IP/00002" },
+  ];
+
+  test("several deposit lines of one invoice are added up; other invoices' are not", async () => {
+    const { statementPaidFor } = await import("../src/lib/checkout.functions");
+    expect(statementPaidFor(deposits, "INV/IP/00001")).toBe(100);
+    expect(statementPaidFor(deposits, "INV/IP/00002")).toBe(25);
+  });
+
+  test("nothing captured for the invoice: it expects zero", async () => {
+    const { statementPaidFor } = await import("../src/lib/checkout.functions");
+    expect(statementPaidFor(deposits, "INV/IP/00009")).toBe(0);
+    expect(statementPaidFor([], "INV/IP/00001")).toBe(0);
+    expect(statementPaidFor(deposits, "")).toBe(0);
+  });
+
+  test("the amount comes from the signed statement, never a fresh read of payments", () => {
+    const code = src("src/lib/checkout.functions.ts");
+    const start = code.indexOf('if (v.type === "cancellation")');
+    const block = code.slice(start, code.indexOf("const { writeStatement }", start));
+    expect(block).toContain("statementPaidFor(v.deposits, String(inv.number");
+    expect(block).not.toMatch(/from\("payments"\)/);
+  });
+});

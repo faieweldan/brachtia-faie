@@ -516,6 +516,17 @@ export const signCheckout = createServerFn({ method: "POST" })
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/** what a signed statement counted as paid on one invoice - its deposit lines for it, added up */
+export const statementPaidFor = (
+  deposits: { amount: number; invoiceNumber: string }[],
+  invoiceNumber: string,
+) =>
+  round2(
+    deposits
+      .filter((d) => invoiceNumber && d.invoiceNumber === invoiceNumber)
+      .reduce((n, d) => n + Number(d.amount || 0), 0),
+  );
+
 /**
  * The deposit applied to an invoice: a payment and its receipt, saved the way
  * every payment is (recordInvoicePayment, 15 Oct 2026) - never more than the
@@ -610,16 +621,16 @@ async function settle(sb: any, residentId: string, s: import("@/lib/checkout.ser
   }
   // a cancellation: the initial invoice is not chased any more - what was paid on it is on this statement
   if (v.type === "cancellation") {
-    const { data: initial } = await sb.from("invoices").select("id, total, status").eq("resident_id", residentId).eq("invoice_type", "initial");
+    const { data: initial } = await sb.from("invoices").select("id, number, total, status").eq("resident_id", residentId).eq("invoice_type", "initial");
     for (const inv of (initial ?? []) as any[]) {
       if (inv.status === "paid" || inv.status === "void") continue;
       /*
-       * Voided only while what is paid on it is what this statement counted -
-       * checked with the invoice locked (16 Oct 2026). A payment saved since is
-       * not on the statement, so the invoice is left live for admin to look at.
+       * Voided only while what is paid on it is what the signed statement counted
+       * (its deposit lines for this invoice) - checked with the invoice locked
+       * (16 Oct 2026). A payment saved since is not on the statement, so the
+       * invoice is left live for admin to look at, never silently dropped.
        */
-      const { data: pays } = await sb.from("payments").select("amount").eq("invoice_id", inv.id);
-      const paid = round2(((pays ?? []) as any[]).reduce((n, p) => n + Number(p.amount || 0), 0));
+      const paid = statementPaidFor(v.deposits, String(inv.number ?? ""));
       const { data: r, error } = await sb.rpc("void_invoice_if_unpaid", {
         p_invoice: inv.id,
         p_expect_paid: paid,

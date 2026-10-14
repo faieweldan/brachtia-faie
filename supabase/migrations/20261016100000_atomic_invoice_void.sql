@@ -126,6 +126,10 @@ begin
   -- the resident's credit first, then the invoice - apply_account_credit's order
   perform pg_advisory_xact_lock(hashtextextended('account_credit:' || p_resident::text, 0));
   select * into inv from public.invoices where id = p_invoice for update;
+  -- only this resident's invoice: another's is neither voided nor credited
+  if found and inv.resident_id <> p_resident::text then
+    return jsonb_build_object('ok', false, 'error', 'not_this_resident', 'voided', false, 'cash', 0);
+  end if;
   if not found or inv.status = 'void' then
     return jsonb_build_object('ok', true, 'voided', false, 'cash', 0);
   end if;

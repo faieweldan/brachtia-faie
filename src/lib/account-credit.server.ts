@@ -204,6 +204,8 @@ export async function voidInvoiceToCredit(
     p_event_id: o.eventId,
   });
   if (error) throw new Error(`Could not cancel the invoice: ${error.message}`);
+  if ((data as any)?.ok === false)
+    throw new Error("Could not cancel the invoice: it is not this resident's invoice.");
   return Number((data as any)?.cash ?? 0);
 }
 
