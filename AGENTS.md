@@ -35,6 +35,7 @@ and what is still duplicated: `docs/HANDOFF-REUSE.md`.
 | Payment methods and what each needs | `METHOD_RULES`, `ruleFor` (`src/lib/payment-methods.ts`) | `tests/payment-methods.test.ts` |
 | Shrink a photo before upload | `compressImage` (`src/lib/compress.ts`) | - |
 | Money on a document | `formatRM` (with sen). `money` in ops-store rounds to the ringgit - lists only | - |
+| A link to send someone (copy with one click) | `CopyLinkButton` (`src/components/admin/CopyLinkButton.tsx`) - Application Form Link, signing link | - |
 | A list's filters (label, date from -> to, search, Reset) | `FilterField`, `DateRangeFilter`, `SearchFilter`, `ResetFilters` (`src/components/admin/filters.tsx`) - Collections and Payables | - |
 | Who is in a unit (Vacant / Reserved / Booked / Occupied, with Next) | `bedStays` (`src/lib/placement.ts`), drawn by `UnitBeds` (`src/components/admin/UnitBeds.tsx`) | `tests/one-rule.test.ts` |
 | A list's stages as clickable counts (filters the table) | `StageStrip` (`src/components/admin/StageStrip.tsx`) - pass the same stage list and pill colours the table uses | - |

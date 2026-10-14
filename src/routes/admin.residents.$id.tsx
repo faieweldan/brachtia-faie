@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CopyLinkButton } from "@/components/admin/CopyLinkButton";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { klToday } from "@/lib/kl-date";
 import { PERSON_LABEL, personStatus, soldBedLabel, timingLine, timingTone } from "@/lib/placement";
 import { ResidentLabelPicker } from "@/components/admin/ResidentLabels";
 import { beforeTenancyStart } from "@/lib/room-change";
 import { isSandboxClient } from "@/lib/sandbox";
-import { ArrowLeft, DoorOpen, Link2, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, DoorOpen, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -221,7 +222,6 @@ function ResidentProfilePage() {
   const [active, setActive] = useState("personal");
   // sections are read-only until the pencil is clicked
   const [editing, setEditing] = useState<Record<string, boolean>>({});
-  const [linking, setLinking] = useState(false);
   const queryClient = useQueryClient();
   const savedDates = useQuery({ queryKey: ["tenancy-dates"], queryFn: () => tenancyDatesByResident() });
   // booked check-in days - arriving on the booked day is not overdue (10 Oct 2026)
@@ -456,23 +456,13 @@ function ResidentProfilePage() {
    * straight back to this resident, so anything they change shows up here and
    * everywhere else at once.
    */
-  async function copyProfileLink() {
-    if (!form || isNew) return;
-    setLinking(true);
-    try {
-      const { getOrCreateProfileLink } = await import("@/lib/profile-link.functions");
-      const { token } = await getOrCreateProfileLink({ data: { residentId: form.id } });
-      const url = `${window.location.origin}/my-profile/${token}`;
-      await navigator.clipboard.writeText(url);
-      toast.success("Profile link copied", {
-        description: "Send it to the resident. It works for 30 days.",
-      });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not create the link");
-    } finally {
-      setLinking(false);
-    }
+  // the resident's own form link - made on first use, then the same one
+  async function profileLink() {
+    const { getOrCreateProfileLink } = await import("@/lib/profile-link.functions");
+    const { token } = await getOrCreateProfileLink({ data: { residentId: form!.id } });
+    return `${window.location.origin}/my-profile/${token}`;
   }
+
 
   async function discard() {
     if (!form) return;
@@ -880,16 +870,14 @@ function ResidentProfilePage() {
 
               {/* sending the student their own form is a nav action, not a
                   section of the profile */}
-              <Button
-                size="sm"
-                variant="outline"
+              <CopyLinkButton
+                label="Application Form Link"
                 className="mt-3 w-full justify-start"
-                disabled={isNew || linking}
-                onClick={copyProfileLink}
-              >
-                <Link2 className="mr-1.5 size-3.5" />
-                {linking ? "Preparing…" : "Application Form Link"}
-              </Button>
+                disabled={isNew}
+                link={profileLink}
+                copied="Profile link copied"
+                note="Send it to the resident. It works for 30 days."
+              />
             </nav>
 
             <div className="min-w-0 flex-1 space-y-4">
