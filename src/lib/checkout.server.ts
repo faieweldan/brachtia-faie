@@ -22,7 +22,7 @@ export * from "@/lib/checkout-types";
  *   checkout/<resident>/v<n>-signature.png
  *   checkout/<resident>/photos/<id>.jpg        a deduction's photos
  *   checkout/<resident>/refund-proof.<ext>
- *   checkout/_counter.json                     the next CN number
+ *   (the number: CN/CS/00001 - the database's checkout_note_seq, nextNumber)
  */
 const BUCKET = "resident-documents";
 

@@ -98,3 +98,24 @@ describe("invoice and credit note codes", () => {
     expect(CREDIT_NOTE_CATEGORIES.refund.code).toBe("RF");
   });
 });
+
+/*
+ * Credit note numbers come only from the database (14 Oct 2026): checkout's was
+ * a counter file in Storage, read then written, so two statements started
+ * together could share a number, and it wrote CS/ instead of CN/CS/. Both
+ * series are database sequences now - CN/CS (next_checkout_note_number) and
+ * CN/RF (issue_account_credit_note) - each from 1.
+ */
+describe("credit note numbers", () => {
+  test("no code keeps its own number counter", () => {
+    const own = [...files("src/lib"), ...files("src/routes"), ...files("src/components")].filter((f) =>
+      /_counter\.json/.test(readFileSync(f, "utf8")),
+    );
+    expect(own).toEqual([]);
+  });
+  test("checkout numbers are CN/CS from the database", () => {
+    const src = readFileSync("src/lib/checkout.server.ts", "utf8");
+    expect(src).toContain('rpc("next_checkout_note_number")');
+    expect(readFileSync("supabase/migrations/20261021100000_credit_note_numbers.sql", "utf8")).toContain("'CN/CS/'");
+  });
+});
