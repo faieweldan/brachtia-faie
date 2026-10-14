@@ -17,6 +17,7 @@ import {
   emptyExistingResident,
   existingResidentGrid,
   invoiceNoFrom,
+  readIssues,
   type ExistingResidentInput,
 } from "@/lib/migration/existing-resident";
 import { previewSheet3Grid } from "@/lib/migration/sheet3";
@@ -73,6 +74,8 @@ function AddExistingResident() {
     [f, units, residents, today],
   );
   const row = preview.rows[0];
+  // the check's issues, read for someone filling it in: to fill, problems, later
+  const read = useMemo(() => readIssues(row?.issues ?? [], f), [row, f]);
 
   // the room: residence -> unit -> room -> bed, from Homes
   const residences = useMemo(() => [...new Set(units.map((u) => u.residenceName))].sort(), [units]);
@@ -349,21 +352,59 @@ function AddExistingResident() {
       {row ? (
         <Panel
           title="Check"
-          description="The bulk upload's own check, on this resident. Open it to see what will be saved."
+          description="Checked as you type, by the same rules as the bulk upload."
           action={
-            <span className={`rounded-full border px-2 py-0.5 text-xs ${MIGRATION_STATUS[row.status].tone}`}>
-              {MIGRATION_STATUS[row.status].label}
-            </span>
+            read.toFill.length ? (
+              <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                {read.toFill.length} still to fill
+              </span>
+            ) : (
+              <span className={`rounded-full border px-2 py-0.5 text-xs ${MIGRATION_STATUS[row.status].tone}`}>
+                {MIGRATION_STATUS[row.status].label}
+              </span>
+            )
           }
         >
-          <div className="rounded-xl border border-border">
-            <ResidentLine row={row} today={today} open={open} onToggle={() => setOpen(!open)} />
-          </div>
+          {/* not filled in yet is a to-do, in grey - red only for what is filled in and wrong (Dani, 14 Oct 2026) */}
+          {read.toFill.length ? (
+            <div className="mb-3 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm">
+              <p className="font-medium text-foreground">Still to fill</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {read.toFill.map((label) => (
+                  <span key={label} className="rounded-full border border-border bg-background px-2 py-0.5 text-xs text-muted-foreground">
+                    {label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {read.problems.length ? (
+            <ul className="mb-3 space-y-1">
+              {read.problems.map((p, n) => (
+                <li key={n} className={`rounded-md px-2.5 py-1.5 text-xs ${p.level === "blocked" ? "bg-rose-50 text-rose-900" : "bg-amber-50 text-amber-900"}`}>
+                  <span className="font-semibold">{p.field}:</span> {p.message}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {read.later.length ? (
+            <p className="mb-3 text-xs text-muted-foreground">
+              Can be uploaded on their profile later: {read.later.join(", ")}.
+            </p>
+          ) : null}
+          {/* what will be saved - once the needed boxes are in, like the bulk upload's line */}
+          {!read.toFill.length ? (
+            <div className="rounded-xl border border-border">
+              <ResidentLine row={row} today={today} open={open} onToggle={() => setOpen(!open)} />
+            </div>
+          ) : null}
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
             <p className="text-xs text-muted-foreground">
-              {row.status === "blocked"
-                ? "Fix what is marked Blocked first."
-                : "Gets a profile, tenancy, the old TA, a paid initial invoice, the rent from the next period, and the bed."}
+              {read.toFill.length
+                ? "Fill in the boxes above - the button turns on when they are done."
+                : row.status === "blocked"
+                  ? "Fix what is marked in red first."
+                  : "Gets a profile, tenancy, the old TA, a paid initial invoice, the rent from the next period, and the bed."}
             </p>
             <Button onClick={() => void add()} disabled={row.status === "blocked" || busy}>
               {busy ? "Adding…" : "Add resident"}

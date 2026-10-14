@@ -1,11 +1,10 @@
 import { useMemo, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ChevronDown, Download, Plus, Upload, Users, UserPlus } from "lucide-react";
+import { Download, Upload, Users, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import type { ImportReport } from "@/lib/residents.functions";
 import * as XLSX from "xlsx";
 
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState, Panel, Select, StatusPill } from "@/components/admin/ops-ui";
@@ -218,10 +217,6 @@ function ResidentsListPage() {
   }
 
   /** Open an empty form. The row is created when it is saved, not before. */
-  function addResident() {
-    void navigate({ to: "/admin/residents/$id", params: { id: "new" } });
-  }
-
   function downloadProblems() {
     if (!report?.problems.length) return;
     const sheet = XLSX.utils.json_to_sheet(
@@ -374,34 +369,14 @@ function ResidentsListPage() {
               <Upload className="mr-1 size-4" /> {importing ? "Reading…" : "Bulk upload"}
             </Button>
             {/*
-              Add resident is a choice (Dani, 14 Oct 2026). A new resident normally
-              comes from a booking; by hand it is either someone from before the
-              system - the bulk upload's own check and import, one at a time - or,
-              rarely, a blank profile admin fills in later (no tenancy, invoice or bed).
+              By hand, only someone from before the system (Dani, 14 Oct 2026) - the
+              bulk upload's own check and import. A new resident comes from a
+              booking: they fill in the public Brachtia link, so there is no blank
+              profile to make here.
             */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm">
-                  <Plus className="mr-1 size-4" /> Add resident <ChevronDown className="ml-1 size-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-72">
-                <DropdownMenuItem onSelect={() => void navigate({ to: "/admin/residents/add-existing" })} className="items-start">
-                  <UserPlus className="mt-0.5 size-4" />
-                  <span>
-                    <span className="block font-medium">Existing resident</span>
-                    <span className="block text-xs text-muted-foreground">From before the system - with their TA, invoice, rent and bed</span>
-                  </span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={addResident} className="items-start">
-                  <Plus className="mt-0.5 size-4" />
-                  <span>
-                    <span className="block font-medium">Blank profile</span>
-                    <span className="block text-xs text-muted-foreground">Details only - no tenancy, invoice or bed yet</span>
-                  </span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button size="sm" onClick={() => void navigate({ to: "/admin/residents/add-existing" })}>
+              <UserPlus className="mr-1 size-4" /> Add existing resident
+            </Button>
             <input
               ref={fileRef}
               type="file"
@@ -420,10 +395,10 @@ function ResidentsListPage() {
           <EmptyState
             icon={Users}
             title="No residents yet"
-            hint="Create a resident profile from a booked enquiry, or add one manually to test the flow."
+            hint="A new resident comes from a booking. Someone from before the system is added here."
             action={
-              <Button size="sm" onClick={addResident}>
-                Add resident
+              <Button size="sm" onClick={() => void navigate({ to: "/admin/residents/add-existing" })}>
+                Add existing resident
               </Button>
             }
           />

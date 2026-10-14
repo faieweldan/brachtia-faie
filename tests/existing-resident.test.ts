@@ -182,3 +182,25 @@ describe("the beds a placement can be written as", () => {
     expect(placementBedOptions({ occupancy: "single", beds: [{ label: "Single", status: "vacant" }] }).map((o) => o.value)).toEqual(["Single"]);
   });
 });
+
+describe("reading the check while the form is filled in", () => {
+  test("an empty form is a to-do list, not problems", async () => {
+    const { readIssues } = await import("../src/lib/migration/existing-resident");
+    const empty = emptyExistingResident();
+    const row = previewSheet3Grid(existingResidentGrid(empty), system).rows[0]!;
+    expect(row.status).toBe("blocked");
+    const read = readIssues(row.issues, empty);
+    expect(read.problems).toEqual([]);
+    expect(read.toFill).toContain("QuickBooks ID");
+    expect(read.toFill).toContain("Tenancy agreement copy");
+    expect(read.later.length).toBe(3);
+  });
+  test("a filled box that is wrong is a problem", async () => {
+    const { readIssues } = await import("../src/lib/migration/existing-resident");
+    const bad = { ...form, email: "not-an-email" };
+    const row = previewSheet3Grid(existingResidentGrid(bad), system).rows[0]!;
+    const read = readIssues(row.issues, bad);
+    expect(read.problems.map((p) => p.field)).toContain("Email");
+    expect(read.toFill).not.toContain("Email");
+  });
+});

@@ -1,11 +1,11 @@
 import { loadProofFile } from "@/lib/payment-proof";
+import { DateRangeFilter, FilterField, ResetFilters, SearchFilter } from "@/components/admin/filters";
 import { Dropdown } from "@/components/admin/Dropdown";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDown,
-  ArrowRight,
   ArrowUp,
   ChevronLeft,
   ChevronRight,
@@ -16,8 +16,6 @@ import {
   Pencil,
   Plus,
   Receipt,
-  RotateCcw,
-  Search,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -40,7 +38,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
 import { EmptyState, Panel } from "@/components/admin/ops-ui";
 import { CollectedBar, Figure, TonePill } from "@/components/admin/billing-ui";
 import { PdfPreviewDialog } from "@/components/admin/PdfPreview";
@@ -62,7 +59,6 @@ import {
 import { fmtDate, money } from "@/lib/ops-store";
 import { paymentStateOf, partPaidUrgency, type PaymentStatus } from "@/lib/payment-status";
 import { getInvoiceBilling, type BillingInvoice } from "@/lib/resident-billing.functions";
-import { DateInput } from "@/components/ui/date-input";
 
 export const Route = createFileRoute("/admin/residents/payments")({
   component: CollectionsPage,
@@ -424,37 +420,10 @@ function CollectionsPage() {
         {/* narrowing it down */}
         <div className="flex flex-wrap items-end gap-x-3 gap-y-3 px-5 py-4">
           <FilterField label="Date">
-            <div className="flex h-9 items-center rounded-md border border-input bg-background focus-within:ring-2 focus-within:ring-ring/40">
-              <DateInput
-                bare
-                value={from}
-                max={to || undefined}
-                onChange={(e) => setFrom(e.target.value)}
-                aria-label="From date"
-                className="h-full w-[8.25rem] bg-transparent px-2.5 text-sm outline-none"
-              />
-              <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-              <DateInput
-                bare
-                value={to}
-                min={from || undefined}
-                onChange={(e) => setTo(e.target.value)}
-                aria-label="To date"
-                className="h-full w-[8.25rem] bg-transparent px-2.5 text-sm outline-none"
-              />
-            </div>
+            <DateRangeFilter from={from} to={to} onFrom={setFrom} onTo={setTo} />
           </FilterField>
           <FilterField label="Search">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Invoice no., name or ID"
-                aria-label="Search invoices"
-                className="h-9 w-56 pl-9"
-              />
-            </div>
+            <SearchFilter value={q} onChange={setQ} placeholder="Invoice no., name or ID" label="Search invoices" />
           </FilterField>
           <FilterField label="Resident">
             <Dropdown
@@ -486,11 +455,7 @@ function CollectionsPage() {
               ))}
             </Dropdown>
           </FilterField>
-          {filtering ? (
-            <Button size="sm" variant="ghost" className="h-9" onClick={resetFilters}>
-              <RotateCcw className="size-4" /> Reset
-            </Button>
-          ) : null}
+          {filtering ? <ResetFilters onReset={resetFilters} /> : null}
         </div>
 
         {/* how many, and which page */}
@@ -770,15 +735,6 @@ function CollectionsPage() {
 }
 
 /* ---------------- pieces ---------------- */
-
-function FilterField({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1">
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      {children}
-    </div>
-  );
-}
 
 function SortHead({
   label,

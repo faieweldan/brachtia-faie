@@ -206,3 +206,67 @@ export function existingResidentGrid(f: ExistingResidentInput): string[][] {
 
 /** Every column the form fills - a test checks each is a real contract column. */
 export const formColumns = (f: ExistingResidentInput = emptyExistingResident()) => Object.keys(values(f));
+
+/*
+ * What the check says, read for someone filling the form in (Dani, 14 Oct
+ * 2026). An empty form came back as a wall of red "Blocked" - correct, and
+ * alarming to an admin who had only just started. The check's rules are not
+ * touched: each of its fields is matched to the form box behind it, and an
+ * issue on a box still empty is "still to fill", not a problem.
+ */
+type Box = keyof ExistingResidentInput;
+
+/** the check's field name -> the form boxes behind it, and the box's label on the form */
+const BEHIND: Record<string, { boxes: Box[]; label: string }> = {
+  "quickbooks id": { boxes: ["quickbooksId"], label: "QuickBooks ID" },
+  "resident name": { boxes: ["name"], label: "Full name" },
+  email: { boxes: ["email"], label: "Email" },
+  "country code": { boxes: ["dial"], label: "Mobile" },
+  "mobile number": { boxes: ["mobile"], label: "Mobile" },
+  "tenancy dates": { boxes: ["tenancyStart", "tenancyEnd"], label: "Tenancy start and end" },
+  "tenancy end": { boxes: ["tenancyEnd"], label: "Tenancy end" },
+  "stay duration": { boxes: ["tenancyStart", "tenancyEnd"], label: "Tenancy start and end" },
+  "monthly rent": { boxes: ["monthlyRent"], label: "Monthly rent" },
+  "payment frequency": { boxes: ["schedule"], label: "Payment frequency" },
+  "next billing period": { boxes: ["tenancyStart", "tenancyEnd", "monthlyRent", "schedule"], label: "Tenancy and rent" },
+  "copy of tenancy agreement": { boxes: ["taUrl"], label: "Tenancy agreement copy" },
+  "copy of invoice": { boxes: ["invoiceUrl"], label: "Initial invoice copy" },
+  "unit no.": { boxes: ["residence", "unitNo"], label: "Room" },
+  room: { boxes: ["room"], label: "Room" },
+  bed: { boxes: ["residence", "unitNo", "room", "bed"], label: "Room" },
+};
+
+/** the application documents: missing is never a problem - uploaded on the profile later */
+const LATER = ["passport size photo", "university offer / admission letter", "nric", "mykad", "passport copy"];
+
+export type ReadIssues = {
+  /** form labels of boxes still empty that the check needs - grey, a to-do */
+  toFill: string[];
+  /** filled in, and wrong - red, as the check says */
+  problems: { level: "warning" | "blocked"; field: string; message: string }[];
+  /** documents that can come later */
+  later: string[];
+};
+
+export function readIssues(
+  issues: { level: "warning" | "blocked"; field: string; message: string }[],
+  f: ExistingResidentInput,
+): ReadIssues {
+  const toFill = new Set<string>();
+  const later: string[] = [];
+  const problems: ReadIssues["problems"] = [];
+  for (const issue of issues) {
+    const field = issue.field.trim().toLowerCase();
+    const behind = BEHIND[field];
+    if (behind && behind.boxes.some((b) => !String(f[b] ?? "").trim())) {
+      toFill.add(behind.label);
+      continue;
+    }
+    if (issue.level === "warning" && LATER.some((d) => field.includes(d)) && /no document link/i.test(issue.message)) {
+      later.push(issue.field);
+      continue;
+    }
+    problems.push(issue);
+  }
+  return { toFill: [...toFill], problems, later };
+}
