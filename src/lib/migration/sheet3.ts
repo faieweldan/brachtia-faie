@@ -334,7 +334,9 @@ export function previewSheet3Grid(grid: unknown[][], system: SystemSnapshot): Mi
       },
     ];
     for (const document of applicationDocuments) {
-      if (!document.url) add("blocked", document.label, "Application document link is missing.");
+      // an older resident may never have sent the form: import them, and upload the
+      // document on their profile later (Dani, 14 Oct 2026)
+      if (!document.url) add("warning", document.label, "No document link - upload it on the profile after import.");
       else if (!WEB_LINK.test(document.url))
         add("blocked", document.label, "Application document must be an http(s) link.");
     }

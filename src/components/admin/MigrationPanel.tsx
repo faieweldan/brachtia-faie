@@ -22,7 +22,7 @@ import type { ImportOutcome } from "@/lib/migration/import.server";
 
 type Filter = "all" | "ready" | "warning" | "blocked";
 
-const STATUS = {
+export const MIGRATION_STATUS = {
   ready: { label: "Ready", tone: "border-emerald-200 bg-emerald-50 text-emerald-800" },
   warning: { label: "Check first", tone: "border-amber-200 bg-amber-50 text-amber-800" },
   blocked: { label: "Blocked", tone: "border-rose-200 bg-rose-50 text-rose-800" },
@@ -159,7 +159,7 @@ export function MigrationPanel({
       {outcomes ? <Outcomes outcomes={outcomes} /> : null}
 
       <p className="mb-2 text-xs text-muted-foreground">
-        Showing {STATUS[filter as keyof typeof STATUS]?.label ?? "everyone"} ({shown.length}). Open a resident to see what will be saved.
+        Showing {MIGRATION_STATUS[filter as keyof typeof MIGRATION_STATUS]?.label ?? "everyone"} ({shown.length}). Open a resident to see what will be saved.
       </p>
       <div className="divide-y divide-border rounded-xl border border-border">
         {shown.length === 0 ? (
@@ -190,8 +190,13 @@ export function MigrationPanel({
   );
 }
 
-function ResidentLine({ row, today, open, onToggle }: { row: MigrationPreviewRow; today: string; open: boolean; onToggle: () => void }) {
-  const status = STATUS[row.status];
+/**
+ * One resident as the check sees them: the line, and opened, what the import
+ * will write. Shared by the bulk upload's list and Add existing resident's
+ * preview (14 Oct 2026), so both show a resident the same way.
+ */
+export function ResidentLine({ row, today, open, onToggle }: { row: MigrationPreviewRow; today: string; open: boolean; onToggle: () => void }) {
+  const status = MIGRATION_STATUS[row.status];
   const r = row.record;
   const bad = new Set(row.issues.map((i) => i.field.toLowerCase()));
   // a field at fault is marked where it is shown

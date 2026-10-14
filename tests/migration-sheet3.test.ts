@@ -170,9 +170,9 @@ describe("Migration 1 Sheet3 readiness", () => {
     ]);
   });
 
-  test("a missing application document blocks the resident", () => {
+  test("a missing application document is a warning - uploaded on the profile later", () => {
     const result = preview(grid({ Photograph: "" }));
-    expect(result.rows[0]!.status).toBe("blocked");
+    expect(result.rows[0]!.status).toBe("warning");
     expect(result.rows[0]!.issues.some((issue) => issue.field === "Passport size photo")).toBe(true);
   });
 

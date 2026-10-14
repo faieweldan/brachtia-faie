@@ -38,6 +38,7 @@ import { Route as AdminHomesIndexRouteImport } from './routes/admin.homes.index'
 import { Route as AdminHomesUnitsRouteImport } from './routes/admin.homes.units'
 import { Route as AdminResidentsIndexRouteImport } from './routes/admin.residents.index'
 import { Route as AdminResidentsIdRouteImport } from './routes/admin.residents.$id'
+import { Route as AdminResidentsAddExistingRouteImport } from './routes/admin.residents.add-existing'
 import { Route as AdminResidentsPayablesRouteImport } from './routes/admin.residents.payables'
 import { Route as AdminResidentsPaymentsRouteImport } from './routes/admin.residents.payments'
 import { Route as AdminWebsiteIndexRouteImport } from './routes/admin.website.index'
@@ -196,6 +197,12 @@ const AdminResidentsIdRoute = AdminResidentsIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AdminResidentsRoute,
 } as any)
+const AdminResidentsAddExistingRoute =
+  AdminResidentsAddExistingRouteImport.update({
+    id: '/add-existing',
+    path: '/add-existing',
+    getParentRoute: () => AdminResidentsRoute,
+  } as any)
 const AdminResidentsPayablesRoute = AdminResidentsPayablesRouteImport.update({
   id: '/payables',
   path: '/payables',
@@ -282,6 +289,7 @@ export interface FileRoutesByFullPath {
   '/admin/bookings/$id': typeof AdminBookingsIdRoute
   '/admin/homes/units': typeof AdminHomesUnitsRoute
   '/admin/residents/$id': typeof AdminResidentsIdRoute
+  '/admin/residents/add-existing': typeof AdminResidentsAddExistingRoute
   '/admin/residents/payables': typeof AdminResidentsPayablesRoute
   '/admin/residents/payments': typeof AdminResidentsPaymentsRoute
   '/api/cron/tenancy-events': typeof ApiCronTenancyEventsRoute
@@ -318,6 +326,7 @@ export interface FileRoutesByTo {
   '/admin/bookings/$id': typeof AdminBookingsIdRoute
   '/admin/homes/units': typeof AdminHomesUnitsRoute
   '/admin/residents/$id': typeof AdminResidentsIdRoute
+  '/admin/residents/add-existing': typeof AdminResidentsAddExistingRoute
   '/admin/residents/payables': typeof AdminResidentsPayablesRoute
   '/admin/residents/payments': typeof AdminResidentsPaymentsRoute
   '/api/cron/tenancy-events': typeof ApiCronTenancyEventsRoute
@@ -361,6 +370,7 @@ export interface FileRoutesById {
   '/admin/bookings/$id': typeof AdminBookingsIdRoute
   '/admin/homes/units': typeof AdminHomesUnitsRoute
   '/admin/residents/$id': typeof AdminResidentsIdRoute
+  '/admin/residents/add-existing': typeof AdminResidentsAddExistingRoute
   '/admin/residents/payables': typeof AdminResidentsPayablesRoute
   '/admin/residents/payments': typeof AdminResidentsPaymentsRoute
   '/api/cron/tenancy-events': typeof ApiCronTenancyEventsRoute
@@ -405,6 +415,7 @@ export interface FileRouteTypes {
     | '/admin/bookings/$id'
     | '/admin/homes/units'
     | '/admin/residents/$id'
+    | '/admin/residents/add-existing'
     | '/admin/residents/payables'
     | '/admin/residents/payments'
     | '/api/cron/tenancy-events'
@@ -441,6 +452,7 @@ export interface FileRouteTypes {
     | '/admin/bookings/$id'
     | '/admin/homes/units'
     | '/admin/residents/$id'
+    | '/admin/residents/add-existing'
     | '/admin/residents/payables'
     | '/admin/residents/payments'
     | '/api/cron/tenancy-events'
@@ -483,6 +495,7 @@ export interface FileRouteTypes {
     | '/admin/bookings/$id'
     | '/admin/homes/units'
     | '/admin/residents/$id'
+    | '/admin/residents/add-existing'
     | '/admin/residents/payables'
     | '/admin/residents/payments'
     | '/api/cron/tenancy-events'
@@ -724,6 +737,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminResidentsIdRouteImport
       parentRoute: typeof AdminResidentsRoute
     }
+    '/admin/residents/add-existing': {
+      id: '/admin/residents/add-existing'
+      path: '/add-existing'
+      fullPath: '/admin/residents/add-existing'
+      preLoaderRoute: typeof AdminResidentsAddExistingRouteImport
+      parentRoute: typeof AdminResidentsRoute
+    }
     '/admin/residents/payables': {
       id: '/admin/residents/payables'
       path: '/payables'
@@ -849,6 +869,7 @@ const AdminHomesRouteWithChildren = AdminHomesRoute._addFileChildren(
 
 interface AdminResidentsRouteChildren {
   AdminResidentsIdRoute: typeof AdminResidentsIdRoute
+  AdminResidentsAddExistingRoute: typeof AdminResidentsAddExistingRoute
   AdminResidentsPayablesRoute: typeof AdminResidentsPayablesRoute
   AdminResidentsPaymentsRoute: typeof AdminResidentsPaymentsRoute
   AdminResidentsIndexRoute: typeof AdminResidentsIndexRoute
@@ -857,6 +878,7 @@ interface AdminResidentsRouteChildren {
 
 const AdminResidentsRouteChildren: AdminResidentsRouteChildren = {
   AdminResidentsIdRoute: AdminResidentsIdRoute,
+  AdminResidentsAddExistingRoute: AdminResidentsAddExistingRoute,
   AdminResidentsPayablesRoute: AdminResidentsPayablesRoute,
   AdminResidentsPaymentsRoute: AdminResidentsPaymentsRoute,
   AdminResidentsIndexRoute: AdminResidentsIndexRoute,

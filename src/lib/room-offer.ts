@@ -91,3 +91,19 @@ export function bedForPlacement<B extends { label: string }>(
   }
   return undefined;
 }
+
+/**
+ * The bed answers a placement in this room can be written as - the other way
+ * round from bedForPlacement (Add existing resident, 14 Oct 2026): each bed's
+ * own label, and "Single" for a twin room nobody is in, let whole.
+ */
+export function placementBedOptions(room: {
+  occupancy: string;
+  beds: { label: string; status: string; upcoming?: unknown[] | undefined }[];
+}): { value: string; label: string }[] {
+  const options = room.beds.map((b) => ({ value: b.label, label: b.label }));
+  if (room.occupancy === "twin" && room.beds.length > 1 && roomUntouched(room)) {
+    options.push({ value: "Single", label: "Single (whole room)" });
+  }
+  return options;
+}
