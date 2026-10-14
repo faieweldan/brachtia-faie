@@ -742,7 +742,10 @@ export async function cancelEvent(sb: any, residentId: string, eventId: string, 
 async function cancelDocuments(sb: any, residentId: string, ev: TenancyEvent) {
   const from = ev.settledAt ? new Date(new Date(ev.settledAt).getTime() - 10 * 60_000).toISOString() : ev.at;
   if (ev.plan.newAgreement) {
-    const { data: ags } = await sb.from("tenancy_agreements").select("id").eq("resident_id", residentId).eq("kind", "renewal").gte("created_at", ev.at);
+    // the one it made (madeAgreementId, 14 Oct 2026); an older event, any renewal made since it was confirmed
+    const { data: ags } = ev.madeAgreementId
+      ? { data: [{ id: ev.madeAgreementId }] }
+      : await sb.from("tenancy_agreements").select("id").eq("resident_id", residentId).eq("kind", "renewal").gte("created_at", ev.at);
     const ids = ((ags ?? []) as any[]).map((a) => a.id);
     if (ids.length) await sb.from("agreement_documents").update({ status: "cancelled" }).in("agreement_id", ids);
   } else if (ev.agreementId) {
