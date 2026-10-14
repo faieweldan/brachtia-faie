@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { costBreakdown, getProperty } from "@/data/properties";
 import { allBeds, fmtDate, money, unitAccepts, unitGender, type BedRow, type Resident, type Unit } from "@/lib/ops-store";
 import { GenderMark } from "@/components/admin/GenderMark";
-import { bedRent, type SiteRoomType } from "@/lib/room-types";
+import { bedRent, sellsSingle, type SiteRoomType } from "@/lib/room-types";
+import { roomOffer, type Sharing } from "@/lib/room-offer";
 import {
   DEPOSIT_KEYS,
   anyChange,
@@ -35,7 +36,7 @@ import {
 } from "@/lib/tenancy-change";
 import { klToday } from "@/lib/kl-date";
 import { stayLength } from "@/lib/stay-length";
-import { dayBefore, placementConflict } from "@/lib/placement";
+import { dayBefore, placementConflict, soldBedLabel, soldOccupancy } from "@/lib/placement";
 import { rentForDays, shiftDate } from "@/lib/rental-schedule";
 import { applyTenancyChange, getTenancyChangeBasis } from "@/lib/tenancy-change.functions";
 
@@ -115,7 +116,8 @@ export function UpdateTenancyDialog({
     queryFn: () => getTenancyChangeBasis({ data: { residentId } }),
     enabled: open,
   });
-  const oldOcc = placed ? bedOccupancy(placed.bed.label) : "single";
+  // how their room was sold - a twin room let whole is a single (soldOccupancy, 14 Oct 2026)
+  const oldOcc = placed ? soldOccupancy(placed.room) || "single" : "single";
   const oldEnd = basis.data?.tenancy?.end || tenancy.end;
   const oldRent = basis.data?.rent || tenancy.rent;
   const roomTypes = (basis.data?.roomTypes ?? []) as SiteRoomType[];
@@ -158,38 +160,50 @@ export function UpdateTenancyDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, placed?.bed.id]);
 
-  const free = useMemo(
-    () =>
-      allBeds(units).filter(
-        ({ unit, room, bed }) =>
-          // vacant now, or someone else's whose tenancy ends before ours does - the move then waits for it (Dani, 7 Oct 2026)
-          bed.id !== placed?.bed.id &&
-          // a room held for another resident's change is in its upcoming stays, with its dates - placementConflict below (14 Oct 2026)
-          (bed.status === "vacant" || (!!bed.residentId && !!bed.tenancyEnd && bed.tenancyEnd.slice(0, 10) < (tenancy.end || "9999"))) &&
-          bedOccupancy(bed.label) === occ &&
-          /*
-           * Free for the dates this stay would have it - from when the bed is free
-           * (or today) to the new end - by the same rule as the booking's room list
-           * (placementConflict, 10 Oct 2026): a booking already coming onto the bed,
-           * a whole room or unit let, or the other gender in the unit then, rules
-           * it out. It used to be offered and then refused on Next.
-           */
-          !placementConflict(
-            unit,
-            room,
-            bed,
-            {
-              start: bed.residentId && bed.tenancyEnd ? nextDay(bed.tenancyEnd.slice(0, 10)) : klToday(),
-              end: newEnd || tenancy.end || undefined,
-              gender,
-              residentId,
-            },
-            residents,
-          ),
-      ),
+  /*
+   * The rooms on offer for the occupancy chosen - by the booking picker's rule
+   * (roomOffer, 14 Oct 2026): a twin room nobody is in is offered for Single as
+   * the whole room, one row, priced as a single, and the move lets it whole.
+   * Before, Update Tenancy read the bed's label alone: a twin room could never
+   * be chosen as a single, and a resident in a twin let whole started as Twin.
+   */
+  const { free, wholeIds } = useMemo(() => {
+    const whole = new Set<string>();
+    const rows = allBeds(units).filter(({ unit, room, bed }) => {
+      if (bed.id === placed?.bed.id) return false;
+      // vacant now, or someone else's whose tenancy ends before ours does - the move then waits for it (Dani, 7 Oct 2026)
+      // a room held for another resident's change is in its upcoming stays, with its dates - placementConflict below (14 Oct 2026)
+      if (!(bed.status === "vacant" || (!!bed.residentId && !!bed.tenancyEnd && bed.tenancyEnd.slice(0, 10) < (tenancy.end || "9999")))) return false;
+      const offer = roomOffer(room, occ as Sharing, sellsSingle(room, roomTypes));
+      if (!("as" in offer)) return false;
+      if (offer.as === "whole") {
+        // a room sold as one is one row: its first bed
+        if (room.beds[0]?.id !== bed.id) return false;
+        whole.add(bed.id);
+      } else if (bedOccupancy(bed.label) !== occ) return false;
+      /*
+       * Free for the dates this stay would have it - from when the bed is free
+       * (or today) to the new end - by the same rule as the booking's room list
+       * (placementConflict, 10 Oct 2026): a booking already coming onto the bed,
+       * a whole room or unit let, or the other gender in the unit then, rules
+       * it out. It used to be offered and then refused on Next.
+       */
+      return !placementConflict(
+        unit,
+        room,
+        bed,
+        {
+          start: bed.residentId && bed.tenancyEnd ? nextDay(bed.tenancyEnd.slice(0, 10)) : klToday(),
+          end: newEnd || tenancy.end || undefined,
+          gender,
+          residentId,
+        },
+        residents,
+      );
+    });
+    return { free: rows, wholeIds: whole };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [units, occ, placed?.bed.id, residents, gender, tenancy.end, newEnd],
-  );
+  }, [units, occ, placed?.bed.id, residents, gender, tenancy.end, newEnd, roomTypes]);
   const target = wantRoom ? (free.find((b) => b.bed.id === bedId) ?? null) : null;
   const end = wantDate && newEnd ? newEnd : oldEnd;
   // the renewal / extension start: the day after the tenancy ends
@@ -210,7 +224,13 @@ export function UpdateTenancyDialog({
     newEnd: end,
   });
   const moved = isMove(flags);
-  const websiteRate = (b: BedRow) => bedRent(roomTypes, b.unit, b.room, {}, false, "long");
+  // a whole twin room is priced as the single it is sold as
+  const websiteRate = (b: BedRow) => bedRent(roomTypes, b.unit, b.room, {}, wholeIds.has(b.bed.id), "long");
+  const targetWhole = !!target && wholeIds.has(target.bed.id);
+  // a bed as the resident has it, or will: "Single (whole room)" for a twin let whole
+  const bedName = (b: BedRow) =>
+    wholeIds.has(b.bed.id) ? "Single (whole room)" : b.bed.id === placed?.bed.id ? soldBedLabel(placed.room, placed.bed) : b.bed.label;
+  const occOf = (b: BedRow) => (wholeIds.has(b.bed.id) ? "single" : b.bed.id === placed?.bed.id ? oldOcc : bedOccupancy(b.bed.label));
 
   /*
    * The events, each priced from the state the one before leaves (agreed 7 Oct
@@ -331,7 +351,7 @@ export function UpdateTenancyDialog({
           },
           moveOn: moved ? effectiveMove : "",
           approvedBy,
-          moveTo: moved && target ? { bedId: target.bed.id, roomId: target.room.id, unitId: target.unit.id, occupancy: target.room.occupancy } : null,
+          moveTo: moved && target ? { bedId: target.bed.id, roomId: target.room.id, unitId: target.unit.id, occupancy: occOf(target), letWhole: targetWhole } : null,
           events: events.map((e) => ({
             date: e.date,
             rent: e.rent,
@@ -346,7 +366,8 @@ export function UpdateTenancyDialog({
             }),
             periodEnd: e.periodEnd,
             roomName: e.bed ? `${e.bed.unit.unitNo} · Room ${e.bed.room.letter}` : "",
-            occupancy: OCCUPANCY_LABEL[e.bed ? bedOccupancy(e.bed.bed.label) : occ] ?? "",
+            // what the screen showed; the IP reads the bed itself on the server (invoicePlace)
+            occupancy: e.bed ? occOf(e.bed) : occ,
           })),
         },
       });
@@ -363,7 +384,7 @@ export function UpdateTenancyDialog({
   }
 
   const occLabel = (o: string) => OCCUPANCY_LABEL[o] ?? o;
-  const bedLabel = (b: BedRow | null | undefined) => (b ? `${b.unit.residenceName} · ${b.unit.unitNo} · Room ${b.room.letter} · ${b.bed.label}` : "—");
+  const bedLabel = (b: BedRow | null | undefined) => (b ? `${b.unit.residenceName} · ${b.unit.unitNo} · Room ${b.room.letter} · ${bedName(b)}` : "—");
 
   return (
     <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>
@@ -630,6 +651,7 @@ export function UpdateTenancyDialog({
         homeResidence={placed?.unit.residenceId ?? ""}
         occupancy={occLabel(occ)}
         rateOf={websiteRate}
+        nameOf={bedName}
         onPick={(b) => {
           setBedId(b.bed.id);
           resetMoney();
@@ -873,6 +895,7 @@ function RoomPicker({
   picked,
   occupancy,
   rateOf,
+  nameOf,
   onPick,
   homeResidence,
 }: {
@@ -884,6 +907,7 @@ function RoomPicker({
   picked: string;
   occupancy: string;
   rateOf: (b: BedRow) => number;
+  nameOf: (b: BedRow) => string;
   onPick: (b: BedRow) => void;
 }) {
   const [q, setQ] = useState("");
@@ -920,7 +944,7 @@ function RoomPicker({
           </p>
         ) : null}
         <div className={`min-h-0 flex-1 overflow-y-auto ${elsewhere ? "pointer-events-none opacity-50" : ""}`}>
-          <RoomList rows={shown} residents={residents} current="" picked={picked} rateOf={rateOf} onPick={(id) => onPick(rows.find((b) => b.bed.id === id)!)} />
+          <RoomList rows={shown} residents={residents} current="" picked={picked} rateOf={rateOf} nameOf={nameOf} onPick={(id) => onPick(rows.find((b) => b.bed.id === id)!)} />
         </div>
       </DialogContent>
     </Dialog>
@@ -971,6 +995,7 @@ function RoomList({
   current,
   picked,
   rateOf,
+  nameOf,
   onPick,
 }: {
   rows: BedRow[];
@@ -979,6 +1004,8 @@ function RoomList({
   picked: string;
   /** what the bed costs them: their own rent, or the Website rate - never another occupant's deal (Dani, 7 Oct 2026) */
   rateOf: (b: BedRow) => number;
+  /** the bed as it would be sold: "Single (whole room)" for a twin let whole */
+  nameOf: (b: BedRow) => string;
   onPick: (bedId: string) => void;
 }) {
   const [openUnit, setOpenUnit] = useState<string | null>(null);
@@ -1018,7 +1045,7 @@ function RoomList({
               )}
               <span>Room {b.room.letter}</span>
               <span className="text-muted-foreground">
-                {b.bed.label}
+                {nameOf(b)}
                 {/* someone else's now - free the day after their tenancy ends */}
                 {b.bed.residentId && b.bed.id !== current && b.bed.tenancyEnd ? (
                   <span className="block text-[11px] text-amber-700">free from {fmtDate(shiftDate(b.bed.tenancyEnd.slice(0, 10), { days: 1 }))}</span>

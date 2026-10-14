@@ -32,7 +32,14 @@ const BUCKET = "resident-documents";
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const day = (v: unknown) => String(v ?? "").slice(0, 10);
 
-export type MoveTo = { bedId: string; roomId: string; unitId: string; occupancy: string };
+export type MoveTo = {
+  bedId: string;
+  roomId: string;
+  unitId: string;
+  occupancy: string;
+  /** a twin room nobody is in, let whole as one single (roomOffer "whole") - place_stay's p_whole (14 Oct 2026) */
+  letWhole?: boolean | undefined;
+};
 
 export type TenancyEvent = {
   eventId: string;
@@ -294,7 +301,10 @@ async function applyRent(sb: any, residentId: string, ev: TenancyEvent) {
     }
   }
 
-  await rs.writeRentSteps(sb, residentId, ev.tenancyId, { steps });
+  // the room this event moves to, from its day - the rent rows name it (RentMove)
+  const moves = (saved.moves ?? []).filter((m) => m.id !== ev.eventId);
+  if (ev.moveTo) moves.push({ id: ev.eventId, from: ev.date, bedId: ev.moveTo.bedId, letWhole: !!ev.moveTo.letWhole });
+  await rs.writeRentSteps(sb, residentId, ev.tenancyId, { steps, moves });
   // the rent terms run to the new end, at the latest rent; the scheduled RPs follow
   const { data: s } = await sb.from("rental_schedules").select("tenancy_end").eq("tenancy_id", ev.tenancyId).maybeSingle();
   if (s) {
@@ -352,6 +362,8 @@ async function eventMergeValues(sb: any, residentId: string, ev0: TenancyEvent) 
     residentId,
     {
       bedId: ev0.moveTo?.bedId,
+      // a twin room let whole is a single in Schedule A, as sold (14 Oct 2026)
+      ...(ev0.moveTo ? { letWhole: !!ev0.moveTo.letWhole } : {}),
       // a renewal starts a new term on its date; an extension keeps the start it had
       ...(ev0.plan.newAgreement ? { start: ev0.date } : {}),
       end: ev0.periodEnd,
@@ -435,6 +447,8 @@ export async function makeEffective(
       p_bed: ev.moveTo.bedId,
       p_start: ev.date,
       p_end: ev.periodEnd,
+      // a twin room let whole: the tenancy records it (let_whole), and its other bed is Sold as single
+      p_whole: !!ev.moveTo.letWhole,
       p_by: "Update Tenancy",
     });
     if (error) throw new Error(error.message);
@@ -509,6 +523,16 @@ async function raiseAdjustment(sb: any, residentId: string, tenancyId: string, l
   return { id: String(inv.id), number: String(inv.number ?? "") };
 }
 
+/** what an IP is for: its billing day and note, the stay after it, and the bed it moves to (none: theirs now) */
+export type IpOptions = {
+  billOn: string;
+  note: string;
+  tenancyEnd: string;
+  rent: number;
+  bedId?: string | undefined;
+  letWhole?: boolean | undefined;
+};
+
 /**
  * The Initial Payment invoice raiseIp writes, before it is written - so the
  * room-change review's draft is the row Confirm inserts (14 Oct 2026).
@@ -517,7 +541,7 @@ export async function ipInvoiceRow(
   sb: any,
   residentId: string,
   lines: { label: string; amount: number; kind: string }[],
-  o: { billOn: string; note: string; tenancyEnd: string; rent: number; roomName: string; occupancy: string },
+  o: IpOptions,
 ) {
   const { data: first } = await sb
     .from("invoices")
@@ -528,10 +552,12 @@ export async function ipInvoiceRow(
     .limit(1)
     .maybeSingle();
   const total = r2(lines.reduce((n, l) => n + l.amount, 0));
+  // where it is for, as sold: the bed it moves to, else theirs now (invoicePlace, 14 Oct 2026)
+  const { invoicePlace, residentInvoicePlace } = await import("@/lib/placement.server");
+  const place = o.bedId ? await invoicePlace(sb, o.bedId, o.letWhole) : await residentInvoicePlace(sb, residentId);
   return {
     ...(first ?? {}),
-    ...(o.roomName ? { room_name: o.roomName } : {}),
-    ...(o.occupancy ? { occupancy: o.occupancy } : {}),
+    ...(place ?? {}),
     ...(o.tenancyEnd ? { tenancy_end: o.tenancyEnd } : {}),
     ...(o.rent ? { monthly_rent: o.rent } : {}),
     invoice_type: "initial",
@@ -555,7 +581,7 @@ export async function raiseIp(
   residentId: string,
   tenancyId: string,
   lines: { label: string; amount: number; kind: string }[],
-  o: { billOn: string; note: string; tenancyEnd: string; rent: number; roomName: string; occupancy: string },
+  o: IpOptions,
 ) {
   const id = crypto.randomUUID();
   const { error } = await sb.from("invoices").insert({
@@ -706,7 +732,8 @@ export async function cancelEvent(sb: any, residentId: string, eventId: string, 
     const rs = await import("@/lib/rent-schedule.server");
     const saved = await rs.readRentSteps(sb, residentId, ev.tenancyId);
     const steps = saved.steps.filter((x) => !ids.includes(x.id));
-    await rs.writeRentSteps(sb, residentId, ev.tenancyId, { steps });
+    const moves = (saved.moves ?? []).filter((m) => !ids.includes(m.id));
+    await rs.writeRentSteps(sb, residentId, ev.tenancyId, { steps, moves });
     const { data: t } = await sb.from("tenancies").select("end_date").eq("id", ev.tenancyId).maybeSingle();
     const last = [...steps].sort((a, b) => a.from.localeCompare(b.from)).at(-1);
     await sb
@@ -773,6 +800,8 @@ export async function holdForChange(
   bedId: string,
   start: string,
   end: string,
+  /** a twin room let whole - its other bed is kept Sold as single (14 Oct 2026) */
+  whole = false,
 ) {
   const { data, error } = await sb.rpc("place_stay", {
     p_enquiry: null,
@@ -781,6 +810,7 @@ export async function holdForChange(
     p_start: start || null,
     p_end: end || null,
     p_later: true,
+    p_whole: whole,
     p_by: "Update Tenancy",
   });
   if (error) throw new Error(error.message);

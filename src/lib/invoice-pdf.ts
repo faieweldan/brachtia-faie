@@ -4,6 +4,7 @@ import { company, formatDate, formatRM, inBillingOrder } from "@/data/properties
 import { nextRentalPayment, cycleEnd } from "@/lib/rental-schedule";
 import { stayLength } from "@/lib/stay-length";
 import { lineQty } from "@/lib/invoices";
+import { occupancyPrinted } from "@/lib/occupancy";
 
 const GREEN: [number, number, number] = [26, 71, 52];
 const PEACH: [number, number, number] = [250, 240, 231];
@@ -356,7 +357,7 @@ async function buildInvoice(inv: InvoiceDoc) {
       ...(inv.resident_code ? [["Resident ID", inv.resident_code]] : []),
       ["Residence", inv.residence_name || "—"],
       ["Room", inv.room_name || "—"],
-      ["Occupancy", inv.occupancy === "twin" ? "Twin sharing (per pax)" : "Single"],
+      ["Occupancy", occupancyPrinted(inv.occupancy)],
       [
         "Tenancy",
         // how long the stay runs, the way Stay details and the quote say it

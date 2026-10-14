@@ -2,6 +2,8 @@ import type { Bed, Resident, Unit, UnitRoom } from "@/lib/ops-store";
 import { residentForBed, residentIdOf, sponsorLabel } from "@/lib/ops-store";
 import { universityAbbr } from "@/data/form-options";
 
+export { occupancyKey, occupancyPrinted } from "@/lib/occupancy";
+
 /**
  * Who has a claim on a unit, and when (Dani, 8 Oct 2026).
  *

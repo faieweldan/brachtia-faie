@@ -142,6 +142,8 @@ const changeRequest = z.object({
       roomId: z.string().max(80),
       unitId: z.string().max(80),
       occupancy: z.string().max(20),
+      /** a twin room nobody is in, let whole as one single (roomOffer "whole") */
+      letWhole: z.boolean().optional(),
     })
     .nullable(),
   /** each event as the window priced it - the server checks the plan and works out the money itself */
@@ -300,16 +302,19 @@ export async function applyTenancyChangeWith(sb: any, data: TenancyChangeRequest
       .neq("status", "vacant")
       .limit(1)
       .maybeSingle();
-    const holds: { bedId: string; start: string; end: string }[] = [];
+    const holds: { bedId: string; start: string; end: string; whole: boolean }[] = [];
     if (live?.id && finalEnd > data.change.oldEnd) {
       const from = T.nextDay(data.change.oldEnd);
       const until = T.isMove(flags) && data.moveOn ? dayBefore(data.moveOn) : finalEnd;
-      if (until >= from) holds.push({ bedId: String(live.id), start: from, end: until });
+      // their own room, held on as it was sold - a twin let whole stays whole
+      const { placementForResident } = await import("@/lib/placement.server");
+      const mine = await placementForResident(sb, data.residentId);
+      if (until >= from) holds.push({ bedId: String(live.id), start: from, end: until, whole: !!mine?.letWhole });
     }
     if (T.isMove(flags) && data.moveTo)
-      holds.push({ bedId: data.moveTo.bedId, start: data.moveOn, end: finalEnd });
+      holds.push({ bedId: data.moveTo.bedId, start: data.moveOn, end: finalEnd, whole: !!data.moveTo.letWhole });
     for (const h of holds) {
-      const r = await E.holdForChange(sb, data.residentId, h.bedId, h.start, h.end);
+      const r = await E.holdForChange(sb, data.residentId, h.bedId, h.start, h.end, h.whole);
       if (!r.ok) {
         for (const b of held) await E.releaseChangeHold(sb, data.residentId, b);
         const { data: me } = await sb
@@ -363,8 +368,8 @@ export async function applyTenancyChangeWith(sb: any, data: TenancyChangeRequest
           note: ipDifferenceNote(name, p.date),
           tenancyEnd: e.periodEnd,
           rent: rentAfter,
-          roomName: e.roomName,
-          occupancy: e.occupancy,
+          // the room it is for, read from the bed as sold (invoicePlace) - moved by now, or theirs
+          ...(data.moveTo && data.moveOn && data.moveOn <= p.date ? { bedId: data.moveTo.bedId, letWhole: !!data.moveTo.letWhole } : {}),
         });
       }
       events.push({

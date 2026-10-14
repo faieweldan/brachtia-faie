@@ -1900,15 +1900,17 @@ export const previewRoomChange = createServerFn({ method: "GET" })
 
 /**
  * The invoice's Room line names the unit and room - "Unit A-10-11 · Room C" -
- * the same as when the invoice is raised, never the room type (10 Oct 2026).
- * Plain lookups: a nested select that fails comes back empty, not as an error.
+ * the same as when the invoice is raised, never the room type (10 Oct 2026);
+ * and its Occupancy is the room as sold - a twin let whole is Single - read
+ * from the bed, not what the screen sent (invoicePlace, 14 Oct 2026).
  */
-async function placeNameFor(supabase: any, bedId: string | undefined, fallback: string | undefined) {
-  if (!bedId) return fallback;
-  const { data: tb } = await supabase.from("beds").select("room_id").eq("id", bedId).maybeSingle();
-  const { data: tr } = tb ? await supabase.from("rooms").select("letter, unit_id").eq("id", tb.room_id).maybeSingle() : { data: null };
-  const { data: tu } = tr ? await supabase.from("units").select("unit_no").eq("id", tr.unit_id).maybeSingle() : { data: null };
-  return tu?.unit_no ? `Unit ${tu.unit_no} · Room ${tr.letter}` : fallback;
+async function placeFor(
+  supabase: any,
+  input: { bedId?: string | undefined; whole?: boolean | undefined; roomName?: string | undefined; occupancy?: string | undefined },
+) {
+  const { invoicePlace } = await import("@/lib/placement.server");
+  const place = await invoicePlace(supabase, input.bedId, input.bedId ? !!input.whole : undefined);
+  return { placeName: place?.room_name || input.roomName, occupancy: place?.occupancy || input.occupancy };
 }
 
 /** The stay's dates after the change - the booking's, which Stay details saves (13 Oct 2026). */
@@ -1925,7 +1927,7 @@ async function newStayDates(supabase: any, enquiryId: string, plan: { start: str
  * The documents a room change will make, as drafts for the review's eye (Dani,
  * 14 Oct 2026) - built from the plan the rows are read from, and by the same
  * rules Confirm writes with (rewrittenInvoiceValues, roomChangeRewrite,
- * ipInvoiceRow, roomChangeIpOptions, placeNameFor, newStayDates), so the
+ * ipInvoiceRow, roomChangeIpOptions, placeFor, newStayDates), so the
  * preview cannot say one thing and Confirm do another. Nothing is saved.
  *   revise / same  the initial invoice as revised, with paid to date
  *   ip             the new Initial Payment invoice for the difference
@@ -1940,6 +1942,8 @@ export async function roomChangeDrafts(
     bedId?: string | undefined;
     roomName?: string | undefined;
     occupancy?: string | undefined;
+    /** a twin room nobody is in, let whole as one single */
+    whole?: boolean | undefined;
     residenceName?: string | undefined;
     fromLabel?: string | undefined;
     toLabel?: string | undefined;
@@ -1951,7 +1955,7 @@ export async function roomChangeDrafts(
   const { residentCodeFor } = await import("@/lib/resident-billing.functions");
   const { klToday } = await import("@/lib/kl-date");
   const dates = await newStayDates(supabase, input.enquiryId, plan);
-  const placeName = await placeNameFor(supabase, input.bedId, input.roomName);
+  const { placeName, occupancy } = await placeFor(supabase, input);
   const code = plan.residentId ? await residentCodeFor(supabase, plan.residentId) : "";
   const who = code ? { resident_code: code } : {};
   const DRAFT = "DRAFT";
@@ -1965,7 +1969,7 @@ export async function roomChangeDrafts(
     const values = rewrittenInvoiceValues(
       roomChangeRewrite(plan.invoice.id, inv, items, {
         placeName,
-        occupancy: input.occupancy,
+        occupancy,
         residenceName: input.residenceName,
         start: dates.start,
         end: dates.end,
@@ -1986,7 +1990,7 @@ export async function roomChangeDrafts(
   if (m.kind === "ip" && plan.residentId) {
     const { ipInvoiceRow } = await import("@/lib/tenancy-events.server");
     const lines = m.lines.map((l) => ({ label: l.label, amount: l.amount, kind: l.kind }));
-    const row = await ipInvoiceRow(supabase, plan.residentId, lines, roomChangeIpOptions(plan, input, placeName, dates, klToday()));
+    const row = await ipInvoiceRow(supabase, plan.residentId, lines, roomChangeIpOptions(plan, input, dates, klToday()));
     return {
       ip: {
         ...invoiceDocFromRow({ ...row, number: DRAFT, ...(dates.start ? { tenancy_start: dates.start } : {}) }, lines),
@@ -2052,8 +2056,7 @@ function roomChangeRewrite(
 /** The difference invoice's details - for Confirm and for its draft. */
 function roomChangeIpOptions(
   plan: { end: string },
-  input: { bedId?: string | undefined; newRent: number; occupancy?: string | undefined; fromLabel?: string | undefined; toLabel?: string | undefined },
-  placeName: string | undefined,
+  input: { bedId?: string | undefined; whole?: boolean | undefined; newRent: number; fromLabel?: string | undefined; toLabel?: string | undefined },
   dates: { end: string },
   today: string,
 ) {
@@ -2063,8 +2066,8 @@ function roomChangeIpOptions(
     note: ipDifferenceNote(what, `${input.fromLabel ?? ""} to ${input.toLabel ?? ""}`),
     tenancyEnd: dates.end || plan.end,
     rent: input.newRent,
-    roomName: placeName ?? "",
-    occupancy: input.occupancy ?? "",
+    // the new bed, as sold - ipInvoiceRow reads its room and occupancy (invoicePlace)
+    ...(input.bedId ? { bedId: input.bedId, letWhole: !!input.whole } : {}),
   };
 }
 
@@ -2277,7 +2280,7 @@ export async function applyRoomChange(supabase: any, data: RoomChangeInput) {
     }
     const m = plan.money;
     const out: { invoice?: string; version?: number; ipNumber?: string; ipAmount?: number; credit?: number; outstanding?: number } = {};
-    const placeName = await placeNameFor(supabase, data.bedId, data.roomName);
+    const { placeName, occupancy } = await placeFor(supabase, data);
     if (plan.invoice && (m.kind === "same" || m.kind === "revise")) {
       const { data: inv } = await supabase.from("invoices").select("*").eq("id", plan.invoice.id).maybeSingle();
       // same price: the same lines, with the new room's details
@@ -2288,7 +2291,7 @@ export async function applyRoomChange(supabase: any, data: RoomChangeInput) {
         supabase,
         roomChangeRewrite(plan.invoice.id, inv, items, {
           placeName,
-          occupancy: data.occupancy,
+          occupancy,
           residenceName: data.residenceName,
           start: newStart,
           end: newEnd,
@@ -2330,7 +2333,7 @@ export async function applyRoomChange(supabase: any, data: RoomChangeInput) {
         plan.residentId,
         plan.tenancyId,
         m.lines.map((l) => ({ label: l.label, amount: l.amount, kind: l.kind })),
-        roomChangeIpOptions(plan, data, placeName, { end: newEnd }, klToday()),
+        roomChangeIpOptions(plan, data, { end: newEnd }, klToday()),
       );
       await supabase.from("invoices").update({ enquiry_id: data.enquiryId, ...(newStart ? { tenancy_start: newStart } : {}) }).eq("id", ip.id);
       out.ipNumber = ip.number;

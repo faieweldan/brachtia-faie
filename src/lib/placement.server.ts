@@ -57,6 +57,35 @@ export async function bedSurroundings(sb: any, roomId: string | null | undefined
   return { room, unit: unit ?? null, residence: residence ?? null };
 }
 
+/**
+ * Where a placement is, as an invoice states it (14 Oct 2026) - the residence,
+ * "Unit A-07-03 · Room B", and the occupancy AS SOLD (soldOccupancy): a twin
+ * room let whole is "single". Every invoice row that names a place is written
+ * from here - the scheduled rent, an Update Tenancy IP, a room change - never
+ * copied from another invoice or from what a screen sent: the rent rows copied
+ * the first invoice and said "twin" for a resident paying the single rate.
+ * `letWhole` is the placement's own record when the caller has it.
+ */
+export async function invoicePlace(sb: any, bedId: string | null | undefined, letWhole?: boolean | undefined) {
+  if (!bedId) return null;
+  const { data: bed } = await sb.from("beds").select("room_id").eq("id", bedId).maybeSingle();
+  const { room, unit, residence } = await bedSurroundings(sb, bed?.room_id);
+  if (!room) return null;
+  const { soldOccupancy } = await import("@/lib/placement");
+  const { placeLabel } = await import("@/lib/held-place");
+  return {
+    residence_name: String(residence?.name ?? ""),
+    room_name: placeLabel(String(unit?.unit_no ?? ""), String(room.letter ?? "")),
+    occupancy: soldOccupancy(room, letWhole),
+  };
+}
+
+/** the resident's own placement, as an invoice states it - their bed and how it was sold */
+export async function residentInvoicePlace(sb: any, residentId: string) {
+  const p = await placementForResident(sb, residentId);
+  return p ? invoicePlace(sb, String(p.bed.id), p.letWhole) : null;
+}
+
 export async function placementForResident(sb: any, residentId: string): Promise<Placement | null> {
   if (!residentId) return null;
   const { data: rows, error } = await sb.rpc("resident_placements", { p_residents: [residentId] });

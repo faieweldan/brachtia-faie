@@ -87,7 +87,13 @@ export async function initialInvoiceFor(supabase: any, tenancy: Tenancy) {
 export const rentStepPath = (residentId: string, tenancyId: string) => `tenancy-change/${residentId}/rent-step-${tenancyId}.json`;
 
 export type MoveTo = { bedId: string; roomId: string; unitId: string; occupancy: string; from?: string };
-export type RentSteps = { steps: RentStep[]; moveTo?: MoveTo };
+/**
+ * A move an Update Tenancy event has applied (14 Oct 2026): the rent rows from
+ * its day name the room it goes to, as sold (invoicePlace). Kept with the rent
+ * steps, and taken out with them when the event is cancelled.
+ */
+export type RentMove = { id: string; from: string; bedId: string; letWhole: boolean };
+export type RentSteps = { steps: RentStep[]; moveTo?: MoveTo; moves?: RentMove[] };
 
 export async function readRentSteps(supabase: any, residentId: string, tenancyId: string): Promise<RentSteps> {
   const { data } = await supabase.storage.from("resident-documents").download(rentStepPath(residentId, tenancyId), { cacheNonce: Date.now() });
@@ -267,7 +273,14 @@ export async function syncScheduledRent(supabase: any, tenancyId: string) {
    * cheaper room in a period already billed is account credit now; a step
    * saved before 7 Oct still carries its credit, taken off the next invoice once.
    */
-  const { steps } = await readRentSteps(supabase, tenancy.resident_id, tenancyId);
+  const { steps, moves = [] } = await readRentSteps(supabase, tenancy.resident_id, tenancyId);
+  // the place each period is in: theirs now, then each applied move's room from its day
+  const { invoicePlace, residentInvoicePlace } = await import("@/lib/placement.server");
+  const here = await residentInvoicePlace(supabase, String(tenancy.resident_id));
+  const movePlaces = await Promise.all(
+    [...moves].sort((a, b) => a.from.localeCompare(b.from)).map(async (m) => ({ from: m.from, place: await invoicePlace(supabase, m.bedId, m.letWhole) })),
+  );
+  const placeFrom = (start: string) => movePlaces.filter((m) => m.place && start >= m.from).at(-1)?.place ?? here;
   const room = (r: number) => `RM ${r.toLocaleString("en-MY", { maximumFractionDigits: 2 })} a month`;
   const legacy = steps.find((x) => x.credit && !billed.some((r) => String(r.notes ?? "").includes(x.id)));
   let credit = legacy?.credit ?? 0;
@@ -306,9 +319,10 @@ export async function syncScheduledRent(supabase: any, tenancyId: string) {
       phone: person.mobile || inv.phone || "",
       university: person.university || inv.university || "",
       nationality: person.nationality || inv.nationality || "",
-      residence_name: inv.residence_name ?? "",
-      room_name: inv.room_name ?? "",
-      occupancy: inv.occupancy ?? "",
+      // where they are for this period, as sold - never copied from the first invoice (invoicePlace, 14 Oct 2026)
+      residence_name: placeFrom(p.start)?.residence_name || inv.residence_name || "",
+      room_name: placeFrom(p.start)?.room_name || inv.room_name || "",
+      occupancy: placeFrom(p.start)?.occupancy || inv.occupancy || "",
       tenancy_start: tenancy.start_date,
       tenancy_end: terms.tenancyEnd,
       monthly_rent: terms.monthlyRent,
