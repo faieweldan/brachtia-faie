@@ -647,18 +647,29 @@ async function settle(sb: any, residentId: string, s: import("@/lib/checkout.ser
 /* ----------------------------------------------------------------- Payables */
 
 /**
- * Money out (Dani, 2 Oct 2026): every credit note Brachtia owes a resident at
- * checkout, issued or paid - beside Collections, which is money in.
+ * Money out (Dani, 2 Oct 2026): every credit note Brachtia owes a resident,
+ * issued or paid - beside Collections, which is money in. Two kinds, one list:
+ *   checkout  the checkout statement's refund (CS/...)
+ *   credit    account credit no invoice can take, paid back (CN/AC/..., 13 Oct 2026)
+ * The Payables tab reads every resident; a resident's Payments tab reads only
+ * theirs - the same rows, so the two cannot disagree.
  */
-export const listPayables = createServerFn({ method: "GET" }).handler(async () => {
-  const sb = await admin();
+async function payableRows(sb: any, only?: string) {
   const { readStatement } = await import("@/lib/checkout.server");
-  const { data: folders } = await sb.storage.from("resident-documents").list("checkout", { limit: 1000 });
-  const ids = ((folders ?? []) as { name: string; id: string | null }[]).filter((f) => !f.id && /^[0-9a-f-]{36}$/.test(f.name)).map((f) => f.name);
+  const { creditNotes, creditResidents } = await import("@/lib/account-credit.server");
+  let checkoutIds: string[];
+  if (only) checkoutIds = [only];
+  else {
+    const { data: folders } = await sb.storage.from("resident-documents").list("checkout", { limit: 1000 });
+    checkoutIds = ((folders ?? []) as { name: string; id: string | null }[]).filter((f) => !f.id && /^[0-9a-f-]{36}$/.test(f.name)).map((f) => f.name);
+  }
+  const creditIds = only ? [only] : await creditResidents(sb);
+  const ids = [...new Set([...checkoutIds, ...creditIds])];
   const { data: people } = ids.length ? await sb.from("residents").select("id, full_name, resident_code").in("id", ids) : { data: [] };
   const who = new Map(((people ?? []) as any[]).map((p) => [p.id, p]));
+  const person = (id: string) => ({ residentId: id, name: String(who.get(id)?.full_name ?? ""), code: String(who.get(id)?.resident_code ?? "") });
   const rows = [];
-  for (const id of ids) {
+  for (const id of checkoutIds) {
     const s = await readStatement(sb, id);
     const v = s?.versions.at(-1);
     if (!s || !v) continue;
@@ -667,11 +678,10 @@ export const listPayables = createServerFn({ method: "GET" }).handler(async () =
     const amount = s.settled.refund;
     if (amount <= 0) continue;
     rows.push({
-      residentId: id,
-      name: String(who.get(id)?.full_name ?? ""),
-      code: String(who.get(id)?.resident_code ?? ""),
+      ...person(id),
+      kind: "checkout" as const,
       number: s.number,
-      version: v.v,
+      version: v.v as number | null,
       issuedAt: v.issuedAt,
       amount,
       status: s.refund ? "Paid" : "To pay",
@@ -681,10 +691,94 @@ export const listPayables = createServerFn({ method: "GET" }).handler(async () =
       deducted: v.deducted,
       deposits: v.deposits.map((d) => ({ label: d.label, amount: d.amount })),
       lines: v.lines.map((l) => ({ label: l.label, amount: l.amount })),
+      issuedBy: "",
       refund: s.refund
         ? { amount: s.refund.amount, paidOn: s.refund.paidOn, method: s.refund.method, reference: s.refund.reference, recordedBy: s.refund.recordedBy ?? "", hasProof: !!s.refund.proofPath }
         : null,
     });
   }
-  return rows.sort((a, b) => b.number.localeCompare(a.number));
-});
+  for (const id of creditIds) {
+    for (const n of await creditNotes(sb, id)) {
+      rows.push({
+        ...person(id),
+        kind: "credit" as const,
+        number: n.number,
+        version: null,
+        issuedAt: n.at,
+        amount: n.amount,
+        status: n.refund ? "Paid" : "To pay",
+        paidOn: n.refund?.paidOn ?? "",
+        held: 0,
+        deducted: 0,
+        deposits: [] as { label: string; amount: number }[],
+        lines: [{ label: n.reason, amount: n.amount }],
+        issuedBy: n.issuedBy,
+        refund: n.refund
+          ? { amount: n.refund.amount, paidOn: n.refund.paidOn, method: n.refund.method, reference: n.refund.reference, recordedBy: n.refund.recordedBy, hasProof: !!n.refund.proofPath }
+          : null,
+      });
+    }
+  }
+  return rows.sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+}
+
+export type PayableRow = Awaited<ReturnType<typeof payableRows>>[number];
+
+export const listPayables = createServerFn({ method: "GET" }).handler(async () => payableRows(await admin()));
+
+/** One resident's credit notes - their Payments tab shows the section only when there is one. */
+export const listResidentPayables = createServerFn({ method: "GET" })
+  .inputValidator((d) => rid.parse(d))
+  .handler(async ({ data }) => payableRows(await admin(), data.residentId));
+
+/**
+ * Issue a credit note for the account credit no invoice can take (13 Oct
+ * 2026) - the button on the Payments tab. The amount is worked out on the
+ * server (creditOutlook), never typed.
+ */
+export const issueAccountCreditNote = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ residentId: z.string().uuid(), issuedBy: z.string().min(1).max(80) }).parse(d))
+  .handler(async ({ data }) => {
+    const sb = await admin();
+    const { issueCreditNote } = await import("@/lib/account-credit.server");
+    return issueCreditNote(sb, data.residentId, data.issuedBy);
+  });
+
+/** Pay a credit note's refund - the same form, method rules and proof as a checkout refund. */
+export const recordCreditNoteRefundFn = createServerFn({ method: "POST" })
+  .inputValidator((d: FormData) => d)
+  .handler(async ({ data }) => {
+    const sb = await admin();
+    const residentId = String(data.get("residentId") ?? "");
+    const number = String(data.get("creditNote") ?? "");
+    if (!z.string().uuid().safeParse(residentId).success || !number) throw new Error("Which credit note?");
+    const amount = Number(data.get("amount"));
+    const paidOn = String(data.get("paidOn") ?? "");
+    const method = String(data.get("method") ?? "").trim();
+    const reference = String(data.get("reference") ?? "").trim();
+    const recordedBy = String(data.get("recordedBy") ?? "").trim();
+    if (!(amount > 0) || !paidOn || !method) throw new Error("Enter the amount, date and method");
+    if (!recordedBy) throw new Error("Choose who is recording this refund");
+    const { putCreditFile, recordCreditNoteRefund } = await import("@/lib/account-credit.server");
+    const file = data.get("file");
+    let proofPath = "";
+    if (file instanceof File && file.size) {
+      if (file.size > 8 * 1024 * 1024) throw new Error("The proof is larger than 8MB");
+      const ext = /\.([a-z0-9]{1,5})$/i.exec(file.name)?.[1]?.toLowerCase() ?? "pdf";
+      proofPath = `account-credit/${residentId}/${number.replace(/\//g, "-")}-proof.${ext}`;
+      await putCreditFile(sb, proofPath, new Uint8Array(await file.arrayBuffer()), file.type || "application/octet-stream");
+    } else throw new Error("Attach the proof of the refund");
+    await recordCreditNoteRefund(sb, residentId, number, { amount, paidOn, method, reference, proofPath, recordedBy, recordedAt: new Date().toISOString() });
+    return { ok: true as const };
+  });
+
+export const creditNoteProofUrl = createServerFn({ method: "GET" })
+  .inputValidator((d) => z.object({ residentId: z.string().uuid(), number: z.string().min(1) }).parse(d))
+  .handler(async ({ data }) => {
+    const sb = await admin();
+    const { creditNotes } = await import("@/lib/account-credit.server");
+    const note = (await creditNotes(sb, data.residentId)).find((n) => n.number === data.number);
+    if (!note?.refund?.proofPath) throw new Error("No proof");
+    const { data: signed } = await sb.storage.from("resident-documents").createSignedUrl(note.refund.proofPath, 300);
+    return { url: String(signed?.signedUrl ?? "") };
+  });

@@ -141,10 +141,13 @@ describe("a room change before the start gives its credit once", () => {
   test("the review keeps one key while the same room change is confirmed or retried, and a new one for another", () => {
     const review = src("src/components/admin/RoomChangeReview.tsx");
     expect(review).toContain("useState(() => crypto.randomUUID())");
-    // renewed only when another room or rent is picked, or once it is done
+    // renewed only when another room, rent or dates is picked, or once it is done
+    expect(review).toContain("const changeId = picked ? `${picked.bedId}|${picked.rent}` : `dates:${dates?.to}`;");
     expect(review).toMatch(
-      /if \(keyFor\.current === now\) return;[\s\S]*?setRequestKey\(crypto\.randomUUID\(\)\);\n\s+\}, \[picked\.bedId, picked\.rent\]\);/,
+      /if \(keyFor\.current === changeId\) return;[\s\S]*?setRequestKey\(crypto\.randomUUID\(\)\);\n\s+\}, \[changeId\]\);/,
     );
+    // the dates path sends it too - it gives credit the same way
+    expect(review).toMatch(/changeStayDatesBeforeStart\(\{[\s\S]*?requestKey,/);
     expect(review).toMatch(/setRequestKey\(crypto\.randomUUID\(\)\);\n\s+onDone\(res\);/);
     expect(review).toMatch(/toLabel: picked\.label,\n\s+requestKey,/);
     // not renewed on a failure: the catch and the refused answer leave it

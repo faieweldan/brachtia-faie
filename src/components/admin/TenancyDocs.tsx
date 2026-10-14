@@ -42,6 +42,7 @@ import {
 import { fullAgreementPdf, uploadExistingAgreement, uploadStampPage } from "@/lib/agreement-files.functions";
 import { EmptyState, Panel, Select, StatusPill } from "@/components/admin/ops-ui";
 import { fmtDate, money, type Resident } from "@/lib/ops-store";
+import { completeness } from "@/lib/resident-fields";
 import type { ServerTenancy } from "@/lib/rental-schedule.functions";
 import {
   ACCESS_CARD_END_STATES,
@@ -735,6 +736,45 @@ function AccessCardTable({
 }
 
 /**
+ * Create Document Pack, asking first when the profile is not finished (Dani,
+ * 13 Oct 2026). The pack fills the agreement from the profile, so a gap shows
+ * as a blank on the paper. Asking is enough: a resident may sign before the
+ * last details are in. The figure is completeness() - the same number as the
+ * bar at the top of the page.
+ */
+function CreatePackButton({ residentId, disabled, missing, pct }: { residentId: string; disabled: boolean; missing: number; pct: number }) {
+  const navigate = useNavigate();
+  const [asking, setAsking] = useState(false);
+  const go = () => void navigate({ to: "/admin/residents/$id/document-pack", params: { id: residentId } });
+  return (
+    <>
+      <Button size="sm" disabled={disabled} onClick={() => (missing ? setAsking(true) : go())}>
+        Create Document Pack
+      </Button>
+      <Dialog open={asking} onOpenChange={setAsking}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>The profile is not finished</DialogTitle>
+            <DialogDescription>
+              {pct}% complete - {missing} {missing === 1 ? "field" : "fields"} still to fill in. The agreement is filled from the
+              profile, so anything missing is left blank on it. Continue anyway?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => setAsking(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={go}>
+              Continue
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+/**
  * The Tenancy tab: the document-pack prompt before generation, and the
  * agreements + access card tables after.
  */
@@ -768,21 +808,21 @@ export function TenancyDocs({
   }
 
   if (!data.agreements.length) {
+    const profile = completeness(resident);
     return (
       <Panel>
         <div className="flex flex-col items-start gap-3">
           <div>
-            <p className="text-sm font-semibold text-brand-deep">Resident profile complete</p>
+            {/* says what is true: it used to read "complete" at 16% (13 Oct 2026) */}
+            <p className="text-sm font-semibold text-brand-deep">
+              {profile.pct >= 100 ? "Resident profile complete" : `Resident profile ${profile.pct}% complete`}
+            </p>
             <p className="text-sm text-muted-foreground">
               Review the resident and tenancy information before generating the initial documents.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button asChild size="sm" disabled={!tenancy}>
-              <Link to="/admin/residents/$id/document-pack" params={{ id: resident.id }}>
-                Create Document Pack
-              </Link>
-            </Button>
+            <CreatePackButton residentId={resident.id} disabled={!tenancy} missing={profile.missing.length} pct={profile.pct} />
             {/* a resident who signed on paper before the website */}
             <UploadExisting resident={resident} tenancy={tenancy} onDone={refresh} />
           </div>

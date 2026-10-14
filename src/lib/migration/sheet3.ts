@@ -1,4 +1,10 @@
-import { COUNTRIES, RACE_OPTIONS, RELIGION_OPTIONS } from "@/lib/reference-data";
+import {
+  COUNTRIES,
+  MARITAL_OPTIONS,
+  RACE_OPTIONS,
+  RELIGION_OPTIONS,
+  idDocLabelFor,
+} from "@/lib/reference-data";
 import { normUnit, toDate, toSchedule } from "@/lib/master-list";
 import { fmtDate, type Resident, type Unit } from "@/lib/ops-store";
 import { bedForPlacement } from "@/lib/room-offer";
@@ -53,6 +59,22 @@ export type MigrationRecord = {
   passport: string;
   university: string;
   residentType: string;
+  referralSource: string;
+  maritalStatus: string;
+  race: string;
+  religion: string;
+  address: string;
+  postcode: string;
+  state: string;
+  country: string;
+  medicalCondition: string;
+  medicalDetail: string;
+  agreementNo: string;
+  documents: {
+    key: "photo" | "offer" | "id";
+    label: string;
+    url: string;
+  }[];
   paidBy: string;
   payorName: string;
   schedule: string;
@@ -105,6 +127,9 @@ const REQUIRED_HEADERS = [
   "Utilities deposit (RM) (refundable)",
   "Copy of Tenancy Agreement",
   "Copy of Invoice",
+  "Photograph",
+  "NRIC / Passport Copy",
+  "Offer Letter",
 ] as const;
 
 const CHARGE_HEADERS = {
@@ -120,7 +145,9 @@ const CHARGE_HEADERS = {
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const RACE = new Set(RACE_OPTIONS.map((o) => o.value.toLowerCase()));
 const RELIGION = new Set(RELIGION_OPTIONS.map((o) => o.value.toLowerCase()));
+const MARITAL = new Set(MARITAL_OPTIONS.map((o) => o.value.toLowerCase()));
 const DIALS = new Set(COUNTRIES.map((c) => c.dial));
+const WEB_LINK = /^https?:\/\/\S+$/i;
 
 const text = (value: unknown) => {
   if (value == null) return "";
@@ -273,13 +300,43 @@ export function previewSheet3Grid(grid: unknown[][], system: SystemSnapshot): Mi
     }
     if (!mobile) add("blocked", "Mobile Number", "Mobile number is blank.");
 
-    const race = identity(text(value("Race")));
-    const religion = identity(text(value("Religion")));
+    const maritalStatus = text(value("Marital status"));
+    const raceValue = text(value("Race"));
+    const religionValue = text(value("Religion"));
+    const race = identity(raceValue);
+    const religion = identity(religionValue);
+    if (maritalStatus && !MARITAL.has(identity(maritalStatus))) {
+      add("warning", "Marital status", "Use one of the application form's fixed options.");
+    }
     if (race && race !== "n/a" && !RACE.has(race)) {
       add("warning", "Race", "Use one fixed option, or Other. No extra description is needed.");
     }
     if (religion && religion !== "n/a" && !RELIGION.has(religion)) {
       add("warning", "Religion", "Use one fixed option, or Other. No extra description is needed.");
+    }
+    const medicalCondition = identity(text(value("Medical Condition")));
+    const medicalDetail = medicalCondition === "no" ? "" : text(value("Medical Condition - Remarks"));
+    if (medicalCondition && medicalCondition !== "yes" && medicalCondition !== "no") {
+      add("warning", "Medical Condition", "Use Yes or No.");
+    }
+
+    const applicationDocuments: MigrationRecord["documents"] = [
+      { key: "photo", label: "Passport size photo", url: text(value("Photograph")) },
+      {
+        key: "id",
+        label: idDocLabelFor(text(value("Nationality")).toUpperCase()),
+        url: text(value("NRIC / Passport Copy")),
+      },
+      {
+        key: "offer",
+        label: "University offer / admission letter",
+        url: text(value("Offer Letter")),
+      },
+    ];
+    for (const document of applicationDocuments) {
+      if (!document.url) add("blocked", document.label, "Application document link is missing.");
+      else if (!WEB_LINK.test(document.url))
+        add("blocked", document.label, "Application document must be an http(s) link.");
     }
 
     const start = toDate(text(value("Tenancy Start")));
@@ -427,6 +484,17 @@ export function previewSheet3Grid(grid: unknown[][], system: SystemSnapshot): Mi
       passport: text(value("Passport number")),
       university: text(value("University")),
       residentType: text(value("Resident Type")).toLowerCase() || "student",
+      referralSource: text(value("Referral Source")),
+      maritalStatus,
+      race: raceValue,
+      religion: religionValue,
+      address: text(value("Address")),
+      postcode: text(value("Postal Code")),
+      state: text(value("State / Region / Province")),
+      country: text(value("Country")),
+      medicalCondition,
+      medicalDetail,
+      documents: applicationDocuments,
       paidBy: text(value("Paid by")) || "Self",
       payorName: text(value("Payor name")),
       schedule,
@@ -434,6 +502,8 @@ export function previewSheet3Grid(grid: unknown[][], system: SystemSnapshot): Mi
       starterPack: money(value("Add on: Starter pack")) ?? 0,
       totalPaid: money(value("Total Initial Payment")) ?? 0,
       taUrl: text(value("Copy of Tenancy Agreement")),
+      // the existing TA's own number, e.g. TA2025_A-18-05_00724 (Rina, 13 Oct 2026)
+      agreementNo: text(value("Agreement No.")),
       invoiceUrl: text(value("Copy of Invoice")),
       invoiceNo: text(value("Invoice No.")),
       bedId,

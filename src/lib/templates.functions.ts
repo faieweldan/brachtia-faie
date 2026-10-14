@@ -271,7 +271,7 @@ export const searchResidents = createServerFn({ method: "GET" })
     return (rows ?? []).map((r: any) => ({ id: r.id as string, name: r.full_name as string, code: (r.resident_code ?? "") as string }));
   });
 
-async function buildContext(db: any, residentId: string) {
+async function buildContext(db: any, residentId: string, opts: { newAgreement?: boolean | undefined } = {}) {
   const data = { residentId };
   const { data: resident } = await db
     .from("residents")
@@ -304,13 +304,24 @@ async function buildContext(db: any, residentId: string) {
   const room = placed?.room ?? null;
   const unit = placed?.unit ?? null;
   const residence = placed?.residence ?? null;
-  const { data: agreement } = await db
+  const { data: latest } = await db
     .from("tenancy_agreements")
     .select("agreement_no, created_at")
     .eq("resident_id", data.residentId)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  /*
+   * A pack being made shows the number it will be given - the same
+   * nextAgreementNo the Generate button uses - not the last pack's, or a
+   * blank for a first one (Dani, 13 Oct 2026). No Resident ID yet: left blank.
+   */
+  let agreement = latest;
+  if (opts.newAgreement) {
+    const { nextAgreementNo } = await import("@/lib/agreement-no");
+    const next = await nextAgreementNo(db, data.residentId).catch(() => "");
+    agreement = next ? { agreement_no: next, created_at: new Date().toISOString() } : null;
+  }
   const { loadSignatory } = await import("@/lib/signatory.server");
   const signatory = await loadSignatory(db);
   const ctx: MappingContext = {
@@ -451,8 +462,9 @@ async function filledPackBytes(
   residentId: string,
   docKey: (typeof PACK_KEYS)[number],
   overrides?: Record<string, string>,
+  newAgreement?: boolean,
 ): Promise<{ kind: "pdf" | "docx"; bytes: Uint8Array } | null> {
-  const { ctx } = await buildContext(db, residentId);
+  const { ctx } = await buildContext(db, residentId, { newAgreement });
   const { data: rows } = await db
     .from("template_versions")
     .select("content_html, file_path, mappings, boxes, document_templates!inner(doc_key, residence_id, deactivated_at)")
@@ -490,6 +502,8 @@ const packInput = z.object({
   residentId: z.string().uuid(),
   docKey: z.enum(PACK_KEYS),
   overrides: z.record(z.string().max(80), z.string().max(2000)).optional(),
+  /** a new pack: show the agreement number it will get (not for a replacement card) */
+  newAgreement: z.boolean().optional(),
 });
 
 /** The filled Word file, for the quick on-page view. Read-only. */
@@ -497,7 +511,7 @@ export const fillPackDocx = createServerFn({ method: "POST" })
   .inputValidator((d) => packInput.parse(d))
   .handler(async ({ data }) => {
     const db = await admin();
-    const doc = await filledPackBytes(db, data.residentId, data.docKey, data.overrides);
+    const doc = await filledPackBytes(db, data.residentId, data.docKey, data.overrides, data.newAgreement);
     // a PDF form has no Word file to show; its exact pages come from the preview
     return doc?.kind === "docx" ? { base64: toBase64(doc.bytes) } : null;
   });
@@ -510,7 +524,7 @@ export const previewPackPdf = createServerFn({ method: "POST" })
   .inputValidator((d) => packInput.parse(d))
   .handler(async ({ data }) => {
     const db = await admin();
-    const doc = await filledPackBytes(db, data.residentId, data.docKey, data.overrides);
+    const doc = await filledPackBytes(db, data.residentId, data.docKey, data.overrides, data.newAgreement);
     if (!doc) return { ok: false as const, error: "This document has no file to preview." };
     if (doc.kind === "pdf") return { ok: true as const, base64: toBase64(doc.bytes) };
     return pdfResult(doc.bytes);

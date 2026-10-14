@@ -98,7 +98,17 @@ export type ResidentBilling = {
   /** IPs of cancelled Update Tenancy events - void, kept in the history with why and who */
   voided: BillingInvoice[];
   /** account credit from Update Tenancy: given, used on invoices, left */
-  accountCredit: { given: number; used: number; balance: number };
+  accountCredit: {
+    given: number;
+    used: number;
+    /** paid back on credit notes */
+    noted: number;
+    balance: number;
+    /** where what is left will go: invoice id -> credit, the next to pay first (creditOutlook) */
+    plan: Record<string, number>;
+    /** what no invoice can take - may be issued as a credit note (13 Oct 2026) */
+    leftover: number;
+  };
 };
 
 const num = (v: unknown) => Number(v ?? 0) || 0;
@@ -152,7 +162,7 @@ export const getResidentBilling = createServerFn({ method: "GET" })
       depositsHeld: 0,
       groups: { initial: [], rental: [], charge: [], checkout: [] },
       scheduled: [],
-      accountCredit: { given: 0, used: 0, balance: 0 },
+      accountCredit: { given: 0, used: 0, noted: 0, balance: 0, plan: {}, leftover: 0 },
       voided: [],
     };
 
@@ -163,11 +173,16 @@ export const getResidentBilling = createServerFn({ method: "GET" })
     // rent whose billing day has come is owed from today
     await billDueInvoices(supabase);
     // and any account credit is used on it (agreed 7 Oct 2026)
-    const { applyAccountCredit, creditBalance } = await import("@/lib/account-credit.server");
+    const { applyAccountCredit, creditBalance, creditOutlook } = await import("@/lib/account-credit.server");
     await applyAccountCredit(supabase, data.residentId);
     // and an Update Tenancy event whose IP is settled, or whose day has come, moves on
     await (await import("@/lib/tenancy-events.server")).processResident(supabase, data.residentId);
-    const accountCredit = await creditBalance(supabase, data.residentId);
+    const [credit, outlook] = await Promise.all([creditBalance(supabase, data.residentId), creditOutlook(supabase, data.residentId)]);
+    const accountCredit = {
+      ...credit,
+      plan: Object.fromEntries(outlook.plan.filter((p) => p.credit > 0).map((p) => [p.id, p.credit])),
+      leftover: outlook.leftover,
+    };
     const residentCode = await residentCodeFor(supabase, data.residentId);
     const { data: invoices, error } = await supabase
       .from("invoices")

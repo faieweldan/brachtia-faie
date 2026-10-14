@@ -1,7 +1,7 @@
 import { logBookingEvent } from "@/lib/booking-events";
 import { STAGE_ORDER, stageLabel } from "@/lib/bookings-pipeline";
 import { BOOKING_FEE, liveInvoices } from "@/lib/invoices";
-import { SCHEDULES, normCountry, normGender, normUniversity } from "@/lib/reference-data";
+import { SCHEDULES, normCountry, normGender, normReferral, normUniversity } from "@/lib/reference-data";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -97,6 +97,8 @@ export async function residentFromBooking(supabase: any, enquiryId: string) {
         nationality: normCountry(String(enquiry.nationality ?? "")).value,
         gender: normGender(String(enquiry.gender ?? "")).value,
         university: normUniversity(String(enquiry.university ?? "")).value,
+        // the booking form's answer is the resident's - not a second, empty copy
+        referral_source: normReferral(String(enquiry.heard_about ?? "")).value,
         occupancy: enquiry.occupancy ?? "",
         move_in: moveIn,
         lease_months: months ? String(months) : "",
@@ -395,7 +397,13 @@ export async function moveStayDates(
  * never touched; when some has been, the rent terms are left for admin on the
  * Payments tab rather than rebuilt here.
  */
-export async function syncPaidStay(supabase: any, enquiryId: string, rentOverride?: number) {
+export async function syncPaidStay(
+  supabase: any,
+  enquiryId: string,
+  rentOverride?: number,
+  /** new dates before move-in (13 Oct 2026): the tenancy takes these, not the paid invoice's */
+  dates?: { start: string; end: string },
+) {
   const { data: t } = await supabase
     .from("tenancies")
     .select("id, resident_id, start_date, end_date")
@@ -418,8 +426,8 @@ export async function syncPaidStay(supabase: any, enquiryId: string, rentOverrid
     .limit(1)
     .maybeSingle();
   const inv = invoice.data as any;
-  const start = String(inv?.tenancy_start ?? "").slice(0, 10);
-  const end = String(inv?.tenancy_end ?? "").slice(0, 10);
+  const start = (dates?.start || String(inv?.tenancy_start ?? "")).slice(0, 10);
+  const end = (dates?.end || String(inv?.tenancy_end ?? "")).slice(0, 10);
   const rent = Number(inv?.monthly_rent || 0);
   if (!start || !end) return { changed: false as const, reason: "no dates" };
   const datesChanged = start !== String(t.start_date ?? "") || end !== String(t.end_date ?? "");

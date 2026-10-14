@@ -1218,7 +1218,7 @@ function BookingDetail() {
           ["university", "University", "text"],
           ["intake", "Intake", "text"],
         ] as const)),
-    ["heard_about", "Referral Source", "heard"],
+    ["heard_about", "How did you hear about us?", "heard"],
   ] as const;
 
   return (
@@ -1392,6 +1392,13 @@ function BookingDetail() {
                   }
                 : null
             }
+            tenancyDates={(billing as any)?.tenancyDates ?? null}
+            onStayChanged={(message) => {
+              toast.success(message);
+              void refreshUnits();
+              void queryClient.invalidateQueries({ queryKey: ["admin"] });
+              void queryClient.invalidateQueries({ queryKey: ["billing-ledger"] });
+            }}
             onQuoteUpdated={async () => {
               try {
                 await syncInvoiceWithQuote({ data: { enquiryId: id } });
@@ -2337,6 +2344,7 @@ function BookingDetail() {
               phone={row.phone ?? ""}
               // the fee is in, so what is left is the balance rather than the lot
               isBalance={paidTotal > 0}
+              paidBefore={Number((billing as any)?.paidBefore ?? 0)}
               attachments={[
                 {
                   label: `Invoice ${invoice.number}`,

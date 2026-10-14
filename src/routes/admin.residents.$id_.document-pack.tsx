@@ -191,7 +191,7 @@ function DocumentPackPage() {
   // the exact pages, from a real Word engine; redrawn after typing pauses
   const pdfDoc = useQuery({
     queryKey: ["pack-pdf", id, docKey, typed],
-    queryFn: () => pdfFn({ data: { residentId: id, docKey, overrides: typed } }),
+    queryFn: () => pdfFn({ data: { residentId: id, docKey, overrides: typed, newAgreement: !card } }),
     enabled: Boolean(tpl?.hasFile),
     // keep the pages on screen while a changed value redraws them - but only
     // the same document's pages, never the last document's while switching
@@ -210,7 +210,7 @@ function DocumentPackPage() {
       if (!t?.hasFile || key === docKey) continue;
       void qc.prefetchQuery({
         queryKey: ["pack-pdf", id, key, typed],
-        queryFn: () => pdfFn({ data: { residentId: id, docKey: key as typeof docKey, overrides: typed } }),
+        queryFn: () => pdfFn({ data: { residentId: id, docKey: key as typeof docKey, overrides: typed, newAgreement: !card } }),
         staleTime: 60_000,
       });
     }
@@ -220,7 +220,7 @@ function DocumentPackPage() {
   // the approximate view, only where no PDF can be made on this server
   const filledDoc = useQuery({
     queryKey: ["pack-docx", id, docKey, typed],
-    queryFn: () => fillDocx({ data: { residentId: id, docKey, overrides: typed } }),
+    queryFn: () => fillDocx({ data: { residentId: id, docKey, overrides: typed, newAgreement: !card } }),
     enabled: Boolean(tpl?.hasFile) && pdfDoc.data?.ok === false,
     placeholderData: (prev) => prev,
   });
@@ -382,7 +382,7 @@ function DocumentPackPage() {
             {tpl?.hasFile ? (
               <ExactPreviewButton
                 title={`${MENU.flatMap((g) => g.items).find((i) => i.key === selected)?.label ?? "Document"} · ${resident.fullName}`}
-                load={() => pdfFn({ data: { residentId: id, docKey, overrides } })}
+                load={() => pdfFn({ data: { residentId: id, docKey, overrides, newAgreement: !card } })}
               />
             ) : null}
           </div>

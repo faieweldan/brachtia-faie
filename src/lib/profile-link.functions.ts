@@ -45,6 +45,7 @@ const EDITABLE = [
   "marital_status",
   "race",
   "religion",
+  "referral_source",
   "medical_condition",
   "medical_detail",
   // what they are doing now - it decides whether the academic or the

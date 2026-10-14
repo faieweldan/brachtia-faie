@@ -192,3 +192,11 @@ export const ROOM_CHANGE_REASONS = [
   "Operational reassignment",
   "Other",
 ] as const;
+
+/** Why a paid stay's dates moved before move-in (13 Oct 2026). */
+export const STAY_DATE_REASONS = [
+  "Semester dates changed",
+  "Resident requested new dates",
+  "Operational",
+  "Other",
+] as const;

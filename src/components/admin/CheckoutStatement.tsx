@@ -21,6 +21,7 @@ import {
   markCheckoutInactive,
   previewCheckout,
   recordCheckoutRefund,
+  recordCreditNoteRefundFn,
   refundProofUrl,
   saveCheckoutDraft,
   startCheckout,
@@ -484,8 +485,12 @@ export function CheckoutStatement({
   );
 }
 
-/** Pay the refund: how, when, and its proof. */
-export function RefundForm({ residentId, net, onDone }: { residentId: string; net: number; onDone: () => void }) {
+/**
+ * Pay the refund: how, when, and its proof. The checkout statement's, or an
+ * account-credit credit note's (`creditNote`, 13 Oct 2026) - one form, so both
+ * ask the same questions under the same method rules.
+ */
+export function RefundForm({ residentId, net, onDone, creditNote }: { residentId: string; net: number; onDone: () => void; creditNote?: string }) {
   const [amount, setAmount] = useState(String(Math.abs(net)));
   const [paidOn, setPaidOn] = useState(klToday());
   const [method, setMethod] = useState(METHODS[0]!);
@@ -506,7 +511,10 @@ export function RefundForm({ residentId, net, onDone }: { residentId: string; ne
       fd.set("reference", rule.reference ? reference : "");
       fd.set("recordedBy", recordedBy);
       if (file) fd.set("file", file);
-      await recordCheckoutRefund({ data: fd });
+      if (creditNote) {
+        fd.set("creditNote", creditNote);
+        await recordCreditNoteRefundFn({ data: fd });
+      } else await recordCheckoutRefund({ data: fd });
       toast.success("Refund recorded");
       onDone();
     } catch (e) {
@@ -518,7 +526,7 @@ export function RefundForm({ residentId, net, onDone }: { residentId: string; ne
   return (
     <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/50 p-4">
       <p className="text-sm font-semibold text-brand-deep">
-        {net >= 0 ? "Signed by the resident - record the refund" : "Signed by the resident - record the balance they paid"}
+        {creditNote ? `Record the refund of ${creditNote}` : net >= 0 ? "Signed by the resident - record the refund" : "Signed by the resident - record the balance they paid"}
       </p>
       {/* the same picker as Collections' Record payment */}
       <div className="space-y-1.5">

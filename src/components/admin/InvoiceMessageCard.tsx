@@ -33,6 +33,8 @@ const paymentMessage = (d: {
   paid: number;
   dueDate: string;
   isBalance: boolean;
+  /** money already in on an earlier invoice - the booking fee is behind them */
+  paidBefore: number;
 }) => {
   /*
    * Almost nobody pays the whole thing at once. They send the RM500 first to
@@ -44,7 +46,13 @@ const paymentMessage = (d: {
    * AND the invoice is actually bigger than the fee - on a smaller invoice
    * "pay RM500 first" would be asking for more than is owed.
    */
-  const splitFee = !d.isBalance && d.amount > BOOKING_FEE;
+  /*
+   * A second invoice after the first was paid in full (a room upgrade) asks
+   * for the difference only - their room has been secured since the first
+   * payment, so naming the booking fee again is wrong (Dani, 13 Oct 2026).
+   */
+  const feeBehind = d.isBalance || d.paidBefore > 0;
+  const splitFee = !feeBehind && d.amount > BOOKING_FEE;
 
   // built as paragraphs, so a line that has nothing to say can be left out
   // without taking a blank line with it
@@ -65,7 +73,7 @@ const paymentMessage = (d: {
     [
       "I've attached the invoice, which has our bank details on it.",
       `Once you've paid, please send the payment proof here and we'll issue your receipt.${
-        d.isBalance
+        feeBehind
           ? " Your room stays reserved for you in the meantime."
           : splitFee
             ? ` The ${company.bookingFee} booking fee secures your room straight away, and the balance is due by the date above.`
@@ -90,6 +98,7 @@ export function InvoiceMessageCard({
   dueDate,
   phone,
   isBalance = false,
+  paidBefore = 0,
   attachments,
   id,
 }: {
@@ -104,11 +113,13 @@ export function InvoiceMessageCard({
   phone: string;
   /** the booking fee is already in, so this asks for the rest */
   isBalance?: boolean;
+  /** paid on the booking's earlier invoices - the fee is not asked for again */
+  paidBefore?: number;
   attachments: InvoiceAttachment[];
   id?: string;
 }) {
   const [message, setMessage] = useState(() =>
-    paymentMessage({ name: studentName, reference, amount, paid, dueDate, isBalance }),
+    paymentMessage({ name: studentName, reference, amount, paid, dueDate, isBalance, paidBefore }),
   );
   /*
    * Like the signing message (Dani, 6 Oct 2026): open by itself until it is

@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dropdown, StaffPicker } from "@/components/admin/Dropdown";
 import { PdfPreviewButton } from "@/components/admin/PdfPreview";
-import { changeRoomBeforeStart, previewRoomChange } from "@/lib/admin.functions";
+import { changeRoomBeforeStart, changeStayDatesBeforeStart, previewRoomChange } from "@/lib/admin.functions";
 import { fmtDate, money } from "@/lib/ops-store";
-import { ROOM_CHANGE_REASONS, creditPartLabel } from "@/lib/room-change";
+import { ROOM_CHANGE_REASONS, STAY_DATE_REASONS, creditPartLabel } from "@/lib/room-change";
 
 /** A room picked in the booking's Room assignment picker. */
 export type RoomOption = {
@@ -32,7 +32,9 @@ export type RoomChangeResult = Awaited<ReturnType<typeof changeRoomBeforeStart>>
 
 /**
  * The review under the booking's own Room assignment picker, once a room is
- * picked (Dani, 10 Oct 2026) - no popup. Placement first, then the money only
+ * picked (Dani, 10 Oct 2026) - no popup. Also the review for new dates on a
+ * paid booking before move-in (`dates` instead of `picked`, 13 Oct 2026): the
+ * same server path, so the same price impact, documents and approval. Placement first, then the money only
  * when it moves, then the documents only when they need something, and who
  * approved it and why. On or after the tenancy start it points to Update
  * Tenancy instead.
@@ -42,6 +44,7 @@ export function RoomChangeReview({
   residentId,
   current,
   picked,
+  dates,
   onCancel,
   onDone,
 }: {
@@ -49,7 +52,10 @@ export function RoomChangeReview({
   residentId?: string | undefined;
   /** "B-08-05 · Room C · Single" */
   current: string;
-  picked: RoomOption;
+  /** a room change */
+  picked?: RoomOption | undefined;
+  /** or new dates in the same room: "01 Sep 2026 – 31 May 2027", and the rent it stays at */
+  dates?: { from: string; to: string; rent: number } | undefined;
   onCancel: () => void;
   onDone: (res: RoomChangeResult & { ok: true }) => void;
 }) {
@@ -58,33 +64,34 @@ export function RoomChangeReview({
   const [approvedBy, setApprovedBy] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const rent = picked?.rent ?? dates?.rent ?? 0;
   /*
-   * One key for this room change (16 Oct 2026): Confirm pressed again, or after
-   * an answer that never came back, sends the same key, so any account credit
-   * it gives is given once. Another room or rent picked is another room change.
+   * One key for this change (16 Oct 2026): Confirm pressed again, or after an
+   * answer that never came back, sends the same key, so any account credit it
+   * gives is given once. Another room, rent or dates is another change.
    */
+  const changeId = picked ? `${picked.bedId}|${picked.rent}` : `dates:${dates?.to}`;
   const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
-  const keyFor = useRef(`${picked.bedId}|${picked.rent}`);
+  const keyFor = useRef(changeId);
   useEffect(() => {
-    const now = `${picked.bedId}|${picked.rent}`;
-    if (keyFor.current === now) return;
-    keyFor.current = now;
+    if (keyFor.current === changeId) return;
+    keyFor.current = changeId;
     setRequestKey(crypto.randomUUID());
-  }, [picked.bedId, picked.rent]);
+  }, [changeId]);
   const preview = useQuery({
-    queryKey: ["room-change", enquiryId, picked.bedId, picked.rent],
+    queryKey: ["room-change", enquiryId, picked?.bedId ?? `dates:${dates?.to}`, rent],
     // the room's details too, so the drafts name it as Confirm will
     queryFn: () =>
       previewRoomChange({
         data: {
           enquiryId,
-          newRent: picked.rent,
-          bedId: picked.bedId,
-          ...(picked.roomName ? { roomName: picked.roomName } : {}),
-          ...(picked.occupancy ? { occupancy: picked.occupancy } : {}),
-          ...(picked.residenceName ? { residenceName: picked.residenceName } : {}),
+          newRent: rent,
+          ...(picked?.bedId ? { bedId: picked.bedId } : {}),
+          ...(picked?.roomName ? { roomName: picked.roomName } : {}),
+          ...(picked?.occupancy ? { occupancy: picked.occupancy } : {}),
+          ...(picked?.residenceName ? { residenceName: picked.residenceName } : {}),
           fromLabel: current,
-          toLabel: picked.label,
+          toLabel: picked?.label ?? "the new dates",
         },
       }),
     retry: false,
@@ -94,13 +101,17 @@ export function RoomChangeReview({
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     box.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [picked.bedId]);
+  }, [picked?.bedId, dates?.to]);
 
   async function confirm() {
     setBusy(true);
     setError("");
     try {
-      const res = await changeRoomBeforeStart({
+      const res = !picked
+        ? await changeStayDatesBeforeStart({
+            data: { enquiryId, approvedBy, reason, ...(note.trim() ? { note: note.trim() } : {}), requestKey, ...(p?.key ? { expectedKey: p.key } : {}) },
+          })
+        : await changeRoomBeforeStart({
         data: {
           enquiryId,
           bedId: picked.bedId,
@@ -131,7 +142,7 @@ export function RoomChangeReview({
       setRequestKey(crypto.randomUUID());
       onDone(res);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "The room could not be changed.");
+      setError(e instanceof Error ? e.message : picked ? "The room could not be changed." : "The dates could not be changed.");
     } finally {
       setBusy(false);
     }
@@ -203,7 +214,7 @@ export function RoomChangeReview({
         <p className="py-6 text-center text-sm text-muted-foreground">Working it out…</p>
       ) : !p.allowed ? (
         <div className="space-y-3 text-sm">
-          <p>The tenancy has started, so a room change goes through Update Tenancy.</p>
+          <p>The tenancy has started, so {picked ? "a room change" : "a change of dates"} goes through Update Tenancy.</p>
           {residentId ? (
             <Button size="sm" asChild>
               <Link to="/admin/residents/$id" params={{ id: residentId }}>
@@ -216,9 +227,19 @@ export function RoomChangeReview({
         <div className="space-y-4">
           {/* placement first */}
           <div className="divide-y divide-border rounded-xl border border-border px-3">
-            {line("Current placement", current)}
-            {line("New placement", <span className="font-medium">{picked.label}</span>)}
-            {line("Tenancy start", fmtDate(p.start))}
+            {picked ? (
+              <>
+                {line("Current placement", current)}
+                {line("New placement", <span className="font-medium">{picked.label}</span>)}
+                {line("Tenancy start", fmtDate(p.start))}
+              </>
+            ) : (
+              <>
+                {line("Room", current)}
+                {line("Current dates", dates?.from)}
+                {line("New dates", <span className="font-medium">{dates?.to}</span>)}
+              </>
+            )}
           </div>
 
           {/* the money, only when it moves */}
@@ -288,7 +309,7 @@ export function RoomChangeReview({
               <div className="divide-y divide-border rounded-xl border border-border px-3">
                 {m?.kind === "same"
                   ? docRow(
-                      <>{p.invoice?.number} · room details updated</>,
+                      <>{p.invoice?.number} · {picked ? "room details" : "dates"} updated</>,
                       drafts.invoice ? invoiceEye(drafts.invoice, `updated invoice ${p.invoice?.number}`) : null,
                       <>
                         {figure("Total", money(m.total))}
@@ -300,12 +321,12 @@ export function RoomChangeReview({
                 {p.ta === "draft"
                   ? line(
                       "Tenancy agreement",
-                      "Not signed yet - reset, to be made again for the new room",
+                      `Not signed yet - reset, to be made again for the new ${picked ? "room" : "dates"}`,
                     )
                   : p.ta === "signed"
                     ? line(
                         "Tenancy agreement",
-                        "Signed - kept. Issue a revised pack from the Tenancy tab",
+                        "Signed - kept as the record. A revised Schedule A is made for the resident to sign again",
                       )
                     : null}
               </div>
@@ -321,7 +342,7 @@ export function RoomChangeReview({
                 className="h-9 w-full"
               >
                 <option value="">Choose…</option>
-                {ROOM_CHANGE_REASONS.map((r) => (
+                {(picked ? ROOM_CHANGE_REASONS : STAY_DATE_REASONS).map((r) => (
                   <option key={r} value={r}>
                     {r}
                   </option>
@@ -355,7 +376,7 @@ export function RoomChangeReview({
             }
             onClick={() => void confirm()}
           >
-            {busy ? "Changing…" : "Confirm room change"}
+            {busy ? "Changing…" : picked ? "Confirm room change" : "Confirm new dates"}
           </Button>
         ) : null}
       </div>
@@ -364,12 +385,13 @@ export function RoomChangeReview({
 }
 
 /** What is said once the room has changed - one sentence, by what happened to the money. */
-export function roomChangeMessage(res: RoomChangeResult & { ok: true }, to: string) {
+export function roomChangeMessage(res: RoomChangeResult & { ok: true }, to: string, done = "Room changed") {
+  const ta = res.ta === "revised" ? " A revised Schedule A is ready to sign." : res.ta === "reset" ? " The document pack is to be made again." : "";
   if (res.ipNumber)
-    return `Room changed. Initial Payment invoice ${res.ipNumber} was created for the ${money(res.ipAmount ?? 0)} difference.`;
+    return `${done}. Initial Payment invoice ${res.ipNumber} was created for the ${money(res.ipAmount ?? 0)} difference.${ta}`;
   if (res.kind === "credit" && res.credit)
-    return `Room changed. ${money(res.credit)} was carried forward as account credit.`;
+    return `${done}. ${money(res.credit)} was carried forward as account credit - it comes off the next rent.${ta}`;
   if (res.kind === "revise")
-    return `Room changed. Initial invoice ${res.invoice} was revised. New balance: ${money(res.outstanding ?? 0)}.${res.credit ? ` ${money(res.credit)} to account credit.` : ""}`;
-  return `Room changed to ${to}. Payments and balance are unchanged.`;
+    return `${done}. Initial invoice ${res.invoice} was revised. New balance: ${money(res.outstanding ?? 0)}.${res.credit ? ` ${money(res.credit)} to account credit.` : ""}${ta}`;
+  return `${done}${to ? ` to ${to}` : ""}. Payments and balance are unchanged.${ta}`;
 }

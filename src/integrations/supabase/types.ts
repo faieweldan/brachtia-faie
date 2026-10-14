@@ -1561,6 +1561,7 @@ export type Database = {
           postcode: string
           quickbooks_id: string | null
           race: string
+          referral_source: string
           religion: string
           resident_code: string | null
           sponsor: string
@@ -1625,6 +1626,7 @@ export type Database = {
           postcode?: string
           quickbooks_id?: string | null
           race?: string
+          referral_source?: string
           religion?: string
           resident_code?: string | null
           sponsor?: string
@@ -1689,6 +1691,7 @@ export type Database = {
           postcode?: string
           quickbooks_id?: string | null
           race?: string
+          referral_source?: string
           religion?: string
           resident_code?: string | null
           sponsor?: string

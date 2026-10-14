@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { klToday } from "@/lib/kl-date";
-import { PERSON_LABEL, personStatus, timingLine } from "@/lib/placement";
+import { PERSON_LABEL, personStatus, timingLine, timingTone } from "@/lib/placement";
+import { ResidentLabelPicker } from "@/components/admin/ResidentLabels";
 import { beforeTenancyStart } from "@/lib/room-change";
 import { isSandboxClient } from "@/lib/sandbox";
 import { ArrowLeft, DoorOpen, Link2, Pencil, Trash2 } from "lucide-react";
@@ -436,6 +437,7 @@ function ResidentProfilePage() {
     },
   };  // Change room before the move-in date; on or after it, Update Tenancy - checked
   // in or not. The same rule as the booking page (beforeTenancyStart, 10 Oct 2026)
+  const when = timingLine(person, stay.start, stay.end, klToday(), checkInDays.data?.[form.id]);
   const notArrived = beforeTenancyStart(stay.start, !(person === "held" || person === "booked"), klToday());
 
 
@@ -610,6 +612,8 @@ function ResidentProfilePage() {
                       {chip}
                     </span>
                   ))}
+                {/* admin's own labels, shared by every admin (13 Oct 2026) */}
+                {form.id ? <ResidentLabelPicker residentId={form.id} /> : null}
               </div>
             </div>
           </div>
@@ -752,15 +756,9 @@ function ResidentProfilePage() {
                 <>
                   {fmtDate(stay.start)}
                   {/* the timing, quietly, under the date it is about */}
-                  {timingLine(person, stay.start, stay.end, klToday(), checkInDays.data?.[form.id]) ? (
-                    <span
-                      className={`block whitespace-normal text-xs font-normal ${
-                        timingLine(person, stay.start, stay.end, klToday(), checkInDays.data?.[form.id]) .endsWith("overdue")
-                          ? "text-rose-700"
-                          : "text-muted-foreground"
-                      }`}
-                    >
-                      {timingLine(person, stay.start, stay.end, klToday(), checkInDays.data?.[form.id])}
+                  {when ? (
+                    <span className={`block whitespace-normal text-xs font-normal ${timingTone(when) || "text-muted-foreground"}`}>
+                      {when}
                     </span>
                   ) : null}
                 </>

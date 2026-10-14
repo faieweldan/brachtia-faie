@@ -38,6 +38,7 @@ import {
   type PayableInvoice,
 } from "@/components/admin/RecordPaymentDialog";
 import { CheckoutStatement } from "@/components/admin/CheckoutStatement";
+import { ResidentCreditNotes } from "@/components/admin/PayablesTable";
 
 /**
  * A resident's money, shown the way an admin thinks about it.
@@ -78,7 +79,7 @@ export function ResidentPayments({
   /** who they are and their stay - a new invoice is filled in from it */
   details: ResidentDetails;
 }) {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch: refetchBilling } = useQuery({
     queryKey: ["resident-billing", residentId, quickbooksId],
     queryFn: () =>
       getResidentBilling({ data: { residentId, ...(quickbooksId ? { quickbooksId } : {}) } }),
@@ -237,7 +238,7 @@ export function ResidentPayments({
       .filter(Boolean)
       .sort()
       .at(-1) ?? "";
-  const creditAhead = new Map<string, number>();
+  const creditAhead = new Map<string, number>(Object.entries(b?.accountCredit?.plan ?? {}));
   const rentRows = [...issuedRent, ...scheduledRent].sort((x, y) =>
     (x.periodStart || x.issuedAt).localeCompare(y.periodStart || y.issuedAt),
   );
@@ -282,6 +283,10 @@ export function ResidentPayments({
         {(b?.accountCredit?.given ?? 0) > 0 ? (
           <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
             Account credit {money(b!.accountCredit.balance)} available · {money(b!.accountCredit.used)} applied to invoices
+            {b!.accountCredit.noted > 0 ? ` · ${money(b!.accountCredit.noted)} refunded on credit notes` : ""}
+            {b!.accountCredit.balance - b!.accountCredit.leftover > 0.005
+              ? ` · ${money(b!.accountCredit.balance - b!.accountCredit.leftover)} comes off the next invoices`
+              : ""}
           </p>
         ) : null}
         {(b?.credit ?? 0) > 0 ? (
@@ -397,17 +402,8 @@ export function ResidentPayments({
               </thead>
               <tbody className="divide-y divide-border">
                 {/* account credit is used on each bill as it is billed, oldest first - shown
-                    ahead on the scheduled rows so the credit is visible where it will go (10 Oct 2026) */}
-                {(() => {
-                  let left = Math.max(0, b?.accountCredit?.balance ?? 0);
-                  for (const r of rentRows) {
-                    if (!r.scheduled || left <= 0.005) continue;
-                    const use = Math.min(left, r.total);
-                    creditAhead.set(r.id, use);
-                    left -= use;
-                  }
-                  return null;
-                })()}
+                    ahead on the rows so the credit is visible where it will go (10 Oct 2026).
+                    The server's plan (creditOutlook), so this, the credit note and billing day agree (13 Oct 2026) */}
                 {rentRows.map((inv) => {
                   const state = rentState(inv, today);
                   return (
@@ -532,6 +528,9 @@ export function ResidentPayments({
           </Row>
         </div>
       </Panel>
+
+      {/* money owed back to them - shown only when there is some (13 Oct 2026) */}
+      <ResidentCreditNotes residentId={residentId} leftover={b?.accountCredit?.leftover ?? 0} onChanged={() => void refetchBilling()} />
 
       <RecordPaymentDialog
         key={paying?.id ?? "none"}

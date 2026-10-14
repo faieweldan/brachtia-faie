@@ -47,6 +47,34 @@ export type CreditEntry = {
   reversedReason?: string;
 };
 
+/** A credit note's refund, once paid (13 Oct 2026). */
+export type CreditRefund = {
+  amount: number;
+  paidOn: string;
+  method: string;
+  reference: string;
+  proofPath: string;
+  recordedBy: string;
+  recordedAt: string;
+};
+
+/**
+ * A credit note: account credit no invoice can take, paid back (Dani, 13 Oct
+ * 2026). Its own table since 14 Oct 2026 (20261018100000_account_credit_notes.sql),
+ * counted in account_credit_position, so the balance is one figure.
+ */
+export type CreditNote = {
+  id: string;
+  at: string;
+  /** what was paid back - above zero */
+  amount: number;
+  reason: string;
+  /** CN/AC/00001 */
+  number: string;
+  issuedBy: string;
+  refund?: CreditRefund | undefined;
+};
+
 /** credit to give - `key` makes it once only; an event's credit has one by itself */
 export type CreditGrant = Omit<CreditEntry, "id" | "at" | "reversedAt" | "reversedReason"> & {
   key?: string;
@@ -165,15 +193,113 @@ export async function addCredit(sb: any, residentId: string, entries: CreditGran
  * cancelled event's IP - is the resident's again.
  */
 export async function creditBalance(sb: any, residentId: string) {
-  if (!UUID.test(residentId)) return { given: 0, used: 0, balance: 0 };
+  if (!UUID.test(residentId)) return { given: 0, used: 0, noted: 0, balance: 0 };
   await ledgerReady(sb, residentId);
   const { data, error } = await sb.rpc("account_credit_position", { p_resident: residentId });
   if (error) throw new Error(error.message);
   return {
     given: Number((data as any)?.given ?? 0),
     used: Number((data as any)?.used ?? 0),
+    // paid back on credit notes: no longer the resident's to use (13 Oct 2026)
+    noted: Number((data as any)?.noted ?? 0),
     balance: Number((data as any)?.balance ?? 0),
   };
+}
+
+/**
+ * Where the credit left will go (Dani, 13 Oct 2026): onto the invoices still to
+ * pay - rent not billed yet included - oldest first, as applyAccountCredit
+ * takes them; and the leftover no invoice can take. Read-only.
+ *
+ * The leftover is the database's (account_credit_leftover) - the figure the
+ * credit note is issued for, under lock - so the button never offers one
+ * amount and the note says another. planCredit only spreads the balance over
+ * the invoices for the screen.
+ */
+export async function creditOutlook(sb: any, residentId: string) {
+  const { planCredit } = await import("@/lib/credit-plan");
+  if (!UUID.test(residentId)) return { balance: 0, plan: [] as ReturnType<typeof planCredit>["plan"], leftover: 0 };
+  const { balance } = await creditBalance(sb, residentId);
+  const [{ data: rows }, { data: left, error }] = await Promise.all([
+    sb
+      .from("invoices")
+      .select("id, total, status")
+      .eq("resident_id", residentId)
+      .not("status", "in", "(void,paid)")
+      .order("invoice_date", { ascending: true })
+      .order("issued_at", { ascending: true }),
+    sb.rpc("account_credit_leftover", { p_resident: residentId }),
+  ]);
+  if (error) throw new Error(error.message);
+  const open = (rows ?? []) as any[];
+  const { data: pays } = open.length
+    ? await sb.from("payments").select("invoice_id, amount").in("invoice_id", open.map((r) => r.id))
+    : { data: [] };
+  const paid = new Map<string, number>();
+  for (const p of (pays ?? []) as any[]) paid.set(p.invoice_id, (paid.get(p.invoice_id) ?? 0) + Number(p.amount || 0));
+  const { plan } = planCredit(balance, open.map((r) => ({ id: r.id, owing: Number(r.total || 0) - (paid.get(r.id) ?? 0) })));
+  return { balance, plan, leftover: Number(left ?? 0) };
+}
+
+/**
+ * Issue a credit note for the credit no invoice can take - only that leftover;
+ * while rent is still to be billed the credit goes there. One database step:
+ * the credit and open invoices locked, the leftover read, the note made for it.
+ */
+export async function issueCreditNote(sb: any, residentId: string, issuedBy: string) {
+  if (!UUID.test(residentId)) throw new Error("A credit note needs a resident");
+  await ledgerReady(sb, residentId);
+  const { data, error } = await sb.rpc("issue_account_credit_note", { p_resident: residentId, p_issued_by: issuedBy });
+  if (error) throw new Error(`Could not issue the credit note: ${error.message}`);
+  if (!(data as any)?.ok) throw new Error("There is no credit left over - it goes onto the rent still to be billed.");
+  return { number: String((data as any).number), amount: Number((data as any).amount) };
+}
+
+const toNote = (r: any): CreditNote => ({
+  id: String(r.id),
+  at: String(r.issued_at ?? ""),
+  amount: Number(r.amount),
+  reason: String(r.reason ?? ""),
+  number: String(r.number ?? ""),
+  issuedBy: String(r.issued_by ?? ""),
+  ...(r.refund ? { refund: r.refund as CreditRefund } : {}),
+});
+
+/** A resident's credit notes, newest first. */
+export async function creditNotes(sb: any, residentId: string): Promise<CreditNote[]> {
+  if (!UUID.test(residentId)) return [];
+  await ledgerReady(sb, residentId);
+  const { data, error } = await sb
+    .from("account_credit_notes")
+    .select("*")
+    .eq("resident_id", residentId)
+    .order("issued_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as any[]).map(toNote);
+}
+
+/** The residents with a credit note - the Payables list reads only these. */
+export async function creditResidents(sb: any): Promise<string[]> {
+  const { data, error } = await sb.from("account_credit_notes").select("resident_id");
+  if (error) throw new Error(error.message);
+  return [...new Set(((data ?? []) as any[]).map((r) => String(r.resident_id)))];
+}
+
+/** The refund of a credit note is paid: recorded on the note, once - the note locked first. */
+export async function recordCreditNoteRefund(sb: any, residentId: string, number: string, refund: CreditRefund) {
+  const { data, error } = await sb.rpc("record_account_credit_note_refund", {
+    p_resident: residentId,
+    p_number: number,
+    p_refund: refund,
+  });
+  if (error) throw new Error(error.message);
+  if ((data as any)?.error === "not_found") throw new Error(`Credit note ${number} not found`);
+  if ((data as any)?.error === "already_paid") throw new Error("The refund is already recorded.");
+}
+
+export async function putCreditFile(sb: any, p: string, bytes: Uint8Array, type: string) {
+  const { error } = await sb.storage.from(BUCKET).upload(p, bytes, { upsert: true, contentType: type });
+  if (error) throw new Error(`Could not save the proof: ${error.message}`);
 }
 
 /** the deposits reclassified as credit, by deposit - checkout holds that much less */

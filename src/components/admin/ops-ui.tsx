@@ -29,6 +29,23 @@ const STATUS_STYLES: Record<string, string> = {
   overdue: "bg-rose-100 text-rose-900 border-rose-200",
   open: "bg-sky-100 text-sky-900 border-sky-200",
   done: "bg-emerald-100 text-emerald-900 border-emerald-200",
+  /*
+   * Documents - the tenancy agreement, Schedule C and the access card (Dani,
+   * 13 Oct 2026). Colour means somebody must act: amber when it is Brachtia's
+   * turn, green when it is finished. Waiting on the resident (Pending
+   * Submission, Pending Signature) and Generated stay grey - nothing for admin
+   * to do. One map, so every document's pill reads the same.
+   */
+  signed: "bg-emerald-100 text-emerald-900 border-emerald-200",
+  stamped: "bg-emerald-100 text-emerald-900 border-emerald-200",
+  valid: "bg-emerald-100 text-emerald-900 border-emerald-200",
+  issued: "bg-emerald-100 text-emerald-900 border-emerald-200",
+  pending_approval: "bg-amber-100 text-amber-900 border-amber-200",
+  pending_stamping: "bg-amber-100 text-amber-900 border-amber-200",
+  received: "bg-amber-100 text-amber-900 border-amber-200",
+  coming_due: "bg-orange-100 text-orange-900 border-orange-200",
+  expired: "bg-slate-200 text-slate-700 border-slate-300",
+  terminated: "bg-red-100 text-red-900 border-red-200",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -50,7 +67,7 @@ export function StatusPill({
 }) {
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold capitalize ${
+      className={`inline-flex items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold capitalize ${
         STATUS_STYLES[status] ?? "bg-muted text-muted-foreground border-border"
       }`}
     >
