@@ -80,3 +80,21 @@ describe("quiet notices share one component", () => {
     expect(own).toEqual([]);
   });
 });
+
+/*
+ * A document code means one thing (Dani, 14 Oct 2026): AC was Additional
+ * charge on invoices and Account credit on credit notes. CS is the one code
+ * meant on both sides - checkout settlement, INV/CS owed, CN/CS owed back.
+ */
+describe("invoice and credit note codes", () => {
+  test("no code means two different things", async () => {
+    const { INVOICE_CATEGORIES, CREDIT_NOTE_CATEGORIES } = await import("../src/lib/invoice-category");
+    const meaning = new Map<string, string>();
+    for (const c of [...Object.values(INVOICE_CATEGORIES), ...Object.values(CREDIT_NOTE_CATEGORIES)]) {
+      const was = meaning.get(c.code);
+      expect(was === undefined || was === c.label).toBe(true);
+      meaning.set(c.code, c.label);
+    }
+    expect(CREDIT_NOTE_CATEGORIES.refund.code).toBe("RF");
+  });
+});

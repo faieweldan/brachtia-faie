@@ -1,4 +1,5 @@
 import { Fragment, useState } from "react";
+import { CREDIT_NOTE_CATEGORIES } from "@/lib/invoice-category";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Eye, MoreHorizontal, Plus } from "lucide-react";
@@ -19,9 +20,10 @@ const TONE: Record<string, string> = {
   Paid: "border-emerald-200 bg-emerald-100 text-emerald-900",
 };
 
+// the codes are the shared list - one meaning each across invoices and credit notes
 const CATEGORY = {
-  checkout: { code: "CS", label: "Checkout credit note" },
-  credit: { code: "AC", label: "Account credit refund" },
+  checkout: CREDIT_NOTE_CATEGORIES.checkout,
+  credit: CREDIT_NOTE_CATEGORIES.refund,
 } as const;
 
 const dateOf = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });

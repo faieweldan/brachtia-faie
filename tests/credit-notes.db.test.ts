@@ -76,7 +76,7 @@ d("credit notes on the account-credit ledger (test-bratchia)", () => {
     const c = await credit();
     const note = await c.issueCreditNote(sb, r, "Staff");
     expect(note.amount).toBe(200);
-    expect(note.number).toMatch(/^CN\/AC\/\d{5}$/);
+    expect(note.number).toMatch(/^CN\/RF\/\d{5}$/);
     expect(await c.creditBalance(sb, r)).toMatchObject({ given: 250, noted: 200, balance: 50 });
     // nothing left over now: a second note is refused
     await expect(c.issueCreditNote(sb, r, "Staff")).rejects.toThrow("no credit left over");

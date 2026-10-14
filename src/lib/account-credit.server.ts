@@ -69,9 +69,12 @@ export type CreditNote = {
   /** what was paid back - above zero */
   amount: number;
   reason: string;
-  /** CN/AC/00001 */
+  /** CN/RF/00001 */
   number: string;
   issuedBy: string;
+  /** who it was issued to, as it says (20261021100000_credit_note_numbers.sql) */
+  residentName: string;
+  residentCode: string;
   refund?: CreditRefund | undefined;
 };
 
@@ -262,6 +265,8 @@ const toNote = (r: any): CreditNote => ({
   reason: String(r.reason ?? ""),
   number: String(r.number ?? ""),
   issuedBy: String(r.issued_by ?? ""),
+  residentName: String(r.resident_name ?? ""),
+  residentCode: String(r.resident_code ?? ""),
   ...(r.refund ? { refund: r.refund as CreditRefund } : {}),
 });
 

@@ -70,6 +70,8 @@ export type CheckoutVersion = {
 export type CheckoutStatement = {
   number: string;
   createdAt: string;
+  /** who it was made for, as it says - Payables shows it if the resident is later removed */
+  issuedTo?: { name: string; code: string };
   draft: { lines: CheckoutLine[]; notes: string; type?: CheckoutType };
   /** admin made the resident inactive after it was settled */
   inactiveAt?: string;
@@ -124,22 +126,17 @@ export async function getFile(sb: any, path: string): Promise<Uint8Array | null>
   return data ? new Uint8Array(await data.arrayBuffer()) : null;
 }
 
-/** The next credit note number - its own series, CN/00001. */
+/**
+ * The next checkout credit note number: CN/CS/00001, its own series from 1
+ * (Dani, 14 Oct 2026) - CS on both sides of checkout, CN/CS here and INV/CS
+ * when the resident owes. From the database, given once: it was a counter in a
+ * Storage file, read then written, so two statements started together could
+ * share a number. CS/ numbers given before keep theirs.
+ */
 export async function nextNumber(sb: any): Promise<string> {
-  const path = "checkout/_counter.json";
-  const raw = await getFile(sb, path);
-  let next = 1;
-  try {
-    next = raw ? Number(JSON.parse(new TextDecoder().decode(raw)).next) || 1 : 1;
-  } catch {
-    /* start again at 1 */
-  }
-  await putFile(sb, path, JSON.stringify({ next: next + 1 }), "application/json");
-  // CS - checkout settlement, one code for every part of checkout (Dani, 6 Oct 2026): this
-  // statement CS/00016, and the invoice made when the student owes, INV/CS/00051. Neutral,
-  // because the statement ends as a credit note or an invoice. CN/ and CO/ numbers given
-  // before keep theirs.
-  return `CS/${String(next).padStart(5, "0")}`;
+  const { data, error } = await sb.rpc("next_checkout_note_number");
+  if (error || !data) throw new Error(`Could not number the checkout statement: ${error?.message ?? "no number"}`);
+  return String(data);
 }
 
 export const sha256 = async (b: Uint8Array) =>

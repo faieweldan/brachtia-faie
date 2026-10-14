@@ -197,9 +197,11 @@ export const startCheckout = createServerFn({ method: "POST" })
     // moved in: the move-in money first - only a cancellation settles an unpaid initial invoice (Dani, 2 Oct 2026)
     if (data.type !== "cancellation" && !now.initialPaid) throw new Error("The initial payment has to be paid in full first - or choose Cancellation.");
     const number = await nextNumber(sb);
+    const { data: who } = await sb.from("residents").select("full_name, resident_code, quickbooks_id").eq("id", data.residentId).maybeSingle();
     await writeStatement(sb, data.residentId, {
       number,
       createdAt: new Date().toISOString(),
+      issuedTo: { name: String(who?.full_name ?? ""), code: String(who?.resident_code || who?.quickbooks_id || "") },
       draft: { lines: [...now.outstanding, ...now.forfeits], notes: "", type: data.type },
       versions: [],
     });
@@ -650,7 +652,7 @@ async function settle(sb: any, residentId: string, s: import("@/lib/checkout.ser
  * Money out (Dani, 2 Oct 2026): every credit note Brachtia owes a resident,
  * issued or paid - beside Collections, which is money in. Two kinds, one list:
  *   checkout  the checkout statement's refund (CS/...)
- *   credit    account credit no invoice can take, paid back (CN/AC/..., 13 Oct 2026)
+ *   credit    account credit no invoice can take, paid back (CN/RF/..., 13-14 Oct 2026)
  * The Payables tab reads every resident; a resident's Payments tab reads only
  * theirs - the same rows, so the two cannot disagree.
  */
@@ -667,7 +669,12 @@ async function payableRows(sb: any, only?: string) {
   const ids = [...new Set([...checkoutIds, ...creditIds])];
   const { data: people } = ids.length ? await sb.from("residents").select("id, full_name, resident_code").in("id", ids) : { data: [] };
   const who = new Map(((people ?? []) as any[]).map((p) => [p.id, p]));
-  const person = (id: string) => ({ residentId: id, name: String(who.get(id)?.full_name ?? ""), code: String(who.get(id)?.resident_code ?? "") });
+  // the resident as they are now; else who the document was issued to
+  const person = (id: string, issuedTo?: { name?: string; code?: string }) => ({
+    residentId: id,
+    name: String(who.get(id)?.full_name || issuedTo?.name || ""),
+    code: String(who.get(id)?.resident_code || issuedTo?.code || ""),
+  });
   const rows = [];
   for (const id of checkoutIds) {
     const s = await readStatement(sb, id);
@@ -678,7 +685,7 @@ async function payableRows(sb: any, only?: string) {
     const amount = s.settled.refund;
     if (amount <= 0) continue;
     rows.push({
-      ...person(id),
+      ...person(id, s.issuedTo),
       kind: "checkout" as const,
       number: s.number,
       version: v.v as number | null,
@@ -700,7 +707,7 @@ async function payableRows(sb: any, only?: string) {
   for (const id of creditIds) {
     for (const n of await creditNotes(sb, id)) {
       rows.push({
-        ...person(id),
+        ...person(id, { name: n.residentName, code: n.residentCode }),
         kind: "credit" as const,
         number: n.number,
         version: null,

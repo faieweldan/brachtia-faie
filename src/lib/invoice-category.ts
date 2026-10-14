@@ -16,6 +16,21 @@ export const INVOICE_CATEGORIES: Record<InvoiceCategory, { label: string; code: 
   checkout: { label: "Checkout settlement", code: "CS" },
 };
 
+/**
+ * Credit notes - money Brachtia owes back - read the same way: CN/<code>/<no.>,
+ * each kind counting from 1 (Dani, 14 Oct 2026). A code means one thing across
+ * invoices and credit notes: CS is checkout settlement on both sides (INV/CS
+ * when the resident owes, CN/CS when Brachtia does); refunded account credit is
+ * RF, because AC is already Additional charge. tests/one-rule.test.ts checks no
+ * code is used for two things.
+ */
+export type CreditNoteCategory = "checkout" | "refund";
+
+export const CREDIT_NOTE_CATEGORIES: Record<CreditNoteCategory, { label: string; code: string }> = {
+  checkout: { label: "Checkout settlement", code: "CS" },
+  refund: { label: "Credit refund", code: "RF" },
+};
+
 /** The category an invoice is filed under. */
 export function categoryOf(invoiceType: string): InvoiceCategory {
   if (invoiceType === "rental") return "rental";

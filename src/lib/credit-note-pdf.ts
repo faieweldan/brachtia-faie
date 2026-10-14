@@ -61,7 +61,7 @@ export type FrameHeader = {
   kind: string;
   /** under it: "CHECKOUT STATEMENT · END OF TENANCY", "ROOM CHANGE" */
   subtitle: string;
-  /** "CS/00016 · Version 2 · 14 Oct 2026", or "DRAFT · 14 Oct 2026" */
+  /** "CN/CS/00001 · Version 2 · 14 Oct 2026", or "DRAFT · 14 Oct 2026" */
   numberLine: string;
   /** the peach panel, two to a row */
   facts: [string, string][];
