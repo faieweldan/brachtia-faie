@@ -12,6 +12,7 @@ import {
   Loader2,
   Plus,
   Receipt,
+  Undo2,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -39,7 +40,7 @@ import {
   type PayableInvoice,
 } from "@/components/admin/RecordPaymentDialog";
 import { CheckoutStatement } from "@/components/admin/CheckoutStatement";
-import { ResidentCreditNotes } from "@/components/admin/PayablesTable";
+import { ResidentCreditNotes, useResidentCreditNotes } from "@/components/admin/PayablesTable";
 
 /**
  * A resident's money, shown the way an admin thinks about it.
@@ -87,6 +88,8 @@ export function ResidentPayments({
   });
 
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  // money owed back: the same list the row's table shows (Dani, 14 Oct 2026)
+  const creditNotes = useResidentCreditNotes(residentId).data ?? [];
   /*
    * Outline what a link brought admin to, for a few seconds: drawn inside the
    * edge, with a tint - an outline outside it was cut off by the group (Dani, 6 Oct 2026)
@@ -527,11 +530,37 @@ export function ResidentPayments({
               <CheckoutStatement residentId={residentId} phone={details.phone} onInactive={onInactive} />
             </div>
           </Row>
+
+          {/* money owed back to them - a row like the rest, shown only when there is some (13-14 Oct 2026) */}
+          {(() => {
+            const leftover = b?.accountCredit?.leftover ?? 0;
+            if (!creditNotes.length && leftover <= 0.005) return null;
+            const toPay = creditNotes.filter((n) => n.status === "To pay");
+            const owed = toPay.reduce((n, r) => n + r.amount, 0);
+            return (
+              <Row
+                icon={Undo2}
+                title="Credit notes"
+                tone={leftover > 0.005 || toPay.length ? "due" : "done"}
+                status={leftover > 0.005 ? "To issue" : toPay.length ? "To pay" : "Paid"}
+                detail={[
+                  creditNotes.length ? `${creditNotes.length} credit note${creditNotes.length === 1 ? "" : "s"}` : null,
+                  owed > 0.005 ? `${money(owed)} to pay back` : null,
+                  leftover > 0.005 ? `${money(leftover)} account credit has no invoice to go on` : null,
+                  "also in Payables",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+                // credit still to issue is something to do: open it
+                open={open["credit"] ?? leftover > 0.005}
+                onToggle={() => setOpen((o) => ({ ...o, credit: !(o["credit"] ?? leftover > 0.005) }))}
+              >
+                <ResidentCreditNotes residentId={residentId} leftover={leftover} onChanged={() => void refetchBilling()} />
+              </Row>
+            );
+          })()}
         </div>
       </Panel>
-
-      {/* money owed back to them - shown only when there is some (13 Oct 2026) */}
-      <ResidentCreditNotes residentId={residentId} leftover={b?.accountCredit?.leftover ?? 0} onChanged={() => void refetchBilling()} />
 
       <RecordPaymentDialog
         key={paying?.id ?? "none"}
@@ -619,7 +648,7 @@ function periodLabel(inv: BillingInvoice) {
     : short(inv.periodStart);
 }
 
-/** One of the four. Its colour says the state; it opens only when there is more. */
+/** One of the rows - the four kinds of billing, and credit notes. Its colour says the state; it opens only when there is more. */
 function Row({
   icon: Icon,
   title,

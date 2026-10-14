@@ -244,9 +244,19 @@ export function PayablesTable({ rows, onChanged, hideResident = false }: { rows:
  * one. The amount is the server's (creditOutlook), never typed: while rent is
  * still to be billed the credit goes onto it instead.
  */
+/** A resident's credit notes - one read, for the Payments tab's row and the table in it. */
+export function useResidentCreditNotes(residentId: string) {
+  return useQuery({ queryKey: ["payables", residentId], queryFn: () => listResidentPayables({ data: { residentId } }) });
+}
+
+/**
+ * The Credit notes row's contents, inside the Payments tab's list (Dani, 14 Oct
+ * 2026) - the row itself is the tab's own Row, like Initial payment and the
+ * rest, so it no longer sits apart in a card of its own.
+ */
 export function ResidentCreditNotes({ residentId, leftover, onChanged }: { residentId: string; leftover: number; onChanged: () => void }) {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["payables", residentId], queryFn: () => listResidentPayables({ data: { residentId } }) });
+  const q = useResidentCreditNotes(residentId);
   const [issuedBy, setIssuedBy] = useState("");
   const [busy, setBusy] = useState(false);
   const rows = q.data ?? [];
@@ -268,11 +278,7 @@ export function ResidentCreditNotes({ residentId, leftover, onChanged }: { resid
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-border bg-card">
-      <div className="px-5 pb-2 pt-4">
-        <p className="text-sm font-semibold text-brand-deep">Credit notes</p>
-        <p className="text-xs text-muted-foreground">Money Brachtia owes this resident. Every credit note is also listed in Payables.</p>
-      </div>
+    <div className="pt-3">
       {leftover > 0.005 ? (
         <div className="mx-5 mb-3 flex flex-wrap items-end justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
           <div className="min-w-0 text-sm text-amber-950">
@@ -290,6 +296,6 @@ export function ResidentCreditNotes({ residentId, leftover, onChanged }: { resid
         </div>
       ) : null}
       {rows.length ? <PayablesTable rows={rows} hideResident onChanged={() => void q.refetch()} /> : null}
-    </section>
+    </div>
   );
 }
