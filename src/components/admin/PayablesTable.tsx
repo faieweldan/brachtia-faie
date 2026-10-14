@@ -6,7 +6,7 @@ import { Download, Eye, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { PdfPreviewDialog } from "@/components/admin/PdfPreview";
+import { PdfPreviewButton, PdfPreviewDialog } from "@/components/admin/PdfPreview";
 import { RefundForm } from "@/components/admin/CheckoutStatement";
 import { StaffTag } from "@/components/admin/RecordPaymentDialog";
 import { StaffPicker } from "@/components/admin/Dropdown";
@@ -41,27 +41,29 @@ export function PayablesTable({ rows, onChanged, hideResident = false }: { rows:
   const [paying, setPaying] = useState<PayableRow | null>(null);
   const [open, setOpen] = useState<string | null>(null);
 
-  async function view(r: PayableRow) {
-    // an account credit note: the shared credit-note PDF, drawn here like an invoice
+  /** a credit note's PDF - the account credit one on the shared credit-note design, a checkout one as issued */
+  async function pdfOf(r: PayableRow): Promise<string> {
     if (r.kind === "credit") {
-      try {
-        const doc = await creditNoteDoc({ data: { residentId: r.residentId, number: r.number } });
-        const { creditNotePdfUrl } = await import("@/lib/credit-note-pdf");
-        setPdf({ url: await creditNotePdfUrl(doc), title: r.number });
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Could not open the PDF");
-      }
-      return;
+      const doc = await creditNoteDoc({ data: { residentId: r.residentId, number: r.number } });
+      const { creditNotePdfUrl } = await import("@/lib/credit-note-pdf");
+      return creditNotePdfUrl(doc);
     }
-    if (r.version == null) return;
+    if (r.version == null) throw new Error("No issued version yet");
+    const { base64 } = await checkoutPdf({ data: { residentId: r.residentId, v: r.version } });
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    return URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+  }
+  const titleOf = (r: PayableRow) => (r.version != null ? `${r.number} · v${r.version}` : r.number);
+
+  // Download PDF from the menu - the same PDF the preview shows
+  async function view(r: PayableRow) {
     try {
-      const { base64 } = await checkoutPdf({ data: { residentId: r.residentId, v: r.version } });
-      const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-      setPdf({ url: URL.createObjectURL(new Blob([bytes], { type: "application/pdf" })), title: `${r.number} · v${r.version}` });
+      setPdf({ url: await pdfOf(r), title: titleOf(r) });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not open the PDF");
     }
   }
+
 
   const proof = (r: PayableRow) =>
     void (r.kind === "credit" ? creditNoteProofUrl({ data: { residentId: r.residentId, number: r.number } }) : refundProofUrl({ data: { residentId: r.residentId } }))
@@ -89,7 +91,16 @@ export function PayablesTable({ rows, onChanged, hideResident = false }: { rows:
               <Fragment key={r.number}>
                 <tr className="border-b border-border/60 last:border-0">
                   <td className="px-4 py-3 font-semibold">
-                    {r.number}
+                    {/* the number opens the PDF, as an invoice number does in Initial payment */}
+                    <PdfPreviewButton
+                      variant="ghost"
+                      className="-ml-1.5 h-7 px-1.5 text-sm font-semibold text-brand-deep"
+                      title={`Credit note ${titleOf(r)}`}
+                      fileName={`Brachtia-${r.number.replace(/\//g, "-")}.pdf`}
+                      build={() => pdfOf(r)}
+                    >
+                      {r.number}
+                    </PdfPreviewButton>
                     {r.version != null ? <span className="ml-1.5 text-xs font-normal text-muted-foreground">v{r.version}</span> : null}
                   </td>
                   <td className="px-3 py-3 text-muted-foreground">{dateOf(r.issuedAt)}</td>
@@ -141,10 +152,19 @@ export function PayablesTable({ rows, onChanged, hideResident = false }: { rows:
                     <td colSpan={cols} className="bg-muted/20 px-4 py-4">
                       <div className="space-y-3">
                         <div className="flex flex-wrap items-center gap-2">
-                          {/* every credit note opens as its PDF, like an invoice */}
-                          <button type="button" className="inline-flex items-center gap-1.5 font-semibold text-brand-deep hover:underline" onClick={() => void view(r)}>
-                            {r.number} <Eye className="size-4" />
-                          </button>
+                          {/* the number, then the eye - as an invoice's detail shows it */}
+                          <p className="text-sm font-medium text-brand-deep">{r.number}</p>
+                          <PdfPreviewButton
+                            size="icon"
+                            variant="ghost"
+                            className="size-7"
+                            aria-label={`View credit note ${r.number}`}
+                            title={`Credit note ${titleOf(r)}`}
+                            fileName={`Brachtia-${r.number.replace(/\//g, "-")}.pdf`}
+                            build={() => pdfOf(r)}
+                          >
+                            <Eye className="size-4" />
+                          </PdfPreviewButton>
                           <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${TONE[r.status] ?? ""}`}>{r.status}</span>
                           <span className="text-xs text-muted-foreground">
                             {r.version != null ? `Version ${r.version} · ` : ""}issued {dateOf(r.issuedAt)}

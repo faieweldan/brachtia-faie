@@ -2308,10 +2308,11 @@ export async function applyRoomChange(supabase: any, data: RoomChangeInput) {
       out.outstanding = m.outstanding;
       if (m.kind === "revise" && m.credit > 0.005 && plan.residentId) {
         const { addCredit } = await import("@/lib/account-credit.server");
+        const { changeCreditLabel } = await import("@/lib/room-change");
         await addCredit(supabase, plan.residentId, [
           {
             amount: m.credit,
-            reason: `Paid above the revised ${plan.invoice.number} - ${what} ${data.toLabel}`,
+            reason: changeCreditLabel({ reason: data.reason, note: data.note, part: `paid above the revised ${plan.invoice.number}`, to: data.toLabel }),
             kind: "rent",
             ...(data.requestKey
               ? { key: roomChangeCreditKey(data.requestKey, "rent", "revise", plan.invoice.id) }
@@ -2336,6 +2337,7 @@ export async function applyRoomChange(supabase: any, data: RoomChangeInput) {
     } else if (plan.invoice && m.kind === "credit" && plan.residentId) {
       const { addCredit } = await import("@/lib/account-credit.server");
       const { depositLabel } = await import("@/lib/tenancy-change");
+      const { changeCreditLabel } = await import("@/lib/room-change");
       await addCredit(
         supabase,
         plan.residentId,
@@ -2346,12 +2348,12 @@ export async function applyRoomChange(supabase: any, data: RoomChangeInput) {
                 kind: "deposit" as const,
                 depositKey: p.deposit,
                 depositLabel: depositLabel(p.deposit),
-                reason: `${depositLabel(p.deposit)} reduced - ${what} ${data.toLabel}`,
+                reason: changeCreditLabel({ reason: data.reason, note: data.note, part: `${depositLabel(p.deposit).toLowerCase()} difference`, to: data.toLabel }),
               }
             : {
                 amount: p.amount,
                 kind: "rent" as const,
-                reason: data.bedId ? `Cheaper room - room change ${data.toLabel}` : `Shorter stay - dates changed ${data.toLabel}`,
+                reason: changeCreditLabel({ reason: data.reason, note: data.note, part: "rent difference", to: data.toLabel }),
               }),
           // the same change confirmed again gives each part no second time (16 Oct 2026)
           ...(data.requestKey

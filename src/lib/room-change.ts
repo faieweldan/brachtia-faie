@@ -200,3 +200,25 @@ export const STAY_DATE_REASONS = [
   "Operational",
   "Other",
 ] as const;
+
+/**
+ * A credit line from a room or date change, in the words admin chose for it
+ * (Dani, 14 Oct 2026): the reason picked in the change's dropdown - Upgrade,
+ * Downgrade, Semester dates changed - or, for Other, what was typed; then
+ * which part of the money it is, and where to. Credit lines made up their own
+ * words ("Cheaper room", "Shorter stay") that said something the admin had not.
+ *
+ *   Downgrade - security deposit difference · A-07-03 · Room C · Single
+ *   Downgrade - rent difference · A-07-03 · Room C · Single
+ */
+export function changeCreditLabel(o: {
+  reason: string;
+  note?: string | undefined;
+  /** "rent difference", "security deposit difference", "paid above INV/IP/00445" */
+  part: string;
+  /** where to - the new room, or "the new dates" */
+  to: string;
+}) {
+  const why = o.reason === "Other" && o.note?.trim() ? o.note.trim() : o.reason;
+  return `${why} - ${o.part}${o.to ? ` · ${o.to}` : ""}`;
+}
