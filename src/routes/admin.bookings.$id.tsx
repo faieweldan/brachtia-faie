@@ -2791,8 +2791,8 @@ function BookingDetail() {
           </Card>
         </div>
 
-        {/* Right column */}
-        <div className="space-y-5">
+        {/* Right column - as tall as the main one; Recent activity takes what is left */}
+        <div className="flex flex-col gap-5">
           {/* Next action */}
           <div
             className={`rounded-xl border p-4 transition-colors ${
@@ -2854,9 +2854,18 @@ function BookingDetail() {
             />
           </Card>
 
-          {/* Recent activity */}
-          <Card title="Recent activity">
-            <ActivityFeed events={activity?.events ?? []} loading={activityLoading} />
+          {/*
+            Recent activity ends where the main column does - level with
+            Internal notes - and a long trail scrolls inside it (Dani, 14 Oct
+            2026). The list sits absolutely in the space left, so its length
+            never makes the page taller; stacked on a phone it has a max height.
+          */}
+          <Card title="Recent activity" className="flex flex-col lg:min-h-[18rem] lg:flex-1">
+            <div className="relative max-h-[28rem] overflow-y-auto lg:max-h-none lg:min-h-0 lg:flex-1 lg:overflow-visible">
+              <div className="lg:absolute lg:inset-0 lg:overflow-y-auto lg:pr-1">
+                <ActivityFeed events={activity?.events ?? []} loading={activityLoading} />
+              </div>
+            </div>
           </Card>
         </div>
       </div>
@@ -2871,6 +2880,7 @@ function Card({
   children,
   id,
   flash,
+  className = "",
 }: {
   title: string;
   children: React.ReactNode;
@@ -2878,13 +2888,15 @@ function Card({
   id?: string;
   /** outlined for a moment after Next action brought you here */
   flash?: boolean;
+  /** how it sits in its column - Recent activity fills what is left */
+  className?: string;
 }) {
   return (
     <div
       id={id}
       className={`scroll-mt-6 rounded-xl border bg-card p-4 transition-shadow duration-500 ${
         flash ? "border-brand-deep/40 ring-2 ring-brand-deep/20" : "border-border"
-      }`}
+      } ${className}`}
     >
       <p className="mb-3 text-sm font-semibold text-brand-deep">{title}</p>
       {children}
