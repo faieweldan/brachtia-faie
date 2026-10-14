@@ -1,4 +1,5 @@
 import { loadProofFile } from "@/lib/payment-proof";
+import { NOTICE_CLASS } from "@/components/admin/OnceNotice";
 import { MIGRATED, MIGRATED_MEANING } from "@/lib/migration/import-plan";
 import { toast } from "sonner";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -281,7 +282,7 @@ export function ResidentPayments({
         </CollectedBar>
 
         {(b?.accountCredit?.given ?? 0) > 0 ? (
-          <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+          <p className={`mt-3 ${NOTICE_CLASS}`}>
             Account credit {money(b!.accountCredit.balance)} available · {money(b!.accountCredit.used)} applied to invoices
             {b!.accountCredit.noted > 0 ? ` · ${money(b!.accountCredit.noted)} refunded on credit notes` : ""}
             {b!.accountCredit.balance - b!.accountCredit.leftover > 0.005
