@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { OnceNotice } from "@/components/admin/OnceNotice";
 import { soldBedLabel } from "@/lib/placement";
 import { Dropdown, StaffPicker } from "@/components/admin/Dropdown";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -416,6 +417,33 @@ function AgreementBlock({
           roomMoved ? `${stay.unitNo} · Room ${stay.room}` : "",
           datesMoved ? `${fmtDate(stay.start)} – ${fmtDate(stay.end)}` : "",
         ].filter(Boolean).join(", ");
+        /*
+         * Signed, and the change already revised what it touches (a room change
+         * before move-in revises Schedule A, 13 Oct 2026): nothing left to do,
+         * so it is news, said once and gone (Dani, 14 Oct 2026). Only while a
+         * pack still has to be made again does the box stay.
+         */
+        const revised = untouched
+          ? []
+          : docs.filter((d) => {
+              if (d.version <= 1 || d.status === "cancelled") return false;
+              const dv = d.mergeValues;
+              const unit = String(dv["Unit_no"] || dv["unit_no"] || "").trim();
+              const room = String(dv["Room_no"] || dv["room"] || "").replace(/^room\s*/i, "").trim();
+              const roomOk = !roomMoved || (unit === stay.unitNo && room.toUpperCase() === String(stay.room).toUpperCase());
+              const datesOk = !datesMoved || (d.periodStart === stay.start && d.periodEnd === stay.end) || !d.periodStart;
+              return roomOk && datesOk;
+            });
+        if (revised.length) {
+          return (
+            <OnceNotice className="mx-4 mb-3" seenKey={`${agreement.id}:${now}`}>
+              <span>
+                {was} → <strong>{now}</strong> ·{" "}
+                {revised.map((d) => DOC_TYPE_LABELS[d.docType].split(" – ")[0]).join(", ")} revised
+              </span>
+            </OnceNotice>
+          );
+        }
         return (
           <div className="mx-4 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
             <span>
