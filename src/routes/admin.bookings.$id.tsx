@@ -732,12 +732,20 @@ function BookingDetail() {
       const id = String(invoice?.id ?? voidedInvoice?.id ?? "");
       return id ? listInvoiceVersions({ data: { invoiceId: id } }) : [];
     },
-    buildVersion: async (v) => {
+    buildVersion: async (v, latest) => {
       const { invoicePdfUrl } = await import("@/lib/invoice-pdf");
       // the document as it was stored, under the reference that version read
       return invoicePdfUrl({
         ...(v.body as any),
         reference: r.reference ?? null,
+        /*
+         * The newest version of a live invoice is the invoice today, and the
+         * money paid before it was changed (a room or date change) still
+         * counts against it. A saved version never stores payments, so the eye
+         * showed the new total with no "Paid to date" or "Balance due" while
+         * the card beside it said RM500 was in. Older versions stay as issued.
+         */
+        ...(latest && invoice ? { paid: paidTotal } : {}),
         number: referenceFor(String(v.reference || invoice?.number || ""), v.version),
       });
     },

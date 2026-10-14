@@ -35,8 +35,12 @@ export type VersionNav = {
   reference: string;
   /** every version, oldest first */
   load: () => Promise<DocumentVersion[]>;
-  /** rebuild the PDF of a version as it was */
-  buildVersion: (v: DocumentVersion) => Promise<string>;
+  /**
+   * rebuild the PDF of a version as it was. `latest` is true for the newest
+   * one - the version that is the document today, which can carry what has
+   * happened since it was saved (an invoice's payments)
+   */
+  buildVersion: (v: DocumentVersion, latest: boolean) => Promise<string>;
   /** only when the document does not record its own versions as it is saved */
   freeze?: () => Promise<{ version: number }>;
 };
@@ -158,7 +162,9 @@ export function PdfPreviewButton({
     if (!target) return;
     setLoading(true);
     try {
-      const built = target.version ? await versions!.buildVersion(target.version) : await build();
+      const built = target.version
+        ? await versions!.buildVersion(target.version, next === list.length - 1)
+        : await build();
       // the effect below frees whichever link this replaces - each one holds a
       // whole PDF in memory, and stepping through versions builds a new one
       setUrl(built);
