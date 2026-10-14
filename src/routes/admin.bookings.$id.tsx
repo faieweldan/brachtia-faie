@@ -2842,13 +2842,20 @@ function BookingDetail() {
             2026). The list sits absolutely in the space left, so its length
             never makes the page taller; stacked on a phone it has a max height.
           */}
-          <Card title="Recent activity" className="flex flex-col lg:min-h-[18rem] lg:flex-1">
-            <div className="relative max-h-[28rem] overflow-y-auto lg:max-h-none lg:min-h-0 lg:flex-1 lg:overflow-visible">
-              <div className="lg:absolute lg:inset-0 lg:overflow-y-auto lg:pr-1">
+          {/*
+            As tall as its entries - never taller (Dani, 14 Oct 2026). The frame
+            around it takes the space left in the column, down to Internal
+            notes' bottom line, and adds no height of its own; the card sits at
+            its top at its natural height and, only when the log is longer than
+            that space, stops there and scrolls inside.
+          */}
+          <div className="lg:relative lg:min-h-[18rem] lg:flex-1">
+            <Card title="Recent activity" className="flex flex-col lg:absolute lg:inset-x-0 lg:top-0 lg:max-h-full">
+              <div className="max-h-[28rem] min-h-0 overflow-y-auto lg:max-h-none lg:pr-1">
                 <ActivityFeed events={activity?.events ?? []} loading={activityLoading} />
               </div>
-            </div>
-          </Card>
+            </Card>
+          </div>
         </div>
       </div>
     </div>
