@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 
-import { DateRangeFilter, FilterField, ResetFilters, SearchFilter } from "@/components/admin/filters";
+import { DateRangeFilter, FilterField, ResetFilters, SearchFilter, StatusTabs } from "@/components/admin/filters";
 import { Dropdown } from "@/components/admin/Dropdown";
 import { PayablesTable } from "@/components/admin/PayablesTable";
 import { listPayables, type PayableRow } from "@/lib/checkout.functions";
@@ -14,7 +14,7 @@ export const Route = createFileRoute("/admin/residents/payables")({
   component: PayablesPage,
 });
 
-type Status = "all" | "To pay" | "Paid";
+type Status = "To pay" | "Paid" | "all";
 // a row's kind -> its category in the shared code list
 const CATEGORY_OF = { checkout: "checkout", credit: "refund" } as const;
 
@@ -25,13 +25,15 @@ const CATEGORY_OF = { checkout: "checkout", credit: "refund" } as const;
  * the same one a resident's Payments tab shows for them alone.
  *
  * Narrowed like Collections (14 Oct 2026), with its own filters (filters.tsx):
- * date issued, search, category - and the three totals are the status filter,
- * each counting what it shows.
+ * date issued, search, category; and where the money stands as tabs - To pay,
+ * Paid out, All - each counting what it shows. Status and kind kept apart:
+ * the totals as clickable cards read like types.
  */
 function PayablesPage() {
   const q = useQuery({ queryKey: ["payables"], queryFn: () => listPayables() });
   const rows = q.data ?? [];
-  const [status, setStatus] = useState<Status>("all");
+  // opens on the pile someone has to act on
+  const [status, setStatus] = useState<Status>("To pay");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [search, setSearch] = useState("");
@@ -54,38 +56,22 @@ function PayablesPage() {
   const toPay = narrowed.filter((r) => r.status !== "Paid");
   const paid = narrowed.filter((r) => r.status === "Paid");
   const sum = (list: PayableRow[]) => list.reduce((n, r) => n + r.amount, 0);
-  const filtering = Boolean(from || to || search || category !== "all" || status !== "all");
-
-  const totals: { key: Status; label: string; value: string; tone: string }[] = [
-    { key: "To pay", label: "Owed to residents", value: money(sum(toPay)), tone: "text-amber-800" },
-    { key: "Paid", label: "Refunded", value: money(sum(paid)), tone: "text-emerald-800" },
-    { key: "all", label: "Credit notes", value: String(narrowed.length), tone: "text-brand-deep" },
-  ];
+  const filtering = Boolean(from || to || search || category !== "all");
 
   return (
     <div className="space-y-5">
-      {/* the totals are the status filter - click one to see those, again for all */}
-      <section className="grid gap-3 sm:grid-cols-3">
-        {totals.map((t) => {
-          const on = status === t.key;
-          return (
-            <button
-              key={t.label}
-              type="button"
-              aria-pressed={on}
-              onClick={() => setStatus(on && t.key !== "all" ? "all" : t.key)}
-              className={`rounded-2xl border bg-card p-5 text-left transition-colors hover:bg-muted/40 ${
-                on ? "border-brand-deep ring-1 ring-brand-deep/30" : "border-border"
-              }`}
-            >
-              <p className="text-xs text-muted-foreground">{t.label}</p>
-              <p className={`text-2xl font-bold tabular-nums ${t.tone}`}>{t.value}</p>
-            </button>
-          );
-        })}
-      </section>
-
       <section className="overflow-hidden rounded-2xl border border-border bg-card">
+        {/* where the money stands - tabs, like Collections; the kind is the Category filter (14 Oct 2026) */}
+        <StatusTabs
+          label="Credit note status"
+          value={status}
+          onChange={setStatus}
+          tabs={[
+            { key: "To pay", label: "To pay", count: toPay.length, note: money(sum(toPay)) },
+            { key: "Paid", label: "Paid out", count: paid.length, note: money(sum(paid)) },
+            { key: "all", label: "All", count: narrowed.length },
+          ]}
+        />
         <div className="flex flex-wrap items-end gap-x-3 gap-y-3 px-5 py-4">
           <FilterField label="Date issued">
             <DateRangeFilter from={from} to={to} onFrom={setFrom} onTo={setTo} />
@@ -111,7 +97,6 @@ function PayablesPage() {
           {filtering ? (
             <ResetFilters
               onReset={() => {
-                setStatus("all");
                 setFrom("");
                 setTo("");
                 setSearch("");
@@ -134,7 +119,9 @@ function PayablesPage() {
             No credit notes yet. They come from a resident's checkout statement, or from account credit with no rent left to use it on.
           </p>
         ) : shown.length === 0 ? (
-          <p className="p-6 text-sm text-muted-foreground">No credit note matches these filters.</p>
+          <p className="p-6 text-sm text-muted-foreground">
+            {filtering ? "No credit note matches these filters." : status === "To pay" ? "Nothing to pay out." : "None here yet."}
+          </p>
         ) : (
           <PayablesTable rows={shown} onChanged={() => void q.refetch()} />
         )}

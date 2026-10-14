@@ -1,5 +1,5 @@
 import { loadProofFile } from "@/lib/payment-proof";
-import { DateRangeFilter, FilterField, ResetFilters, SearchFilter } from "@/components/admin/filters";
+import { DateRangeFilter, FilterField, ResetFilters, SearchFilter, StatusTabs } from "@/components/admin/filters";
 import { Dropdown } from "@/components/admin/Dropdown";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -382,40 +382,12 @@ function CollectionsPage() {
 
       <Panel className="overflow-hidden p-0">
         {/* where the money stands */}
-        <div
-          role="tablist"
-          aria-label="Invoice status"
-          className="flex gap-6 overflow-x-auto border-b border-border px-5"
-        >
-          {TABS.map((t) => {
-            const active = tab === t.key;
-            return (
-              <button
-                key={t.key}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setTab(t.key)}
-                className={`-mb-px flex shrink-0 items-center gap-1.5 border-b-2 py-3 text-sm transition-colors ${
-                  t.key === "scheduled" ? "ml-auto" : ""
-                } ${
-                  active
-                    ? "border-brand-deep font-semibold text-brand-deep"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {t.label}
-                <span
-                  className={`rounded-full px-1.5 py-px text-[11px] font-medium tabular-nums ${
-                    active ? "bg-brand-deep/10 text-brand-deep" : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  {counts[t.key]}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        <StatusTabs
+          label="Invoice status"
+          value={tab}
+          onChange={setTab}
+          tabs={TABS.map((t) => ({ key: t.key, label: t.label, count: counts[t.key], alignRight: t.key === "scheduled" }))}
+        />
 
         {/* narrowing it down */}
         <div className="flex flex-wrap items-end gap-x-3 gap-y-3 px-5 py-4">

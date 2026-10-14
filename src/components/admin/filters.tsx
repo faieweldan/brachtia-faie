@@ -89,3 +89,55 @@ export function ResetFilters({ onReset }: { onReset: () => void }) {
     </Button>
   );
 }
+
+/**
+ * Where the money stands, as tabs over a list (Collections: Due, Overdue,
+ * Paid...; Payables: To pay, Paid out, All). Each tab shows its count, and
+ * `note` (an amount) when given. A view, not a type - the type is a filter.
+ */
+export function StatusTabs<K extends string>({
+  tabs,
+  value,
+  onChange,
+  label,
+}: {
+  tabs: { key: K; label: string; count: number; note?: string | undefined; alignRight?: boolean | undefined }[];
+  value: K;
+  onChange: (key: K) => void;
+  /** read by a screen reader: "Invoice status" */
+  label: string;
+}) {
+  return (
+    <div role="tablist" aria-label={label} className="flex gap-6 overflow-x-auto border-b border-border px-5">
+      {tabs.map((t) => {
+        const active = value === t.key;
+        return (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(t.key)}
+            className={`-mb-px flex shrink-0 items-center gap-1.5 border-b-2 py-3 text-sm transition-colors ${
+              t.alignRight ? "ml-auto" : ""
+            } ${
+              active
+                ? "border-brand-deep font-semibold text-brand-deep"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t.label}
+            <span
+              className={`rounded-full px-1.5 py-px text-[11px] font-medium tabular-nums ${
+                active ? "bg-brand-deep/10 text-brand-deep" : "bg-muted text-muted-foreground"
+              }`}
+            >
+              {t.count}
+            </span>
+            {t.note ? <span className="text-xs font-normal tabular-nums text-muted-foreground">{t.note}</span> : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
