@@ -1027,8 +1027,11 @@ export type InvoiceLine = { label: string; kind: string; amount: number; quantit
  */
 export const getBookingBilling = createServerFn({ method: "GET" })
   .inputValidator((data: { enquiryId: string }) => data)
-  .handler(async ({ data }) => {
-    const supabase = await admin();
+  .handler(async ({ data }) => bookingBilling(await admin(), data));
+
+/** getBookingBilling's body - handed the service-role client, so the database tests can run it too */
+export async function bookingBilling(supabase: any, data: { enquiryId: string }) {
+  {
     // a cancelled invoice is kept as a record, but it is not this booking's
     // invoice any more - so "Generate invoice" comes back
     const { data: live, error } = await liveInvoices(supabase)
@@ -1069,17 +1072,44 @@ export const getBookingBilling = createServerFn({ method: "GET" })
      * the difference. The message must not ask them for a booking fee again
      * (Dani, 13 Oct 2026).
      */
-    const earlierIds = ((live ?? []) as any[]).slice(1).map((i) => i.id);
-    const [items, payments, receipts, earlier] = await Promise.all([
+    const earlierRows = ((live ?? []) as any[]).slice(1).reverse();
+    const earlierIds = earlierRows.map((i) => i.id);
+    const [items, payments, receipts, earlier, earlierReceipts] = await Promise.all([
       supabase.from("invoice_items").select("*").eq("invoice_id", invoice.id).order("sort_order"),
       supabase.from("payments").select("*").eq("invoice_id", invoice.id).order("paid_on"),
       supabase.from("receipts").select("*").eq("invoice_id", invoice.id).order("issued_at"),
       earlierIds.length
-        ? supabase.from("payments").select("amount").in("invoice_id", earlierIds)
+        ? supabase.from("payments").select("*").in("invoice_id", earlierIds).order("paid_on")
+        : Promise.resolve({ data: [] as any[] }),
+      earlierIds.length
+        ? supabase.from("receipts").select("*").in("invoice_id", earlierIds).order("issued_at")
         : Promise.resolve({ data: [] as any[] }),
     ]);
     const paid = ((payments.data ?? []) as any[]).reduce((n, p) => n + Number(p.amount || 0), 0);
     const paidBefore = ((earlier.data ?? []) as any[]).reduce((n, p) => n + Number(p.amount || 0), 0);
+    const paidOn = (invoiceId: string) =>
+      ((earlier.data ?? []) as any[]).filter((p) => p.invoice_id === invoiceId).reduce((n, p) => n + Number(p.amount || 0), 0);
+    /*
+     * The booking fee is paid on the booking's FIRST invoice (Dani, 14 Oct
+     * 2026). After an upgrade the newest invoice is the difference, with
+     * nothing paid on it - read from that, the card asked for the booking fee
+     * again. The fee is always read from the first one, whatever came after.
+     */
+    const first = earlierRows[0] ?? invoice;
+    const fee = {
+      invoiceId: String(first.id),
+      number: String(first.number ?? ""),
+      total: Number(first.total || 0),
+      paid: first === invoice ? paid : paidOn(String(first.id)),
+    };
+    // the invoices before the newest, oldest first - the card lists them all
+    const earlierInvoices = earlierRows.map((i) => ({
+      id: String(i.id),
+      number: String(i.number ?? ""),
+      total: Number(i.total || 0),
+      paid: paidOn(String(i.id)),
+    }));
+    const numberOf = new Map(earlierRows.map((i) => [String(i.id), String(i.number ?? "")]));
     // issued again after a cancellation: the card says which one it replaces
     const { data: replaced } = invoice.replaces_invoice_id
       ? await supabase
@@ -1105,11 +1135,20 @@ export const getBookingBilling = createServerFn({ method: "GET" })
       items: items.data ?? [],
       payments: payments.data ?? [],
       receipts: receipts.data ?? [],
+      // the earlier invoices' receipts, each with the invoice it was for
+      earlierReceipts: ((earlierReceipts.data ?? []) as any[]).map((rc) => ({
+        ...rc,
+        invoice_number: numberOf.get(String(rc.invoice_id)) ?? "",
+      })),
+      earlierPayments: earlier.data ?? [],
+      earlierInvoices,
+      fee,
       paid,
       paidBefore,
       balance: Number(invoice.total || 0) - paid,
     };
-  });
+  }
+}
 
 /**
  * The bookings this one might be a repeat of, for the picker on Close.

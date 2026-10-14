@@ -471,6 +471,34 @@ function BookingDetail() {
   const receipts = ((billing as any)?.receipts ?? []) as any[];
   const paidTotal = Number((billing as any)?.paid ?? 0);
   const balanceDue = Number((billing as any)?.balance ?? 0);
+  // paid on this booking's earlier invoices - the ones before a room change's difference
+  const paidBefore = Number((billing as any)?.paidBefore ?? 0);
+  const earlierInvoices = ((billing as any)?.earlierInvoices ?? []) as {
+    id: string;
+    number: string;
+    total: number;
+    paid: number;
+  }[];
+  /*
+   * The booking fee, read from the booking's FIRST invoice (Dani, 14 Oct 2026):
+   * after a room upgrade the newest invoice is the difference with nothing paid
+   * on it, and read from that the card asked for the booking fee again. The
+   * server says which invoice the fee is on and what is paid there.
+   */
+  const fee = ((billing as any)?.fee ?? null) as {
+    invoiceId: string;
+    number: string;
+    total: number;
+    paid: number;
+  } | null;
+  const feeIn = fee ? fee.paid : paidTotal;
+  // a room change's difference invoice: raised and dropped by the room change, never edited here
+  const isDifference = earlierInvoices.length > 0;
+  // every receipt on the booking, the first invoice's first
+  const allReceipts = [
+    ...(((billing as any)?.earlierReceipts ?? []) as any[]),
+    ...receipts,
+  ];
   /*
    * One invoice: the booking fee the website quotes is the first payment on it.
    *
@@ -488,7 +516,7 @@ function BookingDetail() {
    * payment, so Duplicate stops being offered once the fee is recorded. Every
    * other reason still is: a paid booking can still be lost or cancelled.
    */
-  const feePaid = Boolean(row?.fee_received_at || paidTotal > 0);
+  const feePaid = Boolean(row?.fee_received_at || paidTotal + paidBefore > 0);
 
   /**
    * Payments are recorded in one place. Once the student is a resident, their
@@ -567,10 +595,11 @@ function BookingDetail() {
   /** The booking fee: the first payment on the invoice - from the receipt card or Next action. */
   function recordBookingFee() {
     if (!invoice || !row || needStaff()) return;
-    const outstanding = Math.max(balanceDue, 0);
+    // paid on the invoice the fee is on - the first one
+    const outstanding = fee ? Math.max(fee.total - fee.paid, 0) : Math.max(balanceDue, 0);
     setPaying({
-      id: invoice.id,
-      number: invoice.number,
+      id: fee?.invoiceId ?? invoice.id,
+      number: fee?.number ?? invoice.number,
       outstanding,
       owner: proofOwner(row.resident_id, id),
       label: row.full_name ?? "",
@@ -804,13 +833,15 @@ function BookingDetail() {
 
   /** A receipt as the PDF shows it, with its payment's method and reference. */
   function receiptDocFor(rc: any) {
-    const payment = (((billing as any)?.payments ?? []) as any[]).find(
-      (p) => p.id === rc.payment_id,
-    );
+    const payment = [
+      ...(((billing as any)?.payments ?? []) as any[]),
+      ...(((billing as any)?.earlierPayments ?? []) as any[]),
+    ].find((p) => p.id === rc.payment_id);
     return {
       number: rc.number,
       issued_at: rc.issued_at,
-      invoiceNumber: invoice?.number ?? "",
+      // an earlier invoice's receipt names that invoice
+      invoiceNumber: rc.invoice_number || (invoice?.number ?? ""),
       description: payment?.description ?? "",
       paid_to_date: rc.paid_to_date == null ? null : Number(rc.paid_to_date),
       full_name: r.full_name ?? "",
@@ -2066,8 +2097,44 @@ function BookingDetail() {
                 {invoice ? (
                   <>
                     {/* opened in place, the same way as a receipt below it */}
+                    {/* the invoices before a room change's difference, oldest first (Dani, 14 Oct 2026):
+                        the paid one stays in view beside what is still owed */}
+                    {earlierInvoices.map((e) => (
+                      <div key={e.id} className="mt-1 flex items-center justify-between gap-2 border-b border-border pb-1.5">
+                        <p className="text-xs">
+                          <span className="font-medium text-foreground">{e.number}</span>{" "}
+                          <span className="text-muted-foreground">
+                            {e.paid + 0.005 >= e.total ? "· Paid" : `· Paid ${money(e.paid)} · Balance ${money(e.total - e.paid)}`}
+                          </span>
+                        </p>
+                        <PdfPreviewButton
+                          size="sm"
+                          variant="ghost"
+                          aria-label={`View invoice ${e.number}`}
+                          title={`Invoice ${e.number}`}
+                          fileName={`Brachtia-${e.number}.pdf`}
+                          build={async () => {
+                            // as last issued, with what has been paid on it
+                            const versions = await listInvoiceVersions({ data: { invoiceId: e.id } });
+                            const last = versions[versions.length - 1];
+                            if (!last) throw new Error("No version on record");
+                            return (await import("@/lib/invoice-pdf")).invoicePdfUrl({
+                              ...(last.body as any),
+                              reference: r.reference ?? null,
+                              paid: e.paid,
+                              kind: "initial" as const,
+                            });
+                          }}
+                        >
+                          <Eye className="size-4" />
+                        </PdfPreviewButton>
+                      </div>
+                    ))}
                     <div className="mt-1 flex items-center justify-between gap-2">
-                      <p className="text-xs font-medium text-foreground">{invoice.number}</p>
+                      <p className="text-xs font-medium text-foreground">
+                        {invoice.number}
+                        {isDifference ? <span className="font-normal text-muted-foreground"> · Difference</span> : null}
+                      </p>
                       <PdfPreviewButton
                         size="sm"
                         variant="ghost"
@@ -2106,7 +2173,7 @@ function BookingDetail() {
                           not inherit payments, so cancelling a paid one strands
                           the money.
                       */}
-                      {paidTotal <= BOOKING_FEE ? (
+                      {paidTotal <= BOOKING_FEE && !isDifference ? (
                         <>
                           <Button
                             size="sm"
@@ -2156,6 +2223,8 @@ function BookingDetail() {
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
                           <Check className="size-3.5" /> Paid
                         </span>
+                      ) : isDifference ? (
+                        <span className="text-xs font-medium text-amber-700">To pay on their Payments tab</span>
                       ) : paidTotal + 0.005 >= BOOKING_FEE ? (
                         // the RM500 is in: the booking is held; the rest is the initial payment (10 Oct 2026)
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
@@ -2228,12 +2297,12 @@ function BookingDetail() {
                   everything still owed on the initial invoice is chased on their
                   Payments tab and in Collections rather than here.
                 */}
-                {invoice && paidTotal < (BOOKING_FEE || balanceDue) ? (
+                {invoice && feeIn + 0.005 < (BOOKING_FEE || balanceDue) ? (
                   <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs text-muted-foreground">
-                      Booking fee {money(Math.max((BOOKING_FEE || balanceDue) - paidTotal, 0))}
-                      {paidTotal > 0 ? ` still to pay · ${money(paidTotal)} in` : ""} ·{" "}
-                      {invoice.number}
+                      Booking fee {money(Math.max((BOOKING_FEE || balanceDue) - feeIn, 0))}
+                      {feeIn > 0 ? ` still to pay · ${money(feeIn)} in` : ""} ·{" "}
+                      {fee?.number ?? invoice.number}
                     </span>
                     {/* it refused silently without a staff member: the button
                         looked live, the toast was easy to miss. Now it says so */}
@@ -2249,15 +2318,16 @@ function BookingDetail() {
                     </span>
                   </div>
                 ) : invoice && balanceDue > 0 ? (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Booking fee paid · balance {money(balanceDue)} on their Payments tab
+                  <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                    <Check className="size-3.5 text-emerald-700" /> Booking fee paid · {invoice.number} balance{" "}
+                    {money(balanceDue)} on their Payments tab
                   </p>
                 ) : invoice ? (
                   <p className="mt-1 flex items-center gap-1 text-xs font-medium text-emerald-700">
                     <Check className="size-3.5" /> Fully paid
                   </p>
                 ) : null}
-                {row.resident_id || paidTotal >= BOOKING_FEE ? (
+                {row.resident_id || feeIn + 0.005 >= BOOKING_FEE ? (
                   <div className="mt-2 flex">
                     {row.resident_id ? (
                       <Button
@@ -2285,11 +2355,11 @@ function BookingDetail() {
                     )}
                   </div>
                 ) : null}
-                {receipts.length === 0 ? (
+                {allReceipts.length === 0 ? (
                   <p className="mt-1 text-xs text-muted-foreground">No receipts yet</p>
                 ) : (
                   <ul className="mt-1 space-y-1.5">
-                    {receipts.map((rc) => (
+                    {allReceipts.map((rc) => (
                       <li key={rc.id} className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground">
                           {rc.number} · {money(Number(rc.amount))}
@@ -2777,7 +2847,7 @@ function BookingDetail() {
               bed={assignedBed ? `${assignedBed.unit.unitNo} ${assignedBed.room.letter}` : ""}
               viewing={viewing}
               invoiced={Boolean(invoice)}
-              feePaid={Boolean(row.fee_received_at || paidTotal > 0)}
+              feePaid={feePaid}
               trail={activity?.trail ?? []}
             />
           </Card>

@@ -495,6 +495,21 @@ d("change room before the tenancy starts (test-bratchia)", () => {
     expect((await creditNotePdf(drafts.credit)).length).toBeGreaterThan(1000);
   }, 60000);
 
+  test("after an upgrade the booking card reads the fee from the first invoice, and lists both", async () => {
+    // the fully-paid upgrade above (U -> V): a difference invoice with nothing paid on it -
+    // the case that asked for the booking fee again
+    const t = (await one(sb.from("tenancies").select("enquiry_id").eq("bed_id", beds["V"]!).limit(1))) as any;
+    const { bookingBilling } = await import("../src/lib/admin.functions");
+    const b: any = await bookingBilling(sb, { enquiryId: t.enquiry_id });
+    // the fee is on the first invoice, and it is paid - no "Record booking fee"
+    expect(b.fee.paid).toBeGreaterThanOrEqual(500);
+    expect(b.fee.invoiceId).not.toBe(b.invoice.id);
+    expect(b.paid).toBe(0);
+    // both invoices on the card: the paid one, then the difference
+    expect(b.earlierInvoices.map((i: any) => i.id)).toEqual([b.fee.invoiceId]);
+    expect(b.earlierReceipts.every((r: any) => r.invoice_number === b.fee.number)).toBe(true);
+  }, 60000);
+
   test("a payment recorded after the review opened: Confirm is refused, nothing written", async () => {
     const b = await booking(beds["Y"]!, 650, 300);
     const { plan } = await review(b.enquiry, beds["Z"]!, 700);
