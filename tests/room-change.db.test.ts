@@ -165,18 +165,30 @@ async function booking(bed: string, rent: number, paid: number, start = START) {
   };
 }
 
-async function change(enquiryId: string, bedId: string, newRent: number) {
+async function change(enquiryId: string, bedId: string, newRent: number, expectedKey?: string) {
   const { applyRoomChange } = await import("../src/lib/admin.functions");
   return applyRoomChange(sb, {
     enquiryId,
     bedId,
     newRent,
+    ...(expectedKey ? { expectedKey } : {}),
     approvedBy: (await import("../src/data/form-options")).STAFF[0]!,
     reason: "Resident requested another room",
     fromLabel: "old",
     toLabel: "new",
   });
 }
+
+/** what the review box is handed: the plan and the drafts its eyes open */
+async function review(enquiryId: string, bedId: string, newRent: number) {
+  const { roomChangePlan, roomChangeDrafts } = await import("../src/lib/admin.functions");
+  const plan = await roomChangePlan(sb, enquiryId, newRent);
+  const drafts: any = await roomChangeDrafts(sb, plan, { enquiryId, newRent, bedId, fromLabel: "old", toLabel: "new" });
+  return { plan, drafts };
+}
+const itemsOf = async (invoiceId: string) =>
+  ok<any[]>(sb.from("invoice_items").select("label, amount").eq("invoice_id", invoiceId).order("sort_order"));
+const sum = (xs: { amount: number | string }[]) => Math.round(xs.reduce((n, x) => n + Number(x.amount), 0) * 100) / 100;
 
 const liveFor = async (enquiryId: string) =>
   ok<any[]>(
@@ -206,7 +218,7 @@ d("change room before the tenancy starts (test-bratchia)", () => {
         .select("id"),
     );
     made.unit = u.id;
-    const letters = "ABCDEFGHIJKLMNOPQR".split("");
+    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
     const rooms = await ok<any[]>(
       sb
         .from("rooms")
@@ -432,6 +444,80 @@ d("change room before the tenancy starts (test-bratchia)", () => {
     expect((await one(sb.from("invoices").select("status").eq("id", b.invoice))).status).toBe(
       "paid",
     );
+  }, 60000);
+
+  /*
+   * The review's drafts (Dani, 14 Oct 2026): the eye shows what Confirm makes.
+   * Each draft is compared with the document Confirm then wrote.
+   */
+  test("draft, not fully paid: the revised invoice the eye shows is the one Confirm writes, with paid to date", async () => {
+    const b = await booking(beds["S"]!, 650, 500);
+    const { plan, drafts } = await review(b.enquiry, beds["T"]!, 700);
+    expect(plan.money.kind).toBe("revise");
+    expect(drafts.invoice.paid).toBe(500);
+    const res: any = await change(b.enquiry, beds["T"]!, 700, plan.key);
+    expect(res.ok).toBe(true);
+    const inv = await one(sb.from("invoices").select("total, room_name, deposits_total").eq("id", b.invoice));
+    expect(drafts.invoice.total).toBeCloseTo(Number(inv.total), 2);
+    expect(drafts.invoice.deposits_total).toBeCloseTo(Number(inv.deposits_total), 2);
+    expect(drafts.invoice.room_name).toBe(inv.room_name);
+    expect(drafts.invoice.items.map((i: any) => [i.label, i.amount])).toEqual(
+      (await itemsOf(b.invoice)).map((i) => [i.label, Number(i.amount)]),
+    );
+  }, 60000);
+
+  test("draft, fully paid and dearer: the difference invoice the eye shows is the one Confirm raises", async () => {
+    const full = sum(await linesFor(650));
+    const b = await booking(beds["U"]!, 650, full);
+    const { plan, drafts } = await review(b.enquiry, beds["V"]!, 700);
+    expect(plan.money.kind).toBe("ip");
+    const res: any = await change(b.enquiry, beds["V"]!, 700, plan.key);
+    expect(res.kind).toBe("ip");
+    const ip = (await liveFor(b.enquiry)).find((i) => i.id !== b.invoice)!;
+    expect(sum(drafts.ip.items)).toBeCloseTo(Number(ip.total), 2);
+    expect(drafts.ip.items.map((i: any) => [i.label, i.amount])).toEqual(
+      (await itemsOf(ip.id)).map((i) => [i.label, Number(i.amount)]),
+    );
+    const row = await one(sb.from("invoices").select("room_name, monthly_rent").eq("id", ip.id));
+    expect([drafts.ip.room_name, drafts.ip.monthly_rent]).toEqual([row.room_name, Number(row.monthly_rent)]);
+  }, 60000);
+
+  test("draft, fully paid and cheaper: the credit note the eye shows is the credit Confirm gives", async () => {
+    const full = sum(await linesFor(700));
+    const b = await booking(beds["W"]!, 700, full);
+    const { plan, drafts } = await review(b.enquiry, beds["X"]!, 650);
+    expect(plan.money.kind).toBe("credit");
+    const res: any = await change(b.enquiry, beds["X"]!, 650, plan.key);
+    expect(res.kind).toBe("credit");
+    expect(sum(drafts.credit.lines)).toBeCloseTo(res.credit, 2);
+    // and the PDF is made from it
+    const { creditNotePdf } = await import("../src/lib/credit-note-pdf");
+    expect((await creditNotePdf(drafts.credit)).length).toBeGreaterThan(1000);
+  }, 60000);
+
+  test("a payment recorded after the review opened: Confirm is refused, nothing written", async () => {
+    const b = await booking(beds["Y"]!, 650, 300);
+    const { plan } = await review(b.enquiry, beds["Z"]!, 700);
+    await ok(
+      sb.from("payments").insert({
+        invoice_id: b.invoice,
+        enquiry_id: b.enquiry,
+        resident_id: b.resident,
+        amount: 200,
+        paid_on: "2026-10-02",
+        method: "Bank Transfer",
+        reference: "",
+        proof_path: "",
+      }),
+    );
+    const res: any = await change(b.enquiry, beds["Z"]!, 700, plan.key);
+    expect(res.ok).toBe(false);
+    expect(res.stale).toBe(true);
+    // the room and the invoice are as they were
+    const inv = await one(sb.from("invoices").select("total").eq("id", b.invoice));
+    expect(Number(inv.total)).toBeCloseTo(b.total, 2);
+    const held = await one(sb.from("placement_holds").select("bed_id").eq("enquiry_id", b.enquiry));
+    expect(held.bed_id).toBe(beds["Y"]);
   }, 60000);
 
   async function pack(resident: string, status: string) {

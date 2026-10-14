@@ -169,6 +169,12 @@ export function planRoomChangeMoney(p: {
   return { kind: "credit", oldTotal, newTotal, difference: -difference, parts };
 }
 
+/**
+ * A credit part as the review and the credit note both name it (14 Oct 2026):
+ * a deposit that went down says which, the rest is the initial payment.
+ */
+export const creditPartLabel = (p: CreditPart) => (p.deposit ? `${p.label} - difference` : p.label);
+
 /** Before the tenancy starts and before check-in - after that it is Update Tenancy's. */
 export function beforeTenancyStart(
   start: string | null | undefined,

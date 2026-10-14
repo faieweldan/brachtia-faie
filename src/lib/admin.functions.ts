@@ -1423,6 +1423,32 @@ type InvoiceRewrite = {
 };
 
 /**
+ * What an invoice row becomes when it is rewritten with these lines - the
+ * update below and the room-change review's draft both take it from here, so
+ * the draft the eye shows is the row Confirm writes (14 Oct 2026).
+ */
+function rewrittenInvoiceValues(data: InvoiceRewrite, paidSoFar: number, opts: { roomChange?: boolean } = {}) {
+  const lines = data.items;
+  const invoiceDate = data.invoiceDate || new Date().toISOString().slice(0, 10);
+  const newTotal = lines.reduce((n, l) => n + Number(l.amount || 0) * lineQty(l.quantity), 0);
+  return {
+    ...data.values,
+    // a room change keeps the payments where they are: the status follows them
+    ...(opts.roomChange && paidSoFar > 0
+      ? { status: paidSoFar + 0.005 >= newTotal ? "paid" : "part_paid" }
+      : {}),
+    ...nextPaymentValues(data.values, lines),
+    invoice_date: invoiceDate,
+    payment_terms: data.paymentTerms || "NET15",
+    issued_at: new Date(`${invoiceDate}T00:00:00Z`).toISOString(),
+    total: newTotal,
+    deposits_total: lines
+      .filter((l) => l.kind === "refundable")
+      .reduce((n, l) => n + Number(l.amount || 0) * lineQty(l.quantity), 0),
+  };
+}
+
+/**
  * Change an invoice's lines and details, keeping the old one as a version.
  *
  * Shared by editing an invoice and by Update quote on a booking, so both are
@@ -1468,27 +1494,9 @@ async function rewriteInvoice(
 
   const enquiryId = (inv as any).enquiry_id as string | null;
   const lines = data.items;
-  const invoiceDate = data.invoiceDate || new Date().toISOString().slice(0, 10);
-
-  const newTotal = lines.reduce((n, l) => n + Number(l.amount || 0) * lineQty(l.quantity), 0);
   const { error } = await supabase
     .from("invoices")
-    .update({
-      ...data.values,
-      // a room change keeps the payments where they are: the status follows them
-      ...(opts.roomChange && paidSoFar > 0
-        ? { status: paidSoFar + 0.005 >= newTotal ? "paid" : "part_paid" }
-        : {}),
-      ...nextPaymentValues(data.values, lines),
-      invoice_date: invoiceDate,
-      payment_terms: data.paymentTerms || "NET15",
-      issued_at: new Date(`${invoiceDate}T00:00:00Z`).toISOString(),
-      total: lines.reduce((n, l) => n + Number(l.amount || 0) * lineQty(l.quantity), 0),
-      deposits_total: lines
-        .filter((l) => l.kind === "refundable")
-        .reduce((n, l) => n + Number(l.amount || 0) * lineQty(l.quantity), 0),
-      updated_at: new Date().toISOString(),
-    } as any)
+    .update({ ...rewrittenInvoiceValues(data, paidSoFar, opts), updated_at: new Date().toISOString() } as any)
     .eq("id", data.invoiceId);
   if (error) throw new Error(error.message);
 
@@ -1739,7 +1747,21 @@ export async function roomChangePlan(supabase: any, enquiryId: string, newRent: 
       ta = ((docs ?? []) as any[]).every((d) => RESETTABLE.has(d.status)) ? "draft" : "signed";
     }
   }
+  /*
+   * What Confirm is agreeing to (14 Oct 2026). The review shows the figures and
+   * their drafts from this plan; Confirm sends the key back, and applyRoomChange
+   * works the plan out again and refuses if it moved - a payment recorded, a
+   * difference invoice paid - so nothing is written from figures nobody saw.
+   */
+  const key = JSON.stringify({
+    money,
+    paid: Math.round(paid * 100) / 100,
+    charged: Math.round(charged * 100) / 100,
+    dropping: dropping.map((d) => String(d.id)),
+    first: firstInvoiceLines,
+  });
   return {
+    key,
     ta,
     allowed,
     start,
@@ -1757,16 +1779,180 @@ export async function roomChangePlan(supabase: any, enquiryId: string, newRent: 
 }
 
 export const previewRoomChange = createServerFn({ method: "GET" })
-  .inputValidator((data: { enquiryId: string; newRent: number }) => data)
+  .inputValidator(
+    (data: {
+      enquiryId: string;
+      newRent: number;
+      bedId?: string;
+      roomName?: string;
+      occupancy?: string;
+      residenceName?: string;
+      fromLabel?: string;
+      toLabel?: string;
+    }) => data,
+  )
   .handler(async ({ data }) => {
-    const plan = await roomChangePlan(await admin(), data.enquiryId, Number(data.newRent || 0));
+    const supabase = await admin();
+    const plan = await roomChangePlan(supabase, data.enquiryId, Number(data.newRent || 0));
+    const drafts = await roomChangeDrafts(supabase, plan, data);
     const { newLines: _lines, tenancyId: _t, residentId: _r, firstInvoiceLines: _f, ...shown } = plan;
     void _lines;
     void _f;
     void _t;
     void _r;
-    return shown;
+    return { ...shown, drafts };
   });
+
+/**
+ * The invoice's Room line names the unit and room - "Unit A-10-11 · Room C" -
+ * the same as when the invoice is raised, never the room type (10 Oct 2026).
+ * Plain lookups: a nested select that fails comes back empty, not as an error.
+ */
+async function placeNameFor(supabase: any, bedId: string | undefined, fallback: string | undefined) {
+  if (!bedId) return fallback;
+  const { data: tb } = await supabase.from("beds").select("room_id").eq("id", bedId).maybeSingle();
+  const { data: tr } = tb ? await supabase.from("rooms").select("letter, unit_id").eq("id", tb.room_id).maybeSingle() : { data: null };
+  const { data: tu } = tr ? await supabase.from("units").select("unit_no").eq("id", tr.unit_id).maybeSingle() : { data: null };
+  return tu?.unit_no ? `Unit ${tu.unit_no} · Room ${tr.letter}` : fallback;
+}
+
+/**
+ * The documents a room change will make, as drafts for the review's eye (Dani,
+ * 14 Oct 2026) - built from the plan the rows are read from, and by the same
+ * rules Confirm writes with (rewrittenInvoiceValues, roomChangeRewrite,
+ * ipInvoiceRow, roomChangeIpOptions, placeNameFor), so the preview cannot say
+ * one thing and Confirm do another. Nothing is saved.
+ *   revise / same  the initial invoice as revised, with paid to date
+ *   ip             the new Initial Payment invoice for the difference
+ *   credit         the credit note for what came off
+ */
+export async function roomChangeDrafts(
+  supabase: any,
+  plan: Awaited<ReturnType<typeof roomChangePlan>>,
+  input: {
+    enquiryId: string;
+    newRent: number;
+    bedId?: string | undefined;
+    roomName?: string | undefined;
+    occupancy?: string | undefined;
+    residenceName?: string | undefined;
+    fromLabel?: string | undefined;
+    toLabel?: string | undefined;
+  },
+) {
+  const m = plan.money;
+  if (!plan.invoice || m.kind === "none") return {};
+  const { invoiceDocFromRow } = await import("@/lib/invoice-doc");
+  const { residentCodeFor } = await import("@/lib/resident-billing.functions");
+  const { klToday } = await import("@/lib/kl-date");
+  const placeName = await placeNameFor(supabase, input.bedId, input.roomName);
+  const code = plan.residentId ? await residentCodeFor(supabase, plan.residentId) : "";
+  const who = code ? { resident_code: code } : {};
+  const DRAFT = "DRAFT";
+
+  if (m.kind === "same" || m.kind === "revise") {
+    const { data: inv } = await supabase.from("invoices").select("*").eq("id", plan.invoice.id).maybeSingle();
+    const items =
+      m.kind === "same"
+        ? (((await supabase.from("invoice_items").select("label, kind, amount, quantity").eq("invoice_id", plan.invoice.id).order("sort_order")).data ?? []) as any[])
+        : (plan.firstInvoiceLines as any[]);
+    const values = rewrittenInvoiceValues(
+      roomChangeRewrite(plan.invoice.id, inv, items, {
+        placeName,
+        occupancy: input.occupancy,
+        residenceName: input.residenceName,
+        rent: m.kind === "same" ? inv?.monthly_rent : input.newRent,
+      }),
+      plan.invoice.paid,
+      { roomChange: true },
+    );
+    return {
+      invoice: {
+        ...invoiceDocFromRow({ ...inv, ...values, number: `${inv?.number ?? ""} · ${DRAFT}` }, items),
+        ...who,
+        paid: plan.invoice.paid,
+        kind: "initial" as const,
+      },
+    };
+  }
+  if (m.kind === "ip" && plan.residentId) {
+    const { ipInvoiceRow } = await import("@/lib/tenancy-events.server");
+    const lines = m.lines.map((l) => ({ label: l.label, amount: l.amount, kind: l.kind }));
+    const row = await ipInvoiceRow(supabase, plan.residentId, lines, roomChangeIpOptions(plan, input, placeName, klToday()));
+    return {
+      ip: { ...invoiceDocFromRow({ ...row, number: DRAFT }, lines), ...who, kind: "initial" as const },
+    };
+  }
+  if (m.kind === "credit") {
+    const { data: res } = plan.residentId
+      ? await supabase.from("residents").select("full_name").eq("id", plan.residentId).maybeSingle()
+      : { data: null };
+    const { data: enq } = await supabase.from("enquiries").select("full_name, residence_name").eq("id", input.enquiryId).maybeSingle();
+    const { creditPartLabel } = await import("@/lib/room-change");
+    return {
+      credit: {
+        number: DRAFT,
+        subtitle: "Room change",
+        date: klToday(),
+        resident: {
+          name: String((res as any)?.full_name ?? (enq as any)?.full_name ?? ""),
+          code,
+          residence: String(input.residenceName ?? (enq as any)?.residence_name ?? ""),
+          room: String(placeName ?? ""),
+          tenancyStart: plan.start,
+          tenancyEnd: plan.end,
+        },
+        heading: "WHAT CAME OFF",
+        lines: m.parts.map((p) => ({ label: creditPartLabel(p), amount: p.amount })),
+        totalLabel: "Total credit",
+        resultLabel: "CARRIED FORWARD AS ACCOUNT CREDIT",
+        notes: `${plan.invoice.number} stays paid. The credit comes off the next rent; any deposit part is kept apart so it is not refunded twice at checkout.`,
+      },
+    };
+  }
+  return {};
+}
+
+/** The rewrite a room change makes to the initial invoice - for Confirm and for its draft. */
+function roomChangeRewrite(
+  invoiceId: string,
+  inv: any,
+  items: InvoiceLine[],
+  o: { placeName?: string | undefined; occupancy?: string | undefined; residenceName?: string | undefined; rent: unknown },
+): InvoiceRewrite {
+  return {
+    invoiceId,
+    items,
+    invoiceDate: String(inv?.invoice_date ?? "") || undefined,
+    paymentTerms: String(inv?.payment_terms ?? "") || undefined,
+    values: {
+      ...(o.placeName ? { room_name: o.placeName } : {}),
+      ...(o.occupancy ? { occupancy: o.occupancy } : {}),
+      ...(o.residenceName ? { residence_name: o.residenceName } : {}),
+      tenancy_start: inv?.tenancy_start ?? null,
+      tenancy_end: inv?.tenancy_end ?? null,
+      monthly_rent: o.rent,
+      payment_frequency: inv?.payment_frequency ?? null,
+    },
+  };
+}
+
+/** The difference invoice's details - for Confirm and for its draft. */
+function roomChangeIpOptions(
+  plan: { end: string },
+  input: { newRent: number; occupancy?: string | undefined; fromLabel?: string | undefined; toLabel?: string | undefined },
+  placeName: string | undefined,
+  today: string,
+) {
+  return {
+    billOn: today,
+    note: `Initial payment difference - room change ${input.fromLabel ?? ""} to ${input.toLabel ?? ""}`,
+    tenancyEnd: plan.end,
+    rent: input.newRent,
+    roomName: placeName ?? "",
+    occupancy: input.occupancy ?? "",
+  };
+}
 
 /**
  * Confirm a room change before the tenancy starts, in this order:
@@ -1800,6 +1986,8 @@ export const changeRoomBeforeStart = createServerFn({ method: "POST" })
       toLabel: string;
       /** one per room change confirmed - its account credit is given once */
       requestKey: string;
+      /** the plan's key the review showed - refused when the figures moved since */
+      expectedKey?: string;
     }) => data,
   )
   .handler(async ({ data }) => {
@@ -1827,6 +2015,8 @@ export type RoomChangeInput = {
   toLabel: string;
   /** the room change confirmed - the same key again gives its account credit no second time */
   requestKey?: string;
+  /** the plan's key the review showed - refused when the figures moved since */
+  expectedKey?: string;
 };
 
 /**
@@ -1852,6 +2042,15 @@ export async function applyRoomChange(supabase: any, data: RoomChangeInput) {
 
     const plan = await roomChangePlan(supabase, data.enquiryId, Number(data.newRent || 0));
     if (!plan.allowed) throw new Error("The tenancy has started. Use Update Tenancy on the resident's page.");
+    // the figures the review showed - refused if they moved since (14 Oct 2026)
+    if (data.expectedKey && data.expectedKey !== plan.key) {
+      return {
+        ok: false as const,
+        stale: true as const,
+        error: "The figures changed since this review opened - a payment or invoice came in.",
+        detail: "The review has been worked out again. Check it and confirm once more.",
+      };
+    }
 
     // 1. the room
     const { data: placed, error } = await (supabase as any).rpc("place_stay", {
@@ -1892,38 +2091,21 @@ export async function applyRoomChange(supabase: any, data: RoomChangeInput) {
     }
     const m = plan.money;
     const out: { invoice?: string; version?: number; ipNumber?: string; ipAmount?: number; credit?: number; outstanding?: number } = {};
-    // the invoice's Room line names the unit and room - "Unit A-10-11 · Room C" - the
-    // same as when the invoice is raised, never the room type (10 Oct 2026)
-    // plain lookups: a nested select that fails comes back empty, not as an error
-    const { data: tb } = await (supabase as any).from("beds").select("room_id").eq("id", data.bedId).maybeSingle();
-    const { data: tr } = tb ? await (supabase as any).from("rooms").select("letter, unit_id").eq("id", tb.room_id).maybeSingle() : { data: null };
-    const { data: tu } = tr ? await (supabase as any).from("units").select("unit_no").eq("id", tr.unit_id).maybeSingle() : { data: null };
-    const placeName = tu?.unit_no ? `Unit ${tu.unit_no} · Room ${tr.letter}` : data.roomName;
-    const roomValues = {
-      ...(placeName ? { room_name: placeName } : {}),
-      ...(data.occupancy ? { occupancy: data.occupancy } : {}),
-      ...(data.residenceName ? { residence_name: data.residenceName } : {}),
-    };
+    const placeName = await placeNameFor(supabase, data.bedId, data.roomName);
     if (plan.invoice && (m.kind === "same" || m.kind === "revise")) {
       const { data: inv } = await supabase.from("invoices").select("*").eq("id", plan.invoice.id).maybeSingle();
+      // same price: the same lines, with the new room's details
+      const items = m.kind === "same"
+        ? (((await supabase.from("invoice_items").select("label, kind, amount, quantity").eq("invoice_id", plan.invoice.id).order("sort_order")).data ?? []) as any[])
+        : (plan.firstInvoiceLines as any[]);
       await rewriteInvoice(
         supabase,
-        {
-          invoiceId: plan.invoice.id,
-          // same price: the same lines, with the new room's details
-          items: m.kind === "same"
-            ? (((await supabase.from("invoice_items").select("label, kind, amount, quantity").eq("invoice_id", plan.invoice.id).order("sort_order")).data ?? []) as any[])
-            : (plan.firstInvoiceLines as any[]),
-          invoiceDate: String(inv?.invoice_date ?? "") || undefined,
-          paymentTerms: String(inv?.payment_terms ?? "") || undefined,
-          values: {
-            ...roomValues,
-            tenancy_start: inv?.tenancy_start ?? null,
-            tenancy_end: inv?.tenancy_end ?? null,
-            monthly_rent: m.kind === "same" ? inv?.monthly_rent : data.newRent,
-            payment_frequency: inv?.payment_frequency ?? null,
-          },
-        },
+        roomChangeRewrite(plan.invoice.id, inv, items, {
+          placeName,
+          occupancy: data.occupancy,
+          residenceName: data.residenceName,
+          rent: m.kind === "same" ? inv?.monthly_rent : data.newRent,
+        }),
         { roomChange: true },
       );
       const { data: v } = await supabase
@@ -1954,14 +2136,13 @@ export async function applyRoomChange(supabase: any, data: RoomChangeInput) {
     } else if (plan.invoice && m.kind === "ip" && plan.residentId && plan.tenancyId) {
       const { raiseIp } = await import("@/lib/tenancy-events.server");
       const { klToday } = await import("@/lib/kl-date");
-      const ip = await raiseIp(supabase, plan.residentId, plan.tenancyId, m.lines.map((l) => ({ label: l.label, amount: l.amount, kind: l.kind })), {
-        billOn: klToday(),
-        note: `Initial payment difference - room change ${data.fromLabel} to ${data.toLabel}`,
-        tenancyEnd: plan.end,
-        rent: data.newRent,
-        roomName: data.roomName ?? "",
-        occupancy: data.occupancy ?? "",
-      });
+      const ip = await raiseIp(
+        supabase,
+        plan.residentId,
+        plan.tenancyId,
+        m.lines.map((l) => ({ label: l.label, amount: l.amount, kind: l.kind })),
+        roomChangeIpOptions(plan, data, placeName, klToday()),
+      );
       await supabase.from("invoices").update({ enquiry_id: data.enquiryId }).eq("id", ip.id);
       out.ipNumber = ip.number;
       out.ipAmount = m.difference;
