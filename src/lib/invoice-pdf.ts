@@ -5,6 +5,7 @@ import { nextRentalPayment, cycleEnd } from "@/lib/rental-schedule";
 import { stayLength } from "@/lib/stay-length";
 import { lineQty } from "@/lib/invoices";
 import { occupancyPrinted } from "@/lib/occupancy";
+import { MONEY_LABEL } from "@/lib/tenancy-change";
 
 const GREEN: [number, number, number] = [26, 71, 52];
 const PEACH: [number, number, number] = [250, 240, 231];
@@ -506,9 +507,9 @@ async function buildInvoice(inv: InvoiceDoc) {
     doc.setTextColor(...GREEN);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9.5);
-    doc.text(`Less account credit: -${formatRM(inv.credit_planned)}`, M, y);
+    doc.text(`${MONEY_LABEL.creditApplied} -${formatRM(inv.credit_planned)}`, M, y);
     y += 13;
-    doc.text(`To pay: ${formatRM(Math.max(inv.total - inv.credit_planned, 0))}`, M, y);
+    doc.text(`${MONEY_LABEL.balanceDue}: ${formatRM(Math.max(inv.total - inv.credit_planned, 0))}`, M, y);
     y += 12;
     doc.setTextColor(...MUTED);
     doc.setFont("helvetica", "normal");

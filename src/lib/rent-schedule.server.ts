@@ -186,26 +186,27 @@ export async function ensureRentSchedule(supabase: any, tenancyId: string) {
 }
 
 /**
- * Make the tenancy's rent invoices match its terms.
- *
- * Invoices already billed never change, and the schedule picks up the day after
- * the last one. Scheduled invoices the schedule made are rebuilt; one admin has
- * edited is kept as admin left it, and its period is not made again.
+ * The rent invoices the terms make, worked out but not saved - syncScheduledRent
+ * saves them; the Update Tenancy review shows them at the rent the change would
+ * bring (`override`), so the preview's months are the ones that will be billed
+ * (Dani, 15 Oct 2026). Invoices already billed, and scheduled ones admin edited
+ * (`kept`), are left as they are.
  */
-export async function syncScheduledRent(supabase: any, tenancyId: string) {
-  // anything whose day has come is billed first, so it is kept rather than rebuilt
-  await billDueInvoices(supabase);
-
+export async function plannedRent(
+  supabase: any,
+  tenancyId: string,
+  override?: { steps?: RentStep[]; moves?: RentMove[]; monthlyRent?: number; tenancyEnd?: string },
+) {
   const [tenancy, { data: s, error: sErr }] = await Promise.all([
     tenancyById(supabase, tenancyId),
     supabase.from("rental_schedules").select("*").eq("tenancy_id", tenancyId).maybeSingle(),
   ]);
   if (sErr) throw new Error(sErr.message);
-  if (!tenancy || !s) return;
+  if (!tenancy || !s) return null;
 
   const { data: rows, error } = await supabase
     .from("invoices")
-    .select("id, status, auto_scheduled, period_start, period_end, notes")
+    .select("id, status, auto_scheduled, period_start, period_end, notes, total, bill_on")
     .eq("tenancy_id", tenancyId)
     .eq("invoice_type", "rental")
     .neq("status", "void");
@@ -215,34 +216,22 @@ export async function syncScheduledRent(supabase: any, tenancyId: string) {
   const kept = all.filter((r) => r.status === "scheduled" && !r.auto_scheduled);
   const stale = all.filter((r) => r.status === "scheduled" && r.auto_scheduled);
 
-  if (stale.length) {
-    const { error: dropErr } = await supabase
-      .from("invoices")
-      .delete()
-      .in(
-        "id",
-        stale.map((r) => r.id),
-      )
-      .eq("status", "scheduled");
-    if (dropErr) throw new Error(dropErr.message);
-  }
-
   const initial = await initialInvoiceFor(supabase, tenancy);
   const coverage = firstRentPeriod(
     day(tenancy.start_date),
-    day(s.tenancy_end),
+    override?.tenancyEnd ?? day(s.tenancy_end),
     String(s.frequency),
     initial?.advance ?? 0,
-    Number(s.monthly_rent),
+    override?.monthlyRent ?? Number(s.monthly_rent),
   );
   const terms: ScheduleTerms = {
     firstPeriodCredit: coverage.start === day(s.first_period_start) ? coverage.credit : 0,
-    monthlyRent: Number(s.monthly_rent),
+    monthlyRent: override?.monthlyRent ?? Number(s.monthly_rent),
     frequency: String(s.frequency),
     firstPeriodStart: day(s.first_period_start),
     firstPeriodEnd: day(s.first_period_end),
     firstDueDate: day(s.first_due_date),
-    tenancyEnd: day(s.tenancy_end),
+    tenancyEnd: override?.tenancyEnd ?? day(s.tenancy_end),
     finalAmount: s.final_amount === null ? null : Number(s.final_amount),
   };
   const lastBilledEnd =
@@ -253,7 +242,6 @@ export async function syncScheduledRent(supabase: any, tenancyId: string) {
       .at(-1) ?? "";
   const keptStarts = new Set(kept.map((r) => day(r.period_start)));
   const periods = buildPeriods(terms, lastBilledEnd).filter((p) => !keptStarts.has(p.start));
-  if (!periods.length) return;
 
   // who and where, as the initial invoice and the resident's record have them
   const { data: resident } = await supabase
@@ -273,7 +261,9 @@ export async function syncScheduledRent(supabase: any, tenancyId: string) {
    * cheaper room in a period already billed is account credit now; a step
    * saved before 7 Oct still carries its credit, taken off the next invoice once.
    */
-  const { steps, moves = [] } = await readRentSteps(supabase, tenancy.resident_id, tenancyId);
+  const saved = await readRentSteps(supabase, tenancy.resident_id, tenancyId);
+  const steps = override?.steps ?? saved.steps;
+  const moves = override?.moves ?? saved.moves ?? [];
   // the place each period is in: theirs now, then each applied move's room from its day
   const { invoicePlace, residentInvoicePlace } = await import("@/lib/placement.server");
   const here = await residentInvoicePlace(supabase, String(tenancy.resident_id));
@@ -304,6 +294,36 @@ export async function syncScheduledRent(supabase: any, tenancyId: string) {
     }
     return { id: crypto.randomUUID(), period: { ...p, amount }, lines, notes };
   });
+  return { tenancy, terms, billed, kept, stale, made, inv, person, discounted, placeFrom };
+}
+
+/**
+ * Make the tenancy's rent invoices match its terms.
+ *
+ * Invoices already billed never change, and the schedule picks up the day after
+ * the last one. Scheduled invoices the schedule made are rebuilt; one admin has
+ * edited is kept as admin left it, and its period is not made again.
+ */
+export async function syncScheduledRent(supabase: any, tenancyId: string) {
+  // anything whose day has come is billed first, so it is kept rather than rebuilt
+  await billDueInvoices(supabase);
+
+  const planned = await plannedRent(supabase, tenancyId);
+  if (!planned) return;
+  const { tenancy, terms, stale, made, inv, person, discounted, placeFrom } = planned;
+  if (stale.length) {
+    const { error: dropErr } = await supabase
+      .from("invoices")
+      .delete()
+      .in(
+        "id",
+        stale.map((r) => r.id),
+      )
+      .eq("status", "scheduled");
+    if (dropErr) throw new Error(dropErr.message);
+  }
+
+  if (!made.length) return;
   const { error: insErr } = await supabase.from("invoices").insert(
     made.map(({ id, period: p, notes }) => ({
       id,

@@ -1,3 +1,5 @@
+import { planCredit } from "@/lib/credit-plan";
+
 /*
  * Update Tenancy - the rules. Pure functions, shared by the dialog and the
  * server, and tested in tests/tenancy-change.test.ts. Agreed with Dani,
@@ -253,3 +255,119 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /** "Single" / "Twin 1" - a bed's occupancy */
 export const bedOccupancy = (label: string) => (/twin/i.test(label) ? "twin" : /unit/i.test(label) ? "unit" : "single");
+
+/* ------------------------------------------------------- the money preview */
+
+/**
+ * The words of the money preview (Dani, 15 Oct 2026) - the review, the draft
+ * invoice and the draft credit note print the same ones. A fee paid by credit
+ * is the full fee, then the credit on its own line, then the balance - never
+ * "waived" (that is a real let-off) and never the fee at RM0.
+ */
+export const MONEY_LABEL = {
+  initialPayment: "Initial Payment invoice",
+  creditApplied: "Less: account credit applied",
+  balanceDue: "Balance due",
+  accountCredit: "Account credit",
+  totalCredit: "Total credit",
+  remainingCredit: "Remaining credit",
+  contractualRent: "Contractual monthly rent",
+  rent: "Rent",
+  creditNote: "Credit note",
+  creditHeld: "Account credit held before this change",
+  depositReduction: (label: string) => `${label} reduction`,
+  billedRentCredit: (range: string) => `Rent already billed, ${range}`,
+  appliedTo: (what: string) => `Applied to ${what}`,
+} as const;
+
+/** one event of the request, as the outlook needs it */
+export type OutlookEvent = {
+  name: string;
+  date: string;
+  /** the event's IP total - deposit differences and fees */
+  ipTotal: number;
+  /** each lower deposit, now account credit (given on confirm) */
+  depositCredit: { label: string; amount: number }[];
+  /** cheaper rent for days already billed - credit given when the IP is settled */
+  rentCredit: { label: string; amount: number } | null;
+  /** dearer rent for days already billed - an RP adjustment raised when settled */
+  adjustment: { label: string; amount: number } | null;
+};
+
+/** an invoice the credit can go to, in the order it would take it */
+export type OutlookTarget = { id: string; label: string; date: string; owing: number; kind: "invoice" | "rent" };
+
+/**
+ * Where the account credit goes once the change is confirmed (Dani, 15 Oct
+ * 2026), in the order the system really applies it:
+ *   1. on confirm, the credit there and each lower deposit go on the event's
+ *      own IP first (applyAccountCredit with only that IP)
+ *   2. the rest goes to the invoices still owing and the rent still to bill,
+ *      oldest first (planCredit - the same rule the credit note is issued by)
+ *   3. what no invoice can take is the credit note's amount
+ * Credit is spent first-in first-out, so each use can name where it came from:
+ * "arising from Event 1" when one event's credit pays the next one's IP.
+ */
+export function changeCreditOutlook(balance: number, events: OutlookEvent[], targets: OutlookTarget[]) {
+  type Part = { from: number; amount: number };
+  const pool: Part[] = balance > 0.005 ? [{ from: -1, amount: round2(balance) }] : [];
+  const take = (want: number) => {
+    const used: Part[] = [];
+    let left = round2(want);
+    while (left > 0.005 && pool.length) {
+      const p = pool[0]!;
+      const n = round2(Math.min(p.amount, left));
+      used.push({ from: p.from, amount: n });
+      p.amount = round2(p.amount - n);
+      left = round2(left - n);
+      if (p.amount <= 0.005) pool.shift();
+    }
+    return used;
+  };
+  const given: { label: string; amount: number; event: number }[] = [];
+  if (balance > 0.005) given.push({ label: MONEY_LABEL.creditHeld, amount: round2(balance), event: -1 });
+  const perEvent = events.map((e, i) => {
+    for (const d of e.depositCredit)
+      if (d.amount > 0.005) {
+        pool.push({ from: i, amount: round2(d.amount) });
+        given.push({ label: MONEY_LABEL.depositReduction(d.label), amount: round2(d.amount), event: i });
+      }
+    const used = take(e.ipTotal);
+    const applied = round2(used.reduce((n, u) => n + u.amount, 0));
+    // credit from an earlier event of this request, named formally
+    const fromEvents = [...new Set(used.filter((u) => u.from >= 0 && u.from !== i).map((u) => u.from))];
+    if (e.rentCredit && e.rentCredit.amount > 0.005) {
+      pool.push({ from: i, amount: round2(e.rentCredit.amount) });
+      given.push({ label: e.rentCredit.label, amount: round2(e.rentCredit.amount), event: i });
+    }
+    return { ipTotal: round2(e.ipTotal), creditApplied: applied, balanceDue: round2(e.ipTotal - applied), fromEvents };
+  });
+  const left = round2(pool.reduce((n, p) => n + p.amount, 0));
+  const ordered = [...targets].filter((t) => t.owing > 0.005).sort((a, b) => a.date.localeCompare(b.date));
+  const { plan, leftover } = planCredit(left, ordered);
+  const credited = plan.filter((p) => p.credit > 0.005).map((p) => ({ ...ordered.find((t) => t.id === p.id)!, credit: p.credit, after: p.after }));
+  const totalGiven = round2(given.reduce((n, g) => n + g.amount, 0));
+  return {
+    events: perEvent,
+    /** every credit given: held before, each lower deposit, cheaper billed rent */
+    given,
+    totalGiven,
+    /** what is left after every IP of the request */
+    afterIps: left,
+    /** each invoice or rent the rest goes to, and what is still to pay on it */
+    credited,
+    leftover,
+  };
+}
+
+/** "October 2027" for a calendar month, else "1 Oct 2027 – 15 Oct 2027" */
+export function periodName(start: string, end: string) {
+  const d = (s: string) => new Date(`${s}T00:00:00Z`);
+  const a = d(start);
+  const b = d(end);
+  const lastDay = new Date(Date.UTC(a.getUTCFullYear(), a.getUTCMonth() + 1, 0)).getUTCDate();
+  if (a.getUTCDate() === 1 && b.getUTCFullYear() === a.getUTCFullYear() && b.getUTCMonth() === a.getUTCMonth() && b.getUTCDate() === lastDay)
+    return a.toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+  const f = (x: Date) => x.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  return `${f(a)} – ${f(b)}`;
+}

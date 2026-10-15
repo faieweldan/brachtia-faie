@@ -259,7 +259,6 @@ async function settle(sb: any, residentId: string, ev: TenancyEvent) {
 /** the rent from the event's day: the steps, the rent terms, the scheduled RPs, and rent already billed */
 async function applyRent(sb: any, residentId: string, ev: TenancyEvent) {
   const rs = await import("@/lib/rent-schedule.server");
-  const { billedDifference, shiftDate } = await import("@/lib/rental-schedule");
   const saved = await rs.readRentSteps(sb, residentId, ev.tenancyId);
   const steps = saved.steps.filter((s) => s.id !== ev.eventId);
 
@@ -272,21 +271,7 @@ async function applyRent(sb: any, residentId: string, ev: TenancyEvent) {
       kind: (ev.flags.date === "renewal" ? "renewal" : ev.flags.room || ev.flags.occupancy ? "room" : "extension") as "room" | "renewal" | "extension",
     };
     steps.push(step);
-    // the days already billed at the old rent: billed RPs, and the advance months of the move-in invoice
-    const { data: billedRows } = await sb
-      .from("invoices")
-      .select("period_start, period_end")
-      .eq("tenancy_id", ev.tenancyId)
-      .eq("invoice_type", "rental")
-      .not("status", "in", "(scheduled,void)")
-      .gte("period_end", ev.date);
-    const spans = ((billedRows ?? []) as any[]).map((r) => ({ start: day(r.period_start), end: day(r.period_end) }));
-    const { data: sched } = await sb.from("rental_schedules").select("first_period_start").eq("tenancy_id", ev.tenancyId).maybeSingle();
-    const { data: ten } = await sb.from("tenancies").select("start_date").eq("id", ev.tenancyId).maybeSingle();
-    const firstRent = day(sched?.first_period_start);
-    if (firstRent && day(ten?.start_date) && ev.date < firstRent) spans.push({ start: day(ten?.start_date), end: shiftDate(firstRent, { days: -1 }) });
-    const diff = r2(spans.reduce((n, s) => n + billedDifference(s, step), 0));
-    const lastEnd = spans.map((s) => s.end).sort().at(-1) ?? "";
+    const { diff, lastEnd } = await billedRentDifference(sb, ev.tenancyId, step);
     if (diff > 0 && !ev.adjustment) {
       // never the billed RP itself: an RP adjustment for the difference (agreed 7 Oct 2026)
       const inv = await raiseAdjustment(sb, residentId, ev.tenancyId, {
@@ -318,6 +303,31 @@ async function applyRent(sb: any, residentId: string, ev: TenancyEvent) {
     if (error) throw new Error(error.message);
     await rs.syncScheduledRent(sb, ev.tenancyId);
   }
+}
+
+/**
+ * What a rent change does to rent already billed at the old rent - billed RPs,
+ * and the advance months of the move-in invoice: above 0 an RP adjustment,
+ * below 0 account credit. Read-only - settling and the review's preview use
+ * this one figure (15 Oct 2026).
+ */
+export async function billedRentDifference(sb: any, tenancyId: string, step: import("@/lib/rental-schedule").RentStep) {
+  const { billedDifference, shiftDate } = await import("@/lib/rental-schedule");
+  const { data: billedRows } = await sb
+    .from("invoices")
+    .select("period_start, period_end")
+    .eq("tenancy_id", tenancyId)
+    .eq("invoice_type", "rental")
+    .not("status", "in", "(scheduled,void)")
+    .gte("period_end", step.from);
+  const spans = ((billedRows ?? []) as any[]).map((r) => ({ start: day(r.period_start), end: day(r.period_end) }));
+  const { data: sched } = await sb.from("rental_schedules").select("first_period_start").eq("tenancy_id", tenancyId).maybeSingle();
+  const { data: ten } = await sb.from("tenancies").select("start_date").eq("id", tenancyId).maybeSingle();
+  const firstRent = day(sched?.first_period_start);
+  if (firstRent && day(ten?.start_date) && step.from < firstRent) spans.push({ start: day(ten?.start_date), end: shiftDate(firstRent, { days: -1 }) });
+  const diff = r2(spans.reduce((n, s) => n + billedDifference(s, step), 0));
+  const lastEnd = spans.map((s) => s.end).sort().at(-1) ?? "";
+  return { diff, lastEnd };
 }
 
 /** each document once: a new agreement, or a revised Schedule A / C; and the access card form */

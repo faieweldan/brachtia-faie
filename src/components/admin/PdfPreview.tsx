@@ -1,5 +1,5 @@
 import { useEffect, useState, type ComponentProps, type ReactNode } from "react";
-import { Check, ChevronDown, Download } from "lucide-react";
+import { Check, ChevronDown, Download, Eye } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -326,4 +326,28 @@ function PreviewBody({ url, title, fileName }: { url: string; title: string; fil
   // the window's own Download, at the top, is the one: an invoice's records the version sent
   if (/\.(jpe?g|png|webp|gif)$/i.test(fileName)) return <ImageViewer url={url} alt={title} fileName={fileName} fill hideDownload />;
   return <PdfPageViewer url={url} fileName={fileName} fill className="[&_a[download]]:hidden" />;
+}
+
+/**
+ * The eye beside a draft (Dani, 14-15 Oct 2026): the document Confirm will
+ * make, drawn from the figures the server handed over with it. A draft has no
+ * number, so it is not downloaded - and opening it saves nothing. Shared by the
+ * room-change review and Update Tenancy's Review.
+ */
+export function DraftEye({ what, build }: { what: string; build: () => Promise<string> }) {
+  return (
+    <PdfPreviewButton
+      size="icon"
+      variant="ghost"
+      className="size-7 shrink-0"
+      aria-label={`Preview the ${what}`}
+      title={`${what[0]!.toUpperCase()}${what.slice(1)} · draft`}
+      fileName="Brachtia-draft.pdf"
+      downloadable={false}
+      downloadHint="Draft - made when you confirm"
+      build={build}
+    >
+      <Eye className="size-4" />
+    </PdfPreviewButton>
+  );
 }

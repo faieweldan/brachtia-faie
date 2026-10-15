@@ -2,12 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
-import { Eye } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dropdown, StaffPicker } from "@/components/admin/Dropdown";
-import { PdfPreviewButton } from "@/components/admin/PdfPreview";
+import { DraftEye } from "@/components/admin/PdfPreview";
 import { changeRoomBeforeStart, changeStayDatesBeforeStart, previewRoomChange } from "@/lib/admin.functions";
 import { fmtDate, money } from "@/lib/ops-store";
 import { ROOM_CHANGE_REASONS, STAY_DATE_REASONS, creditPartLabel } from "@/lib/room-change";
@@ -166,21 +164,7 @@ export function RoomChangeReview({
    * built from the same figures as the rows beside it - the server handed both
    * over in one answer. A draft has no number, so it is not downloaded.
    */
-  const eye = (what: string, build: () => Promise<string>) => (
-    <PdfPreviewButton
-      size="icon"
-      variant="ghost"
-      className="size-7 shrink-0"
-      aria-label={`Preview the ${what}`}
-      title={`${what[0]!.toUpperCase()}${what.slice(1)} · draft`}
-      fileName="Brachtia-draft.pdf"
-      downloadable={false}
-      downloadHint="Draft - made when you confirm"
-      build={build}
-    >
-      <Eye className="size-4" />
-    </PdfPreviewButton>
-  );
+  const eye = (what: string, build: () => Promise<string>) => <DraftEye what={what} build={build} />;
   const invoiceEye = (doc: import("@/lib/invoice-pdf").InvoiceDoc, what: string) =>
     eye(what, async () => (await import("@/lib/invoice-pdf")).invoicePdfUrl(doc));
   /** one figure to a line, the amount on the right */

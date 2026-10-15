@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/date-input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { costBreakdown, getProperty } from "@/data/properties";
+import { costBreakdown, formatRM, getProperty } from "@/data/properties";
 import { allBeds, fmtDate, money, unitAccepts, unitGender, type BedRow, type Resident, type Unit } from "@/lib/ops-store";
 import { GenderMark } from "@/components/admin/GenderMark";
 import { bedRent, sellsSingle, type SiteRoomType } from "@/lib/room-types";
@@ -38,7 +38,8 @@ import { klToday } from "@/lib/kl-date";
 import { stayLength } from "@/lib/stay-length";
 import { dayBefore, placementConflict, soldBedLabel, soldOccupancy } from "@/lib/placement";
 import { rentForDays, shiftDate } from "@/lib/rental-schedule";
-import { applyTenancyChange, getTenancyChangeBasis } from "@/lib/tenancy-change.functions";
+import { applyTenancyChange, getTenancyChangeBasis, previewTenancyChange } from "@/lib/tenancy-change.functions";
+import { CreditOutcome, EventMoney } from "@/components/admin/TenancyChangeMoney";
 
 /**
  * Update Tenancy (Dani, 3 Oct 2026; four steps since the 7 Oct review):
@@ -331,14 +332,14 @@ export function UpdateTenancyDialog({
   const dateWord = flags.date === "renewal" ? "Renewal" : flags.date === "extension" ? "Extension" : "";
   const action = dateWord && moved ? `Initiate ${dateWord} + Room Change` : dateWord ? `Initiate ${dateWord}` : "Initiate Room Change";
 
-  async function confirm() {
-    if (!basis.data?.tenancy) return;
-    setBusy(true);
-    try {
-      const res = await applyTenancyChange({
-        data: {
-          residentId,
+  /*
+   * The request, as Confirm sends it and the money preview reads it (15 Oct
+   * 2026) - one object, so Review shows the figures Confirm will save.
+   */
+  const request = basis.data?.tenancy
+    ? {
           tenancyId: basis.data.tenancy.id,
+          residentId,
           change: {
             oldUnitId: placed?.unit.id ?? "",
             newUnitId: target?.unit.id ?? placed?.unit.id ?? "",
@@ -350,7 +351,6 @@ export function UpdateTenancyDialog({
             newEnd: end,
           },
           moveOn: moved ? effectiveMove : "",
-          approvedBy,
           moveTo: moved && target ? { bedId: target.bed.id, roomId: target.room.id, unitId: target.unit.id, occupancy: occOf(target), letWhole: targetWhole } : null,
           events: events.map((e) => ({
             date: e.date,
@@ -369,7 +369,23 @@ export function UpdateTenancyDialog({
             // what the screen showed; the IP reads the bed itself on the server (invoicePlace)
             occupancy: e.bed ? occOf(e.bed) : occ,
           })),
-        },
+        }
+    : null;
+  const requestKey = request ? JSON.stringify(request) : "";
+  // the money preview, worked out by the server - read-only: it saves nothing
+  const preview = useQuery({
+    queryKey: ["tenancy-change-preview", requestKey],
+    enabled: open && step >= 3 && !!request && events.length > 0 && !stop,
+    queryFn: () => previewTenancyChange({ data: request! }),
+    staleTime: 0,
+  });
+
+  async function confirm() {
+    if (!request) return;
+    setBusy(true);
+    try {
+      const res = await applyTenancyChange({
+        data: { ...request, approvedBy, ...(preview.data?.key ? { previewKey: preview.data.key } : {}) },
       });
       await onApplied();
       toast.success(res.events.length > 1 ? "2 events scheduled" : "Tenancy change scheduled", {
@@ -551,6 +567,15 @@ export function UpdateTenancyDialog({
                 <EventCard
                   key={e.i}
                   e={e}
+                  money={
+                    preview.data ? (
+                      <EventMoney preview={preview.data} index={e.i} today={today} />
+                    ) : preview.isError ? (
+                      <p className="text-xs text-amber-700">{preview.error instanceof Error ? preview.error.message : "The figures could not be worked out."}</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Working out the figures…</p>
+                    )
+                  }
                   dates={{ start: tenancy.start, oldEnd }}
                   numbered={events.length > 1}
                   today={today}
@@ -564,6 +589,7 @@ export function UpdateTenancyDialog({
                   position={basis.data ? { cash: basis.data.heldCash, waived: basis.data.waivedHeld } : null}
                 />
               ))}
+              {preview.data ? <CreditOutcome preview={preview.data} /> : null}
               {basis.data && !basis.data.hasSchedule ? <p className="text-xs text-amber-700">Set up the rent schedule on Payments first.</p> : null}
             </div>
           ) : null}
@@ -576,7 +602,12 @@ export function UpdateTenancyDialog({
                     <span>
                       <span className="font-medium">{fmtDate(e.date)}</span> · {e.name}
                     </span>
-                    <span className="tabular-nums text-muted-foreground">IP {e.ip.total > 0 ? money(e.ip.payable) : "none"}</span>
+                    <span className="tabular-nums text-muted-foreground">
+                      {(() => {
+                        const due = preview.data?.events[e.i]?.ip.balanceDue;
+                        return due == null ? "…" : due > 0 ? `Payment required ${formatRM(due)}` : "No payment required";
+                      })()}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -634,7 +665,7 @@ export function UpdateTenancyDialog({
               Next <ArrowRight className="ml-1 size-4" />
             </Button>
           ) : (
-            <Button disabled={busy || !!openEvents.length || !events.length || !approvedBy} onClick={() => void confirm()}>
+            <Button disabled={busy || !!openEvents.length || !events.length || !approvedBy || !preview.data} onClick={() => void confirm()}>
               {busy ? "Saving…" : action}
             </Button>
           )}
@@ -692,6 +723,7 @@ function ChoiceCard({ icon: Icon, title, now, on, onToggle }: { icon: typeof Bed
  */
 function EventCard({
   e,
+  money: moneyPreview,
   dates,
   numbered,
   today,
@@ -706,6 +738,8 @@ function EventCard({
 }: {
   position: { cash: Record<string, number>; waived: Record<string, number> } | null;
   e: PricedEvent;
+  /** the server's money preview for this event (TenancyChangeMoney) */
+  money: React.ReactNode;
   /** the tenancy as it stands - what a date change is measured from */
   dates: { start: string; oldEnd: string };
   numbered: boolean;
@@ -752,17 +786,10 @@ function EventCard({
           />
         ) : null}
         <Row label="Rental" value={Math.abs(e.rent - e.rentBefore) > 0.005 ? `${money(e.rentBefore)} → ${money(e.rent)} a month` : `${money(e.rent)} a month, unchanged`} />
-        <Row
-          label="IP payable"
-          value={
-            e.ip.total > 0
-              ? `${money(e.ip.payable)}${e.ip.creditApplied ? ` (after ${money(e.ip.creditApplied)} account credit)` : ""} · ${e.billOn <= today ? "billed today" : `billed ${fmtDate(e.billOn)}`}`
-              : "None"
-          }
-          strong
-        />
         <Row label="Documents" value={e.docs.join(", ") || "None"} />
       </dl>
+      {/* the money, from the server - the figures Confirm saves */}
+      <div className="border-t border-border px-4 py-3">{moneyPreview}</div>
       <div className="flex gap-1 border-t border-border px-2 py-1">
         {(["calc", "adjust"] as const).map((k) => (
           <Button key={k} size="sm" variant="ghost" className="text-xs" onClick={() => setShow(show === k ? "" : k)}>

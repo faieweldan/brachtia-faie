@@ -169,8 +169,12 @@ const changeRequest = z.object({
     .max(2),
   /** who approved the change - required, as for a cancellation (Dani, 14 Oct 2026) */
   approvedBy: z.string().min(1).max(80),
+  /** the money preview's key - Confirm is refused when the figures moved since (15 Oct 2026) */
+  previewKey: z.string().max(40).optional(),
 });
 export type TenancyChangeRequest = z.infer<typeof changeRequest>;
+const planRequest = changeRequest.omit({ approvedBy: true, previewKey: true });
+type PlanRequest = z.infer<typeof planRequest>;
 
 export const applyTenancyChange = createServerFn({ method: "POST" })
   .inputValidator((d) => changeRequest.parse(d))
@@ -189,13 +193,16 @@ export const applyTenancyChange = createServerFn({ method: "POST" })
  * Before, the documents were found out only once the IP was paid, and the
  * request had made its invoice, credit and room hold by then.
  */
-export async function applyTenancyChangeWith(sb: any, data: TenancyChangeRequest) {
+/**
+ * Part 1 of a change - every check and every read, nothing written: the plan,
+ * the tenancy's official end, the documents each event needs, the rent in
+ * force, the deposits held, and each event priced. Confirm runs it, and so does
+ * the review's money preview, so both show and save one set of figures.
+ */
+async function planChangeWith(sb: any, data: PlanRequest) {
   const T = await import("@/lib/tenancy-change");
   const E = await import("@/lib/tenancy-events.server");
   const flags = T.changeFlags(data.change);
-  // who decided it - a staff member, the same list a cancellation is approved from
-  const { STAFF } = await import("@/data/form-options");
-  if (!STAFF.includes(data.approvedBy)) throw new Error("Choose who approved the change.");
   if (data.change.newEnd < data.change.oldEnd)
     throw new Error("A shorter tenancy is a checkout - Early termination.");
   if (!T.anyChange(flags)) throw new Error("Nothing has changed.");
@@ -247,15 +254,12 @@ export async function applyTenancyChangeWith(sb: any, data: TenancyChangeRequest
    * is held before it (the card deposit is carried over), the IP - deposit
    * differences and the fixed fees not waived - and the rent before and after.
    */
-  const { addCredit, applyAccountCredit } = await import("@/lib/account-credit.server");
   const { shiftDate } = await import("@/lib/rental-schedule");
   // the rent in force the day before the first event: the rent terms with their changes
   let rent = (
     await rentInForce(sb, data.residentId, data.tenancyId, shiftDate(plan[0]!.date, { days: -1 }))
   ).rent;
   let heldDeposits = await heldNow(sb, data.residentId);
-  const requestId = crypto.randomUUID().slice(0, 8);
-  const allowances = (await readJson<Allowance[]>(sb, allowancePath(data.residentId))) ?? [];
   const priced = plan.map((p, i) => {
     const e = data.events[i]!;
     const d = T.eventDeposits(
@@ -281,6 +285,24 @@ export async function applyTenancyChangeWith(sb: any, data: TenancyChangeRequest
       rent,
     };
   });
+
+  return { T, E, flags, today, finalEnd, plan, documents, priced };
+}
+
+export async function applyTenancyChangeWith(sb: any, data: TenancyChangeRequest) {
+  // who decided it - a staff member, the same list a cancellation is approved from
+  const { STAFF } = await import("@/data/form-options");
+  if (!STAFF.includes(data.approvedBy)) throw new Error("Choose who approved the change.");
+  const planned = await planChangeWith(sb, data);
+  const { T, E, flags, today, finalEnd, plan, documents, priced } = planned;
+  void today;
+  void plan;
+  // the review showed figures: they must still be the figures (15 Oct 2026)
+  if (data.previewKey && (await previewOf(sb, data, planned)).key !== data.previewKey)
+    throw new Error("The figures changed while the review was open - go back to Review and check them again.");
+  const { addCredit, applyAccountCredit } = await import("@/lib/account-credit.server");
+  const requestId = crypto.randomUUID().slice(0, 8);
+  const allowances = (await readJson<Allowance[]>(sb, allowancePath(data.residentId))) ?? [];
 
   /*
    * The rooms this change needs, held for the resident from their dates
@@ -448,6 +470,225 @@ export async function applyTenancyChangeWith(sb: any, data: TenancyChangeRequest
         await E.releaseChangeHold(sb, data.residentId, b).catch(() => undefined);
     throw err;
   }
+}
+
+/**
+ * The money preview on Review (Dani, 15 Oct 2026) - read-only: opening it, or
+ * its eye, writes nothing. Built from the same plan Confirm saves
+ * (planChangeWith), so each figure on the screen is the figure that is saved:
+ *   - each event's Initial Payment invoice: its lines, the account credit
+ *     applied on confirm and the balance due, as a draft invoice
+ *   - the account credit: what is given, what each IP takes, then the
+ *     invoices still owing and the rent still to bill, oldest first - those
+ *     rent invoices worked out at the new rent (plannedRent), as they will bill
+ *   - what no invoice can take: a draft credit note (Credit refund), issued
+ *     only later through Payables
+ * Its `key` is sent back with Confirm, which is refused if the figures moved.
+ */
+export const previewTenancyChange = createServerFn({ method: "POST" })
+  .inputValidator((d) => planRequest.parse(d))
+  .handler(async ({ data }) => {
+    const sb = await admin();
+    return previewOf(sb, data, await planChangeWith(sb, data));
+  });
+
+export async function previewTenancyChangeWith(sb: any, data: PlanRequest) {
+  return previewOf(sb, data, await planChangeWith(sb, data));
+}
+
+async function previewOf(sb: any, data: PlanRequest, planned: Awaited<ReturnType<typeof planChangeWith>>) {
+  const { T, E, today, priced } = planned;
+  const { readRentSteps, plannedRent } = await import("@/lib/rent-schedule.server");
+  const { billOnFor } = await import("@/lib/rental-schedule");
+  const { creditBalance } = await import("@/lib/account-credit.server");
+  const { invoiceTitle } = await import("@/lib/invoice-category");
+  const L = T.MONEY_LABEL;
+
+  // the rent changes this request brings, after the ones already saved
+  const saved = await readRentSteps(sb, data.residentId, data.tenancyId);
+  const steps = [...saved.steps];
+  const events: import("@/lib/tenancy-change").OutlookEvent[] = [];
+  for (const x of priced) {
+    let rentCredit: { label: string; amount: number } | null = null;
+    let adjustment: { label: string; amount: number } | null = null;
+    if (Math.abs(x.rent - x.rentBefore) > 0.005 && x.rent > 0) {
+      const step = {
+        id: x.eventId,
+        from: x.p.date,
+        oldRent: x.rentBefore,
+        newRent: x.rent,
+        kind: (x.p.flags.date === "renewal" ? "renewal" : T.isMove(x.p.flags) ? "room" : "extension") as "room" | "renewal" | "extension",
+      };
+      steps.push(step);
+      const b = await E.billedRentDifference(sb, data.tenancyId, step);
+      const range = b.lastEnd ? T.periodName(x.p.date, b.lastEnd) : "";
+      if (b.diff < -0.005) rentCredit = { label: L.billedRentCredit(range), amount: -b.diff };
+      if (b.diff > 0.005) adjustment = { label: `RP adjustment, ${range}`, amount: b.diff };
+    }
+    events.push({
+      name: x.name,
+      date: x.p.date,
+      ipTotal: x.ip.total,
+      depositCredit: x.d.reclassified.map((r) => ({ label: r.label, amount: r.amount })),
+      rentCredit,
+      adjustment,
+    });
+  }
+
+  // what the credit can go to: invoices billed and still owing, then the rent still to bill
+  const targets: import("@/lib/tenancy-change").OutlookTarget[] = [];
+  const { data: open } = await sb
+    .from("invoices")
+    .select("id, number, invoice_type, notes, total, invoice_date")
+    .eq("resident_id", data.residentId)
+    .not("status", "in", "(void,paid,scheduled)");
+  const openRows = (open ?? []) as any[];
+  const { data: pays } = openRows.length ? await sb.from("payments").select("invoice_id, amount").in("invoice_id", openRows.map((r) => r.id)) : { data: [] };
+  const paid = new Map<string, number>();
+  for (const p of (pays ?? []) as any[]) paid.set(p.invoice_id, (paid.get(p.invoice_id) ?? 0) + Number(p.amount || 0));
+  for (const r of openRows)
+    targets.push({
+      id: String(r.id),
+      label: invoiceTitle({ number: String(r.number ?? ""), type: String(r.invoice_type ?? "") }),
+      date: String(r.invoice_date ?? "").slice(0, 10),
+      owing: r2(Number(r.total || 0) - (paid.get(r.id) ?? 0)),
+      kind: "invoice",
+    });
+  events.forEach((e, i) => {
+    if (e.adjustment) targets.push({ id: `adjustment-${i}`, label: e.adjustment.label, date: e.date < today ? today : e.date, owing: e.adjustment.amount, kind: "invoice" });
+  });
+  const finalRent = priced.at(-1)?.rent ?? 0;
+  const lastEnd = priced.map((x) => x.e.periodEnd).sort().at(-1) ?? "";
+  const rent = await plannedRent(sb, data.tenancyId, {
+    steps,
+    ...(finalRent > 0 ? { monthlyRent: finalRent } : {}),
+    ...(lastEnd ? { tenancyEnd: lastEnd > data.change.oldEnd ? lastEnd : data.change.oldEnd } : {}),
+  });
+  const months: { id: string; start: string; end: string; amount: number }[] = (rent?.made ?? []).map((m) => ({ id: String(m.id), start: m.period.start, end: m.period.end, amount: m.period.amount }));
+  for (const k of (rent?.kept ?? []) as any[])
+    months.push({ id: String(k.id), start: String(k.period_start ?? "").slice(0, 10), end: String(k.period_end ?? "").slice(0, 10), amount: Number(k.total || 0) });
+  months.sort((a, b) => a.start.localeCompare(b.start));
+  for (const m of months) targets.push({ id: m.id, label: `${L.rent}, ${T.periodName(m.start, m.end)}`, date: billOnFor(m.start), owing: m.amount, kind: "rent" });
+
+  const balance = (await creditBalance(sb, data.residentId)).balance;
+  const outlook = T.changeCreditOutlook(balance, events, targets);
+
+  // the rent after the last month the credit reaches: "November 2027 onward"
+  const lastCredited = outlook.credited.filter((c) => c.kind === "rent").at(-1);
+  const firstAfter = (() => {
+    const from = lastCredited ? months.findIndex((m) => m.id === lastCredited.id) + 1 : months.findIndex((m) => m.end >= (priced[0]?.p.date ?? ""));
+    return from >= 0 ? months[from] : undefined;
+  })();
+  const onward = firstAfter && finalRent > 0 ? { from: new Date(`${firstAfter.start}T00:00:00Z`).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" }), rent: finalRent } : null;
+
+  // the drafts, built as Confirm and Payables build the real ones
+  const { invoiceDocFromRow } = await import("@/lib/invoice-doc");
+  const { ipDifferenceNote, CREDIT_NOTE_CATEGORIES } = await import("@/lib/invoice-category");
+  const DRAFT = "DRAFT";
+  const shown = await Promise.all(
+    priced.map(async (x, i) => {
+      const o = outlook.events[i]!;
+      const toBed = data.moveTo && data.moveOn && data.moveOn <= x.p.date ? data.moveTo : null;
+      const invoice =
+        x.ip.total > 0
+          ? {
+              ...invoiceDocFromRow(
+                {
+                  ...(await E.ipInvoiceRow(sb, data.residentId, x.ip.lines, {
+                    billOn: x.billOn,
+                    note: ipDifferenceNote(x.name, x.p.date),
+                    tenancyEnd: x.e.periodEnd,
+                    rent: x.rent,
+                    ...(toBed ? { bedId: toBed.bedId, letWhole: !!toBed.letWhole } : {}),
+                  })),
+                  number: DRAFT,
+                },
+                x.ip.lines,
+              ),
+              kind: "initial" as const,
+              ...(o.creditApplied > 0 ? { credit_planned: o.creditApplied } : {}),
+            }
+          : null;
+      return {
+        name: x.name,
+        date: x.p.date,
+        billOn: x.billOn,
+        rentBefore: x.rentBefore,
+        rent: x.rent,
+        ip: {
+          lines: x.ip.lines.map((l) => ({ label: l.label, amount: l.amount })),
+          total: o.ipTotal,
+          creditApplied: o.creditApplied,
+          balanceDue: o.balanceDue,
+          fromEvents: o.fromEvents.map((n) => ({ n: n + 1, name: priced[n]!.name, date: priced[n]!.p.date })),
+        },
+        invoice,
+        adjustment: events[i]!.adjustment,
+      };
+    }),
+  );
+
+  let creditNote: import("@/lib/credit-note-pdf").CreditNoteDoc | null = null;
+  if (outlook.leftover > 0.005) {
+    const { residentParticulars } = await import("@/lib/checkout.server");
+    const who = await residentParticulars(sb, data.residentId);
+    const asAt = new Date(`${today}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+    creditNote = {
+      number: DRAFT,
+      subtitle: CREDIT_NOTE_CATEGORIES.refund.label,
+      date: today,
+      resident: {
+        name: who.name,
+        code: who.code,
+        residence: [who.residence, who.unit].filter(Boolean).join(" · "),
+        room: who.room,
+        tenancyStart: who.tenancyStart,
+        tenancyEnd: who.tenancyEnd,
+      },
+      heading: L.accountCredit.toUpperCase(),
+      lines: [
+        ...outlook.given.map((g) => ({ label: g.label, amount: g.amount })),
+        ...shown.filter((e) => e.ip.creditApplied > 0).map((e) => ({ label: L.appliedTo(`${L.initialPayment} - ${e.name}`), amount: -e.ip.creditApplied })),
+        ...outlook.credited.map((c) => ({ label: L.appliedTo(c.label), amount: -c.credit })),
+      ],
+      totalLabel: `Credit not applicable to any invoice as at ${asAt}`,
+      resultLabel: "REFUND TO THE RESIDENT",
+      notes: `Draft. To be issued through Payables. The amount is confirmed on the date of issue.`,
+    };
+  }
+
+  // what Confirm agrees to: these figures, from this credit and these invoices
+  const key = hashKey(
+    JSON.stringify({
+      e: priced.map((x) => [x.p.date, x.rentBefore, x.rent, x.ip.lines, x.d.reclassified.map((r) => [r.key, r.amount])]),
+      balance,
+      t: targets.map((t) => [t.kind === "rent" ? t.date : t.id, t.owing]),
+      left: outlook.leftover,
+    }),
+  );
+  return {
+    key,
+    asAt: today,
+    events: shown,
+    credit: {
+      given: outlook.given.map((g) => ({ label: g.label, amount: g.amount, event: g.event })),
+      totalGiven: outlook.totalGiven,
+      credited: outlook.credited.map((c) => ({ label: c.label, kind: c.kind, owing: c.owing, credit: c.credit, after: c.after })),
+      leftover: outlook.leftover,
+      onward,
+    },
+    creditNote,
+  };
+}
+
+/** a short fingerprint of the figures - FNV-1a */
+function hashKey(text: string) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(36);
 }
 
 /** The resident's Update Tenancy events, for the Tenancy tab - moved on first, so what shows is current. */
