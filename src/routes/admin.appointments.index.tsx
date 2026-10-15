@@ -59,6 +59,7 @@ import {
 } from "@/components/ui/dialog";
 import { DateInput } from "@/components/ui/date-input";
 import { cleanPhone } from "@/lib/reference-data";
+import { personFrom } from "@/lib/person-fields";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -473,29 +474,27 @@ function AppointmentsPage() {
   }
 
   /*
-   * Linked to a resident or a booking: the person is that resident or that
-   * booking's student, so their details are filled from it - nobody types a
-   * name the system already has (Dani, 10 Oct 2026).
+   * Linked to a resident or a booking: the person IS that record (Dani, 10 and
+   * 15 Oct 2026) - every field it keeps is filled from it (personFrom, one list
+   * for the booking, the profile and here), and Save writes back to it on the
+   * server. It used to copy six fields once, so the rest showed "—".
    */
   function personFromResident(r: (typeof ops.residents)[number]) {
-    return {
-      full_name: r.fullName || "",
-      email: r.email || "",
-      phone: r.mobile || "",
-      university: r.university || "",
-      nationality: r.nationality || "",
-      gender: r.gender || "",
-    };
+    return personFrom("resident", {
+      full_name: r.fullName,
+      email: r.email,
+      mobile: r.mobile,
+      university: r.university,
+      nationality: r.nationality,
+      gender: r.gender,
+      current_status: r.currentStatus,
+      company: r.company,
+      occupation: r.occupation,
+      referral_source: r.referralSource,
+    });
   }
   function personFromBooking(e: any) {
-    return {
-      full_name: String(e.full_name ?? ""),
-      email: String(e.email ?? ""),
-      phone: String(e.phone ?? ""),
-      university: String(e.university ?? ""),
-      nationality: String(e.nationality ?? ""),
-      gender: String(e.gender ?? ""),
-    };
+    return personFrom("booking", e);
   }
   function linkTo(kind: "booking" | "resident", id: string) {
     setForm((prev) => {
@@ -961,6 +960,9 @@ function AppointmentsPage() {
               {(() => {
                 const linkedBooking = form.enquiry_id ? enquiryById.get(form.enquiry_id) : null;
                 const readOnly = Boolean(linkedBooking);
+                // the person is the linked resident's or booking's - edited here, saved to their record (Dani, 15 Oct 2026)
+                const personReadOnly = false;
+                const linkedWho = form.resident_id ? "resident's profile" : linkedBooking ? "booking" : "";
                 const stayMoveIn = form.move_in || linkedBooking?.move_in || "";
                 const stayMoveOut = form.move_out || linkedBooking?.move_out || "";
                 const staySharing = form.sharing_preference || linkedBooking?.occupancy || "";
@@ -1300,13 +1302,13 @@ function AppointmentsPage() {
 
                         <div
                           className={`flex items-start gap-2 rounded-lg px-3 py-2 text-xs ${
-                            readOnly ? "bg-brand-tint text-brand-deep" : "bg-sky-50 text-sky-800"
+                            linkedWho ? "bg-brand-tint text-brand-deep" : "bg-sky-50 text-sky-800"
                           }`}
                         >
                           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                           <span>
-                            {readOnly
-                              ? "This appointment is linked to a booking. Person and stay details are pulled from the booking and are read-only here."
+                            {linkedWho
+                              ? `Person details are the ${linkedWho}: saving here updates it.${readOnly ? " Stay details are the booking's - change them in the booking." : ""}`
                               : "Unlinked appointment. Person and stay details can be edited here."}
                           </span>
                         </div>
@@ -1325,7 +1327,7 @@ function AppointmentsPage() {
                           <User className="h-4 w-4 text-muted-foreground" />
                           Person
                         </span>
-                        {readOnly ? (
+                        {personReadOnly ? (
                           <Link
                             to="/admin/bookings/$id"
                             params={{ id: form.enquiry_id }}
@@ -1336,7 +1338,7 @@ function AppointmentsPage() {
                         ) : null}
                       </header>
                       <div className="space-y-4 p-4">
-                        {readOnly ? (
+                        {personReadOnly ? (
                           <div className="flex items-center gap-3">
                             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-tint text-sm font-semibold text-brand-deep">
                               {initials}
@@ -1348,7 +1350,7 @@ function AppointmentsPage() {
                         ) : null}
                         <div className="grid gap-3 sm:grid-cols-2">
                           <Field label="Full name">
-                            {readOnly ? (
+                            {personReadOnly ? (
                               <ReadValue>{form.full_name}</ReadValue>
                             ) : (
                               <Input
@@ -1358,7 +1360,7 @@ function AppointmentsPage() {
                             )}
                           </Field>
                           <Field label="Mobile Number">
-                            {readOnly ? (
+                            {personReadOnly ? (
                               <ReadValue icon={<Phone className="h-3.5 w-3.5" />}>
                                 {formatPhone(form.phone)}
                               </ReadValue>
@@ -1371,7 +1373,7 @@ function AppointmentsPage() {
                             )}
                           </Field>
                           <Field label="Email">
-                            {readOnly ? (
+                            {personReadOnly ? (
                               <ReadValue icon={<Mail className="h-3.5 w-3.5" />}>
                                 {form.email}
                               </ReadValue>
@@ -1390,7 +1392,7 @@ function AppointmentsPage() {
                             these itself, so the booking fills the gap.
                           */}
                           <Field label="Studying or working">
-                            {readOnly ? (
+                            {personReadOnly ? (
                               <ReadValue>
                                 {personStatus === "employed"
                                   ? "Employed / Self-employed"
@@ -1413,7 +1415,7 @@ function AppointmentsPage() {
                           {personStatus === "employed" ? (
                             <>
                               <Field label="Occupation / Job title">
-                                {readOnly ? (
+                                {personReadOnly ? (
                                   <ReadValue>{personOccupation}</ReadValue>
                                 ) : (
                                   <Input
@@ -1423,7 +1425,7 @@ function AppointmentsPage() {
                                 )}
                               </Field>
                               <Field label="Company / Organisation">
-                                {readOnly ? (
+                                {personReadOnly ? (
                                   // an employed person with no company ticked self-employed
                                   <ReadValue>{personCompany || "Self-employed"}</ReadValue>
                                 ) : (
@@ -1445,7 +1447,7 @@ function AppointmentsPage() {
                                 It now shows as Other, with the name in a box
                                 under it - the same way the student's form asks.
                               */}
-                              {readOnly ? (
+                              {personReadOnly ? (
                                 <ReadValue icon={<GraduationCap className="h-3.5 w-3.5" />}>
                                   {UNIVERSITIES.find((u) => u.value === form.university && u.value !== "Other")
                                     ?.label ?? (form.university === "Other" ? "" : form.university)}
@@ -1483,7 +1485,7 @@ function AppointmentsPage() {
                               )}
                             </Field>
                             <Field label="Intake">
-                              {readOnly ? (
+                              {personReadOnly ? (
                                 <ReadValue>{form.intake}</ReadValue>
                               ) : (
                                 <Input
@@ -1496,7 +1498,7 @@ function AppointmentsPage() {
                             </>
                           )}
                           <Field label="Nationality">
-                            {readOnly ? (
+                            {personReadOnly ? (
                               <ReadValue>{form.nationality}</ReadValue>
                             ) : (
                               <Input
@@ -1506,7 +1508,7 @@ function AppointmentsPage() {
                             )}
                           </Field>
                           <Field label="Gender">
-                            {readOnly ? (
+                            {personReadOnly ? (
                               <ReadValue>{form.gender}</ReadValue>
                             ) : (
                               <Dropdown
@@ -1535,7 +1537,7 @@ function AppointmentsPage() {
                       </header>
                       <div className="grid gap-3 p-4 sm:grid-cols-2">
                         <Field label="Availability enquiry?">
-                          {readOnly ? (
+                          {personReadOnly ? (
                             <ReadValue>
                               {ENQUIRY_STATUS.find((s) => s.value === form.enquiry_status)?.label ??
                                 form.enquiry_status}
@@ -1556,7 +1558,7 @@ function AppointmentsPage() {
                           )}
                         </Field>
                         <Field label="How did you hear about us?">
-                          {readOnly ? (
+                          {personReadOnly ? (
                             <ReadValue>
                               {[form.heard_about, form.heard_about_other]
                                 .filter(Boolean)
@@ -1577,7 +1579,7 @@ function AppointmentsPage() {
                             </Dropdown>
                           )}
                         </Field>
-                        {!readOnly && form.heard_about === "Other" ? (
+                        {!personReadOnly && form.heard_about === "Other" ? (
                           <Field label="Tell us more">
                             <Input
                               value={form.heard_about_other}

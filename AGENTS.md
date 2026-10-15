@@ -44,6 +44,7 @@ and what is still duplicated: `docs/HANDOFF-REUSE.md`.
 | A second agreement an Update Tenancy change made - made again in place, same number; never reset away while the change stands | `regenerateEventAgreement` (`tenancy-events.server.ts`), `renewAgreementWith({ agreementId })`, `clearPackDocuments` (`tenancy-docs.functions.ts`) | `tests/update-tenancy-safety.test.ts` |
 | A credit note's PDF look (checkout statement, room-change credit note) | `creditNoteFrame`, `creditNotePdf` (`src/lib/credit-note-pdf.ts`) | - |
 | Describe a placement (single / twin, bed) - as sold, not as built | `soldOccupancy`, `soldBedLabel` (`src/lib/placement.ts`); documents read `bedSurroundings` (`placement.server.ts`) | `tests/placement.test.ts` |
+| A person's details on an appointment, a booking and a profile - which field lives where | `PERSON_FIELDS`, `personFrom`, `personPatch`, `personOwner` (`src/lib/person-fields.ts`): a linked appointment reads its resident / booking and saves to it (`listAppointments`, `saveAppointment`) | `tests/person-fields.test.ts` |
 | The place an invoice names - residence, "Unit A-07-03 · Room B", occupancy as sold; and how it prints | `invoicePlace`, `residentInvoicePlace` (`placement.server.ts`) for every row written (rent rows, IPs, room change); `occupancyKey`, `occupancyPrinted` (`src/lib/occupancy.ts`) to read and print | `tests/occupancy.test.ts` |
 | Money in a tenancy document (no amount is 0.00) | `money` (`src/lib/template-fields.ts`) | `tests/template-money.test.ts` |
 

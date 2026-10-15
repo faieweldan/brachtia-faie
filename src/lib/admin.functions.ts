@@ -598,8 +598,23 @@ export const listAppointments = createServerFn({ method: "GET" })
       supabase.from("blocked_dates").select("*").order("blocked_on"),
     ]);
     if (appts.error) throw new Error(appts.error.message);
+    // a linked appointment's person is read from their record, every time (personFrom)
+    const { personFrom, personOwner } = await import("@/lib/person-fields");
+    const rows = (appts.data ?? []) as any[];
+    const ids = (owner: string) => [...new Set(rows.map(personOwner).filter((o) => o?.owner === owner).map((o) => o!.id))];
+    const [residentIds, bookingIds] = [ids("resident"), ids("booking")];
+    const [res, enq] = await Promise.all([
+      residentIds.length ? supabase.from("residents").select("*").in("id", residentIds) : { data: [] },
+      bookingIds.length ? supabase.from("enquiries").select("*").in("id", bookingIds) : { data: [] },
+    ]);
+    const byId = new Map<string, any>([...((res.data ?? []) as any[]), ...((enq.data ?? []) as any[])].map((r) => [String(r.id), r]));
+    const appointments = rows.map((a) => {
+      const o = personOwner(a);
+      const rec = o ? byId.get(o.id) : null;
+      return rec ? { ...a, ...personFrom(o!.owner, rec) } : a;
+    });
     return {
-      appointments: appts.data ?? [],
+      appointments,
       types: types.data ?? [],
       rules: rules.data ?? [],
       blocked: blocked.data ?? [],
@@ -629,6 +644,26 @@ export const saveAppointment = createServerFn({ method: "POST" })
         const res = await activateAtCheckIn(supabase, String(appt.resident_id));
         if (!res.ok) throw new Error(res.error);
       }
+    }
+    /*
+     * Linked to a resident or a booking: the person is theirs (Dani, 15 Oct
+     * 2026). Their record is changed first, then the appointment keeps what the
+     * record now says - read back, not the form's copy - so the lists that read
+     * an appointment's name (work queue, overview) say the same.
+     */
+    const { personFrom, personOwner, personPatch } = await import("@/lib/person-fields");
+    const linked = personOwner(values);
+    if (linked) {
+      const table = linked.owner === "resident" ? "residents" : "enquiries";
+      const patch = personPatch(linked.owner, values);
+      if (linked.owner === "resident" && typeof patch["mobile"] === "string") patch["mobile"] = cleanPhone(patch["mobile"]);
+      if (linked.owner === "booking" && typeof patch["phone"] === "string") patch["phone"] = cleanPhone(patch["phone"]);
+      if (Object.keys(patch).length) {
+        const { error: pErr } = await supabase.from(table).update({ ...patch, updated_at: new Date().toISOString() } as any).eq("id", linked.id);
+        if (pErr) throw new Error(`Could not save the person's details: ${pErr.message}`);
+      }
+      const { data: rec } = await supabase.from(table).select("*").eq("id", linked.id).maybeSingle();
+      Object.assign(values, personFrom(linked.owner, rec));
     }
     const q = data.id
       ? supabase.from("appointments").update(values as any).eq("id", data.id)
