@@ -4,6 +4,7 @@ import { soldBedLabel } from "@/lib/placement";
 import { Dropdown, StaffPicker } from "@/components/admin/Dropdown";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getProfileReview, isPendingReview } from "@/lib/profile-link.functions";
 import { ExternalLink, Check, ChevronDown, ChevronRight, FileStack, Plus, RefreshCw, Stamp, Undo2, Upload } from "lucide-react";
 import { MIGRATED, MIGRATED_MEANING } from "@/lib/migration/import-plan";
 import { SigningMessageCard } from "@/components/admin/SigningMessageCard";
@@ -799,19 +800,31 @@ function AccessCardTable({
 function CreatePackButton({ residentId, disabled, missing, pct }: { residentId: string; disabled: boolean; missing: number; pct: number }) {
   const navigate = useNavigate();
   const [asking, setAsking] = useState(false);
+  // a submitted profile not yet reviewed is warned about too (Dani, 15 Oct 2026)
+  const { data: review } = useQuery({
+    queryKey: ["profile-review", residentId],
+    queryFn: () => getProfileReview({ data: { residentId } }),
+  });
+  const pending = isPendingReview(review);
   const go = () => void navigate({ to: "/admin/residents/$id/document-pack", params: { id: residentId } });
   return (
     <>
-      <Button size="sm" disabled={disabled} onClick={() => (missing ? setAsking(true) : go())}>
+      <Button size="sm" disabled={disabled} onClick={() => (missing || pending ? setAsking(true) : go())}>
         Create Document Pack
       </Button>
       <Dialog open={asking} onOpenChange={setAsking}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>The profile is not finished</DialogTitle>
+            <DialogTitle>{pending && !missing ? "The profile is not reviewed" : "The profile is not finished"}</DialogTitle>
             <DialogDescription>
-              {pct}% complete - {missing} {missing === 1 ? "field" : "fields"} still to fill in. The agreement is filled from the
-              profile, so anything missing is left blank on it. Continue anyway?
+              {missing ? (
+                <>
+                  {pct}% complete - {missing} {missing === 1 ? "field" : "fields"} still to fill in. The agreement is filled from the
+                  profile, so anything missing is left blank on it.{" "}
+                </>
+              ) : null}
+              {pending ? "The submitted profile is pending review. " : null}
+              Continue anyway?
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">

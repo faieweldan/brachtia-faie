@@ -132,6 +132,53 @@ export const revokeProfileLink = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/**
+ * Where the resident's submitted profile stands: the latest submitted link
+ * decides it. Pending review = submitted and not reviewed since.
+ */
+export const getProfileReview = createServerFn({ method: "POST" })
+  .inputValidator((data: { residentId: string }) => data)
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    const { data: link } = await supabase
+      .from("profile_links")
+      .select("id, submitted_at, reviewed_at")
+      .eq("resident_id", data.residentId)
+      .not("submitted_at", "is", null)
+      .order("submitted_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return {
+      submittedAt: (link?.submitted_at as string | null) ?? null,
+      reviewedAt: (link?.reviewed_at as string | null) ?? null,
+    };
+  });
+
+export const markProfileReviewed = createServerFn({ method: "POST" })
+  .inputValidator((data: { residentId: string }) => data)
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    const { data: link } = await supabase
+      .from("profile_links")
+      .select("id")
+      .eq("resident_id", data.residentId)
+      .not("submitted_at", "is", null)
+      .order("submitted_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!link) throw new Error("Nothing submitted to review.");
+    const { error } = await supabase
+      .from("profile_links")
+      .update({ reviewed_at: new Date().toISOString() } as any)
+      .eq("id", link.id);
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });
+
+/** pending review: submitted, and not reviewed since */
+export const isPendingReview = (r: { submittedAt: string | null; reviewedAt: string | null } | undefined) =>
+  !!r?.submittedAt && !r.reviewedAt;
+
 /* ---------------- student side ---------------- */
 
 export async function residentForToken(supabase: any, token: string) {
@@ -422,7 +469,8 @@ export const submitProfileByToken = createServerFn({ method: "POST" })
 
     await supabase
       .from("profile_links")
-      .update({ submitted_at: new Date().toISOString() } as any)
+      // changed answers are looked at again
+      .update({ submitted_at: new Date().toISOString(), reviewed_at: null } as any)
       .eq("id", found.link.id);
     return { ok: true as const };
   });

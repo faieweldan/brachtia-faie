@@ -23,6 +23,7 @@ import { refreshMoney } from "@/lib/billing-client";
 
 import { RELATIONSHIP_OPTIONS, idLabelFor } from "@/lib/reference-data";
 import { getDeclarationForResident } from "@/lib/declaration.functions";
+import { getProfileReview, isPendingReview, markProfileReviewed } from "@/lib/profile-link.functions";
 import {
   RESIDENT_GROUPS,
   RESIDENT_SECTIONS,
@@ -827,6 +828,7 @@ function ResidentProfilePage() {
                 {missing.length} field{missing.length === 1 ? "" : "s"} still to fill in
               </p>
             ) : null}
+            {!isNew && form.id ? <ProfileReview residentId={form.id} /> : null}
           </div>
           {tenancy ? (
             <Button size="sm" variant="outline" onClick={() => setTab("tenancy")}>
@@ -1334,5 +1336,42 @@ function CheckInLine({ residentId }: { residentId: string }) {
             : "Not chosen"}
       </span>
     </div>
+  );
+}
+
+/**
+ * A submitted profile is checked before the TA is made from it (Dani, 15 Oct
+ * 2026). Shown only once something is submitted; submitting again sets it back.
+ */
+function ProfileReview({ residentId }: { residentId: string }) {
+  const queryClient = useQueryClient();
+  const { data } = useQuery({
+    queryKey: ["profile-review", residentId],
+    queryFn: () => getProfileReview({ data: { residentId } }),
+  });
+  const [busy, setBusy] = useState(false);
+  if (!data?.submittedAt) return null;
+  async function mark() {
+    setBusy(true);
+    try {
+      await markProfileReviewed({ data: { residentId } });
+      await queryClient.invalidateQueries({ queryKey: ["profile-review", residentId] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return isPendingReview(data) ? (
+    <div className="mt-2 flex items-center gap-2">
+      <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+        Pending review
+      </span>
+      <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={() => void mark()}>
+        Mark reviewed
+      </Button>
+    </div>
+  ) : (
+    <p className="mt-2 text-xs text-muted-foreground">Reviewed {fmtDate(data.reviewedAt!.slice(0, 10))}</p>
   );
 }
