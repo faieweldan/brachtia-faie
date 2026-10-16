@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Dropdown } from "@/components/admin/Dropdown";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { AlertTriangle, ArrowLeft, Check, CheckCircle2, FlaskConical, PanelLeftClose, PanelLeftOpen, Pencil, Power, Trash2, Upload, X } from "lucide-react";
@@ -695,9 +696,8 @@ function TemplateWorkspace() {
                 </Button>
               ) : (
                 <>
-                  <select
+                  <Dropdown
                     value=""
-                    onMouseDown={() => editorRef.current?.focus()}
                     onChange={(e) => { if (e.target.value) insert(e.target.value); }}
                     className="h-8 rounded-md border border-input bg-background px-2 text-xs"
                   >
@@ -707,7 +707,7 @@ function TemplateWorkspace() {
                         {TEMPLATE_FIELDS.filter((f) => f.source === src).map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
                       </optgroup>
                     ))}
-                  </select>
+                  </Dropdown>
                   <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setPendingFile(null); }}>Cancel</Button>
                   <Button size="sm" disabled={busy} onClick={doSave}>Save as Draft</Button>
                 </>

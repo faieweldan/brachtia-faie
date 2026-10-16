@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Dropdown } from "@/components/admin/Dropdown";
 import { Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -134,7 +135,7 @@ export function LineItemsEditor<T extends EditableLine>({
                     />
                   )}
                   {kinds ? (
-                    <select
+                    <Dropdown
                       value={l.kind ?? ""}
                       aria-label="Type"
                       onChange={(e) => edit(i, { kind: e.target.value })}
@@ -145,7 +146,7 @@ export function LineItemsEditor<T extends EditableLine>({
                           {k.label}
                         </option>
                       ))}
-                    </select>
+                    </Dropdown>
                   ) : null}
                   {quantity ? (
                     <>

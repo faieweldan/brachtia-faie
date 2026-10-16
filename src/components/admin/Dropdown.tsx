@@ -30,7 +30,7 @@ const text = (n: ReactNode): string =>
           ? text(n.props.children)
           : "";
 
-function items(children: ReactNode): Item[] {
+export function items(children: ReactNode): Item[] {
   const out: Item[] = [];
   Children.forEach(children, (c) => {
     if (!isValidElement<{ value?: string | number; children?: ReactNode; disabled?: boolean }>(c)) return;

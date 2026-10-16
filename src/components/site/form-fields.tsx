@@ -1,5 +1,9 @@
 import CountryCombobox from "@/components/site/CountryCombobox";
+import { useState, type ReactNode } from "react";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { items } from "@/components/admin/Dropdown";
+import { cn } from "@/lib/utils";
 import { countryByIso, type Country } from "@/data/countries";
 import { joinPhone } from "@/lib/reference-data";
 
@@ -16,6 +20,74 @@ export function SectionLabel({ children }: { children: React.ReactNode }) {
     <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
       {children}
     </p>
+  );
+}
+
+/*
+ * The site's own dropdown in place of a plain <select> (Dani, 16 Oct 2026): a
+ * <select> opens the computer's grey list - a Mac sheet, a Windows box, a
+ * phone wheel. This one is drawn in the page. Same props and <option> children
+ * as a <select>, so a form moves across by changing the tag name; a hidden
+ * input keeps the value in the form for FormData.
+ */
+export function SiteSelect({
+  id,
+  name,
+  className,
+  value,
+  defaultValue,
+  onChange,
+  disabled,
+  children,
+  "data-invalid": invalid,
+  "aria-label": ariaLabel,
+}: {
+  id?: string;
+  name?: string;
+  className?: string;
+  value?: string;
+  defaultValue?: string;
+  onChange?: (e: { target: { value: string } }) => void;
+  disabled?: boolean;
+  children: ReactNode;
+  "data-invalid"?: string | undefined;
+  "aria-label"?: string;
+}) {
+  const [own, setOwn] = useState(defaultValue ?? "");
+  const v = value ?? own;
+  const list = items(children);
+  const placeholder = list.find((o) => o.value === "")?.label ?? "Select";
+  return (
+    <>
+      <Select
+        value={v}
+        {...(disabled ? { disabled } : {})}
+        onValueChange={(next) => {
+          const out = next;
+          if (value === undefined) setOwn(out);
+          onChange?.({ target: { value: out } });
+        }}
+      >
+        <SelectTrigger
+          id={id}
+          aria-label={ariaLabel}
+          data-invalid={invalid}
+          className={cn("h-11 rounded-xl text-left shadow-none", className)}
+        >
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent>
+          {list
+            .filter((o) => o.value !== "")
+            .map((o) => (
+              <SelectItem key={o.value} value={o.value} disabled={o.disabled}>
+                {o.label}
+              </SelectItem>
+            ))}
+        </SelectContent>
+      </Select>
+      {name ? <input type="hidden" name={name} value={v} /> : null}
+    </>
   );
 }
 
@@ -42,13 +114,13 @@ export function SelectField({
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>
-      <select
+      <SiteSelect
         id={id}
         name={name}
         className={fieldClass}
         data-invalid={error ? "true" : undefined}
         {...(controlled
-          ? { value, onChange: (e) => onChange(e.target.value) }
+          ? { value, onChange: (e: { target: { value: string } }) => onChange(e.target.value) }
           : { defaultValue: "" })}
       >
         <option value="" disabled>
@@ -63,7 +135,7 @@ export function SelectField({
             </option>
           );
         })}
-      </select>
+      </SiteSelect>
       <FieldError msg={error} />
     </div>
   );

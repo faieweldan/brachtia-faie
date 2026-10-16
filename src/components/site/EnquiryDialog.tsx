@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/dialog";
 
 import { GENDERS, HEARD_ABOUT, UNIVERSITIES, intakeMonths } from "@/data/form-options";
-import { fieldClass } from "@/components/site/form-fields";
+import { fieldClass, SiteSelect } from "@/components/site/form-fields";
 import { DateInput } from "@/components/ui/date-input";
 import { todayISO } from "@/lib/checkin";
 
@@ -520,7 +520,7 @@ export default function EnquiryDialog({
                         Room type
                         <Req />
                       </Label>
-                      <select
+                      <SiteSelect
                         id="en-room"
                         name="roomId"
                         className={fieldClass}
@@ -536,7 +536,7 @@ export default function EnquiryDialog({
                             {r.name}
                           </option>
                         ))}
-                      </select>
+                      </SiteSelect>
                       <FieldError msg={errors["roomId"]} />
                     </div>
 
@@ -545,7 +545,7 @@ export default function EnquiryDialog({
                         Occupancy
                         <Req />
                       </Label>
-                      <select
+                      <SiteSelect
                         id="en-occ"
                         name="occupancy"
                         className={fieldClass}
@@ -562,7 +562,7 @@ export default function EnquiryDialog({
                             {o === "single" ? "Single" : "Twin sharing"}
                           </option>
                         ))}
-                      </select>
+                      </SiteSelect>
                       <FieldError msg={errors["occupancy"]} />
                     </div>
 
@@ -691,7 +691,7 @@ export default function EnquiryDialog({
                     Are you studying or working?
                     <Req />
                   </Label>
-                  <select
+                  <SiteSelect
                     id="en-status"
                     className={fieldClass}
                     value={status}
@@ -706,7 +706,7 @@ export default function EnquiryDialog({
                         {o.label}
                       </option>
                     ))}
-                  </select>
+                  </SiteSelect>
                   <FieldError msg={errors["currentStatus"]} />
                 </div>
 
@@ -784,7 +784,7 @@ export default function EnquiryDialog({
                           University
                           <Req />
                         </Label>
-                        <select
+                        <SiteSelect
                           id="en-uni"
                           className={fieldClass}
                           value={universityChoice}
@@ -799,7 +799,7 @@ export default function EnquiryDialog({
                               {u.label}
                             </option>
                           ))}
-                        </select>
+                        </SiteSelect>
                         {universityChoice === "Other" && (
                           <Input
                             className="mt-2 h-11 rounded-xl"
@@ -818,7 +818,7 @@ export default function EnquiryDialog({
                           Intake
                           <Req />
                         </Label>
-                        <select
+                        <SiteSelect
                           id="en-intake"
                           name="intake"
                           className={fieldClass}
@@ -833,7 +833,7 @@ export default function EnquiryDialog({
                               {m}
                             </option>
                           ))}
-                        </select>
+                        </SiteSelect>
                         <FieldError msg={errors["intake"]} />
                       </div>
                     </>
@@ -861,7 +861,7 @@ export default function EnquiryDialog({
                       Gender
                       <Req />
                     </Label>
-                    <select
+                    <SiteSelect
                       id="en-gender"
                       name="gender"
                       className={fieldClass}
@@ -876,7 +876,7 @@ export default function EnquiryDialog({
                           {g}
                         </option>
                       ))}
-                    </select>
+                    </SiteSelect>
                     <FieldError msg={errors["gender"]} />
                   </div>
 
@@ -885,7 +885,7 @@ export default function EnquiryDialog({
                       How did you hear about us?
                       <Req />
                     </Label>
-                    <select
+                    <SiteSelect
                       id="en-heard"
                       className={fieldClass}
                       value={heardChoice}
@@ -900,7 +900,7 @@ export default function EnquiryDialog({
                           {h}
                         </option>
                       ))}
-                    </select>
+                    </SiteSelect>
                     {heardChoice === "Other" && (
                       <Input
                         className="mt-2 h-11 rounded-xl"

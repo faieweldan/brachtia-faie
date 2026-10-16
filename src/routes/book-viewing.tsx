@@ -28,6 +28,7 @@ import {
   PhoneField,
   SectionLabel,
   SelectField,
+  SiteSelect,
   fieldClass,
 } from "@/components/site/form-fields";
 import { countryByIso, type Country } from "@/data/countries";
@@ -528,7 +529,7 @@ function BookViewingPage() {
               <SectionLabel>Current status</SectionLabel>
               <div className="space-y-1.5">
                 <Label htmlFor="bv-status">Are you studying or working?</Label>
-                <select
+                <SiteSelect
                   id="bv-status"
                   className={fieldClass}
                   value={status}
@@ -543,7 +544,7 @@ function BookViewingPage() {
                       {o.label}
                     </option>
                   ))}
-                </select>
+                </SiteSelect>
                 <FieldError msg={errors["currentStatus"]} />
               </div>
             </section>
@@ -609,7 +610,7 @@ function BookViewingPage() {
                 <div className="grid gap-4 xl:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="bv-uni">University</Label>
-                    <select
+                    <SiteSelect
                       id="bv-uni"
                       className={fieldClass}
                       value={universityChoice}
@@ -624,7 +625,7 @@ function BookViewingPage() {
                           {u.label}
                         </option>
                       ))}
-                    </select>
+                    </SiteSelect>
                     {universityChoice === "Other" && (
                       <Input
                         className="mt-2 h-11 rounded-xl"
@@ -742,7 +743,7 @@ function BookViewingPage() {
 
                 <div className="space-y-1.5">
                   <Label htmlFor="bv-heard">How did you hear about us?</Label>
-                  <select
+                  <SiteSelect
                     id="bv-heard"
                     className={fieldClass}
                     value={heardChoice}
@@ -757,7 +758,7 @@ function BookViewingPage() {
                         {h}
                       </option>
                     ))}
-                  </select>
+                  </SiteSelect>
                   {heardChoice === "Other" && (
                     <Input
                       className="mt-2 h-11 rounded-xl"
