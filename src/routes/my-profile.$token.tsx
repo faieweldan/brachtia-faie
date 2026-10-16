@@ -44,6 +44,7 @@ import {
   MIN_RESIDENT_AGE,
   RESIDENT_SECTIONS,
   emailProblem,
+  englishProblem,
   fieldShown,
   latestBirthDate,
   formatNric,
@@ -130,6 +131,7 @@ function problemFor(f: ResidentField, values: ProfileLinkFields): string {
   if (f.key === "medical_detail" && !value.trim())
     return "Please tell us what the condition or allergy is.";
   if (!value.trim()) return `${f.label} is needed.`;
+  if (englishProblem(value)) return englishProblem(value);
   // residents are at least sixteen
   if (f.key === "dob" && value > latestBirthDate())
     return `Residents must be at least ${MIN_RESIDENT_AGE} years old.`;

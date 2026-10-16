@@ -299,6 +299,7 @@ export const getProfileByToken = createServerFn({ method: "GET" })
   });
 
 import { CHECKIN_TYPE } from "@/lib/checkin";
+import { englishProblem } from "@/lib/resident-fields";
 
 /**
  * The student's arrival, put where staff already look for appointments.
@@ -427,6 +428,9 @@ export const submitProfileByToken = createServerFn({ method: "POST" })
       const v = data.values[key];
       if (typeof v === "string") row[key] = v.trim();
     }
+    // the same rule the form shows
+    if (Object.values(row).some((v) => englishProblem(String(v))))
+      return { ok: false as const, error: "Please use English letters only." };
 
     /*
      * When they said they would arrive. A request, not a booking - nothing is

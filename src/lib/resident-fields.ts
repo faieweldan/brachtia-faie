@@ -395,6 +395,17 @@ export function completeness(r: Resident) {
  * typing something broken is not.
  * ------------------------------------------------------------------------- */
 
+/**
+ * Typed answers are in English letters (Dani, 16 Oct 2026): the agreement and
+ * staff read them, so Chinese, Tamil, Arabic and other scripts are refused.
+ * Accented Latin letters, numbers and punctuation are fine.
+ */
+export function englishProblem(v: string): string {
+  return /[^\p{Script=Latin}\p{N}\p{P}\p{S}\s]/u.test(v)
+    ? "Please use English letters only."
+    : "";
+}
+
 export function emailProblem(v: string): string {
   const s = v.trim();
   if (!s) return "";
