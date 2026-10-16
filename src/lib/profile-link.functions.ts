@@ -142,7 +142,7 @@ export const getProfileReview = createServerFn({ method: "POST" })
     const supabase = await admin();
     const { data: link } = await supabase
       .from("profile_links")
-      .select("id, submitted_at, reviewed_at")
+      .select("id, submitted_at, reviewed_at, reviewed_by")
       .eq("resident_id", data.residentId)
       .not("submitted_at", "is", null)
       .order("submitted_at", { ascending: false })
@@ -151,12 +151,15 @@ export const getProfileReview = createServerFn({ method: "POST" })
     return {
       submittedAt: (link?.submitted_at as string | null) ?? null,
       reviewedAt: (link?.reviewed_at as string | null) ?? null,
+      reviewedBy: (link?.reviewed_by as string | null) ?? null,
     };
   });
 
 export const markProfileReviewed = createServerFn({ method: "POST" })
-  .inputValidator((data: { residentId: string }) => data)
+  .inputValidator((data: { residentId: string; by: string }) => data)
   .handler(async ({ data }) => {
+    const by = data.by.trim();
+    if (!by) throw new Error("Choose who reviewed it.");
     const supabase = await admin();
     const { data: link } = await supabase
       .from("profile_links")
@@ -169,7 +172,7 @@ export const markProfileReviewed = createServerFn({ method: "POST" })
     if (!link) throw new Error("Nothing submitted to review.");
     const { error } = await supabase
       .from("profile_links")
-      .update({ reviewed_at: new Date().toISOString() } as any)
+      .update({ reviewed_at: new Date().toISOString(), reviewed_by: by } as any)
       .eq("id", link.id);
     if (error) throw new Error(error.message);
     return { ok: true as const };
@@ -474,7 +477,7 @@ export const submitProfileByToken = createServerFn({ method: "POST" })
     await supabase
       .from("profile_links")
       // changed answers are looked at again
-      .update({ submitted_at: new Date().toISOString(), reviewed_at: null } as any)
+      .update({ submitted_at: new Date().toISOString(), reviewed_at: null, reviewed_by: null } as any)
       .eq("id", found.link.id);
     return { ok: true as const };
   });

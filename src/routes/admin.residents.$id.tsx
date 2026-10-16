@@ -23,6 +23,7 @@ import { refreshMoney } from "@/lib/billing-client";
 
 import { RELATIONSHIP_OPTIONS, idLabelFor } from "@/lib/reference-data";
 import { getDeclarationForResident } from "@/lib/declaration.functions";
+import { StaffPicker } from "@/components/admin/Dropdown";
 import { getProfileReview, isPendingReview, markProfileReviewed } from "@/lib/profile-link.functions";
 import {
   RESIDENT_GROUPS,
@@ -1350,11 +1351,12 @@ function ProfileReview({ residentId }: { residentId: string }) {
     queryFn: () => getProfileReview({ data: { residentId } }),
   });
   const [busy, setBusy] = useState(false);
+  const [by, setBy] = useState("");
   if (!data?.submittedAt) return null;
   async function mark() {
     setBusy(true);
     try {
-      await markProfileReviewed({ data: { residentId } });
+      await markProfileReviewed({ data: { residentId, by } });
       await queryClient.invalidateQueries({ queryKey: ["profile-review", residentId] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save");
@@ -1367,11 +1369,14 @@ function ProfileReview({ residentId }: { residentId: string }) {
       <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
         Pending review
       </span>
-      <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={() => void mark()}>
+      <StaffPicker value={by} onChange={setBy} className="h-7 min-w-36 text-xs" />
+      <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy || !by} onClick={() => void mark()}>
         Mark reviewed
       </Button>
     </div>
   ) : (
-    <p className="mt-2 text-xs text-muted-foreground">Reviewed {fmtDate(data.reviewedAt!.slice(0, 10))}</p>
+    <p className="mt-2 text-xs text-muted-foreground">
+      Reviewed{data.reviewedBy ? ` by ${data.reviewedBy}` : ""} · {fmtDate(data.reviewedAt!.slice(0, 10))}
+    </p>
   );
 }
