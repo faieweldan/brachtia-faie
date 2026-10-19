@@ -206,6 +206,10 @@ class ConverterTests(unittest.TestCase):
         self.assertEqual(by["90002"], "Prefers WhatsApp")
         self.assertEqual(by["90003"], "Only the team's")
 
+    def test_clean_checking_mark_is_not_a_note(self):
+        _, _, rows, _, _ = self.convert(resident(Remarks="CLEAN"))
+        self.assertIn(rows[0]["Internal Notes"], (None, ""))
+
     def test_no_note_and_no_remarks_is_empty(self):
         _, _, rows, _, _ = self.convert(resident())
         self.assertIn(rows[0]["Internal Notes"], (None, ""))

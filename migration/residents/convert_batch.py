@@ -713,6 +713,7 @@ COLUMN_ALIASES = {"Remark": "Remarks"}
 OPTIONAL_SOURCE = {"SPONSOR NAME"}
 # Batch 2 onward says per row whether it goes in; only this value is converted
 MIGRATE_OK = "Clean-Migrate"
+CHECK_MARKS = {"CLEAN", "CHECKED", "OK"}
 SHEET = "Migration Batch 1"
 
 
@@ -1014,8 +1015,11 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
 
         # Internal Notes: the team's note and the master's remarks (a sponsor's
         # batch code is not a remark) - admin only on the resident profile
-        out_row["Internal Notes"] = join_notes(
-            fixes["internalNotes"].get(row_qb, ""), "" if batch_used else text(cell("Remarks")))
+        # "CLEAN" in Remarks is the team's checking mark, not a note (Dani, 19 Oct 2026)
+        remark = "" if batch_used else text(cell("Remarks"))
+        if remark.strip().upper() in CHECK_MARKS:
+            remark = ""
+        out_row["Internal Notes"] = join_notes(fixes["internalNotes"].get(row_qb, ""), remark)
         # a duplicate row is left out by its row number ("row 91"), not its ID
         left_out = fixes["leaveOut"].get(row_qb) or fixes["leaveOut"].get(f"row {r}")
         if left_out:
