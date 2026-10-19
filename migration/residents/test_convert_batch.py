@@ -23,7 +23,7 @@ SOURCE_HEADERS = [
     "Tenancy Start", "Tenancy End", "Payment Frequency", "Duration", "Contracting Entity", "Status",
     "Monthly Rent", "Differential Rental (QB)", "Advance Rental", "Security Deposit", "Utility Deposit",
     "Access Card Deposit", "Admin Charges", "Agreement Charges", "Personalised Tag", "Car Park",
-    "Starter Pack", "Total Initial Payment Made", "Initial Payment Invoice Copy", "Status",
+    "Starter Pack", "Total Initial Payment Made", "Initial Payment Invoice Copy", "IP Status", "Status",
 ]
 
 
@@ -209,6 +209,12 @@ class ConverterTests(unittest.TestCase):
     def test_whole_unit_let_keeps_the_unit_slot(self):
         _, _, rows, _, _ = self.convert(resident(Room="Unit", Bed="Unit"))
         self.assertEqual((rows[0]["Room"], rows[0]["Bed"]), ("Unit", "Unit"))
+
+    def test_ip_status_fully_paid_is_checked_nothing_owed(self):
+        r = resident(**{"IP Status": "Fully paid"})
+        r["Total Initial Payment Made"] = float(r["Total Initial Payment Made"]) - 100
+        _, _, rows, _, _ = self.convert(r)
+        self.assertEqual(rows[0]["Initial Balance Due"], 0)
 
     def test_clean_checking_mark_is_not_a_note(self):
         _, _, rows, _, _ = self.convert(resident(Remarks="CLEAN"))

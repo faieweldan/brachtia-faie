@@ -711,7 +711,7 @@ NATIONAL_DIAL = {code: dial.lstrip("+") for code, dial in re.findall(
 # Same converter for every batch (Dani, 14 Oct 2026): a later tab may spell a
 # column differently, or not have one Batch 1 had.
 COLUMN_ALIASES = {"Remark": "Remarks"}
-OPTIONAL_SOURCE = {"SPONSOR NAME"}
+OPTIONAL_SOURCE = {"SPONSOR NAME", "IP Status"}
 # Batch 2 onward says per row whether it goes in; only this value is converted
 MIGRATE_OK = "Clean-Migrate"
 CHECK_MARKS = {"CLEAN", "CHECKED", "OK"}
@@ -1013,7 +1013,16 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
         # what is still owed on the initial invoice (Dani, 19 Oct 2026): the listed
         # lines less what was paid, only above 1 sen. Paid more is not a debt and
         # not a credit. The team's answer wins - 0 clears a running-account invoice.
-        out_row["Initial Balance Due"] = initial_balance_due(out_row, paid, fixes["balanceDue"].get(row_qb))
+        # the master's own "IP Status" (Dani, 20 Oct 2026): Fully paid = checked, nothing owed
+        answer = fixes["balanceDue"].get(row_qb)
+        ip_status = text(cell("IP Status")).lower()
+        if answer is None and ip_status.startswith("fully"):
+            answer = 0
+        out_row["Initial Balance Due"] = initial_balance_due(out_row, paid, answer)
+        if ip_status.startswith("unpaid"):
+            flag(REVIEW, "Initial Balance Due", "The master says the initial payment is Unpaid - check what was paid before importing")
+        elif ip_status.startswith("partial") and not out_row["Initial Balance Due"]:
+            flag(REVIEW, "Initial Balance Due", "The master says Partially paid, but the listed lines and the amount paid show nothing owed - fill in what is owed")
         if out_row["Initial Balance Due"]:
             out_row["Payment Status"] = "Part paid"
 
