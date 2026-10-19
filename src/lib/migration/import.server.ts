@@ -227,7 +227,7 @@ export async function importResident(sb: any, row: MigrationPreviewRow, today: s
       await must(sb.from("rental_schedules").insert({ tenancy_id: tenancy.id, ...terms }), "Rent terms");
       const { syncScheduledRent } = await import("@/lib/rent-schedule.server");
       await syncScheduledRent(sb, tenancy.id);
-      await applyAdminNextRent(sb, tenancy.id, row.nextPaymentDue, row.nextPaymentAmount);
+      await applyAdminNextRent(sb, tenancy.id, row.nextPaymentDue, row.nextPaymentAmount, terms.first_period_start);
     }
 
     /* ---- 5. the bed ---- */
@@ -255,18 +255,21 @@ export async function importResident(sb: any, row: MigrationPreviewRow, today: s
  * added. It is marked edited (auto_scheduled false), so a later schedule
  * rebuild keeps it as admin left it - the same as editing it on the screen.
  */
-export async function applyAdminNextRent(sb: any, tenancyId: string, due: string, amount: number | null) {
+export async function applyAdminNextRent(sb: any, tenancyId: string, due: string, amount: number | null, periodStart: string) {
   if (!due && amount === null) return;
+  // only the bill for Brachtia's next period. If its bill date has passed it was
+  // issued as it was made - from the same Sheet3 period and due date - so it is
+  // left alone, never moved onto the bill after it (Dani, 19 Oct 2026: Dec due 05 Nov)
   const { data: first } = await sb
     .from("invoices")
-    .select("id, total, invoice_date, payment_terms")
+    .select("id, total, invoice_date, payment_terms, status")
     .eq("tenancy_id", tenancyId)
     .eq("invoice_type", "rental")
-    .eq("status", "scheduled")
-    .order("period_start", { ascending: true })
+    .eq("period_start", periodStart)
+    .neq("status", "void")
     .limit(1)
     .maybeSingle();
-  if (!first) return;
+  if (!first || first.status !== "scheduled") return;
   const total = Number(first.total) || 0;
   const target = amount === null ? total : r2(amount);
   let billOn = String(first.invoice_date ?? "").slice(0, 10);
