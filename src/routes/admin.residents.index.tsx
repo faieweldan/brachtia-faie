@@ -151,7 +151,9 @@ function ResidentsListPage() {
     setImporting(true);
     try {
       const book = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
-      const migrationSheet = book.Sheets["Sheet3"];
+      // "Sheet3", or a group's own "Sheet3 - Non-Sponsor" / "Sheet3 - Sponsor"
+      const migrationName = book.SheetNames.find((n) => /^sheet3\b/i.test(n.trim()));
+      const migrationSheet = migrationName ? book.Sheets[migrationName] : undefined;
       const migrationGrid: unknown[][] = migrationSheet
         ? (XLSX.utils.sheet_to_json(migrationSheet, {
             header: 1,
