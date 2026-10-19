@@ -223,6 +223,7 @@ export async function importResident(sb: any, row: MigrationPreviewRow, today: s
       await must(sb.from("rental_schedules").insert({ tenancy_id: tenancy.id, ...terms }), "Rent terms");
       const { syncScheduledRent } = await import("@/lib/rent-schedule.server");
       await syncScheduledRent(sb, tenancy.id);
+      await applyAdminNextRent(sb, tenancy.id, row.nextPaymentDue, row.nextPaymentAmount);
     }
 
     /* ---- 5. the bed ---- */
@@ -240,6 +241,59 @@ export async function importResident(sb: any, row: MigrationPreviewRow, today: s
   } catch (err) {
     if (residentId) await undoResident(sb, residentId);
     return { ...base, result: "failed", reason: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Brachtia admin's next payment wins (Dani, 15 Oct 2026). The first scheduled
+ * rent invoice is set to the due date and amount in Sheet3; the difference is
+ * its own line, so the bill shows what the system worked out and what admin
+ * added. It is marked edited (auto_scheduled false), so a later schedule
+ * rebuild keeps it as admin left it - the same as editing it on the screen.
+ */
+export async function applyAdminNextRent(sb: any, tenancyId: string, due: string, amount: number | null) {
+  if (!due && amount === null) return;
+  const { data: first } = await sb
+    .from("invoices")
+    .select("id, total, invoice_date, payment_terms")
+    .eq("tenancy_id", tenancyId)
+    .eq("invoice_type", "rental")
+    .eq("status", "scheduled")
+    .order("period_start", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (!first) return;
+  const total = Number(first.total) || 0;
+  const target = amount === null ? total : r2(amount);
+  let billOn = String(first.invoice_date ?? "").slice(0, 10);
+  // the due date is the invoice date plus its NET days (dueDateOf reads it the same way)
+  const net = Number(/NET\s*(\d+)/i.exec(String(first.payment_terms ?? ""))?.[1] ?? 0);
+  const currentDue = new Date(Date.parse(`${billOn}T00:00:00Z`) + net * 86_400_000).toISOString().slice(0, 10);
+  const dueOn = due || currentDue;
+  if (Math.abs(target - total) < 0.005 && dueOn === currentDue) return;
+  if (dueOn && dueOn < billOn) billOn = dueOn;
+  const days = dueOn !== currentDue ? Math.max(0, Math.round((Date.parse(`${dueOn}T00:00:00Z`) - Date.parse(`${billOn}T00:00:00Z`)) / 86_400_000)) : null;
+  await must(
+    sb
+      .from("invoices")
+      .update({
+        auto_scheduled: false,
+        bill_on: billOn,
+        invoice_date: billOn,
+        issued_at: `${billOn}T00:00:00Z`,
+        ...(days !== null ? { payment_terms: `NET${days}` } : {}),
+        total: target,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", first.id),
+    "Next payment",
+  );
+  const diff = r2(target - total);
+  if (Math.abs(diff) >= 0.005) {
+    await must(
+      sb.from("invoice_items").insert({ invoice_id: first.id, label: "Adjustment agreed by Brachtia", kind: "rent", amount: diff, quantity: 1, sort_order: 99 }),
+      "Next payment line",
+    );
   }
 }
 

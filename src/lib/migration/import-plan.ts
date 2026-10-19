@@ -1,4 +1,4 @@
-import { buildPeriods, dueFor, firstRentPeriod, nextRentAfter, type ScheduleTerms } from "@/lib/rental-schedule";
+import { nextRentAfter } from "@/lib/rental-schedule";
 import type { MigrationPreviewRow } from "@/lib/migration/sheet3";
 
 /*
@@ -28,36 +28,25 @@ export function initialLines(row: MigrationPreviewRow) {
 export function migratedRentTerms(row: MigrationPreviewRow, today: string) {
   const { schedule, monthlyRent } = row.record;
   if (schedule === "full" || !(monthlyRent > 0)) return null;
-  const advance = row.charges.proratedRent + row.charges.advanceRent;
   const next = nextRentAfter({
     tenancyStart: row.tenancyStart,
     tenancyEnd: row.tenancyEnd,
     frequency: schedule,
     monthlyRent,
-    advance,
+    proratedRent: row.charges.proratedRent,
+    advanceRent: row.charges.advanceRent,
     today,
   });
   if (!next) return null;
-  // the period's end exactly as the normal schedule cuts it
-  const first = firstRentPeriod(row.tenancyStart, row.tenancyEnd, schedule, advance, monthlyRent);
-  const period = buildPeriods({
-    monthlyRent,
-    frequency: schedule,
-    firstPeriodStart: first.start,
-    firstPeriodEnd: first.end,
-    firstDueDate: dueFor(first.start),
-    tenancyEnd: row.tenancyEnd,
-    finalAmount: null,
-    firstPeriodCredit: first.credit,
-  } as ScheduleTerms).find((p) => p.start === next.start);
+  // the schedule steps on from the next cycle; its last bill is whole months too
   return {
     monthly_rent: monthlyRent,
     frequency: schedule,
     first_period_start: next.start,
-    first_period_end: period?.end ?? next.end,
+    first_period_end: next.end,
     first_due_date: next.due,
     tenancy_end: row.tenancyEnd,
-    final_amount: null,
+    final_amount: next.finalAmount,
   };
 }
 

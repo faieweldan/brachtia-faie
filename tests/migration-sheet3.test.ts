@@ -4,6 +4,8 @@ import { previewSheet3Grid } from "../src/lib/migration/sheet3";
 import type { Resident, Unit } from "../src/lib/ops-store";
 
 const headers = [
+  "Next payment due",
+  "Next payment amount",
   "Resident Name",
   "Gender",
   "Country Code",
@@ -210,19 +212,57 @@ describe("Migration 1 Sheet3 readiness", () => {
 
 import { nextRentAfter } from "../src/lib/rental-schedule";
 
-describe("next rent of an existing resident (Dani, 12 Oct 2026)", () => {
-  const base = { tenancyEnd: "2027-08-31", monthlyRent: 330, advance: 330, today: "2026-10-12" };
-  test("bi-monthly from Sep 2025, one month advance: cycles are Oct-Nov, Dec-Jan; Oct-Nov 2026 is paid", () => {
-    expect(nextRentAfter({ ...base, tenancyStart: "2025-09-01", frequency: "bimonthly" }))
-      .toEqual({ start: "2026-12-01", end: "2027-01-31", due: "2026-12-05", amount: 660 });
+describe("next rent of an existing resident - Brachtia's whole-month rule (15 Oct 2026)", () => {
+  const today = "2026-10-15";
+  test("00075: in 3 Sep, no pro-rated, 1,500 advance at 750 = Sep-Oct paid; next Nov-Dec 1,500", () => {
+    expect(
+      nextRentAfter({ tenancyStart: "2026-09-03", tenancyEnd: "2027-04-30", frequency: "bimonthly", monthlyRent: 750, proratedRent: 0, advanceRent: 1500, today }),
+    ).toMatchObject({ start: "2026-11-01", end: "2026-12-31", due: "2026-11-05", amount: 1500 });
   });
-  test("monthly: next month", () => {
-    expect(nextRentAfter({ ...base, tenancyStart: "2025-09-01", frequency: "monthly" })?.start).toBe("2026-11-01");
+  test("00857: pro-rated pays Jan (429.02 - never compared to the sen), advance pays Feb; next Nov-Dec 1,400", () => {
+    expect(
+      nextRentAfter({ tenancyStart: "2026-01-13", tenancyEnd: "2026-12-31", frequency: "bimonthly", monthlyRent: 700, proratedRent: 429.02, advanceRent: 700, today }),
+    ).toMatchObject({ start: "2026-11-01", due: "2026-11-05", amount: 1400 });
   });
-  test("a stay that starts later bills its first period as usual", () => {
-    expect(nextRentAfter({ ...base, tenancyStart: "2026-11-01", frequency: "monthly", advance: 330 })?.start).toBe("2026-12-01");
+  test("00917: the last month is charged in full, not by days", () => {
+    expect(
+      nextRentAfter({ tenancyStart: "2026-04-23", tenancyEnd: "2026-11-22", frequency: "monthly", monthlyRent: 450, proratedRent: 120, advanceRent: 450, today }),
+    ).toMatchObject({ start: "2026-11-01", end: "2026-11-22", amount: 450, finalAmount: 450 });
   });
-  test("nothing left when the tenancy ends in the current period", () => {
-    expect(nextRentAfter({ ...base, tenancyStart: "2025-09-01", tenancyEnd: "2026-10-31", frequency: "monthly" })).toBeNull();
+  test("a last cycle shorter than the frequency is billed for its whole months", () => {
+    // every 2 months from Nov; the tenancy ends in January - Jan alone is the last bill
+    expect(
+      nextRentAfter({ tenancyStart: "2026-09-01", tenancyEnd: "2027-01-31", frequency: "bimonthly", monthlyRent: 500, proratedRent: 0, advanceRent: 1000, today }),
+    ).toMatchObject({ start: "2026-11-01", amount: 1000, finalAmount: 500 });
+  });
+  test("nothing left when the tenancy ends in the current cycle", () => {
+    expect(
+      nextRentAfter({ tenancyStart: "2025-11-01", tenancyEnd: "2026-10-31", frequency: "monthly", monthlyRent: 350, proratedRent: 0, advanceRent: 350, today }),
+    ).toBeNull();
+  });
+});
+
+describe("Brachtia admin's next payment wins (15 Oct 2026)", () => {
+  const today = { today: "2026-10-15" };
+  const run = (change: Record<string, unknown>) =>
+    previewSheet3Grid(grid(change), { units: [unit], residents: [], ...today }).rows[0]!;
+
+  test("blank cells: the worked-out figures are used", () => {
+    const row = run({ "Next payment due": "", "Next payment amount": "" });
+    expect(row.nextPaymentDue).toBe("2026-11-05");
+    expect(row.nextPaymentAmount).toBe(400);
+  });
+
+  test("filled cells win, and the difference is shown as a warning", () => {
+    const row = run({ "Next payment due": "2026-12-05", "Next payment amount": 800 });
+    expect(row.nextPaymentDue).toBe("2026-12-05");
+    expect(row.nextPaymentAmount).toBe(800);
+    expect(row.issues.some((i) => i.field === "Next payment amount" && i.level === "warning")).toBe(true);
+    expect(row.issues.some((i) => i.field === "Next payment due" && i.level === "warning")).toBe(true);
+  });
+
+  test("the same figures as the system raise nothing", () => {
+    const row = run({ "Next payment due": "2026-11-05", "Next payment amount": 400 });
+    expect(row.issues.some((i) => i.field.startsWith("Next payment"))).toBe(false);
   });
 });

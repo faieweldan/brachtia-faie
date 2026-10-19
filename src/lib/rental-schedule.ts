@@ -205,35 +205,55 @@ export function nextRentalPayment(input: {
 
 /**
  * The next rent of someone already living here when they are brought into the
- * system (Migration 1, Dani 12 Oct 2026). Their billing cycle is the normal one
- * - after the advance rent of the initial payment, stepping by the frequency -
- * and every period that has started by `today` counts as paid: they are an
- * existing resident and the team confirmed everyone is paid up to now. The
- * next rent is the first period that starts after today. Null when nothing is
- * left to bill (paid in full, or the tenancy ends within the current period).
+ * system (Migration 1). Brachtia's own rule, checked against admin's figures for
+ * Batch 1 (Dani, 15 Oct 2026) - whole months only, never compared to the sen:
+ *
+ *   1. the pro-rated amount, when there is one, pays for the move-in month
+ *   2. the advance rental pays whole months: advance / rent
+ *   3. billing cycles run every 1/2/3/6/12 months from the first unpaid month
+ *   4. every cycle that has started by `today` counts as paid (they are paid up
+ *      to now); the next rent is the first cycle after today
+ *   5. each bill is rent x its months, the last one too - no part-month by days
+ *   6. due the 5th of the cycle's first month
+ *
+ * (A cent-level check once moved whole cycles: 429.02 paid against 429.03 left
+ * January "unpaid" and put 00857's bill a month late.) Null when nothing is left
+ * to bill. `finalAmount` is the last cycle's whole months, for the rent terms.
  */
 export function nextRentAfter(input: {
   tenancyStart: string;
   tenancyEnd: string;
   frequency: string;
   monthlyRent: number;
-  advance: number;
+  proratedRent: number;
+  advanceRent: number;
   today: string;
 }) {
-  const first = firstRentPeriod(input.tenancyStart, input.tenancyEnd, input.frequency, input.advance, input.monthlyRent);
-  if (!first.start) return null;
-  const periods = buildPeriods({
-    monthlyRent: input.monthlyRent,
-    frequency: input.frequency,
-    firstPeriodStart: first.start,
-    firstPeriodEnd: first.end,
-    firstDueDate: dueFor(first.start),
-    tenancyEnd: input.tenancyEnd.slice(0, 10),
-    finalAmount: null,
-    firstPeriodCredit: first.credit,
-  } as ScheduleTerms);
-  const next = periods.find((p) => p.start > input.today.slice(0, 10));
-  return next ? { start: next.start, end: next.end, due: next.due, amount: next.amount } : null;
+  const cycle = CYCLE[input.frequency];
+  const rent = input.monthlyRent;
+  const start = input.tenancyStart.slice(0, 10);
+  const end = input.tenancyEnd.slice(0, 10);
+  if (!cycle || !(rent > 0) || !start || !end || end < start) return null;
+  const monthOf = (iso: string) => Number(iso.slice(0, 4)) * 12 + Number(iso.slice(5, 7)) - 1;
+  const firstOf = (m: number) => `${Math.floor(m / 12)}-${String((m % 12) + 1).padStart(2, "0")}-01`;
+  const lastMonth = monthOf(end);
+  let m = monthOf(start);
+  if (input.proratedRent > 0) m += 1;
+  m += Math.max(0, Math.round((input.advanceRent || 0) / rent));
+  const firstUnpaid = m;
+  const today = input.today.slice(0, 10);
+  while (m <= lastMonth && firstOf(m) <= today) m += cycle;
+  if (m > lastMonth) return null;
+  const months = Math.min(cycle, lastMonth - m + 1);
+  const cycleEndIso = shiftDate(firstOf(m + months), { days: -1 });
+  const finalMonths = ((lastMonth - firstUnpaid) % cycle) + 1;
+  return {
+    start: firstOf(m),
+    end: cycleEndIso > end ? end : cycleEndIso,
+    due: dueFor(firstOf(m)),
+    amount: Math.round(rent * months * 100) / 100,
+    finalAmount: Math.round(rent * finalMonths * 100) / 100,
+  };
 }
 
 /* ------------------------------------------------- a room change mid-period */

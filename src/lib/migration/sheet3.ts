@@ -465,8 +465,9 @@ export function previewSheet3Grid(grid: unknown[][], system: SystemSnapshot): Mi
             tenancyEnd: end,
             frequency: schedule,
             monthlyRent: rent,
-            // both lines are rent the initial payment already covered
-            advance: safeCharges.proratedRent + safeCharges.advanceRent,
+            // the pro-rated month and the advance's whole months are paid
+            proratedRent: safeCharges.proratedRent,
+            advanceRent: safeCharges.advanceRent,
             // they live here already: paid up to the current period (Dani, 12 Oct 2026)
             today: system.today ?? new Date().toISOString().slice(0, 10),
           })
@@ -475,6 +476,18 @@ export function previewSheet3Grid(grid: unknown[][], system: SystemSnapshot): Mi
     const paidToEnd = !next && !!start && !!end && !!rent && rent > 0;
     if (schedule && schedule !== "full" && !next && !paidToEnd) {
       add("blocked", "Next billing period", "The next rental period cannot be calculated.");
+    }
+    // Brachtia admin's figures, when Sheet3 has them, win over the worked-out ones (Dani, 15 Oct 2026)
+    const sheetDue = toDate(text(value("Next payment due")));
+    // a blank cell is "not set", never RM 0 (money() reads a blank charge as 0)
+    const sheetAmount = text(value("Next payment amount")) ? money(value("Next payment amount")) : null;
+    const nextDue = sheetDue || next?.due || "";
+    const nextAmount = sheetAmount ?? next?.amount ?? null;
+    if (next && sheetAmount !== null && Math.abs(sheetAmount - next.amount) > 0.005) {
+      add("warning", "Next payment amount", `Set by Brachtia admin: ${sheetAmount.toFixed(2)} (the system works out ${next.amount.toFixed(2)}).`);
+    }
+    if (next && sheetDue && sheetDue !== next.due) {
+      add("warning", "Next payment due", `Set by Brachtia admin: ${fmtDate(sheetDue)} (the system works out ${fmtDate(next.due)}).`);
     }
 
     const record: MigrationRecord = {
@@ -540,8 +553,8 @@ export function previewSheet3Grid(grid: unknown[][], system: SystemSnapshot): Mi
           : paidToEnd
             ? "Paid to the end of the tenancy"
             : "",
-      nextPaymentDue: next?.due ?? "",
-      nextPaymentAmount: next?.amount ?? null,
+      nextPaymentDue: nextDue,
+      nextPaymentAmount: nextAmount,
       charges: safeCharges,
       issues,
     };
