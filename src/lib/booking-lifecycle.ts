@@ -104,6 +104,9 @@ export async function residentFromBooking(supabase: any, enquiryId: string) {
         lease_months: months ? String(months) : "",
         // a plan the resident page does not offer is left for the admin to pick
         pay_schedule: SCHEDULES.some((s) => s.value === schedule) ? schedule : "",
+        // the booking's internal notes, copied once (Dani, 19 Oct 2026) - from
+        // here on the resident profile is the only place the note is edited
+        ...(enquiry.admin_notes ? { admin_notes: String(enquiry.admin_notes) } : {}),
       })
       .select("id")
       .single();

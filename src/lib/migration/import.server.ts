@@ -1,5 +1,5 @@
 import { joinPhone, normCountry, normGender, normUniversity } from "@/lib/reference-data";
-import { MIGRATED, initialLines, migratedNote, migratedRentTerms, r2 } from "@/lib/migration/import-plan";
+import { MIGRATED, initialLines, initialPaymentOf, migratedNote, migratedRentTerms, r2 } from "@/lib/migration/import-plan";
 import type { MigrationPreviewRow } from "@/lib/migration/sheet3";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -95,6 +95,8 @@ export async function importResident(sb: any, row: MigrationPreviewRow, today: s
           payer_relationship: rec.paidBy,
           payer_name: rec.paidBy === "Self" ? "" : rec.payorName,
           status: row.tenancyStart <= today ? "Active" : "Booked",
+          // Sheet3 "Internal Notes": the team's note and the master's remarks - admin only
+          ...(rec.internalNotes ? { admin_notes: rec.internalNotes } : {}),
         })
         .select("id")
         .single(),
@@ -149,7 +151,8 @@ export async function importResident(sb: any, row: MigrationPreviewRow, today: s
 
     /* ---- 3. the initial payment: invoice, lines, payment, receipt ---- */
     const lines = initialLines(row);
-    const total = r2(lines.reduce((n, l) => n + l.amount, 0));
+    // what is owed and what was paid - the same rule the preview showed (import-plan)
+    const { total, paid, status } = initialPaymentOf(row);
     const deposits = r2(lines.filter((l) => l.kind === "refundable").reduce((n, l) => n + l.amount, 0));
     const invoice = await must<{ id: string }>(
       sb
@@ -158,7 +161,9 @@ export async function importResident(sb: any, row: MigrationPreviewRow, today: s
           resident_id: residentId,
           tenancy_id: tenancy.id,
           invoice_type: "initial",
-          status: "paid",
+          // "issued" while some is still owed - the Payments tab then shows
+          // Partially paid and the rest is recorded the normal way
+          status,
           full_name: row.residentName,
           email: row.email,
           phone: joinPhone(rec.dial, rec.mobile),
@@ -193,7 +198,6 @@ export async function importResident(sb: any, row: MigrationPreviewRow, today: s
         "Invoice lines",
       );
     }
-    const paid = r2(Math.min(rec.totalPaid || total, total));
     if (paid > 0) {
       /*
        * No receipt (Dani, 13 Oct 2026). A receipt made today would carry today's

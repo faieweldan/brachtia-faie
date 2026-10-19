@@ -657,11 +657,34 @@ def fill_next_rent(rows: list[dict], today: date):
     return ""
 
 
+# the charge columns the app adds up as the initial invoice's lines (import-plan initialLines)
+INITIAL_LINE_COLUMNS = (
+    "First month rent - pro-rated x/x days", "Advance rental (RM)",
+    "Security Deposit (RM) (refundable) ", "Utilities deposit (RM) (refundable) ",
+    "Access card deposit (refundable)", "Resident card charges", "Add on: Starter pack",
+    "Admin + agreement charges",
+)
+
+
+def initial_balance_due(out_row: dict, paid, answer=None):
+    """Owed on the initial invoice: lines - paid above RM0.01, else blank. The team's answer wins."""
+    if answer is not None:
+        return round(float(answer), 2) if float(answer) > 0.01 else None
+    if paid is None:
+        return None
+    owed = round(sum(float(out_row.get(c) or 0) for c in INITIAL_LINE_COLUMNS) - paid, 2)
+    return owed if owed > 0.01 else None
+
+
+def join_notes(*parts: str) -> str:
+    return " · ".join(p.strip() for p in parts if p and p.strip())
+
+
 def load_corrections(path: Path | None) -> dict:
     if not path or not path.exists():
-        return {"set": {}, "leaveOut": {}, "remarksHandled": {}, "applicationRows": {}, "application": {}, "nextRent": {}, "internalNotes": {}, "checkedFirst": []}
+        return {"set": {}, "leaveOut": {}, "remarksHandled": {}, "applicationRows": {}, "application": {}, "nextRent": {}, "internalNotes": {}, "balanceDue": {}, "checkedFirst": []}
     c = json.loads(path.read_text())
-    fixes = {k: c.get(k, {}) for k in ("set", "leaveOut", "remarksHandled", "applicationRows", "application", "nextRent", "internalNotes")}
+    fixes = {k: c.get(k, {}) for k in ("set", "leaveOut", "remarksHandled", "applicationRows", "application", "nextRent", "internalNotes", "balanceDue")}
     fixes["checkedFirst"] = c.get("checkedFirst", [])
     return fixes
 
@@ -982,8 +1005,17 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
         # so listed migration charges are deliberately not reconciled to its total.
         out_row["Payment Status"] = "Paid" if paid is not None else ""
 
-        if row_qb in fixes["internalNotes"]:
-            out_row["Internal Notes"] = fixes["internalNotes"][row_qb]
+        # what is still owed on the initial invoice (Dani, 19 Oct 2026): the listed
+        # lines less what was paid, only above 1 sen. Paid more is not a debt and
+        # not a credit. The team's answer wins - 0 clears a running-account invoice.
+        out_row["Initial Balance Due"] = initial_balance_due(out_row, paid, fixes["balanceDue"].get(row_qb))
+        if out_row["Initial Balance Due"]:
+            out_row["Payment Status"] = "Part paid"
+
+        # Internal Notes: the team's note and the master's remarks (a sponsor's
+        # batch code is not a remark) - admin only on the resident profile
+        out_row["Internal Notes"] = join_notes(
+            fixes["internalNotes"].get(row_qb, ""), "" if batch_used else text(cell("Remarks")))
         # a duplicate row is left out by its row number ("row 91"), not its ID
         left_out = fixes["leaveOut"].get(row_qb) or fixes["leaveOut"].get(f"row {r}")
         if left_out:
@@ -991,7 +1023,7 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
         if corrected:
             flag(WARNING, "Corrected", "Corrected from the team's answer: " + ", ".join(corrected) + " (batch1-corrections.json)")
         if text(cell("Remarks")) and not batch_used and row_qb not in fixes["remarksHandled"]:
-            flag(WARNING, "Remarks", "Source row has remarks - read them before importing")
+            flag(WARNING, "Remarks", "Source row has remarks (carried into Internal Notes) - read them before importing")
 
         # every dropdown column holds only a value on its list - else blank + flag
         for header, field in DROPDOWNS.items():

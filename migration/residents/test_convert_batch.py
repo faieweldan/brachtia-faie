@@ -161,9 +161,54 @@ class ConverterTests(unittest.TestCase):
         self.assertIn("ID type cannot be told", status[2][5])
 
     def test_invoice_total_is_not_reconciled_to_the_listed_lines(self):
-        _, _, rows, status, _ = self.convert(resident(**{"Total Initial Payment Made": 2100}))
+        # an invoice with extra lines (utilities) paid more than the lines listed:
+        # still Paid and Ready. Paid LESS is now owed (19 Oct 2026, test below).
+        _, _, rows, status, _ = self.convert(resident(**{"Total Initial Payment Made": 2300}))
         self.assertEqual(rows[0]["Payment Status"], "Paid")
         self.assertEqual(status[2][3], "Ready")
+
+    def test_paid_less_than_the_lines_owes_the_rest(self):
+        # 00991-shaped, made-up numbers: lines 2,130.00, paid 1,998.29 -> owes 131.71
+        _, _, rows, status, _ = self.convert(resident(**{"Total Initial Payment Made": 1998.29}))
+        self.assertEqual(rows[0]["Initial Balance Due"], 131.71)
+        self.assertEqual(rows[0]["Payment Status"], "Part paid")
+        self.assertEqual(status[2][3], "Ready")
+
+    def test_paid_more_than_the_lines_is_not_a_debt(self):
+        # 00952 / 00993: paid a little more than the listed lines
+        _, _, rows, _, _ = self.convert(resident(**{"Total Initial Payment Made": 2141.16}))
+        self.assertIsNone(rows[0]["Initial Balance Due"])
+        self.assertEqual(rows[0]["Payment Status"], "Paid")
+
+    def test_team_clears_a_running_account_and_sets_a_known_debt(self):
+        # 00721: extra lines on a running account - the team says nothing is owed;
+        # 00994: the team knows what is owed (57.94)
+        fx = Fixture([resident(**{"Total Initial Payment Made": 2000}),
+                      resident(StudentID="90002", Email="two@example.test", Unit="Z-01-02")], self.tmp)
+        corr = self.tmp / "corr.json"
+        corr.write_text(json.dumps({"balanceDue": {"90001": 0, "90002": 57.94}}))
+        _, _, rows, _, _ = fx.run(corr)
+        by = {r["QuickBooks ID"]: r for r in rows}
+        self.assertIsNone(by["90001"]["Initial Balance Due"])
+        self.assertEqual(by["90001"]["Payment Status"], "Paid")
+        self.assertEqual(by["90002"]["Initial Balance Due"], 57.94)
+        self.assertEqual(by["90002"]["Payment Status"], "Part paid")
+
+    def test_internal_notes_join_the_team_note_and_the_remarks(self):
+        fx = Fixture([resident(Remarks="Late key return"),
+                      resident(StudentID="90002", Email="two@example.test", Unit="Z-01-02", Remarks="Prefers WhatsApp"),
+                      resident(StudentID="90003", Email="three@example.test", Unit="Z-01-03")], self.tmp)
+        corr = self.tmp / "corr.json"
+        corr.write_text(json.dumps({"internalNotes": {"90001": "Balance due RM57.94 (Rina, 16 Oct)", "90003": "Only the team's"}}))
+        _, _, rows, _, _ = fx.run(corr)
+        by = {r["QuickBooks ID"]: r["Internal Notes"] for r in rows}
+        self.assertEqual(by["90001"], "Balance due RM57.94 (Rina, 16 Oct) · Late key return")
+        self.assertEqual(by["90002"], "Prefers WhatsApp")
+        self.assertEqual(by["90003"], "Only the team's")
+
+    def test_no_note_and_no_remarks_is_empty(self):
+        _, _, rows, _, _ = self.convert(resident())
+        self.assertIn(rows[0]["Internal Notes"], (None, ""))
 
     def test_payment_within_a_cent_is_paid(self):
         _, _, rows, _, _ = self.convert(resident(**{"Total Initial Payment Made": 2130.004}))

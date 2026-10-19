@@ -24,6 +24,36 @@ export function initialLines(row: MigrationPreviewRow) {
   ].filter((l) => l.amount > 0);
 }
 
+/**
+ * Where the migrated initial invoice stands (Dani, 19 Oct 2026) - one rule for
+ * the upload preview and the import.
+ *
+ * What is still owed is Sheet3's "Initial Balance Due", which the converter
+ * fills (lines minus Total Initial Payment, owed only above 1 sen) and the team
+ * can correct. It is not worked out here from the lines, because a legacy
+ * invoice can carry lines Sheet3 does not list (a running account, utilities)
+ * and only the team can tell those from a real debt.
+ *
+ * Owed: the invoice is "issued" and the payment is what came in, so the
+ * Payments tab shows Partially paid and the rest is paid through the normal
+ * Record payment. Nothing owed: "paid" in full. Paid more than the listed
+ * lines (00952, 00993): paid, and the extra is not carried as credit - it went
+ * on charges outside these lines.
+ */
+export function initialPaymentOf(row: MigrationPreviewRow) {
+  const total = r2(initialLines(row).reduce((n, l) => n + l.amount, 0));
+  const due = r2(row.record.balanceDue);
+  const owed = due > 0.01 ? Math.min(due, total) : 0;
+  return {
+    total,
+    owed,
+    paid: r2(total - owed),
+    status: (owed > 0 ? "issued" : "paid") as "issued" | "paid",
+    /** paid less than the listed lines while Sheet3 says nothing is owed - the team should look */
+    unexplained: !owed && row.record.totalPaid > 0 && total - row.record.totalPaid > 0.01 ? r2(total - row.record.totalPaid) : 0,
+  };
+}
+
 /** The rent terms from the next period after today, or null when nothing is left to bill. */
 export function migratedRentTerms(row: MigrationPreviewRow, today: string) {
   const { schedule, monthlyRent } = row.record;

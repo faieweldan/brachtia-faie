@@ -9,6 +9,7 @@ import { normUnit, toDate, toSchedule } from "@/lib/master-list";
 import { fmtDate, type Resident, type Unit } from "@/lib/ops-store";
 import { bedForPlacement } from "@/lib/room-offer";
 import { nextRentAfter, shiftDate } from "@/lib/rental-schedule";
+import { initialPaymentOf } from "@/lib/migration/import-plan";
 
 export type MigrationIssueLevel = "warning" | "blocked";
 
@@ -81,6 +82,10 @@ export type MigrationRecord = {
   monthlyRent: number;
   starterPack: number;
   totalPaid: number;
+  /** Sheet3 "Initial Balance Due" - what is still owed on the initial invoice (0 = paid in full) */
+  balanceDue: number;
+  /** Sheet3 "Internal Notes" - admin only, goes to residents.admin_notes */
+  internalNotes: string;
   taUrl: string;
   invoiceUrl: string;
   /** the QuickBooks number, as written: INV:IP_00894 */
@@ -516,6 +521,8 @@ export function previewSheet3Grid(grid: unknown[][], system: SystemSnapshot): Mi
       monthlyRent: rent ?? 0,
       starterPack: money(value("Add on: Starter pack")) ?? 0,
       totalPaid: money(value("Total Initial Payment")) ?? 0,
+      balanceDue: money(value("Initial Balance Due")) ?? 0,
+      internalNotes: text(value("Internal Notes")),
       taUrl: text(value("Copy of Tenancy Agreement")),
       // the existing TA's own number, e.g. TA2025_A-18-05_00724 (Rina, 13 Oct 2026)
       agreementNo: text(value("Agreement No.")),
@@ -528,7 +535,7 @@ export function previewSheet3Grid(grid: unknown[][], system: SystemSnapshot): Mi
       occupancy: text(value("Occupancy")),
     };
 
-    return {
+    const out: MigrationPreviewRow = {
       record,
       sourceRow,
       quickbooksId,
@@ -558,6 +565,13 @@ export function previewSheet3Grid(grid: unknown[][], system: SystemSnapshot): Mi
       charges: safeCharges,
       issues,
     };
+    // the initial payment, by the same rule the import uses
+    const pay = initialPaymentOf(out);
+    if (pay.unexplained) {
+      add("warning", "Initial Balance Due", `Paid RM${pay.unexplained.toFixed(2)} less than the listed lines, but Initial Balance Due is empty - imported as fully paid. Fill it in if they still owe it.`);
+      if (out.status === "ready") out.status = "warning";
+    }
+    return out;
   });
 
   const byQuickBooks = new Map<string, MigrationPreviewRow[]>();

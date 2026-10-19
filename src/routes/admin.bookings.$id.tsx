@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Dropdown } from "@/components/admin/Dropdown";
+import { InternalNoteEditor } from "@/components/admin/InternalNote";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -129,7 +130,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Calendar as DayPicker } from "@/components/ui/calendar";
-import { Textarea } from "@/components/ui/textarea";
 import { DateInput } from "@/components/ui/date-input";
 import { AddToCalendar } from "@/components/site/AddToCalendar";
 import { cleanPhone, waDigits } from "@/lib/reference-data";
@@ -2569,14 +2569,9 @@ function BookingDetail() {
 
           {/* Internal notes */}
           <Card title="Internal notes">
-            <Textarea
-              defaultValue={row.admin_notes ?? ""}
-              rows={4}
-              placeholder="Add a note..."
-              onBlur={(e) =>
-                e.target.value !== (row.admin_notes ?? "") &&
-                mutate.mutate({ adminNotes: e.target.value })
-              }
+            <InternalNoteEditor
+              value={row.admin_notes ?? ""}
+              onSave={(next) => mutate.mutate({ adminNotes: next })}
             />
             {/* Closed by mistake. Everything a close did is undone here - the
                 reason, the link to whatever it was said to duplicate - so it

@@ -4,6 +4,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { klToday } from "@/lib/kl-date";
 import { PERSON_LABEL, personStatus, soldBedLabel, timingLine, timingTone } from "@/lib/placement";
 import { ResidentLabelPicker } from "@/components/admin/ResidentLabels";
+import { ResidentNoteLine } from "@/components/admin/InternalNote";
 import { beforeTenancyStart } from "@/lib/room-change";
 import { isSandboxClient } from "@/lib/sandbox";
 import { ArrowLeft, DoorOpen, Pencil, Trash2 } from "lucide-react";
@@ -607,6 +608,8 @@ function ResidentProfilePage() {
                 {/* admin's own labels, shared by every admin (13 Oct 2026) */}
                 {form.id ? <ResidentLabelPicker residentId={form.id} /> : null}
               </div>
+              {/* admin's internal note, under the labels - never shown to the resident (19 Oct 2026) */}
+              {form.id ? <ResidentNoteLine residentId={form.id} /> : null}
             </div>
           </div>
 

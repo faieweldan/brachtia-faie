@@ -231,10 +231,12 @@
     {
       "key": "internal_notes",
       "sheet3": "Internal Notes",
-      "source": null,
-      "db": null,
+      "source": "Remarks",
+      "db": "residents.admin_notes",
       "required": false,
-      "kind": "manual"
+      "kind": "manual",
+      "transform": "The team's note (corrections internalNotes) and the master's Remarks, joined with \" · \"",
+      "notes": "Admin only - never shown to the resident (19 Oct 2026)"
     },
     {
       "key": "residence",
@@ -520,8 +522,19 @@
       "db": "invoices.status",
       "required": true,
       "kind": "calculated",
-      "transform": "Paid when Total Initial Payment Made is present",
+      "transform": "Paid when Total Initial Payment Made is present; Part paid when Initial Balance Due is above 0 (the import reads Initial Balance Due, not this label)",
       "notes": "Do not reconcile against the listed lines: the legacy invoice can contain extra charges such as utilities."
+    },
+    {
+      "key": "initial_balance_due",
+      "sheet3": "Initial Balance Due",
+      "source": null,
+      "db": "invoices.status (issued while owed) + payments.amount (lines - owed)",
+      "required": false,
+      "kind": "calculated",
+      "addedToSheet3": true,
+      "transform": "Listed charge lines - Total Initial Payment, only when above RM0.01; the team can set or clear it (corrections balanceDue)",
+      "notes": "Paid more than the lines is not a debt and not a credit: blank. Running-account invoices with extra lines are cleared by the team (19 Oct 2026)."
     },
     {
       "key": "next_billing_period",

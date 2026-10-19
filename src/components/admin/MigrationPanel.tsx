@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Panel } from "@/components/admin/ops-ui";
 import { fmtDate, money } from "@/lib/ops-store";
-import { initialLines, r2 } from "@/lib/migration/import-plan";
+import { initialLines, initialPaymentOf } from "@/lib/migration/import-plan";
 import { SCHEDULES } from "@/lib/reference-data";
 import type { MigrationPreview, MigrationPreviewRow } from "@/lib/migration/sheet3";
 import type { ImportOutcome } from "@/lib/migration/import.server";
@@ -203,7 +203,8 @@ export function ResidentLine({ row, today, open, onToggle }: { row: MigrationPre
   const mark = (...fields: string[]) =>
     fields.some((f) => bad.has(f.toLowerCase())) ? "rounded bg-rose-100 px-1 text-rose-900" : "";
   const lines = initialLines(row);
-  const total = r2(lines.reduce((n, l) => n + l.amount, 0));
+  // the same rule the import uses (import-plan)
+  const pay = initialPaymentOf(row);
 
   return (
     <div className="text-sm">
@@ -260,12 +261,17 @@ export function ResidentLine({ row, today, open, onToggle }: { row: MigrationPre
             <Field label="Invoice copy">
               <DocLink url={r.invoiceUrl} marked={mark("Copy of Invoice")} />
             </Field>
+            <Field label="Internal note">
+              <span className="whitespace-pre-wrap">{r.internalNotes || "—"}</span>
+            </Field>
           </dl>
 
           <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs">
             <div className="mb-1 flex justify-between font-medium">
               <span>Initial payment</span>
-              <span className="tabular-nums">{money(total)} · paid</span>
+              <span className={`tabular-nums ${pay.owed ? "text-amber-800" : ""}`}>
+                {money(pay.total)} · {pay.owed ? `Part paid - owes ${money(pay.owed)}` : "Paid"}
+              </span>
             </div>
             <ul className="text-muted-foreground">
               {lines.map((l) => (
