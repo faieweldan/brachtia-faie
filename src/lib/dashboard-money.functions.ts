@@ -43,10 +43,11 @@ export const dashboardMoney = createServerFn({ method: "GET" }).handler(
       ),
     ];
     const { data: tens } = tenancyIds.length
-      ? await sb.from("tenancies").select("id, payment_frequency").in("id", tenancyIds)
+      ? // the frequency lives on the rent schedule, not the tenancy (15 Sep 2026)
+        await sb.from("rental_schedules").select("tenancy_id, frequency").in("tenancy_id", tenancyIds)
       : { data: [] };
     const freqOf = new Map(
-      ((tens ?? []) as any[]).map((t) => [t.id, String(t.payment_frequency ?? "")]),
+      ((tens ?? []) as any[]).map((t) => [t.tenancy_id, String(t.frequency ?? "")]),
     );
     const rent: RentDue[] = rental.map((i) => ({
       dueDate: dueDateOf(i),

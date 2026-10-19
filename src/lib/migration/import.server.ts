@@ -114,8 +114,8 @@ export async function importResident(sb: any, row: MigrationPreviewRow, today: s
           bed_id: null,
           start_date: row.tenancyStart,
           end_date: row.tenancyEnd,
-          monthly_rent: rec.monthlyRent,
-          payment_frequency: rec.schedule,
+          // rent and frequency live on rental_schedules only (15 Sep 2026); the
+          // tenancy columns were dropped - test-bratchia still had them, live did not
         })
         .select("id")
         .single(),
