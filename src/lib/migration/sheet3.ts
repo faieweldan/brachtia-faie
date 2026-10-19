@@ -34,6 +34,11 @@ export type MigrationPreviewRow = {
   stayDuration: string;
   term: "Short Term" | "Long Term" | "";
   nextBillingPeriod: string;
+  /** the first rent period the schedule starts from - Brachtia's when Sheet3 gives one */
+  nextPeriodStart: string;
+  nextPeriodEnd: string;
+  /** Sheet3 says nothing more is owed ("Fully paid" / "Paid to the end of the tenancy") */
+  paidToEndBySheet: boolean;
   nextPaymentDue: string;
   nextPaymentAmount: number | null;
   charges: {
@@ -486,6 +491,14 @@ export function previewSheet3Grid(grid: unknown[][], system: SystemSnapshot): Mi
     const sheetDue = toDate(text(value("Next payment due")));
     // a blank cell is "not set", never RM 0 (money() reads a blank charge as 0)
     const sheetAmount = text(value("Next payment amount")) ? money(value("Next payment amount")) : null;
+    // and Brachtia's next billing period: the schedule starts from it, so every later bill follows (19 Oct 2026)
+    const periodText = text(value("Next billing period"));
+    const paidToEndBySheet = /^(fully paid|paid to the end)/i.test(periodText);
+    const [pStart = "", pEnd = ""] = periodText.split(/\s*[–—]\s*|\s+-\s*|\s*-\s+/).map((p) => toDate(p));
+    const sheetPeriod = pStart && pEnd && pEnd >= pStart ? { start: pStart, end: pEnd } : null;
+    if (next && sheetPeriod && (sheetPeriod.start !== next.start || sheetPeriod.end !== next.end)) {
+      add("warning", "Next billing period", `Set by Brachtia admin: ${fmtDate(sheetPeriod.start)} – ${fmtDate(sheetPeriod.end)} (the system works out ${fmtDate(next.start)} – ${fmtDate(next.end)}).`);
+    }
     const nextDue = sheetDue || next?.due || "";
     const nextAmount = sheetAmount ?? next?.amount ?? null;
     if (next && sheetAmount !== null && Math.abs(sheetAmount - next.amount) > 0.005) {
@@ -553,7 +566,14 @@ export function previewSheet3Grid(grid: unknown[][], system: SystemSnapshot): Mi
           : "ready",
       stayDuration: duration,
       term,
-      nextBillingPeriod: next
+      nextPeriodStart: sheetPeriod?.start ?? next?.start ?? "",
+      nextPeriodEnd: sheetPeriod?.end ?? next?.end ?? "",
+      paidToEndBySheet,
+      nextBillingPeriod: paidToEndBySheet
+        ? periodText
+        : sheetPeriod
+        ? `${fmtDate(sheetPeriod.start)} – ${fmtDate(sheetPeriod.end)}`
+        : next
         ? `${fmtDate(next.start)} – ${fmtDate(next.end)}`
         : schedule === "full"
           ? "Fully paid"

@@ -51,6 +51,11 @@ export const RENT_DUE_DAY = 5;
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
 /** The 5th of the first month covered by a payment. */
+/** How many months one bill covers for a payment frequency (0 when it is not a repeating one). */
+export function cycleMonths(frequency: string) {
+  return CYCLE[frequency] ?? 0;
+}
+
 export function dueFor(start: string) {
   const [y, m] = start.slice(0, 10).split("-").map(Number);
   if (!y || !m) return start;

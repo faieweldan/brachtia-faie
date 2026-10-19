@@ -1,4 +1,4 @@
-import { nextRentAfter } from "@/lib/rental-schedule";
+import { cycleMonths, dueFor, nextRentAfter } from "@/lib/rental-schedule";
 import type { MigrationPreviewRow } from "@/lib/migration/sheet3";
 
 /*
@@ -67,6 +67,23 @@ export function migratedRentTerms(row: MigrationPreviewRow, today: string) {
     advanceRent: row.charges.advanceRent,
     today,
   });
+  // Sheet3 says nothing more is owed: no schedule (19 Oct 2026)
+  if (row.paidToEndBySheet) return null;
+  // Brachtia's next billing period wins: the schedule starts there, every later bill follows it
+  if (row.nextPeriodStart && row.nextPeriodStart !== next?.start) {
+    const cycle = cycleMonths(schedule);
+    const month = (iso: string) => Number(iso.slice(0, 4)) * 12 + Number(iso.slice(5, 7)) - 1;
+    const finalMonths = cycle ? ((month(row.tenancyEnd) - month(row.nextPeriodStart)) % cycle) + 1 : 1;
+    return {
+      monthly_rent: monthlyRent,
+      frequency: schedule,
+      first_period_start: row.nextPeriodStart,
+      first_period_end: row.nextPeriodEnd,
+      first_due_date: row.nextPaymentDue || dueFor(row.nextPeriodStart),
+      tenancy_end: row.tenancyEnd,
+      final_amount: Math.round(monthlyRent * finalMonths * 100) / 100,
+    };
+  }
   if (!next) return null;
   // the schedule steps on from the next cycle; its last bill is whole months too
   return {

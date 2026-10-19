@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { migratedRentTerms } from "../src/lib/migration/import-plan";
 import { previewSheet3Grid } from "../src/lib/migration/sheet3";
 import type { Resident, Unit } from "../src/lib/ops-store";
 
 const headers = [
+  "Next billing period",
   "Next payment due",
   "Next payment amount",
   "Resident Name",
@@ -264,5 +266,24 @@ describe("Brachtia admin's next payment wins (15 Oct 2026)", () => {
   test("the same figures as the system raise nothing", () => {
     const row = run({ "Next payment due": "2026-11-05", "Next payment amount": 400 });
     expect(row.issues.some((i) => i.field.startsWith("Next payment"))).toBe(false);
+  });
+
+  // 00598 Tahura: Brachtia checked QuickBooks - next bill is Nov-Dec, the system worked out Dec-Jan (19 Oct 2026)
+  test("Brachtia's next billing period starts the schedule, so later bills follow it", () => {
+    const row = run({
+      "Tenancy Start": "2026-09-01", "Tenancy End": "2027-08-31", "Payment frequency": "Bi-monthly",
+      "Monthly rent": 800, "First month rent - pro-rated x/x days": 77.42, "Advance rental (RM)": 1600,
+      "Next billing period": "01 Nov 2026 – 31 Dec 2026", "Next payment due": "2026-11-05", "Next payment amount": 1600,
+    });
+    expect([row.nextPeriodStart, row.nextPeriodEnd]).toEqual(["2026-11-01", "2026-12-31"]);
+    expect(row.issues.some((i) => i.field === "Next billing period" && i.level === "warning")).toBe(true);
+    expect(migratedRentTerms(row, "2026-10-15")).toMatchObject({
+      first_period_start: "2026-11-01", first_period_end: "2026-12-31", first_due_date: "2026-11-05", final_amount: 1600,
+    });
+  });
+
+  test("\"Paid to the end of the tenancy\" in Sheet3 makes no rent schedule", () => {
+    const row = run({ "Next billing period": "Paid to the end of the tenancy", "Next payment due": "", "Next payment amount": "" });
+    expect(migratedRentTerms(row, "2026-10-15")).toBeNull();
   });
 });
