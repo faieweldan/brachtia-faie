@@ -669,7 +669,8 @@ INITIAL_LINE_COLUMNS = (
 def initial_balance_due(out_row: dict, paid, answer=None):
     """Owed on the initial invoice: lines - paid above RM0.01, else blank. The team's answer wins."""
     if answer is not None:
-        return round(float(answer), 2) if float(answer) > 0.01 else None
+        # the team's 0 is written as 0, not blank: "checked, nothing owed" (19 Oct 2026)
+        return round(float(answer), 2) if float(answer) > 0.01 else 0.0
     if paid is None:
         return None
     owed = round(sum(float(out_row.get(c) or 0) for c in INITIAL_LINE_COLUMNS) - paid, 2)

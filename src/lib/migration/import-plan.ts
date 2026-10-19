@@ -50,7 +50,7 @@ export function initialPaymentOf(row: MigrationPreviewRow) {
     paid: r2(total - owed),
     status: (owed > 0 ? "issued" : "paid") as "issued" | "paid",
     /** paid less than the listed lines while Sheet3 says nothing is owed - the team should look */
-    unexplained: !owed && row.record.totalPaid > 0 && total - row.record.totalPaid > 0.01 ? r2(total - row.record.totalPaid) : 0,
+    unexplained: !owed && !row.record.balanceChecked && row.record.totalPaid > 0 && total - row.record.totalPaid > 0.01 ? r2(total - row.record.totalPaid) : 0,
   };
 }
 

@@ -8,10 +8,10 @@ import type { MigrationPreviewRow } from "@/lib/migration/sheet3";
  * amounts are the real cases' totals; nothing else about them is here. One
  * rule (initialPaymentOf) for the upload preview and the import.
  */
-function row(lines: number, totalPaid: number, balanceDue = 0): MigrationPreviewRow {
+function row(lines: number, totalPaid: number, balanceDue = 0, balanceChecked = false): MigrationPreviewRow {
   return {
     charges: { proratedRent: 0, advanceRent: lines, securityDeposit: 0, utilitiesDeposit: 0, accessCardDeposit: 0, residentCardCharges: 0, adminAgreementCharges: 0 },
-    record: { starterPack: 0, totalPaid, balanceDue } as any,
+    record: { starterPack: 0, totalPaid, balanceDue, balanceChecked } as any,
   } as unknown as MigrationPreviewRow;
 }
 
@@ -40,6 +40,16 @@ describe("a migrated initial payment that is not fully paid", () => {
 
   test("00721 running account, cleared by the team: paid", () => {
     expect(initialPaymentOf(row(4000, 4500)).status).toBe("paid");
+  });
+
+  test("00721 / 00929: paid less, but the team checked it (0) - paid, and no warning", () => {
+    const p = initialPaymentOf(row(3526.73, 3245, 0, true));
+    expect(p.status).toBe("paid");
+    expect(p.unexplained).toBe(0);
+  });
+
+  test("paid less and nobody filled the balance in: still a warning", () => {
+    expect(initialPaymentOf(row(3526.73, 3245)).unexplained).toBe(281.73);
   });
 
   test("1 sen or less is not a debt", () => {

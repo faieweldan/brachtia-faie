@@ -89,6 +89,8 @@ export type MigrationRecord = {
   totalPaid: number;
   /** Sheet3 "Initial Balance Due" - what is still owed on the initial invoice (0 = paid in full) */
   balanceDue: number;
+  /** the cell holds a number, 0 included: the team checked it (0 = checked, nothing owed) */
+  balanceChecked: boolean;
   /** Sheet3 "Internal Notes" - admin only, goes to residents.admin_notes */
   internalNotes: string;
   taUrl: string;
@@ -535,6 +537,7 @@ export function previewSheet3Grid(grid: unknown[][], system: SystemSnapshot): Mi
       starterPack: money(value("Add on: Starter pack")) ?? 0,
       totalPaid: money(value("Total Initial Payment")) ?? 0,
       balanceDue: money(value("Initial Balance Due")) ?? 0,
+      balanceChecked: text(value("Initial Balance Due")) !== "",
       internalNotes: text(value("Internal Notes")),
       taUrl: text(value("Copy of Tenancy Agreement")),
       // the existing TA's own number, e.g. TA2025_A-18-05_00724 (Rina, 13 Oct 2026)

@@ -189,7 +189,7 @@ class ConverterTests(unittest.TestCase):
         corr.write_text(json.dumps({"balanceDue": {"90001": 0, "90002": 57.94}}))
         _, _, rows, _, _ = fx.run(corr)
         by = {r["QuickBooks ID"]: r for r in rows}
-        self.assertIsNone(by["90001"]["Initial Balance Due"])
+        self.assertEqual(by["90001"]["Initial Balance Due"], 0)  # checked by the team: 0, not blank
         self.assertEqual(by["90001"]["Payment Status"], "Paid")
         self.assertEqual(by["90002"]["Initial Balance Due"], 57.94)
         self.assertEqual(by["90002"]["Payment Status"], "Part paid")
