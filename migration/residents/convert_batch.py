@@ -887,8 +887,11 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
                 # system - "Unit" in the master is that room (Dani, 14 Oct 2026)
                 out_row["Room"], out_row["Bed"] = "A", "Single"
             else:
-                flag(REVIEW, "Room", f"Room says 'Unit' but {out_row['Unit no. '] or 'the unit'} is "
-                     f"'{unit_type or 'not set up'}' - whole-unit lets need a whole-unit rate in Website settings")
+                # a whole-unit let: the room "Unit" with its one bed "Unit", as Homes and the
+                # bulk upload make it (residents.functions.ts) - the unit must be let whole in Homes
+                out_row["Room"], out_row["Bed"] = "Unit", "Unit"
+                flag(WARNING, "Room", f"Whole-unit let - {out_row['Unit no. '] or 'the unit'} must be set up as a whole unit "
+                     f"in Homes (it needs a whole-unit rate for '{unit_type or 'its unit type'}' in Website settings)")
         # occupancy follows the bed: one person alone has the room as a single
         out_row["Occupancy"] = {"single": "Single", "twin 1": "Twin Share", "twin 2": "Twin Share"}.get(
             out_row["Bed"].strip().lower(), "")
@@ -1034,6 +1037,8 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
             v = out_row.get(header)
             if v in (None, "") or field not in allowed:
                 continue
+            if header in ("Room", "Bed") and v == "Unit":
+                continue  # the whole-unit slot's own name, not a dropdown choice
             if str(v) not in allowed[field]:
                 if header == "University":
                     # the system's "Other - I will type it": a typed university is kept
