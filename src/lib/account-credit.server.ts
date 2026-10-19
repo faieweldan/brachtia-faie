@@ -314,6 +314,34 @@ export async function putCreditFile(sb: any, p: string, bytes: Uint8Array, type:
 }
 
 /** the deposits reclassified as credit, by deposit - checkout holds that much less */
+/**
+ * The same, for many residents in a few calls (the dashboard, Dani 19 Oct 2026):
+ * live's host caps the calls one request may make, and one-by-one per resident
+ * broke the money figures once 82 residents were imported. Only a resident with
+ * an old account-credit file not yet brought over is read one at a time.
+ */
+export async function reclassifiedDepositsFor(sb: any, residentIds: string[]) {
+  const ids = residentIds.filter((id) => UUID.test(id));
+  if (!ids.length) return [];
+  const { data: marks, error: mErr } = await sb.from("account_credit_imports").select("resident_id").in("resident_id", ids);
+  if (mErr) throw new Error(`Account credit is not ready on this database: ${mErr.message}`);
+  const marked = new Set(((marks ?? []) as any[]).map((m) => String(m.resident_id)));
+  const unmarked = ids.filter((id) => !marked.has(id));
+  if (unmarked.length) {
+    const { data: files } = await sb.storage.from(BUCKET).list("account-credit", { limit: 10000 });
+    const legacy = new Set(((files ?? []) as any[]).map((f) => String(f.name).replace(/\.json$/, "")));
+    for (const id of unmarked) if (legacy.has(id)) await ledgerReady(sb, id);
+  }
+  const { data, error } = await sb
+    .from("account_credit_entries")
+    .select("*")
+    .in("resident_id", ids)
+    .eq("kind", "deposit")
+    .is("reversed_at", null);
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as any[]).map(toEntry);
+}
+
 export async function reclassifiedDeposits(sb: any, residentId: string) {
   return (await creditEntries(sb, residentId)).filter((e) => e.kind === "deposit" && !e.reversedAt);
 }

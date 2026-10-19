@@ -24,7 +24,7 @@ export const dashboardMoney = createServerFn({ method: "GET" }).handler(
     const sb = await adminDb();
     const { dueDateOf, isDeposit } = await import("@/lib/resident-billing.functions");
     const { readStatement } = await import("@/lib/checkout.server");
-    const { reclassifiedDeposits } = await import("@/lib/account-credit.server");
+    const { reclassifiedDepositsFor } = await import("@/lib/account-credit.server");
 
     const { data: invoices, error } = await sb
       .from("invoices")
@@ -68,8 +68,14 @@ export const dashboardMoney = createServerFn({ method: "GET" }).handler(
     const stillHere = ((people ?? []) as any[])
       .filter((p) => p.status !== "Inactive")
       .map((p) => String(p.id));
+    // only a resident with a checkout folder can have a settled statement - one
+    // listing instead of a download per resident (live caps calls per request)
+    const { data: folders } = await sb.storage.from("resident-documents").list("checkout", { limit: 10000 });
+    const checkedOut = new Set(((folders ?? []) as any[]).map((f) => String(f.name)));
     const settled = await Promise.all(
-      stillHere.map(async (id) => ((await readStatement(sb, id))?.settled ? id : null)),
+      stillHere
+        .filter((id) => checkedOut.has(id))
+        .map(async (id) => ((await readStatement(sb, id))?.settled ? id : null)),
     );
     const keep = new Set(stillHere.filter((id) => !settled.includes(id)));
 
@@ -111,9 +117,8 @@ export const dashboardMoney = createServerFn({ method: "GET" }).handler(
       }
     }
     // a deposit lowered by Update Tenancy became account credit: held no more
-    for (const id of keep)
-      for (const r of await reclassifiedDeposits(sb, id))
-        deposits.push({ label: String(r.depositLabel ?? "Deposit"), amount: -Number(r.amount) });
+    for (const r of await reclassifiedDepositsFor(sb, [...keep]))
+      deposits.push({ label: String(r.depositLabel ?? "Deposit"), amount: -Number(r.amount) });
 
     return { deposits, rent };
   },
