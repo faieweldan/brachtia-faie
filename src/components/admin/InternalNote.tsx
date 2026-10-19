@@ -40,6 +40,48 @@ export function InternalNoteEditor({
 }
 
 /**
+ * The booking's Internal notes card. One note, one place (Dani, 19 Oct 2026):
+ * before the booking has a resident it is the booking's own note; once it has
+ * one, the card shows and saves the resident's note - the same note as the
+ * line on their profile, so editing either changes both.
+ */
+export function BookingNoteBox({
+  residentId,
+  bookingNote,
+  onSaveBooking,
+}: {
+  residentId?: string | null;
+  bookingNote: string;
+  onSaveBooking: (next: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const key = ["admin", "resident-note", residentId ?? ""];
+  const { data } = useQuery({
+    queryKey: key,
+    queryFn: () => getResidentNote({ data: { residentId: residentId! } }),
+    enabled: !!residentId,
+  });
+  if (!residentId || (data && !data.ready))
+    return <InternalNoteEditor value={bookingNote} onSave={onSaveBooking} />;
+  if (!data) return null;
+  return (
+    <InternalNoteEditor
+      key={data.note}
+      value={data.note}
+      onSave={async (next) => {
+        try {
+          await setResidentNote({ data: { residentId, note: next } });
+          await queryClient.invalidateQueries({ queryKey: key });
+          toast.success("Note saved");
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : "Could not save the note");
+        }
+      }}
+    />
+  );
+}
+
+/**
  * The resident's note as one short line under their labels: the note cut to
  * one line, click to open and edit; "Add note" when there is none. Under it,
  * read-only, the message they wrote on their enquiry - only when there is one.

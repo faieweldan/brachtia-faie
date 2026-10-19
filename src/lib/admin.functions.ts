@@ -217,7 +217,15 @@ export const updateEnquiry = createServerFn({ method: "POST" })
       patch["status"] = data.status;
       patch["stage_changed_at"] = new Date().toISOString();
     }
-    if (data.adminNotes !== undefined) patch["admin_notes"] = data.adminNotes;
+    if (data.adminNotes !== undefined) {
+      // once the booking has a resident, the note is theirs - one note, one place (19 Oct 2026)
+      const { data: owner } = await supabase.from("enquiries").select("resident_id").eq("id", data.id).maybeSingle();
+      const residentId = (owner as any)?.resident_id;
+      if (residentId) {
+        const { error } = await (supabase as any).from("residents").update({ admin_notes: data.adminNotes }).eq("id", residentId);
+        if (error) throw new Error(error.message);
+      } else patch["admin_notes"] = data.adminNotes;
+    }
     if (data.assignedStaff !== undefined) patch["assigned_staff"] = data.assignedStaff;
     if (data.residentId !== undefined) patch["resident_id"] = data.residentId;
     if (data.fullName !== undefined) patch["full_name"] = data.fullName;

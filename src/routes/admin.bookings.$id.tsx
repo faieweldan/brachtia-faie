@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Dropdown } from "@/components/admin/Dropdown";
-import { InternalNoteEditor } from "@/components/admin/InternalNote";
+import { BookingNoteBox } from "@/components/admin/InternalNote";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -2569,9 +2569,10 @@ function BookingDetail() {
 
           {/* Internal notes */}
           <Card title="Internal notes">
-            <InternalNoteEditor
-              value={row.admin_notes ?? ""}
-              onSave={(next) => mutate.mutate({ adminNotes: next })}
+            <BookingNoteBox
+              residentId={row.resident_id}
+              bookingNote={row.admin_notes ?? ""}
+              onSaveBooking={(next) => mutate.mutate({ adminNotes: next })}
             />
             {/* Closed by mistake. Everything a close did is undone here - the
                 reason, the link to whatever it was said to duplicate - so it
