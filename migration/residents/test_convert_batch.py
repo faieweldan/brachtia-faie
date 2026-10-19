@@ -23,7 +23,7 @@ SOURCE_HEADERS = [
     "Tenancy Start", "Tenancy End", "Payment Frequency", "Duration", "Contracting Entity", "Status",
     "Monthly Rent", "Differential Rental (QB)", "Advance Rental", "Security Deposit", "Utility Deposit",
     "Access Card Deposit", "Admin Charges", "Agreement Charges", "Personalised Tag", "Car Park",
-    "Starter Pack", "Total Initial Payment Made", "Initial Payment Invoice Copy", "IP Status", "Status",
+    "Starter Pack", "Total Initial Payment Made", "Initial Payment Invoice Copy", "IP Status", "TA RENT", "TA CLEAN", "Status",
 ]
 
 
@@ -652,3 +652,40 @@ class WholeMonthFlagTests(ConverterTests):
         fix.write_text(json.dumps({"nextRent": {qb: {"due": "2026-12-05", "amount": 1000}}}))
         _, _, _, status, _ = Fixture([resident(**{"Advance Rental": 1000})], self.tmp).run(fix)
         self.assertEqual(status[2][3], "Warning")
+
+
+class SponsorTabTests(ConverterTests):
+    """The Sponsor tab (Dani, 20 Oct 2026): its own column names, the split ignored."""
+
+    def test_advance_in_ta_rent_months_is_the_sponsors_share_not_a_renewal(self):
+        # 6 x TA RENT 400 = 2400, full rent 450: counted as 6 paid months
+        r = resident(**{"Monthly Rent": 450, "TA RENT": 400, "Advance Rental": 2400,
+                        "Total Initial Payment Made": 3730})
+        _, _, rows, status, _ = self.convert(r)
+        self.assertEqual(status[2][3], "Warning")
+        # start 14 Sep 2026 + pro-rated Sep + 6 months -> next bill 1 Apr 2027
+        self.assertTrue(str(rows[0]["Next billing period"]).startswith("01 Apr 2027"))
+
+    def test_ta_clean_problem_is_flagged_for_a_new_ta(self):
+        _, _, _, status, _ = self.convert(resident(**{"TA CLEAN": "Problem"}))
+        self.assertEqual(status[2][3], "Warning")
+
+    def test_master_balance_due_is_what_is_owed(self):
+        r = resident(**{"IP Status": "Partially Paid"})
+        r["Total Initial Payment Made"] = 2000
+        _, _, rows, _, _ = self.convert(r)
+        self.assertEqual(rows[0]["Initial Balance Due"], 130)
+
+    def test_residence_from_the_unit_list(self):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "DM - Unit Set Up"
+        ws.append(["UnitID", "UnitNo", "Type", "Residence"])
+        ws.append(["U001", "A-07-1A", "3 Bedroom Apartment", "The Arc"])
+        wb.save(self.tmp / "units.xlsx")
+        self.assertEqual(cb.unit_residences(self.tmp / "units.xlsx"), {"A-07-01A": "The Arc"})
+
+    def test_sponsor_form_race_words(self):
+        self.assertEqual(cb.normal_race("MELAYU")[0], "Malay")
+        self.assertEqual(cb.normal_race("Bajau (Bumiputera Sabah)")[0], "Bumiputera (Sabah/Sarawak)")
+        self.assertEqual(cb.normal_race("Iban")[0], "Bumiputera (Sabah/Sarawak)")

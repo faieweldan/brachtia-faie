@@ -321,7 +321,10 @@ def normal_race(value) -> tuple[str, str]:
     if not k.strip(".-/ "):
         return "", ""
     mapped = {
-        "malay": "Malay", "chinese": "Chinese", "indian": "Indian",
+        "malay": "Malay", "melayu": "Malay", "chinese": "Chinese", "indian": "Indian",
+        # Sponsor forms (20 Oct 2026): East Malaysian groups are this option
+        "iban": "Bumiputera (Sabah/Sarawak)", "kadazan": "Bumiputera (Sabah/Sarawak)",
+        "bajau": "Bumiputera (Sabah/Sarawak)",
         "bumiputera sabah, brunei": "Bumiputera (Sabah/Sarawak)",
         "bumiputera (sabah/sarawak)": "Bumiputera (Sabah/Sarawak)",
         "bamar": "Other Asian", "burmese": "Other Asian",
@@ -331,6 +334,8 @@ def normal_race(value) -> tuple[str, str]:
         "other": "Other", "n/a": "Prefer not to say", "n": "Prefer not to say",
         "prefer not to say": "Prefer not to say",
     }.get(k)
+    if not mapped and ("sabah" in k or "sarawak" in k):
+        mapped = "Bumiputera (Sabah/Sarawak)"
     return (mapped, "") if mapped else ("Other", f"Race '{raw}' was grouped as Other")
 
 
@@ -339,7 +344,7 @@ def normal_religion(value) -> tuple[str, str]:
     k = key(raw).strip(". ")
     mapped = {
         "islam": "Islam", "muslim": "Islam", "islam/musllim": "Islam",
-        "christian": "Christianity", "christianity": "Christianity", "kristian": "Christianity",
+        "christian": "Christianity", "christian chatolic": "Christianity", "christian catholic": "Christianity", "christianity": "Christianity", "kristian": "Christianity",
         "buddha": "Buddhism", "buddhist": "Buddhism", "buddhism": "Buddhism",
         "hindu": "Hinduism", "hinduism": "Hinduism",
         "sikh": "Sikhism", "sikhism": "Sikhism", "tao": "Taoism", "taoism": "Taoism",
@@ -630,6 +635,21 @@ def unit_types(source: Path) -> dict[str, str]:
     return out
 
 
+def unit_residences(source: Path) -> dict[str, str]:
+    """unit number -> residence, from the same unit list - for a tab with no
+    Residence column (the Sponsor tab, Dani 20 Oct 2026)."""
+    wb = openpyxl.load_workbook(source, read_only=True, data_only=True)
+    if "DM - Unit Set Up" not in wb.sheetnames:
+        return {}
+    out = {}
+    for row in wb["DM - Unit Set Up"].iter_rows(min_row=2, values_only=True):
+        if row and len(row) > 3 and row[1] and row[3]:
+            no = re.sub(r"-(\d)A$", r"-0\1A", str(row[1]).strip().upper())
+            out[no] = str(row[3]).strip()
+    wb.close()
+    return out
+
+
 def fill_next_rent(rows: list[dict], today: date):
     """Next billing period / due / amount, by the system's own rule (next-rent.ts)."""
     bun = shutil.which("bun")
@@ -642,7 +662,9 @@ def fill_next_rent(rows: list[dict], today: date):
         "frequency": r.get("Payment frequency") or "",
         "rent": float(r.get("Monthly rent") or 0),
         "prorated": float(r.get("First month rent - pro-rated x/x days") or 0),
-        "advance": float(r.get("Advance rental (RM)") or 0),
+        # a sponsor's advance counts in TA RENT months (see "_advance_months")
+        "advance": float(r["_advance_months"] * (r.get("Monthly rent") or 0)) if r.get("_advance_months")
+        else float(r.get("Advance rental (RM)") or 0),
     } for r in rows]}
     done = subprocess.run([bun, str(Path(__file__).parent / "next-rent.ts")], input=json.dumps(payload),
                           capture_output=True, text=True, cwd=ROOT)
@@ -710,8 +732,9 @@ NATIONAL_DIAL = {code: dial.lstrip("+") for code, dial in re.findall(
 
 # Same converter for every batch (Dani, 14 Oct 2026): a later tab may spell a
 # column differently, or not have one Batch 1 had.
-COLUMN_ALIASES = {"Remark": "Remarks"}
-OPTIONAL_SOURCE = {"SPONSOR NAME", "IP Status"}
+# the Sponsor tab says "Payment Status" / "Balance Due" for the initial payment
+COLUMN_ALIASES = {"Remark": "Remarks", "Payment Status": "IP Status", "Balance Due": "Balance Due on IP"}
+OPTIONAL_SOURCE = {"SPONSOR NAME", "IP Status", "Residence"}
 # Batch 2 onward says per row whether it goes in; only this value is converted
 MIGRATE_OK = "Clean-Migrate"
 CHECK_MARKS = {"CLEAN", "CHECKED", "OK"}
@@ -733,6 +756,7 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
     allowed = allowed_values(labels)
     fixes = load_corrections(corrections)
     types = unit_types(source)
+    residences = unit_residences(source)
     apps = application_rows(applications) if applications else []
     app_index = application_indexes(apps) if applications else None
     apps_by_row = {row["_row"]: row for row in apps}
@@ -861,6 +885,9 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
             if application_finding:
                 flag(application_finding[0], "Application Form", application_finding[1])
         res = text(cell("Residence"))
+        if not res and ("Residence", 1) not in cols:
+            unit_no = re.sub(r"-(\d)A$", r"-0\1A", text(cell("Unit")).upper())
+            res = residences.get(unit_no, "")
         out_row["Residence"] = RESIDENCE.get(res.upper(), res)
         payer = text(cell("PAYOR?")).upper()
         out_row["Paid by"] = PAID_BY.get(payer, "")
@@ -995,7 +1022,18 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
         if pro and isinstance(start, date) and start.day == 1:
             flag(renewal, "Differential Rental (QB)",
                  f"Starts on the 1st but has a pro-rated amount ({pro:,.2f}) - likely a renewal; ask the team for the next payment")
-        if adv and rent_now and abs(adv / rent_now - round(adv / rent_now)) > 0.01:
+        # Sponsor tab: the advance is the sponsor's share - whole months of TA RENT,
+        # not of the full Monthly Rent (the sponsor/student split is not built yet,
+        # Dani 20 Oct 2026). Count the paid months by TA RENT.
+        ta_rent = cell("TA RENT")
+        ta_rent = float(ta_rent) if isinstance(ta_rent, (int, float)) and ta_rent > 0 else 0
+        whole = lambda x, by: by and abs(x / by - round(x / by)) <= 0.01
+        if adv and rent_now and ta_rent and ta_rent != rent_now and not whole(adv, rent_now) and whole(adv, ta_rent):
+            out_row["_advance_months"] = round(adv / ta_rent)
+            flag(WARNING, "Advance Rental",
+                 f"Advance rental ({adv:,.2f}) is {round(adv / ta_rent)} months of TA RENT ({ta_rent:,.2f}), the sponsor's share - "
+                 f"the system bills the full rent ({rent_now:,.2f}); the sponsor/student split is not built yet")
+        elif adv and rent_now and abs(adv / rent_now - round(adv / rent_now)) > 0.01:
             flag(renewal, "Advance Rental",
                  f"Advance rental ({adv:,.2f}) is not whole months of rent ({rent_now:,.2f}) - likely a renewal; ask the team for the next payment")
         out_row["Security Deposit (RM) (refundable) "] = charges["Security Deposit"]
@@ -1018,6 +1056,10 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
         ip_status = text(cell("IP Status")).lower()
         if answer is None and ip_status.startswith("fully"):
             answer = 0
+        # the master's own Balance Due on the initial payment, when it gives a number
+        master_due = cell("Balance Due on IP")
+        if answer is None and isinstance(master_due, (int, float)):
+            answer = master_due
         out_row["Initial Balance Due"] = initial_balance_due(out_row, paid, answer)
         if ip_status.startswith("unpaid"):
             flag(REVIEW, "Initial Balance Due", "The master says the initial payment is Unpaid - check what was paid before importing")
@@ -1025,6 +1067,10 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
             flag(REVIEW, "Initial Balance Due", "The master says Partially paid, but the listed lines and the amount paid show nothing owed - fill in what is owed")
         if out_row["Initial Balance Due"]:
             out_row["Payment Status"] = "Part paid"
+        # Sponsor tab: the team found the signed TA wrong - a new one is generated
+        # in the system and sent for signing after import (Dani, 20 Oct 2026)
+        if text(cell("TA CLEAN")).lower() == "problem":
+            flag(WARNING, "TACopy", "TA CLEAN is Problem - regenerate the TA in the system and send the signing link after import")
 
         # Internal Notes: the team's note and the master's remarks (a sponsor's
         # batch code is not a remark) - admin only on the resident profile
