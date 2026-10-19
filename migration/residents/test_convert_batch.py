@@ -658,7 +658,7 @@ class WholeMonthFlagTests(ConverterTests):
 class SponsorTabTests(ConverterTests):
     """The Sponsor tab (Dani, 20 Oct 2026): its own column names, the split ignored."""
 
-    def test_advance_in_ta_rent_months_is_the_sponsors_share_not_a_renewal(self):
+    def test_advance_in_old_ta_rent_months_is_not_a_renewal(self):
         # 6 x TA RENT 400 = 2400, full rent 450: counted as 6 paid months
         r = resident(**{"Monthly Rent": 450, "TA RENT": 400, "Advance Rental": 2400,
                         "Total Initial Payment Made": 3730})

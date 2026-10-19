@@ -1033,17 +1033,17 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
         if pro and isinstance(start, date) and start.day == 1:
             flag(renewal, "Differential Rental (QB)",
                  f"Starts on the 1st but has a pro-rated amount ({pro:,.2f}) - likely a renewal; ask the team for the next payment")
-        # Sponsor tab: the advance is the sponsor's share - whole months of TA RENT,
-        # not of the full Monthly Rent (the sponsor/student split is not built yet,
-        # Dani 20 Oct 2026). Count the paid months by TA RENT.
+        # Sponsor tab: TA RENT is the rent in the resident's signed TA, since raised
+        # (TA CLEAN = Problem, the TA is regenerated - Dani 19 Oct 2026). The advance
+        # was billed at that old rent, so the paid months are counted by TA RENT.
         ta_rent = cell("TA RENT")
         ta_rent = float(ta_rent) if isinstance(ta_rent, (int, float)) and ta_rent > 0 else 0
         whole = lambda x, by: by and abs(x / by - round(x / by)) <= 0.01
         if adv and rent_now and ta_rent and ta_rent != rent_now and not whole(adv, rent_now) and whole(adv, ta_rent):
             out_row["_advance_months"] = round(adv / ta_rent)
             flag(WARNING, "Advance Rental",
-                 f"Advance rental ({adv:,.2f}) is {round(adv / ta_rent)} months of TA RENT ({ta_rent:,.2f}), the sponsor's share - "
-                 f"the system bills the full rent ({rent_now:,.2f}); the sponsor/student split is not built yet")
+                 f"Advance rental ({adv:,.2f}) is {round(adv / ta_rent)} months of the old TA rent ({ta_rent:,.2f}) - "
+                 f"counted as {round(adv / ta_rent)} paid months; the next bills are at the current rent ({rent_now:,.2f})")
         elif adv and rent_now and abs(adv / rent_now - round(adv / rent_now)) > 0.01:
             flag(renewal, "Advance Rental",
                  f"Advance rental ({adv:,.2f}) is not whole months of rent ({rent_now:,.2f}) - likely a renewal; ask the team for the next payment")
