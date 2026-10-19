@@ -13,6 +13,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 import openpyxl
+import openpyxl.styles
 
 sys.path.insert(0, str(Path(__file__).parent))
 import convert_batch as cb  # noqa: E402
@@ -23,7 +24,7 @@ SOURCE_HEADERS = [
     "Tenancy Start", "Tenancy End", "Payment Frequency", "Duration", "Contracting Entity", "Status",
     "Monthly Rent", "Differential Rental (QB)", "Advance Rental", "Security Deposit", "Utility Deposit",
     "Access Card Deposit", "Admin Charges", "Agreement Charges", "Personalised Tag", "Car Park",
-    "Starter Pack", "Total Initial Payment Made", "Initial Payment Invoice Copy", "IP Status", "TA RENT", "TA CLEAN", "Status",
+    "Starter Pack", "Total Initial Payment Made", "Initial Payment Invoice Copy", "IP Status", "TA RENT", "TA CLEAN", "Tag", "Status",
 ]
 
 
@@ -689,3 +690,39 @@ class SponsorTabTests(ConverterTests):
         self.assertEqual(cb.normal_race("MELAYU")[0], "Malay")
         self.assertEqual(cb.normal_race("Bajau (Bumiputera Sabah)")[0], "Bumiputera (Sabah/Sarawak)")
         self.assertEqual(cb.normal_race("Iban")[0], "Bumiputera (Sabah/Sarawak)")
+
+
+class SponsorBatchAndUnpaidTests(ConverterTests):
+    """Petronas batches in Tag, B4 unpaid, red names left out (Dani, 19 Oct 2026)."""
+
+    def sponsored(self, **over):
+        return resident(**{"PAYOR?": "SPONSOR", "SPONSOR NAME": "PETRONAS", **over})
+
+    def test_batch_from_the_tag_column(self):
+        _, _, rows, _, _ = self.convert(self.sponsored(Tag="B4", Remarks="B4, TA will follow"))
+        self.assertEqual(rows[0]["Payor name"], "PETRONAS (B4)")
+        self.assertEqual(rows[0]["Internal Notes"], "TA will follow")
+
+    def test_unpaid_owes_the_whole_invoice_and_needs_no_copy(self):
+        r = self.sponsored(**{"IP Status": "Unpaid", "Initial Payment Invoice Copy": None})
+        _, _, rows, status, _ = self.convert(r)
+        self.assertEqual(status[2][3], "Warning")
+        self.assertEqual(rows[0]["Total Initial Payment"], 0)
+        self.assertEqual(rows[0]["Payment Status"], "Unpaid")
+        self.assertGreater(rows[0]["Initial Balance Due"], 0)
+
+    def test_team_answer_wins_over_unpaid(self):
+        fix = self.tmp / "fix.json"
+        fix.write_text(json.dumps({"balanceDue": {"90001": 0}}))
+        _, _, rows, _, _ = Fixture([self.sponsored(**{"IP Status": "Unpaid"})], self.tmp).run(fix)
+        self.assertEqual(rows[0]["Initial Balance Due"], 0)
+        self.assertNotEqual(rows[0]["Total Initial Payment"], 0)
+
+    def test_red_name_is_left_out(self):
+        fx = Fixture([resident(), resident(StudentID="90002", IDNumber="Z7654321", Email="two@example.test")], self.tmp)
+        wb = openpyxl.load_workbook(fx.source)
+        ws = wb.active
+        ws.cell(3, SOURCE_HEADERS.index("StudentName") + 1).fill = openpyxl.styles.PatternFill("solid", fgColor="FFFF0000")
+        wb.save(fx.source)
+        _, _, rows, _, _ = fx.run()
+        self.assertEqual([r["QuickBooks ID"] for r in rows], ["90001"])

@@ -733,8 +733,10 @@ NATIONAL_DIAL = {code: dial.lstrip("+") for code, dial in re.findall(
 # Same converter for every batch (Dani, 14 Oct 2026): a later tab may spell a
 # column differently, or not have one Batch 1 had.
 # the Sponsor tab says "Payment Status" / "Balance Due" for the initial payment
-COLUMN_ALIASES = {"Remark": "Remarks", "Payment Status": "IP Status", "Balance Due": "Balance Due on IP"}
-OPTIONAL_SOURCE = {"SPONSOR NAME", "IP Status", "Residence"}
+COLUMN_ALIASES = {"Remark": "Remarks", "Payment Status": "IP Status", "Balance Due": "Balance Due on IP",
+                  # the Sponsor tab (master 7): its total is what was invoiced
+                  "Total Initial Payment": "Total Initial Payment Made"}
+OPTIONAL_SOURCE = {"SPONSOR NAME", "IP Status", "Residence", "Tag"}
 # Batch 2 onward says per row whether it goes in; only this value is converted
 MIGRATE_OK = "Clean-Migrate"
 CHECK_MARKS = {"CLEAN", "CHECKED", "OK"}
@@ -897,9 +899,11 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
         # a sponsor's intake batch is written in Remarks as "B3" / "B4" (Petronas):
         # it goes with the sponsor as "PETRONAS (B3)", the form sponsorLabel reads
         # (Dani, 12 Oct 2026) - and then the remark has been dealt with
-        batch = re.fullmatch(r"B\d{1,2}", text(cell("Remarks")).upper())
-        batch_used = bool(batch and out_row["Payor name"])
-        if batch_used:
+        # the Sponsor tab has its own "Tag" column for the batch (Dani, 19 Oct 2026)
+        tag = re.fullmatch(r"B\d{1,2}", text(cell("Tag")).upper())
+        batch = tag or re.fullmatch(r"B\d{1,2}", text(cell("Remarks")).upper())
+        batch_used = bool(batch and out_row["Payor name"]) and not tag
+        if batch and out_row["Payor name"]:
             out_row["Payor name"] = f"{out_row['Payor name']} ({batch.group(0)})"
         if out_row["Paid by"] == "Sponsor" and not out_row["Payor name"]:
             flag(WARNING, "Payor name", "Sponsored, but SPONSOR NAME is blank")
@@ -962,10 +966,14 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
         if freq not in FREQUENCY:
             flag(BLOCKED, "Payment frequency", "Payment frequency not recognised")
 
+        # Unpaid (Petronas B4, Dani 19 Oct 2026): the initial invoice is out but
+        # nothing is paid - there may be no copy yet, and its total is all owed
+        # - unless the team has answered what is owed (corrections balanceDue wins)
+        unpaid = text(cell("IP Status")).lower().startswith("unpaid") and row_qb not in fixes["balanceDue"]
         # ---- documents
         for src, header, label, required in (
             ("TACopy", "Copy of Tenancy Agreement", "Tenancy Agreement copy", True),
-            ("Initial Payment Invoice Copy", "Copy of Invoice", "Invoice copy", True),
+            ("Initial Payment Invoice Copy", "Copy of Invoice", "Invoice copy", not unpaid),
         ):
             c = raw_cell(src)
             value, f = check_document(text(cell(src)), c.hyperlink.target if c.hyperlink else None, base, label, required)
@@ -1008,6 +1016,9 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
             "Personalised Tag": amount("Personalised Tag", "optional"),
         }
         paid = amount("Total Initial Payment Made", "paid")
+        if unpaid:
+            paid = 0.0
+            flag(WARNING, "Initial Balance Due", "The master says Unpaid - imported as nothing paid, the whole initial invoice owed")
         if paid is None and not any(i[1] == "Total Initial Payment Made" for i in issues):
             flag(BLOCKED, "Total Initial Payment", "Total Initial Payment Made is blank")
 
@@ -1061,12 +1072,10 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
         if answer is None and isinstance(master_due, (int, float)):
             answer = master_due
         out_row["Initial Balance Due"] = initial_balance_due(out_row, paid, answer)
-        if ip_status.startswith("unpaid"):
-            flag(REVIEW, "Initial Balance Due", "The master says the initial payment is Unpaid - check what was paid before importing")
-        elif ip_status.startswith("partial") and not out_row["Initial Balance Due"]:
+        if ip_status.startswith("partial") and not out_row["Initial Balance Due"]:
             flag(REVIEW, "Initial Balance Due", "The master says Partially paid, but the listed lines and the amount paid show nothing owed - fill in what is owed")
         if out_row["Initial Balance Due"]:
-            out_row["Payment Status"] = "Part paid"
+            out_row["Payment Status"] = "Unpaid" if unpaid else "Part paid"
         # Sponsor tab: the team found the signed TA wrong - a new one is generated
         # in the system and sent for signing after import (Dani, 20 Oct 2026)
         if text(cell("TA CLEAN")).lower() == "problem":
@@ -1076,16 +1085,22 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
         # batch code is not a remark) - admin only on the resident profile
         # "CLEAN" in Remarks is the team's checking mark, not a note (Dani, 19 Oct 2026)
         remark = "" if batch_used else text(cell("Remarks"))
+        # "B3, Price from..." - the batch is the sponsor's, the rest is the remark
+        remark = re.sub(r"^\s*B\d{1,2}\s*[,.;:-]?\s*", "", remark) if batch else remark
         if remark.strip().upper() in CHECK_MARKS:
             remark = ""
         out_row["Internal Notes"] = join_notes(fixes["internalNotes"].get(row_qb, ""), remark)
         # a duplicate row is left out by its row number ("row 91"), not its ID
         left_out = fixes["leaveOut"].get(row_qb) or fixes["leaveOut"].get(f"row {r}")
+        # a name the team filled red has a problem they are still checking (Dani, 19 Oct 2026)
+        name_fill = raw_ws.cell(r, cols[("StudentName", 1)]).fill
+        if not left_out and name_fill.fill_type and str(name_fill.fgColor.rgb).upper() == "FFFF0000":
+            left_out = "Name is red in the master - the team is still checking it"
         if left_out:
             out_row["_left_out"] = left_out
         if corrected:
             flag(WARNING, "Corrected", "Corrected from the team's answer: " + ", ".join(corrected) + " (batch1-corrections.json)")
-        if text(cell("Remarks")) and not batch_used and row_qb not in fixes["remarksHandled"]:
+        if remark and row_qb not in fixes["remarksHandled"]:
             flag(WARNING, "Remarks", "Source row has remarks (carried into Internal Notes) - read them before importing")
 
         # every dropdown column holds only a value on its list - else blank + flag

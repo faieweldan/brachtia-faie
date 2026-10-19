@@ -401,7 +401,11 @@ export function previewSheet3Grid(grid: unknown[][], system: SystemSnapshot): Mi
     if (!text(value("Copy of Tenancy Agreement"))) {
       add("blocked", "Copy of Tenancy Agreement", "Existing tenancy agreement is missing.");
     }
-    if (!text(value("Copy of Invoice"))) {
+    // Unpaid (Petronas B4, 19 Oct 2026): the initial invoice is out but not paid -
+    // there may be no copy yet; the system's own invoice is the record until it is
+    if (!text(value("Copy of Invoice")) && /^unpaid$/i.test(text(value("Payment Status")))) {
+      add("warning", "Copy of Invoice", "Unpaid and no invoice copy yet - the system's invoice is used; add the copy on the profile later.");
+    } else if (!text(value("Copy of Invoice"))) {
       add("blocked", "Copy of Invoice", "Existing initial invoice is missing.");
     }
 
