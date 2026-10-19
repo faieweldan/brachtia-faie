@@ -1,4 +1,5 @@
 import { billDueInvoices, liveInvoices } from "@/lib/invoices";
+import { migratedOriginal } from "@/lib/migration/import-plan";
 import { IP_DIFFERENCE_NOTE } from "@/lib/invoice-category";
 import {
   billOnFor,
@@ -225,7 +226,11 @@ export async function plannedRent(
     override?.monthlyRent ?? Number(s.monthly_rent),
   );
   const terms: ScheduleTerms = {
-    firstPeriodCredit: coverage.start === day(s.first_period_start) ? coverage.credit : 0,
+    // a migrated resident's first bill is Brachtia's checked next payment (Sheet3):
+    // the master's pro-rated/advance can be from an earlier invoice, so no part-month
+    // credit is worked out from them (Dani, 19 Oct 2026: Yeo Plumber's Nov RM1,266.70)
+    firstPeriodCredit:
+      coverage.start === day(s.first_period_start) && !migratedOriginal(initial?.invoice?.notes) ? coverage.credit : 0,
     monthlyRent: override?.monthlyRent ?? Number(s.monthly_rent),
     frequency: String(s.frequency),
     firstPeriodStart: day(s.first_period_start),
