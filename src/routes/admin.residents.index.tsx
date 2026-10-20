@@ -70,6 +70,10 @@ function ResidentsListPage() {
   // who pays (Dani, 20 Oct 2026): the same short sponsor the Homes inventory shows -
   // "PETRONAS" takes every batch, "PETRONAS (B3)" one batch
   const [sponsor, setSponsor] = useState("");
+  // click Balance or Profile to sort, again to flip, a third time for the list's own order (Dani, 20 Oct 2026)
+  const [sort, setSort] = useState<{ by: "balance" | "profile"; dir: 1 | -1 } | null>(null);
+  const sortBy = (by: "balance" | "profile") =>
+    setSort((s) => (s?.by !== by ? { by, dir: by === "balance" ? -1 : 1 } : s.dir === (by === "balance" ? -1 : 1) ? { by, dir: (s.dir * -1) as 1 | -1 } : null));
   const sponsorOf = (r: (typeof residents)[number]) => sponsorLabel(r.payerName || r.sponsor);
   const sponsors = useMemo(() => {
     const full = new Set(residents.map(sponsorOf));
@@ -497,12 +501,27 @@ function ResidentsListPage() {
                     <th className="px-3 py-2 text-center font-medium">Placement</th>
                     <th className="px-3 py-2 font-medium">University</th>
                     <th className="px-3 py-2 font-medium">Tenancy</th>
-                    <th className="px-3 py-2 font-medium">Profile</th>
-                    <th className="px-3 py-2 font-medium">Balance</th>
+                    {(["profile", "balance"] as const).map((by) => (
+                      <th key={by} className="px-3 py-2 font-medium" aria-sort={sort?.by === by ? (sort.dir === 1 ? "ascending" : "descending") : "none"}>
+                        <button type="button" onClick={() => sortBy(by)} className="inline-flex items-center gap-1 hover:text-foreground">
+                          {by === "profile" ? "Profile" : "Balance"}
+                          <span className={sort?.by === by ? "text-foreground" : "opacity-40"}>
+                            {sort?.by === by ? (sort.dir === 1 ? "▲" : "▼") : "↕"}
+                          </span>
+                        </button>
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {rows.map((r) => {
+                  {(sort
+                    ? [...rows].sort((a, b) =>
+                        sort.by === "balance"
+                          ? sort.dir * ((owed.get(a.id) ?? 0) - (owed.get(b.id) ?? 0))
+                          : sort.dir * (completeness(a).pct - completeness(b).pct),
+                      )
+                    : rows
+                  ).map((r) => {
                     const placed = findBedForResident(units, r);
                     const stay = stayDates(
                       savedDates.data?.[r.id],
