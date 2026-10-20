@@ -246,9 +246,14 @@ class ConverterTests(unittest.TestCase):
         left = openpyxl.load_workbook(self.tmp / "out" / "report.xlsx")["Left out"]
         self.assertEqual(left.cell(4, 2).value, "90001")
 
-    def test_tenancy_ending_in_october_stays_for_the_checkout_test(self):
-        # Dani, 12 Oct 2026: October endings stay, to test their checkout statements
-        _, _, _, status, _ = self.convert(resident(**{"Tenancy End": datetime(2026, 10, 31)}))
+    def test_tenancy_ending_in_october_is_left_out(self):
+        # Dani, 20 Oct 2026 (was kept on 12 Oct for checkout tests): a tenancy that
+        # ends this month is not brought into the system
+        result, _, rows, _, _ = self.convert(resident(**{"Tenancy End": datetime(2026, 10, 31)}))
+        self.assertEqual((result["rows"], result["left_out"], rows), (0, 1, []))
+
+    def test_tenancy_ending_in_november_goes_in(self):
+        _, _, _, status, _ = self.convert(resident(**{"Tenancy End": datetime(2026, 11, 30)}))
         self.assertEqual(status[2][3], "Ready")
 
     def test_start_after_end_is_blocked(self):
