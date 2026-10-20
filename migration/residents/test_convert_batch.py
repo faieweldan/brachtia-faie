@@ -731,3 +731,9 @@ class SponsorBatchAndUnpaidTests(ConverterTests):
         wb.save(fx.source)
         _, _, rows, _, _ = fx.run()
         self.assertEqual([r["QuickBooks ID"] for r in rows], ["90001"])
+
+
+class CorrectionDateTests(unittest.TestCase):
+    def test_iso_text_date_from_the_corrections_file(self):
+        self.assertEqual(cb.as_date("2027-04-30"), date(2027, 4, 30))
+        self.assertIsNone(cb.as_date("2027-04-31"))

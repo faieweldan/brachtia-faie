@@ -611,6 +611,12 @@ def as_date(v):
         return v.date()
     if isinstance(v, date):
         return v
+    # a date the team gives in the corrections file: "2027-04-30" (20 Oct 2026)
+    if isinstance(v, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", v.strip()):
+        try:
+            return date.fromisoformat(v.strip())
+        except ValueError:
+            return None
     return None
 
 
