@@ -443,6 +443,21 @@ export function ResidentPayments({
                       <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
                         {inv.scheduled ? (
                           `Bills ${fmtDate(inv.billOn)}`
+                        ) : inv.migrated ? (
+                          // billed by Brachtia before the system (Petronas' current period, 20 Oct
+                          // 2026): their copy, never a PDF of ours - the same as a Migrated initial invoice
+                          <span className="inline-flex items-center gap-1.5">
+                            {inv.migrated.url ? (
+                              <a href={inv.migrated.url} target="_blank" rel="noopener noreferrer" title="The original invoice, before the system" className="px-1.5 text-xs font-medium text-brand-deep hover:underline">
+                                {invoiceRef(inv.number, inv.type)}
+                              </a>
+                            ) : (
+                              <MigratedCopyButton invoiceId={inv.id} />
+                            )}
+                            <span title={MIGRATED_MEANING} className="rounded-full border border-border bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                              {MIGRATED}
+                            </span>
+                          </span>
                         ) : (
                           <PdfPreviewButton
                             variant="ghost"
