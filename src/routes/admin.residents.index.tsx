@@ -483,6 +483,10 @@ function ResidentsListPage() {
               />
             </div>
 
+            {/* how many the filters leave, small like a spreadsheet's count (Dani, 20 Oct 2026) */}
+            <p className="mb-1.5 text-right text-xs text-muted-foreground tabular-nums">
+              {rows.length === residents.length ? `${residents.length} residents` : `${rows.length} of ${residents.length}`}
+            </p>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[980px] text-sm">
                 <thead className="bg-muted text-left text-xs text-muted-foreground">
