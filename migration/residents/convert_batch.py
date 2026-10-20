@@ -1050,6 +1050,11 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
         # these two signs mostly mean a renewal: the pro-rated/advance amounts are from the
         # first setup invoice, so the next payment cannot be worked out from them (16 Oct 2026)
         payor = str(out_row.get("Payor name") or "")
+        # Petronas always pays half-yearly: a master that says otherwise (00968 "BI-MONTHLY")
+        # made 2-month bills under a 6-month amount (Dani, 20 Oct 2026)
+        if payor.upper().startswith("PETRONAS") and out_row.get("Payment frequency") not in ("semiannual", ""):
+            flag(WARNING, "Payment frequency", f"Petronas pays half-yearly - the master's {text(cell('Payment Frequency'))} is taken as HALF-YEARLY")
+            out_row["Payment frequency"] = "semiannual"
         if payor.upper().startswith("PETRONAS") and rent_now and isinstance(end, date) and row_qb not in fixes["nextRent"]:
             nxt_end = min(PETRONAS_NEXT[1], end)
             if nxt_end >= PETRONAS_NEXT[0]:

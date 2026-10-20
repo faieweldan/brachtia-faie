@@ -744,3 +744,10 @@ class PaidInFullTests(ConverterTests):
         r = resident(**{"Tenancy Start": datetime(2026, 9, 1), "Payment Frequency": "FULLY"})
         _, _, _, status, _ = self.convert(r)
         self.assertNotEqual(status[2][3], "Needs review")
+
+
+class PetronasHalfYearlyTests(ConverterTests):
+    def test_petronas_is_always_half_yearly(self):
+        r = resident(**{"PAYOR?": "SPONSOR", "SPONSOR NAME": "PETRONAS", "Tag": "B4", "Payment Frequency": "BI-MONTHLY"})
+        _, _, rows, _, _ = self.convert(r)
+        self.assertEqual(rows[0]["Payment frequency"], "semiannual")
