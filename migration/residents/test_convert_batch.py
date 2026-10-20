@@ -737,3 +737,10 @@ class CorrectionDateTests(unittest.TestCase):
     def test_iso_text_date_from_the_corrections_file(self):
         self.assertEqual(cb.as_date("2027-04-30"), date(2027, 4, 30))
         self.assertIsNone(cb.as_date("2027-04-31"))
+
+
+class PaidInFullTests(ConverterTests):
+    def test_paid_in_full_has_no_next_payment_to_review(self):
+        r = resident(**{"Tenancy Start": datetime(2026, 9, 1), "Payment Frequency": "FULLY"})
+        _, _, _, status, _ = self.convert(r)
+        self.assertNotEqual(status[2][3], "Needs review")

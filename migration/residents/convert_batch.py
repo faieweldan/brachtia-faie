@@ -1064,7 +1064,8 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
                 cur_end = min(PETRONAS_CURRENT[1], end)
                 out_row["Current period outstanding"] = f"{day_first(PETRONAS_CURRENT[0])} – {day_first(cur_end)}"
                 out_row["Current period amount"] = round(rent_now * whole_months(PETRONAS_CURRENT[0], cur_end), 2)
-        renewal = REVIEW if row_qb not in fixes["nextRent"] else WARNING
+        # paid in full (FULLY): there is no next payment for these signs to confuse (20 Oct 2026)
+        renewal = REVIEW if row_qb not in fixes["nextRent"] and out_row.get("Payment frequency") != "full" else WARNING
         if pro and isinstance(start, date) and start.day == 1:
             flag(renewal, "Differential Rental (QB)",
                  f"Starts on the 1st but has a pro-rated amount ({pro:,.2f}) - likely a renewal; ask the team for the next payment")
