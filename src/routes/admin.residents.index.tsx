@@ -25,6 +25,7 @@ import {
   refreshResidents,
   refreshUnits,
   saveResidentRecord,
+  sponsorLabel,
   stayDates,
   useOps,
 } from "@/lib/ops-store";
@@ -66,6 +67,15 @@ function ResidentsListPage() {
   // admin's own labels (13 Oct 2026): show only residents carrying this one
   const [labelId, setLabelId] = useState("");
   const labels = useLabels();
+  // who pays (Dani, 20 Oct 2026): the same short sponsor the Homes inventory shows -
+  // "PETRONAS" takes every batch, "PETRONAS (B3)" one batch
+  const [sponsor, setSponsor] = useState("");
+  const sponsorOf = (r: (typeof residents)[number]) => sponsorLabel(r.payerName || r.sponsor);
+  const sponsors = useMemo(() => {
+    const full = new Set(residents.map(sponsorOf));
+    const base = new Set([...full].filter((s) => s.includes("(")).map((s) => s.replace(/\s*\(.*\)$/, "")));
+    return [...new Set([...base, ...full])].sort((a, b) => (a === "Self" ? -1 : b === "Self" ? 1 : a.localeCompare(b)));
+  }, [residents]);
 
   const universities = useMemo(
     () => Array.from(new Set(residents.map((r) => universityAbbr(r.university)).filter(Boolean))),
@@ -118,6 +128,10 @@ function ResidentsListPage() {
     if (view !== "all" && phases.get(r.id) !== view) return false;
     if (university && universityAbbr(r.university) !== university) return false;
     if (labelId && !(labels.data?.byResident[r.id] ?? []).includes(labelId)) return false;
+    if (sponsor) {
+      const s = sponsorOf(r);
+      if (s !== sponsor && s.replace(/\s*\(.*\)$/, "") !== sponsor) return false;
+    }
     if (residence) {
       const placed = findBedForResident(units, r);
       if (placed?.unit.residenceName !== residence) return false;
@@ -430,7 +444,7 @@ function ResidentsListPage() {
               ))}
             </div>
 
-            <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground">Search</p>
                 <Input
@@ -451,6 +465,13 @@ function ResidentsListPage() {
                 value={residence}
                 onChange={setResidence}
                 options={residences}
+                placeholder="All"
+              />
+              <Select
+                label="Sponsor"
+                value={sponsor}
+                onChange={setSponsor}
+                options={sponsors}
                 placeholder="All"
               />
               <Select
