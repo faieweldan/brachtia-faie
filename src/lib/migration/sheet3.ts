@@ -41,6 +41,12 @@ export type MigrationPreviewRow = {
   paidToEndBySheet: boolean;
   nextPaymentDue: string;
   nextPaymentAmount: number | null;
+  /**
+   * Sheet3 "Current period outstanding" / "Current period amount" (Petronas B1-B3,
+   * 20 Oct 2026): the block running now, owed and only recorded - imported as a
+   * Migrated rent bill, no invoice of ours. Null when Sheet3 has none.
+   */
+  currentPeriod: { start: string; end: string; amount: number } | null;
   charges: {
     proratedRent: number;
     advanceRent: number;
@@ -505,6 +511,17 @@ export function previewSheet3Grid(grid: unknown[][], system: SystemSnapshot): Mi
     if (next && sheetPeriod && (sheetPeriod.start !== next.start || sheetPeriod.end !== next.end)) {
       add("warning", "Next billing period", `Set by Brachtia admin: ${fmtDate(sheetPeriod.start)} – ${fmtDate(sheetPeriod.end)} (the system works out ${fmtDate(next.start)} – ${fmtDate(next.end)}).`);
     }
+    const curText = text(value("Current period outstanding"));
+    const [cStart = "", cEnd = ""] = curText.split(/\s*[–—]\s*|\s+-\s*|\s*-\s+/).map((p) => toDate(p));
+    const curAmount = text(value("Current period amount")) ? money(value("Current period amount")) : null;
+    const currentPeriod = cStart && cEnd && cEnd >= cStart && curAmount !== null && curAmount > 0
+      ? { start: cStart, end: cEnd, amount: curAmount }
+      : null;
+    if (curText && !currentPeriod) {
+      add("blocked", "Current period outstanding", "The current period or its amount cannot be read.");
+    } else if (currentPeriod) {
+      add("warning", "Current period outstanding", `${fmtDate(currentPeriod.start)} – ${fmtDate(currentPeriod.end)} RM${currentPeriod.amount.toFixed(2)} is owed - recorded as a Migrated bill to attach Brachtia's invoice and record the payment.`);
+    }
     const nextDue = sheetDue || next?.due || "";
     const nextAmount = sheetAmount ?? next?.amount ?? null;
     if (next && sheetAmount !== null && Math.abs(sheetAmount - next.amount) > 0.005) {
@@ -589,6 +606,7 @@ export function previewSheet3Grid(grid: unknown[][], system: SystemSnapshot): Mi
             : "",
       nextPaymentDue: nextDue,
       nextPaymentAmount: nextAmount,
+      currentPeriod,
       charges: safeCharges,
       issues,
     };

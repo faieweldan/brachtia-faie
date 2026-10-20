@@ -390,6 +390,27 @@ export const listBillingLedger = createServerFn({ method: "GET" }).handler(
  * It is filed under the resident, or under the booking when the student is not
  * a resident yet.
  */
+/**
+ * The original (QuickBooks) copy of a Migrated invoice, linked after import
+ * (Dani, 20 Oct 2026): an unpaid B4 initial invoice or a Petronas rent period
+ * came in before Brachtia had the copy. Only a Migrated invoice takes one - an
+ * invoice of ours has its own PDF.
+ */
+export const setMigratedCopy = createServerFn({ method: "POST" })
+  .inputValidator((data: { invoiceId: string; url: string }) => data)
+  .handler(async ({ data }) => {
+    const url = String(data.url ?? "").trim();
+    if (!/^https?:\/\/\S+$/i.test(url)) throw new Error("Paste the full link of the invoice copy (https://...)");
+    const supabase = await admin();
+    const { data: inv, error } = await supabase.from("invoices").select("notes").eq("id", data.invoiceId).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!migratedOriginal(inv?.notes)) throw new Error("Only an invoice from before the system takes an original copy");
+    const { migratedNote } = await import("@/lib/migration/import-plan");
+    const { error: uErr } = await supabase.from("invoices").update({ notes: migratedNote(url) }).eq("id", data.invoiceId);
+    if (uErr) throw new Error(uErr.message);
+    return { ok: true as const };
+  });
+
 export const uploadPaymentProof = createServerFn({ method: "POST" })
   .inputValidator((data: FormData) => data)
   .handler(async ({ data }) => {

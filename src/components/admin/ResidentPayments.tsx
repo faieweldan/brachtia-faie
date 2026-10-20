@@ -3,7 +3,8 @@ import { DismissibleNotice } from "@/components/ui/notice";
 import { MIGRATED, MIGRATED_MEANING } from "@/lib/migration/import-plan";
 import { toast } from "sonner";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import {
   CalendarClock,
   ChevronDown,
@@ -31,7 +32,7 @@ import { invoiceRef, invoiceTitle } from "@/lib/invoice-category";
 import { getResidentRent } from "@/lib/rental-schedule.functions";
 import { RentalScheduleDialog } from "@/components/admin/RentalScheduleDialog";
 import { fmtDate, money } from "@/lib/ops-store";
-import { getResidentBilling, type BillingInvoice } from "@/lib/resident-billing.functions";
+import { getResidentBilling, setMigratedCopy, type BillingInvoice } from "@/lib/resident-billing.functions";
 import {
   ProofLink,
   ReplaceProofButton,
@@ -714,6 +715,56 @@ function Row({
   );
 }
 
+/** Link Brachtia's own copy to a Migrated invoice that came in without one. */
+function MigratedCopyButton({ invoiceId }: { invoiceId: string }) {
+  const save = useServerFn(setMigratedCopy);
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  if (!open) {
+    return (
+      <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setOpen(true)}>
+        Add original copy
+      </Button>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <input
+        autoFocus
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        placeholder="Paste the invoice's Drive link"
+        className="h-7 w-64 rounded-md border border-border bg-background px-2 text-xs"
+      />
+      <Button
+        size="sm"
+        className="h-7 px-2 text-xs"
+        disabled={busy || !url.trim()}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            await save({ data: { invoiceId, url } });
+            toast.success("Original copy linked");
+            setOpen(false);
+            await qc.invalidateQueries();
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Could not link the copy");
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        Save
+      </Button>
+      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setOpen(false)}>
+        Cancel
+      </Button>
+    </span>
+  );
+}
+
 /** The accounting, one level down, only when asked for - the resident tab and Collections both open it. */
 export function InvoiceDetail({ invoice, onPay }: { invoice: BillingInvoice; onPay: () => void }) {
   // its own, because this is exported and drawn outside the page that holds one
@@ -724,7 +775,15 @@ export function InvoiceDetail({ invoice, onPay }: { invoice: BillingInvoice; onP
         <p className="text-sm font-medium text-brand-deep">
           {invoiceTitle(invoice)}
         </p>
-        {invoice.migrated ? (
+        {invoice.migrated && !invoice.migrated.url ? (
+          // from before the system, its copy not linked yet (Dani, 20 Oct 2026)
+          <>
+            <MigratedCopyButton invoiceId={invoice.id} />
+            <span title={MIGRATED_MEANING} className="rounded-full border border-border bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+              {MIGRATED}
+            </span>
+          </>
+        ) : invoice.migrated ? (
           // from before the system: the eye opens the original (QuickBooks) copy
           <>
             <a

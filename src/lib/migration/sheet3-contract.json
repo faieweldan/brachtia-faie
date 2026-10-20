@@ -562,6 +562,27 @@
       "kind": "system"
     },
     {
+      "key": "current_period_outstanding",
+      "sheet3": "Current period outstanding",
+      "source": null,
+      "db": "invoices (rental, issued, Migrated - no invoice of ours)",
+      "required": false,
+      "kind": "calculated",
+      "addedToSheet3": true,
+      "transform": "Petronas B1-B3: the 6-month block running now (01 Sep 2026 – 28 Feb 2027)",
+      "notes": "Outstanding, only recorded: the admin attaches Brachtia's invoice and records the payment (20 Oct 2026)"
+    },
+    {
+      "key": "current_period_amount",
+      "sheet3": "Current period amount",
+      "source": null,
+      "db": "invoices.total",
+      "required": false,
+      "kind": "calculated",
+      "addedToSheet3": true,
+      "transform": "Monthly rent x the months in the current period"
+    },
+    {
       "key": "invoice_copy",
       "sheet3": "Copy of Invoice",
       "source": "Initial Payment Invoice Copy",

@@ -221,6 +221,53 @@ export async function importResident(sb: any, row: MigrationPreviewRow, today: s
       );
     }
 
+    /*
+     * ---- 3b. the rent period running now, owed and only recorded (Petronas B1-B3,
+     * Dani 20 Oct 2026). Brachtia billed it before the system, so it is a Migrated
+     * rent bill - no invoice of ours to send; the admin attaches Brachtia's copy
+     * and records the payment, and Collections counts it as owed. The schedule
+     * below starts after it.
+     */
+    if (row.currentPeriod) {
+      const cur = row.currentPeriod;
+      const bill = await must<{ id: string }>(
+        sb
+          .from("invoices")
+          .insert({
+            resident_id: residentId,
+            tenancy_id: tenancy.id,
+            invoice_type: "rental",
+            status: "issued",
+            full_name: row.residentName,
+            email: row.email,
+            phone: joinPhone(rec.dial, rec.mobile),
+            university: rec.university,
+            nationality: rec.nationality,
+            residence_name: row.place.split(" · ")[0] ?? "",
+            room_name: `${rec.unitNo} · Room ${rec.room}`,
+            occupancy: rec.occupancy,
+            tenancy_start: row.tenancyStart,
+            tenancy_end: row.tenancyEnd,
+            monthly_rent: rec.monthlyRent,
+            payment_frequency: rec.schedule,
+            period_start: cur.start,
+            period_end: cur.end,
+            total: cur.amount,
+            invoice_date: cur.start,
+            issued_at: `${cur.start}T00:00:00+08:00`,
+            auto_scheduled: false,
+            notes: migratedNote(""),
+          })
+          .select("id")
+          .single(),
+        "Current rent period",
+      );
+      await must(
+        sb.from("invoice_items").insert({ invoice_id: bill.id, label: `Rent ${cur.start} – ${cur.end}`, kind: "rent", amount: cur.amount, quantity: 1, sort_order: 0 }),
+        "Current rent period line",
+      );
+    }
+
     /* ---- 4. rent from the next period on ---- */
     const terms = migratedRentTerms(row, today);
     if (terms) {

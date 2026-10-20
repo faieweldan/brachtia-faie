@@ -741,6 +741,20 @@ OPTIONAL_SOURCE = {"SPONSOR NAME", "IP Status", "Residence", "Tag"}
 MIGRATE_OK = "Clean-Migrate"
 CHECK_MARKS = {"CLEAN", "CHECKED", "OK"}
 SHEET = "Migration Batch 1"
+# Petronas pays in fixed 6-month blocks, Sep-Feb and Mar-Aug (Dani with Brachtia,
+# 20 Oct 2026). For this migration: the block running now is outstanding and only
+# recorded (B1-B3 Sep 2026-Feb 2027 as its own bill; B4's is their initial
+# invoice), and the system invoices from the next block on.
+PETRONAS_NEXT = (date(2027, 3, 1), date(2027, 8, 31))
+PETRONAS_CURRENT = (date(2026, 9, 1), date(2027, 2, 28))
+
+
+def day_first(d: date) -> str:
+    return d.strftime("%d %b %Y")
+
+
+def whole_months(a: date, b: date) -> int:
+    return (b.year - a.year) * 12 + b.month - a.month + 1
 
 
 def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Path | None = None,
@@ -1029,6 +1043,21 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
         rent_now = out_row.get("Monthly rent") or 0
         # these two signs mostly mean a renewal: the pro-rated/advance amounts are from the
         # first setup invoice, so the next payment cannot be worked out from them (16 Oct 2026)
+        payor = str(out_row.get("Payor name") or "")
+        if payor.upper().startswith("PETRONAS") and rent_now and isinstance(end, date) and row_qb not in fixes["nextRent"]:
+            nxt_end = min(PETRONAS_NEXT[1], end)
+            if nxt_end >= PETRONAS_NEXT[0]:
+                fixes["nextRent"][row_qb] = {
+                    "period": f"{day_first(PETRONAS_NEXT[0])} – {day_first(nxt_end)}",
+                    "due": "2027-03-05",
+                    "amount": round(rent_now * whole_months(PETRONAS_NEXT[0], nxt_end), 2),
+                }
+                out_row["_petronas"] = True
+            # B1-B3: Sep 2026-Feb 2027 is outstanding, recorded without an invoice of ours
+            if not payor.upper().endswith("(B4)") and end >= PETRONAS_CURRENT[0]:
+                cur_end = min(PETRONAS_CURRENT[1], end)
+                out_row["Current period outstanding"] = f"{day_first(PETRONAS_CURRENT[0])} – {day_first(cur_end)}"
+                out_row["Current period amount"] = round(rent_now * whole_months(PETRONAS_CURRENT[0], cur_end), 2)
         renewal = REVIEW if row_qb not in fixes["nextRent"] else WARNING
         if pro and isinstance(start, date) and start.day == 1:
             flag(renewal, "Differential Rental (QB)",
