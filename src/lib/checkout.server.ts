@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { A4, GREEN, INK, M, MUTED, creditNoteFrame, day, rm, wrap } from "@/lib/credit-note-pdf";
 import { CHECKOUT_TYPE_LABEL, checkoutDocKind, checkoutTotals, type CheckoutType } from "@/lib/checkout-types";
 
 export * from "@/lib/checkout-types";
@@ -161,6 +160,8 @@ export type StatementPdfInput = {
 
 /** The statement on the shared credit-note frame (credit-note-pdf.ts): the sums, then the signatures and photos. */
 export async function statementPdf(input: StatementPdfInput): Promise<Uint8Array> {
+  // Reading a statement must not initialise PDF dependencies on the Worker.
+  const { A4, GREEN, INK, M, MUTED, creditNoteFrame, day, rm, wrap } = await import("@/lib/credit-note-pdf");
   const v = input.version;
   const r = input.resident;
   const f = await creditNoteFrame({
@@ -293,6 +294,7 @@ export async function residentParticulars(sb: any, residentId: string) {
 
 /** Build a version's PDF from the record - unsigned, signed, or with the refund. */
 export async function buildStatementPdf(sb: any, residentId: string, s: CheckoutStatement, v: CheckoutVersion, withRefund = false) {
+  const { day } = await import("@/lib/credit-note-pdf");
   const { loadSignatory, loadSignatureImage } = await import("@/lib/signatory.server");
   const signatory = await loadSignatory(sb);
   const photos: Record<string, Uint8Array> = {};
