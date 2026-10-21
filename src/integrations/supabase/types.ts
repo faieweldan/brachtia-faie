@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -71,6 +71,120 @@ export type Database = {
           },
         ]
       }
+      account_credit_entries: {
+        Row: {
+          amount: number
+          created_at: string
+          deposit_key: string | null
+          deposit_label: string | null
+          event_id: string | null
+          grant_key: string
+          id: string
+          kind: string
+          legacy_id: string | null
+          reason: string
+          resident_id: string
+          reversed_at: string | null
+          reversed_reason: string | null
+          source: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          deposit_key?: string | null
+          deposit_label?: string | null
+          event_id?: string | null
+          grant_key: string
+          id?: string
+          kind: string
+          legacy_id?: string | null
+          reason?: string
+          resident_id: string
+          reversed_at?: string | null
+          reversed_reason?: string | null
+          source?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          deposit_key?: string | null
+          deposit_label?: string | null
+          event_id?: string | null
+          grant_key?: string
+          id?: string
+          kind?: string
+          legacy_id?: string | null
+          reason?: string
+          resident_id?: string
+          reversed_at?: string | null
+          reversed_reason?: string | null
+          source?: string
+        }
+        Relationships: []
+      }
+      account_credit_imports: {
+        Row: {
+          entries: number
+          imported_at: string
+          resident_id: string
+        }
+        Insert: {
+          entries: number
+          imported_at?: string
+          resident_id: string
+        }
+        Update: {
+          entries?: number
+          imported_at?: string
+          resident_id?: string
+        }
+        Relationships: []
+      }
+      account_credit_notes: {
+        Row: {
+          amount: number
+          id: string
+          issued_at: string
+          issued_by: string
+          legacy_id: string | null
+          lines: Json
+          number: string
+          reason: string
+          refund: Json | null
+          resident_code: string
+          resident_id: string
+          resident_name: string
+        }
+        Insert: {
+          amount: number
+          id?: string
+          issued_at?: string
+          issued_by?: string
+          legacy_id?: string | null
+          lines?: Json
+          number: string
+          reason?: string
+          refund?: Json | null
+          resident_code?: string
+          resident_id: string
+          resident_name?: string
+        }
+        Update: {
+          amount?: number
+          id?: string
+          issued_at?: string
+          issued_by?: string
+          legacy_id?: string | null
+          lines?: Json
+          number?: string
+          reason?: string
+          refund?: Json | null
+          resident_code?: string
+          resident_id?: string
+          resident_name?: string
+        }
+        Relationships: []
+      }
       agreement_documents: {
         Row: {
           agreement_id: string
@@ -81,6 +195,7 @@ export type Database = {
           generated_pdf_path: string | null
           generation_error: string | null
           id: string
+          legacy_url: string | null
           merge_values: Json
           period_end: string | null
           period_start: string | null
@@ -98,6 +213,7 @@ export type Database = {
           generated_pdf_path?: string | null
           generation_error?: string | null
           id?: string
+          legacy_url?: string | null
           merge_values?: Json
           period_end?: string | null
           period_start?: string | null
@@ -115,6 +231,7 @@ export type Database = {
           generated_pdf_path?: string | null
           generation_error?: string | null
           id?: string
+          legacy_url?: string | null
           merge_values?: Json
           period_end?: string | null
           period_start?: string | null
@@ -578,28 +695,45 @@ export type Database = {
         Row: {
           category: string
           created_at: string
+          deactivated_at: string | null
+          deactivation_reason: string
           doc_key: string
           id: string
           name: string
+          residence_id: string | null
           sort_order: number
         }
         Insert: {
           category?: string
           created_at?: string
+          deactivated_at?: string | null
+          deactivation_reason?: string
           doc_key?: string
           id?: string
           name: string
+          residence_id?: string | null
           sort_order?: number
         }
         Update: {
           category?: string
           created_at?: string
+          deactivated_at?: string | null
+          deactivation_reason?: string
           doc_key?: string
           id?: string
           name?: string
+          residence_id?: string | null
           sort_order?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "document_templates_residence_id_fkey"
+            columns: ["residence_id"]
+            isOneToOne: false
+            referencedRelation: "residences"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       enquiries: {
         Row: {
@@ -791,33 +925,92 @@ export type Database = {
       }
       import_batches: {
         Row: {
+          confirmed_at: string | null
+          confirmed_by: string | null
           created_at: string
           error_count: number
           filename: string
           id: string
           kind: string
           row_count: number
+          source_sheet: string
           status: string
         }
         Insert: {
+          confirmed_at?: string | null
+          confirmed_by?: string | null
           created_at?: string
           error_count?: number
           filename?: string
           id?: string
           kind: string
           row_count?: number
+          source_sheet?: string
           status?: string
         }
         Update: {
+          confirmed_at?: string | null
+          confirmed_by?: string | null
           created_at?: string
           error_count?: number
           filename?: string
           id?: string
           kind?: string
           row_count?: number
+          source_sheet?: string
           status?: string
         }
         Relationships: []
+      }
+      import_rows: {
+        Row: {
+          agreement_id: string | null
+          batch_id: string
+          created_at: string
+          id: string
+          invoice_id: string | null
+          reason: string
+          resident_id: string | null
+          resident_key: string
+          result: string
+          source_row: number
+          tenancy_id: string | null
+        }
+        Insert: {
+          agreement_id?: string | null
+          batch_id: string
+          created_at?: string
+          id?: string
+          invoice_id?: string | null
+          reason?: string
+          resident_id?: string | null
+          resident_key?: string
+          result: string
+          source_row: number
+          tenancy_id?: string | null
+        }
+        Update: {
+          agreement_id?: string | null
+          batch_id?: string
+          created_at?: string
+          id?: string
+          invoice_id?: string | null
+          reason?: string
+          resident_id?: string | null
+          resident_key?: string
+          result?: string
+          source_row?: number
+          tenancy_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_rows_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "import_batches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       invoice_items: {
         Row: {
@@ -931,6 +1124,7 @@ export type Database = {
           invoice_date: string | null
           invoice_type: string
           issued_at: string
+          legacy_copy_url: string | null
           list_rent: number | null
           monthly_rent: number
           nationality: string
@@ -974,6 +1168,7 @@ export type Database = {
           invoice_date?: string | null
           invoice_type?: string
           issued_at?: string
+          legacy_copy_url?: string | null
           list_rent?: number | null
           monthly_rent?: number
           nationality?: string
@@ -1017,6 +1212,7 @@ export type Database = {
           invoice_date?: string | null
           invoice_type?: string
           issued_at?: string
+          legacy_copy_url?: string | null
           list_rent?: number | null
           monthly_rent?: number
           nationality?: string
@@ -1068,6 +1264,27 @@ export type Database = {
           },
         ]
       }
+      labels: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       payments: {
         Row: {
           amount: number
@@ -1079,7 +1296,9 @@ export type Database = {
           method: string
           paid_on: string
           proof_path: string
+          recorded_by: string
           reference: string
+          request_key: string | null
           resident_id: string
         }
         Insert: {
@@ -1092,7 +1311,9 @@ export type Database = {
           method?: string
           paid_on?: string
           proof_path?: string
+          recorded_by?: string
           reference?: string
+          request_key?: string | null
           resident_id?: string
         }
         Update: {
@@ -1105,7 +1326,9 @@ export type Database = {
           method?: string
           paid_on?: string
           proof_path?: string
+          recorded_by?: string
           reference?: string
+          request_key?: string | null
           resident_id?: string
         }
         Relationships: [
@@ -1125,6 +1348,139 @@ export type Database = {
           },
         ]
       }
+      placement_holds: {
+        Row: {
+          bed_id: string
+          created_at: string
+          created_by: string
+          end_date: string | null
+          enquiry_id: string | null
+          hold_until: string | null
+          id: string
+          let_whole: boolean
+          resident_id: string | null
+          start_date: string | null
+        }
+        Insert: {
+          bed_id: string
+          created_at?: string
+          created_by?: string
+          end_date?: string | null
+          enquiry_id?: string | null
+          hold_until?: string | null
+          id?: string
+          let_whole?: boolean
+          resident_id?: string | null
+          start_date?: string | null
+        }
+        Update: {
+          bed_id?: string
+          created_at?: string
+          created_by?: string
+          end_date?: string | null
+          enquiry_id?: string | null
+          hold_until?: string | null
+          id?: string
+          let_whole?: boolean
+          resident_id?: string | null
+          start_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "placement_holds_bed_id_fkey"
+            columns: ["bed_id"]
+            isOneToOne: false
+            referencedRelation: "beds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "placement_holds_enquiry_id_fkey"
+            columns: ["enquiry_id"]
+            isOneToOne: true
+            referencedRelation: "enquiries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "placement_holds_resident_id_fkey"
+            columns: ["resident_id"]
+            isOneToOne: false
+            referencedRelation: "residents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      placement_moves: {
+        Row: {
+          created_at: string
+          created_by: string
+          enquiry_id: string | null
+          from_bed_id: string | null
+          id: string
+          moved_on: string
+          resident_id: string | null
+          tenancy_id: string | null
+          to_bed_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          enquiry_id?: string | null
+          from_bed_id?: string | null
+          id?: string
+          moved_on?: string
+          resident_id?: string | null
+          tenancy_id?: string | null
+          to_bed_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          enquiry_id?: string | null
+          from_bed_id?: string | null
+          id?: string
+          moved_on?: string
+          resident_id?: string | null
+          tenancy_id?: string | null
+          to_bed_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "placement_moves_enquiry_id_fkey"
+            columns: ["enquiry_id"]
+            isOneToOne: false
+            referencedRelation: "enquiries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "placement_moves_from_bed_id_fkey"
+            columns: ["from_bed_id"]
+            isOneToOne: false
+            referencedRelation: "beds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "placement_moves_resident_id_fkey"
+            columns: ["resident_id"]
+            isOneToOne: false
+            referencedRelation: "residents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "placement_moves_tenancy_id_fkey"
+            columns: ["tenancy_id"]
+            isOneToOne: false
+            referencedRelation: "tenancies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "placement_moves_to_bed_id_fkey"
+            columns: ["to_bed_id"]
+            isOneToOne: false
+            referencedRelation: "beds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profile_links: {
         Row: {
           created_at: string
@@ -1132,6 +1488,8 @@ export type Database = {
           id: string
           opened_at: string | null
           resident_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
           revoked_at: string | null
           submitted_at: string | null
           token: string
@@ -1142,6 +1500,8 @@ export type Database = {
           id?: string
           opened_at?: string | null
           resident_id: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           revoked_at?: string | null
           submitted_at?: string | null
           token: string
@@ -1152,6 +1512,8 @@ export type Database = {
           id?: string
           opened_at?: string | null
           resident_id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           revoked_at?: string | null
           submitted_at?: string | null
           token?: string
@@ -1505,9 +1867,43 @@ export type Database = {
           },
         ]
       }
+      resident_labels: {
+        Row: {
+          created_at: string
+          label_id: string
+          resident_id: string
+        }
+        Insert: {
+          created_at?: string
+          label_id: string
+          resident_id: string
+        }
+        Update: {
+          created_at?: string
+          label_id?: string
+          resident_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resident_labels_label_id_fkey"
+            columns: ["label_id"]
+            isOneToOne: false
+            referencedRelation: "labels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resident_labels_resident_id_fkey"
+            columns: ["resident_id"]
+            isOneToOne: false
+            referencedRelation: "residents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       residents: {
         Row: {
           address: string
+          admin_notes: string
           checkin_asked_at: string | null
           checkin_on: string | null
           checkin_remind: boolean
@@ -1573,6 +1969,7 @@ export type Database = {
         }
         Insert: {
           address?: string
+          admin_notes?: string
           checkin_asked_at?: string | null
           checkin_on?: string | null
           checkin_remind?: boolean
@@ -1638,6 +2035,7 @@ export type Database = {
         }
         Update: {
           address?: string
+          admin_notes?: string
           checkin_asked_at?: string | null
           checkin_on?: string | null
           checkin_remind?: boolean
@@ -1859,6 +2257,7 @@ export type Database = {
       template_versions: {
         Row: {
           activated_at: string | null
+          boxes: Json
           content_html: string
           created_at: string
           file_name: string
@@ -1878,6 +2277,7 @@ export type Database = {
         }
         Insert: {
           activated_at?: string | null
+          boxes?: Json
           content_html?: string
           created_at?: string
           file_name?: string
@@ -1897,6 +2297,7 @@ export type Database = {
         }
         Update: {
           activated_at?: string | null
+          boxes?: Json
           content_html?: string
           created_at?: string
           file_name?: string
@@ -1931,6 +2332,7 @@ export type Database = {
           end_date: string | null
           enquiry_id: string | null
           id: string
+          let_whole: boolean
           resident_id: string
           start_date: string | null
           updated_at: string
@@ -1941,6 +2343,7 @@ export type Database = {
           end_date?: string | null
           enquiry_id?: string | null
           id?: string
+          let_whole?: boolean
           resident_id: string
           start_date?: string | null
           updated_at?: string
@@ -1951,6 +2354,7 @@ export type Database = {
           end_date?: string | null
           enquiry_id?: string | null
           id?: string
+          let_whole?: boolean
           resident_id?: string
           start_date?: string | null
           updated_at?: string
@@ -2105,11 +2509,44 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      account_credit_leftover: { Args: { p_resident: string }; Returns: number }
+      account_credit_note_lines: {
+        Args: { p_leave_out?: string; p_resident: string }
+        Returns: Json
+      }
+      account_credit_position: { Args: { p_resident: string }; Returns: Json }
+      activate_at_checkin: { Args: { p_resident: string }; Returns: Json }
       activate_template_version: {
         Args: { _version_id: string }
         Returns: undefined
       }
+      apply_account_credit: {
+        Args: {
+          p_first?: string
+          p_only?: boolean
+          p_paid_on?: string
+          p_resident: string
+        }
+        Returns: Json
+      }
+      bed_in_use: { Args: { p_bed: string }; Returns: boolean }
       bill_due_invoices: { Args: never; Returns: number }
+      confirm_paid_placement: { Args: { p_enquiry: string }; Returns: Json }
+      delete_unit_if_unused: { Args: { p_unit: string }; Returns: Json }
+      drop_unused_rooms_beds: {
+        Args: { p_rooms: Json; p_unit: string }
+        Returns: Json
+      }
+      empty_bed: { Args: { p_bed: string }; Returns: undefined }
+      extend_stay: {
+        Args: { p_end: string; p_resident: string; p_tenancy: string }
+        Returns: Json
+      }
+      free_sold_single: { Args: { p_room: string }; Returns: undefined }
+      grant_account_credit: {
+        Args: { p_entries: Json; p_resident: string }
+        Returns: number
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -2117,12 +2554,158 @@ export type Database = {
         }
         Returns: boolean
       }
+      import_legacy_account_credit: {
+        Args: { p_entries: Json; p_resident: string }
+        Returns: Json
+      }
       invoice_category_code: { Args: { invoice_type: string }; Returns: string }
+      issue_account_credit_note: {
+        Args: { p_issued_by: string; p_resident: string }
+        Returns: Json
+      }
+      lock_units: { Args: { p_units: string[] }; Returns: undefined }
+      move_stay_dates: {
+        Args: {
+          p_end: string
+          p_enquiry: string
+          p_gender?: string
+          p_lease_months?: string
+          p_rent?: number
+          p_start: string
+        }
+        Returns: Json
+      }
       next_agreement_no: { Args: never; Returns: number }
+      next_checkout_note_number: { Args: never; Returns: string }
       next_enquiry_reference: { Args: never; Returns: string }
       next_invoice_number: { Args: { invoice_type: string }; Returns: string }
       next_invoice_reference: { Args: never; Returns: string }
       next_receipt_reference: { Args: never; Returns: string }
+      place_stay: {
+        Args: {
+          p_bed: string
+          p_by?: string
+          p_end?: string
+          p_enquiry: string
+          p_hold_until?: string
+          p_later?: boolean
+          p_resident: string
+          p_start?: string
+          p_whole?: boolean
+        }
+        Returns: Json
+      }
+      placement_claims: {
+        Args: { p_units?: string[] }
+        Returns: {
+          bed_id: string
+          ends: string
+          enquiry_id: string
+          gender: string
+          resident_id: string
+          room_id: string
+          source: string
+          starts: string
+          unit_id: string
+          who: string
+        }[]
+      }
+      placement_conflict: {
+        Args: {
+          p_bed: string
+          p_end: string
+          p_enquiry: string
+          p_gender: string
+          p_resident: string
+          p_start: string
+          p_whole: boolean
+        }
+        Returns: string
+      }
+      placement_guard_report: { Args: never; Returns: Json }
+      record_account_credit_note_refund: {
+        Args: { p_number: string; p_refund: Json; p_resident: string }
+        Returns: Json
+      }
+      record_invoice_payment: {
+        Args: {
+          p_amount: number
+          p_cap_to_owing?: boolean
+          p_description?: string
+          p_fail_before_receipt?: boolean
+          p_invoice: string
+          p_method: string
+          p_paid_on: string
+          p_proof_path?: string
+          p_recorded_by?: string
+          p_reference?: string
+          p_request_key?: string
+        }
+        Returns: Json
+      }
+      release_after_checkout: { Args: { p_resident: string }; Returns: Json }
+      release_hand_hold: { Args: { p_bed: string }; Returns: Json }
+      release_hold: {
+        Args: { p_bed?: string; p_enquiry: string; p_resident: string }
+        Returns: number
+      }
+      resident_placements: {
+        Args: { p_residents?: string[] }
+        Returns: {
+          bed_id: string
+          ends: string
+          enquiry_id: string
+          next_bed_id: string
+          next_end: string
+          next_start: string
+          resident_id: string
+          starts: string
+          via: string
+        }[]
+      }
+      reverse_account_credit: {
+        Args: { p_event_ids: string[]; p_reason: string; p_resident: string }
+        Returns: number
+      }
+      seat_if_first: {
+        Args: { p_bed: string; p_keep?: string; p_tenancy: string }
+        Returns: boolean
+      }
+      stay_range: { Args: { p_end: string; p_start: string }; Returns: unknown }
+      sync_room_shapes: { Args: { p_unit?: string }; Returns: number }
+      unit_claims: {
+        Args: { p_unit: string }
+        Returns: {
+          bed_id: string
+          ends: string
+          enquiry_id: string
+          gender: string
+          resident_id: string
+          room_id: string
+          starts: string
+          who: string
+        }[]
+      }
+      void_invoice_if_unpaid: {
+        Args: { p_expect_paid?: number; p_invoice: string }
+        Returns: Json
+      }
+      void_invoice_to_credit: {
+        Args: {
+          p_event_id: string
+          p_fail_before_credit?: boolean
+          p_invoice: string
+          p_note: string
+          p_resident: string
+          p_tail: string
+          p_what: string
+        }
+        Returns: Json
+      }
+      void_unpaid_booking_invoices: {
+        Args: { p_enquiry: string }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "admin"

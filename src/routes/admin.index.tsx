@@ -31,6 +31,17 @@ const TASK_LABEL: Record<string, string> = {
 };
 
 export const Route = createFileRoute("/admin/")({
+  head: () => ({
+    meta: [
+      { title: "Revenue overview | Brachtia Homes staff" },
+      { name: "description", content: "Brachtia Homes staff revenue overview, rent forecast and deposits held." },
+      { property: "og:title", content: "Revenue overview | Brachtia Homes staff" },
+      { property: "og:description", content: "Brachtia Homes staff revenue overview, rent forecast and deposits held." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
+  }),
   component: Dashboard,
 });
 
