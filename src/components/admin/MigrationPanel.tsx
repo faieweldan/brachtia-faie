@@ -270,7 +270,8 @@ export function ResidentLine({ row, today, open, onToggle }: { row: MigrationPre
             <div className="mb-1 flex justify-between font-medium">
               <span>Initial payment</span>
               <span className={`tabular-nums ${pay.owed ? "text-amber-800" : ""}`}>
-                {money(pay.total)} · {pay.owed ? `Part paid - owes ${money(pay.owed)}` : "Paid"}
+                {money(pay.total)} · {/* nothing paid is Unpaid, not Part paid (00715, 21 Oct 2026) */}
+                {pay.owed ? (pay.paid > 0.005 ? `Part paid - owes ${money(pay.owed)}` : `Unpaid - owes ${money(pay.owed)}`) : "Paid"}
               </span>
             </div>
             <ul className="text-muted-foreground">
