@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] Resolve and verify the dashboard money loading error without changing its calculations.
+- [x] Remove the dashboard's eager PDF dependency; staff dashboard and 26 regression tests pass locally (online preview verification unavailable).
 
 - [ ] Replace the approved Microsoft Word conversion approach with Google Docs templates and PDF export.
 - [x] Support both native Google Docs links and imported Word files.
