@@ -26,13 +26,17 @@ export const dashboardMoney = createServerFn({ method: "GET" }).handler(
     const { readStatement } = await import("@/lib/checkout.server");
     const { reclassifiedDepositsFor } = await import("@/lib/account-credit.server");
 
-    const { data: invoices, error } = await sb
-      .from("invoices")
-      .select(
-        "id, resident_id, tenancy_id, invoice_type, status, total, invoice_date, payment_terms, payment_frequency",
-      )
-      .not("status", "in", "(void,cancelled,draft)");
-    if (error) throw new Error(error.message);
+    // every page - one query stops at 1,000 rows (all-rows.ts)
+    const { allRows } = await import("@/lib/all-rows");
+    const invoices = await allRows(() =>
+      sb
+        .from("invoices")
+        .select(
+          "id, resident_id, tenancy_id, invoice_type, status, total, invoice_date, payment_terms, payment_frequency",
+        )
+        .not("status", "in", "(void,cancelled,draft)")
+        .order("id"),
+    );
     const all = (invoices ?? []) as any[];
 
     /* ---- rent ---- */
@@ -86,12 +90,9 @@ export const dashboardMoney = createServerFn({ method: "GET" }).handler(
     const ids = candidates.map((i) => i.id);
     const deposits: DepositLine[] = [];
     if (ids.length) {
-      const [{ data: items }, { data: pays }] = await Promise.all([
-        sb
-          .from("invoice_items")
-          .select("invoice_id, label, kind, amount, quantity")
-          .in("invoice_id", ids),
-        sb.from("payments").select("invoice_id, amount").in("invoice_id", ids),
+      const [items, pays] = await Promise.all([
+        allRows(() => sb.from("invoice_items").select("invoice_id, label, kind, amount, quantity").in("invoice_id", ids).order("id")),
+        allRows(() => sb.from("payments").select("invoice_id, amount").in("invoice_id", ids).order("id")),
       ]);
       const paid = new Map<string, number>();
       for (const p of (pays ?? []) as any[])

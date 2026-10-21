@@ -319,6 +319,7 @@ export const listBillingLedger = createServerFn({ method: "GET" }).handler(
     // credit is used on what was just billed, so Collections does not chase it
     await (await import("@/lib/account-credit.server")).applyAllAccountCredit(supabase);
     await (await import("@/lib/tenancy-events.server")).processAllEvents(supabase);
+    const { allRows } = await import("@/lib/all-rows");
     const [invoicesRes, paymentsRes] = await Promise.all([
       // scheduled invoices too - marked, so the page can keep them out of what is owed
       /*
@@ -330,11 +331,10 @@ export const listBillingLedger = createServerFn({ method: "GET" }).handler(
        * The resident's own Payments tab still leaves them out: that view is
        * what this student owes, and a voided invoice is not part of it.
        */
-      supabase.from("invoices").select("*").order("issued_at", { ascending: false }),
-      supabase.from("payments").select("invoice_id, amount, paid_on"),
+      // every page - one query stops at 1,000 rows (all-rows.ts)
+      allRows(() => supabase.from("invoices").select("*").order("issued_at", { ascending: false }).order("id")).then((data) => ({ data })),
+      allRows(() => supabase.from("payments").select("invoice_id, amount, paid_on").order("id")).then((data) => ({ data })),
     ]);
-    if (invoicesRes.error) throw new Error(invoicesRes.error.message);
-    if (paymentsRes.error) throw new Error(paymentsRes.error.message);
 
     const paid = new Map<string, { sum: number; last: string }>();
     for (const p of (paymentsRes.data ?? []) as any[]) {
