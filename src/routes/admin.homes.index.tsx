@@ -465,6 +465,8 @@ function InventoryPage() {
           // a line that cannot be sold is not shown (Dani, 22 Oct 2026): the Whole
           // unit line only when it is let or every bed is free; a let whole unit hides its rooms
           const sellable = unitRows.filter(({ unit: u, room, bed }) => !bedBlockedBy(u, room, bed));
+          // the Whole unit line only once somebody has it - it is sold from the booking's room picker
+          const shown = sellable.filter(({ room, bed }) => !isUnitSlot(room) || roomStatusOf(bed) !== "vacant");
           const expanded = open[unitId] !== false;
           return (
             <div
@@ -498,8 +500,9 @@ function InventoryPage() {
                   </p>
                 </div>
                 <span className="text-xs text-muted-foreground">
-                  {sellable.filter((r) => !isUnitSlot(r.room)).length} beds
-                  {sellable.some((r) => isUnitSlot(r.room)) ? " · lettable whole" : ""}
+                  {shown.some((r) => isUnitSlot(r.room))
+                    ? "Let whole"
+                    : `${sellable.filter((r) => !isUnitSlot(r.room)).length} beds`}
                 </span>
               </button>
 
@@ -520,7 +523,7 @@ function InventoryPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {collapseSingles(sellable, roomTypes).map(({ room, bed, asSingle }) => (
+                      {collapseSingles(shown, roomTypes).map(({ room, bed, asSingle }) => (
                         <BedLine
                           key={bed.id}
                           unit={unit}
