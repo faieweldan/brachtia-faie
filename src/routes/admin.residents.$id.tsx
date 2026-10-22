@@ -1,3 +1,4 @@
+import { roomAndBed, roomName } from "@/lib/room-name";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CopyLinkButton } from "@/components/admin/CopyLinkButton";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -740,8 +741,10 @@ function ResidentProfilePage() {
                   search={{ residence: placed.unit.residenceName, unit: placed.unit.id }}
                   className="text-brand-deep underline-offset-2 hover:underline"
                 >
-                  Room {placed.room.letter} ·{" "}
-                  {soldBedLabel(placed.room, placed.bed, placed.bed.upcoming?.find((u) => u.residentId === form.id)?.letWhole)}
+                  {roomAndBed(
+                    placed.room.letter,
+                    soldBedLabel(placed.room, placed.bed, placed.bed.upcoming?.find((u) => u.residentId === form.id)?.letWhole),
+                  )}
                 </Link>
               ) : undefined,
             },
@@ -1100,7 +1103,7 @@ function ResidentProfilePage() {
               occupation: form.occupation,
               nationality: form.nationality,
               residenceName: placed?.unit.residenceName ?? "",
-              roomName: placed ? `Unit ${placed.unit.unitNo} · Room ${placed.room.letter}` : "",
+              roomName: placed ? `Unit ${placed.unit.unitNo} · ${roomName(placed.room.letter)}` : "",
               occupancy: placed?.room.occupancy ?? "",
               tenancyStart: stay.start || "",
               tenancyEnd: stay.end || "",

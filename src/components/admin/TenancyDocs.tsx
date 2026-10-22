@@ -1,3 +1,4 @@
+import { roomName } from "@/lib/room-name";
 import { useState } from "react";
 import { DismissibleNotice } from "@/components/ui/notice";
 import { soldBedLabel } from "@/lib/placement";
@@ -434,11 +435,11 @@ function AgreementBlock({
         const datesMoved = made.periodStart !== stay.start || made.periodEnd !== stay.end;
         if (!datesMoved && !roomMoved) return null;
         const was = [
-          roomMoved ? `${madeUnit} · Room ${madeRoom}` : "",
+          roomMoved ? `${madeUnit} · ${roomName(madeRoom)}` : "",
           datesMoved ? `${fmtDate(made.periodStart)} – ${fmtDate(made.periodEnd)}` : "",
         ].filter(Boolean).join(", ");
         const now = [
-          roomMoved ? `${stay.unitNo} · Room ${stay.room}` : "",
+          roomMoved ? `${stay.unitNo} · ${roomName(stay.room)}` : "",
           datesMoved ? `${fmtDate(stay.start)} – ${fmtDate(stay.end)}` : "",
         ].filter(Boolean).join(", ");
         /*
@@ -1056,7 +1057,7 @@ export function currentMergeValues(
     id_number: resident.idNumber,
     residence: placed?.unit.residenceName ?? "",
     unit_no: placed?.unit.unitNo ?? "",
-    room: placed ? `Room ${placed.room.letter}` : "",
+    room: placed ? roomName(placed.room.letter) : "",
     bed: placed ? soldBedLabel(placed.room, placed.bed) : "",
     tenancy_start: tenancy?.start || resident.moveIn || "",
     tenancy_end: tenancy?.end || "",

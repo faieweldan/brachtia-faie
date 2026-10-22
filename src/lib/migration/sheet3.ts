@@ -1,3 +1,4 @@
+import { roomAndBed, roomName } from "@/lib/room-name";
 import {
   COUNTRIES,
   MARITAL_OPTIONS,
@@ -298,7 +299,7 @@ export function previewSheet3Grid(grid: unknown[][], system: SystemSnapshot): Mi
     const unitNo = text(value("Unit no."));
     const room = text(value("Room"));
     const bedLabel = text(value("Bed"));
-    const place = [residence, unitNo, room && `Room ${room}`, bedLabel].filter(Boolean).join(" · ");
+    const place = [residence, unitNo, roomAndBed(room, bedLabel)].filter(Boolean).join(" · ");
     let wholeRoom = false;
     let bedId = "";
 
@@ -439,7 +440,7 @@ export function previewSheet3Grid(grid: unknown[][], system: SystemSnapshot): Mi
     } else if (!unit) {
       add("blocked", "Unit no.", `${residence} / ${unitNo} is not set up in Homes.`);
     } else if (!matchedRoom) {
-      add("blocked", "Room", `${unitNo} / Room ${room} is not set up in Homes.`);
+      add("blocked", "Room", `${unitNo} / ${roomName(room)} is not set up in Homes.`);
     } else if (!matchedBed) {
       add("blocked", "Bed", `${unitNo} / Room ${room} / ${bedLabel} is not set up in Homes.`);
     } else {

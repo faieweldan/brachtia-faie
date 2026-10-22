@@ -4,6 +4,7 @@
  * left blank). Shared by the Templates workspace and the server.
  */
 
+import { roomName } from "@/lib/room-name";
 import { soldBedLabel, soldOccupancy } from "@/lib/placement";
 import { COUNTRIES, SCHEDULES } from "@/lib/reference-data";
 import { stayLength } from "@/lib/stay-length";
@@ -169,7 +170,7 @@ export const TEMPLATE_FIELDS: TemplateField[] = [
   { key: "total_stay", label: "Total for whole stay", source: "Initial Payment", get: (c) => money((c.enquiry?.["quote_snapshot"] as any)?.quote?.totalStay) },
   { key: "residence", label: "Residence", source: "Room Record", get: (c) => c.residence?.["name"] },
   { key: "unit_no", label: "Unit no.", source: "Room Record", get: (c) => c.unit?.["unit_no"] },
-  { key: "room_no", label: "Room", source: "Room Record", get: (c) => (c.room ? `Room ${c.room["letter"]}` : "") },
+  { key: "room_no", label: "Room", source: "Room Record", get: (c) => (c.room ? roomName(String(c.room["letter"] ?? "")) : "") },
   // as sold: a twin room let whole is a single (placement.ts soldOccupancy, 14 Oct 2026)
   { key: "bed", label: "Bed", source: "Room Record", get: (c) => (c.bed ? soldBedLabel(c.room as any, c.bed as any, c.letWhole) : undefined) },
   { key: "occupancy", label: "Occupancy", source: "Room Record", get: (c) => (c.room ? soldOccupancy(c.room as any, c.letWhole) : undefined) ?? c.resident?.["occupancy"] },

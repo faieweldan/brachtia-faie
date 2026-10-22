@@ -1,3 +1,4 @@
+import { roomName } from "@/lib/room-name";
 import { useMemo, useState, type ReactNode } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -245,7 +246,7 @@ function AddExistingResident() {
             />
           </F>
           <F label="Room">
-            <Pick value={f.room} disabled={!unit} onChange={(v) => set({ room: v, bed: "" })} options={(unit?.rooms ?? []).map((r) => ({ value: r.letter, label: `Room ${r.letter}` }))} />
+            <Pick value={f.room} disabled={!unit} onChange={(v) => set({ room: v, bed: "" })} options={(unit?.rooms ?? []).map((r) => ({ value: r.letter, label: roomName(r.letter) }))} />
           </F>
           <F label="Bed">
             <Pick value={f.bed} disabled={!room} onChange={(v) => set({ bed: v })} options={bedOptions} />

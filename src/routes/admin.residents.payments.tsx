@@ -1,3 +1,4 @@
+import { roomText } from "@/lib/room-name";
 import { loadProofFile } from "@/lib/payment-proof";
 import { DateRangeFilter, FilterField, ResetFilters, SearchFilter, StatusTabs } from "@/components/admin/filters";
 import { Dropdown } from "@/components/admin/Dropdown";
@@ -833,7 +834,7 @@ function detailsFrom(inv: BillingInvoice): ResidentDetails {
     occupation: d.occupation ?? "",
     nationality: d.nationality ?? "",
     residenceName: d.residence_name,
-    roomName: d.room_name,
+    roomName: roomText(d.room_name),
     occupancy: d.occupancy,
     tenancyStart: d.tenancy_start ?? "",
     tenancyEnd: d.tenancy_end ?? "",

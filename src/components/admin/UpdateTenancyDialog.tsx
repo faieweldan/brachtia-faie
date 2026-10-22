@@ -1,3 +1,4 @@
+import { roomAndBed, roomName } from "@/lib/room-name";
 import { useEffect, useMemo, useState } from "react";
 import { StaffPicker } from "@/components/admin/Dropdown";
 import { UnitBeds } from "@/components/admin/UnitBeds";
@@ -365,7 +366,7 @@ export function UpdateTenancyDialog({
               ...(e.flags.date === "renewal" ? { newStart: e.date } : {}),
             }),
             periodEnd: e.periodEnd,
-            roomName: e.bed ? `${e.bed.unit.unitNo} · Room ${e.bed.room.letter}` : "",
+            roomName: e.bed ? `${e.bed.unit.unitNo} · ${roomName(e.bed.room.letter)}` : "",
             // what the screen showed; the IP reads the bed itself on the server (invoicePlace)
             occupancy: e.bed ? occOf(e.bed) : occ,
           })),
@@ -400,7 +401,7 @@ export function UpdateTenancyDialog({
   }
 
   const occLabel = (o: string) => OCCUPANCY_LABEL[o] ?? o;
-  const bedLabel = (b: BedRow | null | undefined) => (b ? `${b.unit.residenceName} · ${b.unit.unitNo} · Room ${b.room.letter} · ${bedName(b)}` : "—");
+  const bedLabel = (b: BedRow | null | undefined) => (b ? `${b.unit.residenceName} · ${b.unit.unitNo} · ${roomAndBed(b.room.letter, bedName(b))}` : "—");
 
   return (
     <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>

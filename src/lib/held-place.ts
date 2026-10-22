@@ -1,3 +1,4 @@
+import { roomName } from "@/lib/room-name";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /**
@@ -86,7 +87,7 @@ export async function heldPlace(
 
 /** "Unit A-07-03 · Room C", or as much of it as is known. */
 export function placeLabel(unitNo: string, roomLetter: string): string {
-  return [unitNo ? `Unit ${unitNo}` : "", roomLetter ? `Room ${roomLetter}` : ""]
+  return [unitNo ? `Unit ${unitNo}` : "", roomName(roomLetter)]
     .filter(Boolean)
     .join(" · ");
 }

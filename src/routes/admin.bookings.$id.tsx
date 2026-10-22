@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { roomAndBed, roomName } from "@/lib/room-name";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Dropdown } from "@/components/admin/Dropdown";
 import { BookingNoteBox } from "@/components/admin/InternalNote";
@@ -964,7 +965,7 @@ function BookingDetail() {
     if (reservingRef.current) return;
     // the room it already has: nothing to save, nothing to log
     if (assignedBed && !c.convert && assignedBed.bed.id === c.row.bed.id) {
-      toast.info(`Room ${c.row.unit.unitNo} · ${c.row.room.letter} is already reserved for this booking`);
+      toast.info(`${c.row.unit.unitNo} · ${roomName(c.row.room.letter)} is already reserved for this booking`);
       return;
     }
     reservingRef.current = true;
@@ -1027,7 +1028,7 @@ function BookingDetail() {
         enquiryId: id,
         kind: "room_reserved",
         ref: bedId,
-        summary: `Room ${b.unit.unitNo} ${b.room.letter} ${moved ? "reserved instead" : "reserved"}`,
+        summary: `${b.unit.unitNo} ${roomName(b.room.letter)} ${moved ? "reserved instead" : "reserved"}`,
       },
     })
       .then(() => queryClient.invalidateQueries({ queryKey: ["admin", "activity", id] }))
@@ -1035,7 +1036,7 @@ function BookingDetail() {
     toast.success(
       c.convert
         ? `${b.unit.unitNo} · Room ${b.room.letter} reconfigured to Twin — 1 of 2 reserved`
-        : `${moved ? "Moved to" : "Reserved"} Room ${b.unit.unitNo} · ${b.room.letter}${c.whole ? " as a single" : ""}`,
+        : `${moved ? "Moved to" : "Reserved"} ${b.unit.unitNo} · ${roomName(b.room.letter)}${c.whole ? " as a single" : ""}`,
       // a paid booking moved: its invoice and TA still name the old room until they are redone
       moved && r.resident_id
         ? {
@@ -1197,7 +1198,7 @@ function BookingDetail() {
     const occ = isUnitSlot(c.row.room) ? "unit" : c.whole ? "single" : c.row.room.occupancy;
     return {
       bedId: c.row.bed.id,
-      label: `${c.row.unit.unitNo} · ${isUnitSlot(c.row.room) ? "Whole unit" : `Room ${c.row.room.letter}`}${c.whole ? " · Single" : c.row.room.occupancy === "twin" ? ` · ${c.row.bed.label}` : ""}`,
+      label: `${c.row.unit.unitNo} · ${roomName(c.row.room.letter)}${isUnitSlot(c.row.room) ? "" : c.whole ? " · Single" : c.row.room.occupancy === "twin" ? ` · ${c.row.bed.label}` : ""}`,
       residenceName: c.row.unit.residenceName,
       residenceSlug: c.row.unit.residenceSlug || undefined,
       // the room's own price - never the rent of whoever is in it now
@@ -1672,7 +1673,7 @@ function BookingDetail() {
                               <span aria-hidden />
                             )}
                             <span className="text-foreground">
-                              {isUnitSlot(b.room) ? "Whole unit" : `Room ${b.room.letter}`}
+                              {roomName(b.room.letter)}
                             </span>
                             <span className="text-muted-foreground">
                               {config}
@@ -1740,7 +1741,7 @@ function BookingDetail() {
                     key={picked.bedId}
                     enquiryId={id}
                     residentId={r.resident_id || undefined}
-                    current={`${assignedBed.unit.unitNo} · Room ${assignedBed.room.letter} · ${soldBedLabel(assignedBed.room, assignedBed.bed, assignedLetWhole)}`}
+                    current={`${assignedBed.unit.unitNo} · ${roomAndBed(assignedBed.room.letter, soldBedLabel(assignedBed.room, assignedBed.bed, assignedLetWhole))}`}
                     picked={picked}
                     onCancel={() => setPicked(null)}
                     onDone={(res) => {

@@ -1,3 +1,4 @@
+import { roomName } from "@/lib/room-name";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -621,6 +622,8 @@ function BedLine({
 
   // the room's own status: whoever is physically in it decides
   const roomStatus = roomStatusOf(bed);
+  // the whole unit's one bed is the unit itself - "Whole unit" says it all
+  const bedText = isUnitSlot(room) ? "—" : asSingle ? "Single" : bed.label;
 
   /** a column's blocks, stacked: the bed's own first, then each later stay under a hairline */
   const col = (render: (s: Stay) => React.ReactNode) =>
@@ -641,9 +644,9 @@ function BedLine({
 
   return (
     <tr className="align-top">
-      <td className="px-4 py-2 font-medium">{isUnitSlot(room) ? "Whole unit" : `Room ${room.letter}`}</td>
+      <td className="px-4 py-2 font-medium">{roomName(room.letter)}</td>
       {/* every column stacks one block per person, so a later stay reads across one line (Dani, 10 Oct 2026) */}
-      <td className="px-4 py-2">{stays.length ? col(() => (asSingle ? "Single" : bed.label)) : asSingle ? "Single" : bed.label}</td>
+      <td className="px-4 py-2">{stays.length ? col(() => bedText) : bedText}</td>
       <td className="px-4 py-2">
         {stays.length ? (
           col((st) =>

@@ -1,3 +1,4 @@
+import { roomName } from "@/lib/room-name";
 import { useEffect, useMemo, useState } from "react";
 import { soldBedLabel } from "@/lib/placement";
 import { Dropdown } from "@/components/admin/Dropdown";
@@ -117,7 +118,7 @@ function DocumentPackPage() {
       id_number: resident.idNumber,
       residence: placed?.unit.residenceName ?? "",
       unit_no: placed?.unit.unitNo ?? "",
-      room: placed ? `Room ${placed.room.letter}` : "",
+      room: placed ? roomName(placed.room.letter) : "",
       bed: placed ? soldBedLabel(placed.room, placed.bed) : "",
       tenancy_start: start,
       tenancy_end: end,

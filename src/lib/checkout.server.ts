@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { isWholeUnitLetter, roomName } from "@/lib/room-name";
 import { CHECKOUT_TYPE_LABEL, checkoutDocKind, checkoutTotals, type CheckoutType } from "@/lib/checkout-types";
 
 export * from "@/lib/checkout-types";
@@ -286,7 +287,7 @@ export async function residentParticulars(sb: any, residentId: string) {
     residence: String(rs?.name ?? ""),
     unit: String(un?.unit_no ?? ""),
     // as sold: a twin room let whole is a single (placement.ts soldBedLabel)
-    room: [rm2?.letter ? `Room ${rm2.letter}` : "", bed ? (await import("@/lib/placement")).soldBedLabel(rm2, bed, placed?.letWhole) : ""].filter(Boolean).join(", "),
+    room: isWholeUnitLetter(rm2?.letter) ? roomName(rm2?.letter) : [roomName(rm2?.letter), bed ? (await import("@/lib/placement")).soldBedLabel(rm2, bed, placed?.letWhole) : ""].filter(Boolean).join(", "),
     tenancyStart: String(doc?.[0]?.period_start ?? ""),
     tenancyEnd: String(doc?.[0]?.period_end ?? ""),
   };

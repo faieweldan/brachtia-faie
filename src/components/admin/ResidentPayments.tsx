@@ -1,3 +1,4 @@
+import { roomText } from "@/lib/room-name";
 import { loadProofFile } from "@/lib/payment-proof";
 import { DismissibleNotice } from "@/components/ui/notice";
 import { MIGRATED, MIGRATED_MEANING } from "@/lib/migration/import-plan";
@@ -211,7 +212,7 @@ export function ResidentPayments({
     ...details,
     residentCode: details.residentCode || first?.resident_code || "",
     residenceName: details.residenceName || first?.residence_name || "",
-    roomName: details.roomName || first?.room_name || "",
+    roomName: roomText(details.roomName || first?.room_name),
     occupancy: details.occupancy || first?.occupancy || "",
     tenancyStart: details.tenancyStart || first?.tenancy_start || "",
     tenancyEnd: details.tenancyEnd || first?.tenancy_end || "",

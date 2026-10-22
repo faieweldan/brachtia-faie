@@ -1,3 +1,4 @@
+import { roomName } from "@/lib/room-name";
 import { joinPhone, normCountry, normGender, normUniversity } from "@/lib/reference-data";
 import { MIGRATED, initialLines, initialPaymentOf, migratedNote, migratedRentTerms, r2 } from "@/lib/migration/import-plan";
 import type { MigrationPreviewRow } from "@/lib/migration/sheet3";
@@ -176,7 +177,7 @@ export async function importResident(sb: any, row: MigrationPreviewRow, today: s
           university: rec.university,
           nationality: rec.nationality,
           residence_name: row.place.split(" · ")[0] ?? "",
-          room_name: `${rec.unitNo} · Room ${rec.room}`,
+          room_name: `${rec.unitNo} · ${roomName(rec.room)}`,
           occupancy: rec.occupancy,
           tenancy_start: row.tenancyStart,
           tenancy_end: row.tenancyEnd,

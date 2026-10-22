@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { roomText } from "@/lib/room-name";
 import { ipPurpose } from "@/lib/invoice-category";
 import { discountLabel } from "@/lib/invoices";
 import type { InvoiceDoc } from "@/lib/invoice-pdf";
@@ -37,7 +38,7 @@ export function invoiceDocFromRow(row: any, items: any[]): InvoiceDoc {
     occupation: row?.occupation ?? "",
     nationality: row?.nationality ?? "",
     residence_name: row?.residence_name ?? "",
-    room_name: row?.room_name ?? "",
+    room_name: roomText(row?.room_name),
     occupancy: row?.occupancy ?? "",
     tenancy_start: row?.tenancy_start ?? null,
     tenancy_end: row?.tenancy_end ?? null,

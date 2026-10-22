@@ -118,7 +118,8 @@ export function ResidentNoteLine({ residentId }: { residentId: string }) {
             type="button"
             title={open ? "Show less" : note}
             onClick={() => setOpen((o) => !o)}
-            className={`min-w-0 flex-1 text-left ${open ? "whitespace-pre-wrap" : "truncate"}`}
+            // up to four lines shown, the rest on a click (Dani, 22 Oct 2026: one line cut a group's names off)
+            className={`min-w-0 flex-1 whitespace-pre-wrap break-words text-left ${open ? "" : "line-clamp-4"}`}
           >
             {note}
           </button>

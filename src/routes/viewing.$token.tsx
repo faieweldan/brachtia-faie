@@ -1,3 +1,4 @@
+import { roomName } from "@/lib/room-name";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -271,7 +272,7 @@ function ViewingLinkPage() {
         {booking["unit_no"] ? (
           <p className="text-sm font-semibold text-primary-foreground/95">
             Unit {String(booking["unit_no"])}
-            {booking["unit_room"] ? ` · Room ${String(booking["unit_room"])}` : ""}
+            {booking["unit_room"] ? ` · ${roomName(String(booking["unit_room"]))}` : ""}
           </p>
         ) : null}
         <p className="text-sm font-medium text-primary-foreground/90">{booking["room_name"]}</p>

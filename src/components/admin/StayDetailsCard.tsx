@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { roomName } from "@/lib/room-name";
 import { Dropdown } from "@/components/admin/Dropdown";
 import { useState, type ReactNode } from "react";
 import { AlertTriangle, Check, Pencil, RefreshCw, X } from "lucide-react";
@@ -273,7 +274,7 @@ export function StayDetailsCard({
         soldWhole,
         term ?? "long",
       );
-      rentFrom = `From the assigned room · Unit ${assignedBed.unit.unitNo} Room ${assignedBed.room.letter}`;
+      rentFrom = `From the assigned room · Unit ${assignedBed.unit.unitNo} ${roomName(assignedBed.room.letter)}`;
       if (!(rent > 0)) blocked = "no-rate";
     } else if (!term) {
       blocked = "no-dates";
@@ -730,7 +731,7 @@ export function StayDetailsCard({
           <RoomChangeReview
             enquiryId={String(row.id)}
             residentId={row.resident_id || undefined}
-            current={assignedBed ? `${assignedBed.unit.unitNo} · Room ${assignedBed.room.letter}` : String(row.room_name ?? "")}
+            current={assignedBed ? `${assignedBed.unit.unitNo} · ${roomName(assignedBed.room.letter)}` : String(row.room_name ?? "")}
             dates={{
               from: `${fmtDate(tenancyDates.start)} – ${fmtDate(tenancyDates.end)}`,
               to: `${fmtDate(row.move_in)} – ${fmtDate(row.move_out)} (${stayLength(row.move_in, row.move_out)})`,

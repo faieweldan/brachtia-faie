@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { roomName } from "@/lib/room-name";
 import type { DefectDecision, InventoryMode, InventoryRecord } from "@/lib/inventory";
 
 /*
@@ -161,7 +162,7 @@ export async function buildInventoryPdf(
       effectiveDate: dmy(effective),
       residence: String(rs?.name ?? ""),
       unitNo: String(un?.unit_no ?? ""),
-      room: rm?.letter ? `Room ${rm.letter}` : "",
+      room: roomName(rm?.letter),
       // as sold: a twin room let whole is a single (placement.ts soldBedLabel)
       bed: bed ? (await import("@/lib/placement")).soldBedLabel(rm, bed, placed?.letWhole) : "",
     },

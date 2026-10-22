@@ -1,3 +1,4 @@
+import { roomAndBed, roomName } from "@/lib/room-name";
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { toast } from "sonner";
@@ -94,7 +95,7 @@ export function ReserveBedDialog({
         if (row.bed.id === bed.id) continue; // already in this very bed
         placed.push({
           person: r,
-          from: `${row.unit.unitNo} · Room ${row.room.letter} · ${row.bed.label}`,
+          from: `${row.unit.unitNo} · ${roomAndBed(row.room.letter, row.bed.label)}`,
         });
       } else {
         waiting.push({ person: r });
@@ -128,7 +129,7 @@ export function ReserveBedDialog({
       toast.error(res.error, res.detail ? { description: res.detail } : undefined);
       return;
     }
-    const what = whole ? `Room ${room.letter}` : bed.label;
+    const what = whole || isUnitSlot(room) ? roomName(room.letter) : bed.label;
     toast.success(
       from
         ? `${person.fullName || "Resident"} moved from ${from} to ${what}`
@@ -148,7 +149,7 @@ export function ReserveBedDialog({
           <DialogDescription className="flex flex-wrap items-center gap-2">
             <span>
               {unit.residenceName} · {unit.unitNo} ·{" "}
-              {isUnitSlot(room) ? "Whole unit" : `Room ${room.letter}`} · {bed.label}
+              {roomAndBed(room.letter, bed.label)}
             </span>
             {/* the unit's gender, to match against the students below */}
             <UnitGenderMark unit={unit} residents={residents} />
