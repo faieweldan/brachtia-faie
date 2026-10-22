@@ -779,7 +779,9 @@ function UnitSetupPage() {
 }
 
 /** Units, rooms, beds and whole-unit lets in a set of units - all of them, or one residence. */
-function statsFor(list: Unit[]) {
+function statsFor(all: Unit[]) {
+  // units in service only - a deactivated one is counted on its own, so the two add up (22 Oct 2026)
+  const list = all.filter((u) => !u.deactivatedAt);
   const lettable = list.flatMap((u) => u.rooms).filter((r) => r.letter.toLowerCase() !== "unit");
   return {
     units: list.length,
@@ -789,7 +791,7 @@ function statsFor(list: Unit[]) {
     whole: list.filter((u) =>
       u.rooms.some((r) => r.letter.toLowerCase() === "unit" && r.beds.some((b) => b.residentId || b.enquiryId || b.status !== "vacant")),
     ).length,
-    deactivated: list.filter((u) => u.deactivatedAt).length,
+    deactivated: all.length - list.length,
   };
 }
 
