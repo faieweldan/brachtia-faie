@@ -728,8 +728,9 @@ function ResidentProfilePage() {
                   {form.fullName || "This resident"} has moved out?
                 </DialogTitle>
                 <DialogDescription>
-                  Their room goes to whoever has it next, or shows Vacant. Rent not billed yet for after
-                  this day is dropped. Their checkout statement stays open - settling it makes them Inactive.
+                  Future room assignments go to the next guest or revert to Vacant. Rent billing stops after
+                  the checkout date. The checkout statement remains open; settling it changes their status to
+                  Inactive.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-1.5">
