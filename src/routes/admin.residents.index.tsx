@@ -61,7 +61,7 @@ function ResidentsListPage() {
     return m;
   }, [ledger]);
   const [q, setQ] = useState("");
-  const [view, setView] = useState<"active" | "upcoming" | "inactive" | "all">("active");
+  const [view, setView] = useState<"active" | "upcoming" | "moved_out" | "inactive" | "all">("active");
   const [university, setUniversity] = useState("");
   const [residence, setResidence] = useState("");
   // admin's own labels (13 Oct 2026): show only residents carrying this one
@@ -101,21 +101,22 @@ function ResidentsListPage() {
   /*
    * Current, Upcoming or Former (Dani, 9 Oct 2026) - worked out, never stored:
    * Former is checked out; Upcoming has a room reserved or booked but has not
-   * checked in, or no room yet and a stay that starts later; everyone else is
-   * Current.
+   * checked in, or no room yet and a stay that starts later; Moved out has
+   * left the room with the checkout not settled yet - Brachtia still has their
+   * money to close (22 Oct 2026); everyone else is Current.
    */
   const today = klToday();
   const phaseOf = (r: (typeof residents)[number]) => {
     if (isInactive(r)) return "inactive" as const;
     const placed = findBedForResident(units, r);
     const st = personStatus({
-      // moved out, settlement open: still Current - Brachtia has their money to close (22 Oct 2026)
       movedOut: savedDates.data?.[r.id]?.movedOut,
       bedStatus: placed?.bed.status,
       upcomingAs: placed?.upcoming
         ? placed.bed.upcoming?.find((u) => u.residentId === r.id)?.status
         : undefined,
     });
+    if (st === "moved_out") return "moved_out" as const;
     if (st === "held" || st === "booked") return "upcoming" as const;
     if (st === "none") {
       const start = savedDates.data?.[r.id]?.start || r.moveIn || "";
@@ -127,6 +128,7 @@ function ResidentsListPage() {
   const counts = {
     active: residents.filter((r) => phases.get(r.id) === "active").length,
     upcoming: residents.filter((r) => phases.get(r.id) === "upcoming").length,
+    moved_out: residents.filter((r) => phases.get(r.id) === "moved_out").length,
     inactive: residents.filter((r) => phases.get(r.id) === "inactive").length,
   };
 
@@ -431,6 +433,7 @@ function ResidentsListPage() {
                 [
                   { key: "active", label: "Current", count: counts.active },
                   { key: "upcoming", label: "Upcoming", count: counts.upcoming },
+                  { key: "moved_out", label: "Moved out", count: counts.moved_out },
                   { key: "inactive", label: "Former", count: counts.inactive },
                   { key: "all", label: "All", count: residents.length },
                 ] as const
