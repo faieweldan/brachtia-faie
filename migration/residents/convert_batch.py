@@ -985,8 +985,8 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
                 # a whole-unit let: the room "Unit" with its one bed "Unit", as Homes and the
                 # bulk upload make it (residents.functions.ts) - the unit must be let whole in Homes
                 out_row["Room"], out_row["Bed"] = "Unit", "Unit"
-                flag(WARNING, "Room", f"Whole-unit let - {out_row['Unit no. '] or 'the unit'} must be set up as a whole unit "
-                     f"in Homes (it needs a whole-unit rate for '{unit_type or 'its unit type'}' in Website settings)")
+                flag(WARNING, "Room", f"Whole-unit let - goes on {out_row['Unit no. '] or 'the unit'}'s Whole unit line in Homes "
+                     f"(there when Website has a whole-unit rate for '{unit_type or 'its unit type'}'); the rent is this row's")
         # occupancy follows the bed: one person alone has the room as a single
         out_row["Occupancy"] = {"single": "Single", "twin 1": "Twin Share", "twin 2": "Twin Share"}.get(
             out_row["Bed"].strip().lower(), "")

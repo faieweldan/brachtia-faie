@@ -19,8 +19,9 @@ import { findBedForResident, type Unit } from "../src/lib/ops-store";
  */
 const KNOWN: Record<string, number> = {
   // saveUnitWith: bed labels and order only (removal is drop_unused_rooms_beds); the two
-  // "database not migrated yet" fallbacks of checkout and check-in
-  "src/lib/homes.functions.ts": 3,
+  // "database not migrated yet" fallbacks of checkout and check-in; syncWholeUnitSlots
+  // making the whole-unit line's empty "Unit" bed (22 Oct 2026)
+  "src/lib/homes.functions.ts": 4,
   // the rent in force copied onto the bed for display, after a move or a rent change
   "src/lib/tenancy-events.server.ts": 2,
   // the master-list upload building a unit's rooms and beds, and its rent on the bed

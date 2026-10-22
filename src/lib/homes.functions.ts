@@ -231,6 +231,8 @@ function toUnit(row: any, rooms: any[], beds: any[]): Unit {
 
 export const listUnits = createServerFn({ method: "GET" }).handler(async (): Promise<Unit[]> => {
   const supabase = await admin();
+  // the whole-unit line follows Website's whole-unit rate - no toggle (syncWholeUnitSlots)
+  await syncWholeUnitSlots(supabase);
   const { data: units, error } = await supabase
     .from("units")
     .select("*, residences(name, slug)")
@@ -283,23 +285,19 @@ export async function saveUnitWith(
   data: { unit: Unit; importBatchId?: string },
 ): Promise<Unit> {
   {
-    const { unit, importBatchId } = data;
+    let { unit } = data;
+    const { importBatchId } = data;
 
-    // a unit is let whole (one "Unit" bed) or by room - never both. Every screen
-    // keeps to this, and this refuses anything that did not
-    const slots = unit.rooms.filter((r) => r.letter.toLowerCase() === "unit");
-    if (slots.length && slots.length !== unit.rooms.length) {
-      throw new Error(`${unit.unitNo}: a unit is let either whole or by room, not both`);
-    }
-    // and let whole only when Website gives its unit type a whole-unit rate (11 Oct 2026)
-    if (slots.length) {
-      const { data: resRow } = await supabase.from("residences").select("unit_rates").eq("id", unit.residenceId).maybeSingle();
-      const { wholeUnitOffered } = await import("@/lib/room-offer");
-      const taken = slots.some((r) => r.beds.some((b) => b.residentId || b.enquiryId || b.status !== "vacant"));
-      if (!taken && !wholeUnitOffered(resRow as any, unit.unitType ?? "")) {
-        throw new Error(`${unit.unitNo}: no whole-unit rate in Website for ${unit.unitType || "this unit type"}`);
-      }
-    }
+    /*
+     * A unit is sold by room AND, when Website gives its unit type a whole-unit
+     * rate, as a whole (Dani, 22 Oct 2026 - the "Rent as whole unit" toggle is
+     * gone). The whole-unit line is the room "Unit" with its one bed "Unit";
+     * the server keeps it (syncWholeUnitSlots), the page never sends it, and
+     * placement_conflict lets either the unit or its rooms be taken for any
+     * one date - never both.
+     */
+    const isSlot = (r: { letter: string }) => r.letter.toLowerCase() === "unit";
+    unit = { ...unit, rooms: unit.rooms.filter((r) => !isSlot(r)) };
 
     /*
      * The code this unit is known by - U001, U002, and no dash, the way the
@@ -363,9 +361,7 @@ export async function saveUnitWith(
       floor: unit.floor ?? "",
       unit_type: unit.unitType ?? "",
       gender: unit.gender ?? "",
-      // whether it is let whole follows from its rooms, so the two cannot disagree
-      whole_unit: slots.length > 0,
-      whole_unit_rent: unit.wholeUnitRent ?? 0,
+      // whole_unit and whole_unit_rent follow Website (syncWholeUnitSlots)
       notes: unit.notes ?? "",
       ...(importBatchId ? { import_batch_id: importBatchId } : {}),
     };
@@ -433,7 +429,11 @@ export async function saveUnitWith(
     {
       const { data: dropped, error: dropErr } = await supabase.rpc("drop_unused_rooms_beds", {
         p_unit: unitId,
-        p_rooms: unit.rooms.map((r) => ({ letter: r.letter, labels: r.beds.map((b) => b.label) })),
+        // the whole-unit line is never the page's to remove
+        p_rooms: [
+          ...unit.rooms.map((r) => ({ letter: r.letter, labels: r.beds.map((b) => b.label) })),
+          { letter: "Unit", labels: ["Unit"] },
+        ],
       });
       if (dropErr) throw new Error(rpcError(dropErr));
       const out = dropped as { ok: boolean; busy?: string[] };
@@ -446,6 +446,7 @@ export async function saveUnitWith(
 
     // twin or single follows the room type in Website, whatever was sent
     await syncRoomShapes(supabase, unitId);
+    await syncWholeUnitSlots(supabase, unitId);
     return await readUnit(supabase, unitId);
   }
 }
@@ -494,6 +495,54 @@ export const setUnitCodes = createServerFn({ method: "POST" })
  * 2026) - sync_room_shapes in 20261011110000_room_shape_from_website.sql. A
  * database without that migration keeps the rooms as they were.
  */
+/**
+ * The whole-unit line follows Website (Dani, 22 Oct 2026): a unit whose type
+ * has a whole-unit rate gets the room "Unit" with one bed "Unit", priced at
+ * that rate; a unit whose type has none loses it - unless somebody is placed on
+ * it, now, later or before (drop_unused_rooms_beds refuses, and it stays).
+ * Writes only what differs, so it is safe on every read.
+ */
+export async function syncWholeUnitSlots(supabase: any, unitId?: string) {
+  const unitsQ = supabase.from("units").select("id, residence_id, unit_type, whole_unit, whole_unit_rent");
+  const { data: units } = await (unitId ? unitsQ.eq("id", unitId) : unitsQ);
+  if (!units?.length) return;
+  const ids = units.map((u: any) => u.id);
+  const [{ data: residences }, { data: rooms }] = await Promise.all([
+    supabase.from("residences").select("id, unit_rates"),
+    supabase.from("rooms").select("id, unit_id, letter, beds(label)").in("unit_id", ids),
+  ]);
+  const { wholeUnitOffered } = await import("@/lib/room-offer");
+  const resById = new Map<string, any>((residences ?? []).map((r: any) => [r.id, r]));
+  for (const u of units as any[]) {
+    const res = resById.get(u.residence_id);
+    const offered = wholeUnitOffered(res, u.unit_type ?? "");
+    const rate = offered ? Number(res?.unit_rates?.[u.unit_type]?.long) || Number(res?.unit_rates?.[u.unit_type]?.short) || 0 : 0;
+    const mine = ((rooms ?? []) as any[]).filter((r) => r.unit_id === u.id);
+    const slot = mine.find((r) => String(r.letter).toLowerCase() === "unit");
+    let has = !!slot;
+    if (offered && !slot) {
+      const { data: made } = await supabase
+        .from("rooms")
+        .upsert({ unit_id: u.id, letter: "Unit", occupancy: "unit", room_type_code: "", rent: 0, sort_order: 99 }, { onConflict: "unit_id,letter" })
+        .select("id")
+        .single();
+      if (made) {
+        await supabase.from("beds").upsert({ room_id: made.id, label: "Unit", status: "vacant", sort_order: 0 }, { onConflict: "room_id,label", ignoreDuplicates: true });
+        has = true;
+      }
+    } else if (!offered && slot) {
+      const { data: dropped } = await supabase.rpc("drop_unused_rooms_beds", {
+        p_unit: u.id,
+        p_rooms: mine.filter((r) => r !== slot).map((r) => ({ letter: r.letter, labels: (r.beds ?? []).map((b: any) => b.label) })),
+      });
+      has = !(dropped as any)?.ok;
+    }
+    if (!!u.whole_unit !== has || Number(u.whole_unit_rent ?? 0) !== rate) {
+      await supabase.from("units").update({ whole_unit: has, whole_unit_rent: rate }).eq("id", u.id);
+    }
+  }
+}
+
 export async function syncRoomShapes(supabase: any, unitId?: string) {
   const { error } = await supabase.rpc("sync_room_shapes", unitId ? { p_unit: unitId } : {});
   if (error && !notMigrated(error)) throw new Error(error.message);

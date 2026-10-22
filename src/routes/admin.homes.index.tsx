@@ -211,6 +211,8 @@ function InventoryPage() {
       if (gender && unit.gender !== gender) return false;
       const [wantStatus, wantOccupancy] = status.split(":");
       if (wantStatus && roomStatusOf(bed) !== wantStatus) return false;
+      // a line the whole-unit letting (or a let room) holds is not for sale
+      if (wantStatus === "vacant" && bedBlockedBy(unit, room, bed)) return false;
       if (wantOccupancy && room.occupancy !== wantOccupancy) return false;
       if (from && bed.tenancyEnd && bed.tenancyEnd < from) return false;
       if (to && bed.tenancyStart && bed.tenancyStart > to) return false;
@@ -264,7 +266,16 @@ function InventoryPage() {
     const c: Record<string, number> = {};
     for (const { unit, room, bed } of allBeds(units)) {
       if (residence && unit.residenceName !== residence) continue;
+      // the whole-unit line is not one more bed: it counts only as a whole unit
+      // free to sell (22 Oct 2026), and a bed the whole-unit letting holds is not vacant
+      const blocked = bedBlockedBy(unit, room, bed);
+      if (isUnitSlot(room)) {
+        if (roomStatusOf(bed) === "vacant" && !blocked) c["vacant:unit"] = (c["vacant:unit"] ?? 0) + 1;
+        else if (roomStatusOf(bed) !== "vacant") c[roomStatusOf(bed)] = (c[roomStatusOf(bed)] ?? 0) + 1;
+        continue;
+      }
       c["all"] = (c["all"] ?? 0) + 1;
+      if (blocked) continue;
       // an empty bed with a stay coming counts as Reserved or Booked, not Vacant
       const s = roomStatusOf(bed);
       c[s] = (c[s] ?? 0) + 1;
@@ -450,8 +461,8 @@ function InventoryPage() {
         ) : null}
         {grouped.map(([unitId, unitRows]) => {
           const unit = unitRows[0]!.unit;
-          // a slot that cannot be sold is not shown at all - letting the whole
-          // unit hides its rooms, exactly as a single room hides its twins
+          // a unit is sold by room and whole (22 Oct 2026): the line that cannot be
+          // sold now is still shown, saying why and until when (bedBlockedBy)
           const sellable = unitRows.filter(({ unit: u, room, bed }) => !bedBlockedBy(u, room, bed));
           const expanded = open[unitId] !== false;
           return (
@@ -508,8 +519,9 @@ function InventoryPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {collapseSingles(sellable, roomTypes).map(({ room, bed, asSingle }) => (
+                      {collapseSingles(unitRows, roomTypes).map(({ room, bed, asSingle }) => (
                         <BedLine
+                          blocked={bedBlockedBy(unit, room, bed)}
                           key={bed.id}
                           unit={unit}
                           room={room}
@@ -584,6 +596,7 @@ function BedLine({
   onReleaseHold,
   checkInDays,
   agreedRent,
+  blocked = "",
 }: {
   unit: Unit;
   room: BedRow["room"];
@@ -596,6 +609,8 @@ function BedLine({
   onReleaseHold: (enquiryId: string) => void;
   checkInDays?: Record<string, string> | undefined;
   agreedRent?: Record<string, { rent: number }> | undefined;
+  /** why this line cannot be sold now - the whole unit, or a room in it, is let */
+  blocked?: string;
 }) {
   const today = klToday();
   // who is on the bed, and when - the shared reader (placement.ts bedStays)
@@ -639,6 +654,8 @@ function BedLine({
               <StatusPill status={st.status} label={PERSON_LABEL[st.status]} />
             ),
           )
+        ) : blocked ? (
+          <span className="text-xs text-muted-foreground">Not available · {blocked}</span>
         ) : (
           <StatusPill status={roomStatus} />
         )}
@@ -726,7 +743,7 @@ function BedLine({
         )}
         {/* only a bed nobody is in or coming to - later stays are booked from the
             booking, where the dates are (Dani, 10 Oct 2026) */}
-        {!stays.length ? (
+        {!stays.length && !blocked ? (
           <Button size="sm" variant="outline" onClick={onReserve}>
             Reserve
           </Button>

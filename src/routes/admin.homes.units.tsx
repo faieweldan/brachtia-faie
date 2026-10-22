@@ -12,8 +12,6 @@ import { NO_ROOM_TYPES, typesOfUnitType, unitTypeNames } from "@/lib/room-types"
 import { shapeFromWebsite, wholeUnitOffered } from "@/lib/room-offer";
 import { findResidence, mergeUnitFromFile, normalUnitNo } from "@/lib/unit-import";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { EmptyState, Panel, Select, Text } from "@/components/admin/ops-ui";
 import {
   bedsFor,
@@ -192,7 +190,9 @@ function UnitSetupPage() {
     }
   }
 
-  function withConfiguredType(u: Unit): Unit {
+  function withConfiguredType(unit: Unit): Unit {
+    // the whole-unit line is the server's (syncWholeUnitSlots) - the form edits the rooms
+    const u = { ...unit, rooms: unit.rooms.filter((r) => r.letter.toLowerCase() !== "unit") };
     const names = unitTypeNames(roomTypes.filter((r) => r.residence_id === u.residenceId));
     if (!u.unitType || names.includes(u.unitType)) return u;
     const match = names.find((n) => roomCountFor(n) === roomCountFor(u.unitType));
@@ -253,40 +253,7 @@ function UnitSetupPage() {
   }
 
   function applyType(unitType: string) {
-    // a whole unit keeps its one Unit bed whatever the type says
-    setDraft((d) =>
-      d
-        ? { ...d, unitType, rooms: d.wholeUnit ? d.rooms : buildRooms(unitType, typesForResidence) }
-        : d,
-    );
-  }
-
-  /**
-   * A unit is let whole or by room, never both. Turning "Rent as whole unit" on
-   * replaces the rooms with one Unit bed; turning it off brings the rooms back
-   * from the unit type. Refused while someone is in a bed that would go.
-   */
-  function setWholeUnit(on: boolean) {
-    if (!draft) return;
-    const isSlot = (r: UnitRoom) => r.letter.toLowerCase() === "unit";
-    const leaving = draft.rooms.filter((r) => (on ? !isSlot(r) : isSlot(r)));
-    const taken = leaving.some((r) =>
-      r.beds.some((b) => b.residentId || b.enquiryId || b.status !== "vacant"),
-    );
-    if (taken) {
-      toast.error(
-        on
-          ? "Someone is in a room here - release them before letting the unit whole."
-          : "Someone holds the whole unit - release them before letting it by room.",
-      );
-      return;
-    }
-    patch({
-      wholeUnit: on,
-      rooms: on
-        ? [draft.rooms.find(isSlot) ?? blankRoom("Unit")]
-        : buildRooms(draft.unitType, typesForResidence),
-    });
+    setDraft((d) => (d ? { ...d, unitType, rooms: buildRooms(unitType, typesForResidence) } : d));
   }
 
   function applyRoomType(roomId: string, code: string) {
@@ -458,17 +425,11 @@ function UnitSetupPage() {
         };
       });
       if (!unit.rooms.length) unit.rooms = buildRooms(unitType, typesForUnit);
-      // a unit is let whole or by room, never both. A file that gives a unit
-      // only a "Unit" row makes it a whole unit. One that gives it rooms as well
-      // is carrying an old whole-unit letting from the master list's history
-      // (a unit files built from every row, Inactive ones included, did exactly
-      // that) - so the rooms win and the stray Unit row is dropped
-      const wholeRows = unit.rooms.filter((r) => r.letter.toLowerCase() === "unit");
+      // a "Unit" row is the whole-unit letting - no longer a shape of its own:
+      // every unit keeps its rooms, and is also sold whole when Website gives
+      // its type a whole-unit rate (syncWholeUnitSlots, 22 Oct 2026)
       const roomRows = unit.rooms.filter((r) => r.letter.toLowerCase() !== "unit");
-      // and only a unit type Website gives a whole-unit rate can be let whole
-      const whole = !roomRows.length && wholeRows.length > 0 && wholeUnitOffered(res, unitType);
-      unit.rooms = whole ? wholeRows.slice(0, 1) : roomRows.length ? roomRows : buildRooms(unitType, typesForUnit);
-      unit.wholeUnit = whole;
+      unit.rooms = roomRows.length ? roomRows : buildRooms(unitType, typesForUnit);
       // the unit already there is updated, never saved over (12 Oct 2026): found
       // by its code, else by residence and unit number
       const fileCode = (first["code"] ?? "").trim();
@@ -560,37 +521,17 @@ function UnitSetupPage() {
           </span>
         </p>
 
-        <div className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted p-3">
-          {/* only a unit type Website gives a whole-unit rate can be let whole (11 Oct 2026) */}
-          <Switch
-            checked={draft.wholeUnit}
-            onCheckedChange={setWholeUnit}
-            id="whole-unit"
-            disabled={!draft.wholeUnit && !wholeUnitOffered(residences.find((r) => r.id === draft.residenceId), draft.unitType)}
-          />
-          <Label htmlFor="whole-unit" className="text-sm">
-            Rent as whole unit
-          </Label>
-          {draft.wholeUnit ? (
-            <div className="w-40">
-              <Text
-                label="Whole unit rent (RM/mo)"
-                type="number"
-                value={String(draft.wholeUnitRent || "")}
-                onChange={(v) => patch({ wholeUnitRent: Number(v) || 0 })}
-              />
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Off — beds are rented individually.
-              {wholeUnitOffered(residences.find((r) => r.id === draft.residenceId), draft.unitType)
-                ? ""
-                : " No whole-unit rate in Website."}
-            </p>
-          )}
-        </div>
+        {/* sold whole as well, whenever every bed is free - from Website's whole-unit rate, no toggle (22 Oct 2026) */}
+        <p className="mt-3 text-xs text-muted-foreground">
+          Whole unit:{" "}
+          <span className="font-medium text-foreground">
+            {wholeUnitOffered(residences.find((r) => r.id === draft.residenceId), draft.unitType)
+              ? "also sold whole when every bed is free (Website's whole-unit rate)"
+              : "not sold whole - no whole-unit rate in Website"}
+          </span>
+        </p>
 
-        {!draft.wholeUnit ? (
+        {(
           <div className="mt-5 space-y-3">
             <p className="text-sm font-semibold text-brand-deep">Bed configuration</p>
             {draft.rooms.length === 0 ? (
@@ -633,7 +574,7 @@ function UnitSetupPage() {
               </div>
             ))}
           </div>
-        ) : null}
+        )}
 
         <div className="mt-5 flex gap-2">
           <Button size="sm" onClick={save}>

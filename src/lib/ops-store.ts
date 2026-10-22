@@ -485,18 +485,21 @@ export function isUnitSlot(room: { letter: string }) {
 
 export function bedBlockedBy(unit: Unit, room: UnitRoom, bed: Bed): string {
   if (isTaken(bed)) return "";
+  // "until" the latest end among those in the way - when it can be sold again
+  const until = (beds: Bed[]) => {
+    const end = beds.map((b) => b.tenancyEnd ?? "").sort().pop();
+    return end ? ` until ${new Date(`${end}T00:00:00`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}` : "";
+  };
 
   if (!isUnitSlot(room)) {
-    const unitRoom = unit.rooms.find(isUnitSlot);
-    return unitRoom?.beds.some(isTaken) ? "whole unit let" : "";
+    const taken = unit.rooms.filter(isUnitSlot).flatMap((r) => r.beds.filter(isTaken));
+    return taken.length ? `Whole unit let${until(taken)}` : "";
   }
 
-  for (const r of unit.rooms) {
-    if (isUnitSlot(r)) continue;
-    const t = r.beds.find(isTaken);
-    if (t) return `Room ${r.letter} ${t.label} let`;
-  }
-  return "";
+  const taken = unit.rooms.filter((r) => !isUnitSlot(r)).flatMap((r) => r.beds.filter(isTaken));
+  if (!taken.length) return "";
+  const first = unit.rooms.find((r) => !isUnitSlot(r) && r.beds.some(isTaken))!;
+  return `Room ${first.letter} is let${until(taken)}`;
 }
 
 export type BedRow = {

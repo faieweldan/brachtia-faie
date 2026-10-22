@@ -1102,11 +1102,10 @@ function BookingDetail() {
       const conflict = placementConflict(b.unit, b.room, b.bed, asking, ops.residents);
       // men and women never share a unit at the same time - not even with "Show all rooms" on
       if (/\((male|female)\) in this unit|^Kept for/.test(conflict)) continue;
-      // a unit is let whole or by room, never both: a whole unit is only for a
-      // Whole unit request, through its Unit bed, and nobody asking for a single
-      // or a twin is offered any part of it
-      const wholeUnit = b.unit.rooms.some((rm) => isUnitSlot(rm));
-      const wrongShape = wantedOcc === "unit" ? !isUnitSlot(b.room) : wholeUnit;
+      // a Whole unit request is offered the unit's Unit bed, a single or twin
+      // request its rooms - one unit can be both (22 Oct 2026); whether the
+      // dates leave it free is placementConflict's
+      const wrongShape = wantedOcc === "unit" ? !isUnitSlot(b.room) : isUnitSlot(b.room);
       const roomBeds = b.room.beds;
       // free for the dates asked, not merely empty today: somebody leaving before
       // this stay starts does not stand in its way (8 Oct 2026)
