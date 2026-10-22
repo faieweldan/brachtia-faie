@@ -101,6 +101,8 @@ export type LedgerRow = LedgerInvoice & {
   quickbooksId: string;
   /** the ID the resident goes by - their resident ID, or the Brachtia ID they kept */
   residentCode: string;
+  /** the sponsor, as the resident record says - blank is self-funded */
+  sponsor: string;
 };
 
 /**
@@ -131,6 +133,12 @@ export function useBillingLedger() {
         residentName: person?.fullName || inv.invoiceName,
         quickbooksId: person?.quickbooksId ?? "",
         residentCode: person ? residentIdOf(person) : "",
+        // the import files a sponsor as the payer, so read it there too -
+        // but only a sponsor: a parent paying is still self-funded
+        sponsor:
+          person?.sponsor ||
+          (person?.payerRelationship === "Sponsor" ? person.payerName : "") ||
+          "",
       };
     });
   }, [data, residents]);

@@ -138,9 +138,19 @@ const SORTERS: Record<SortKey, (a: LedgerRow, b: LedgerRow) => number> = {
 
 const PAGE_SIZES = [30, 50, 100];
 
-/** Who an invoice belongs to, as one key - a resident, or a booking not yet a resident. */
-const personKey = (r: LedgerRow) =>
-  r.residentId ? `r:${r.residentId}` : r.enquiryId ? `b:${r.enquiryId}` : `n:${r.residentName}`;
+/**
+ * Who pays an invoice, as one key, read from whatever sponsors the residents
+ * have - so a new sponsor typed on a resident appears here by itself. The name
+ * is kept as typed, capitals included, so "MARA" and "Mara" stay apart and the
+ * odd one shows up to be fixed on the resident. Only stray spaces and the intake
+ * batch in brackets are ignored. Blank or "Self" is self-paying, as is a booking.
+ */
+const sponsorName = (raw: string) => raw.replace(/\([^)]*\)\s*$/, "").replace(/\s+/g, " ").trim();
+const SELF = "self";
+const payerKey = (r: LedgerRow) => {
+  const name = sponsorName(r.sponsor);
+  return !name || name.toLowerCase() === SELF ? SELF : name;
+};
 
 /**
  * Collections - every invoice on one page, to see what is owed and act on it.
@@ -161,7 +171,7 @@ function CollectionsPage() {
   const [q, setQ] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [person, setPerson] = useState("all");
+  const [payer, setPayer] = useState("all");
   const [category, setCategory] = useState<InvoiceCategory | "all">("all");
   const [sort, setSort] = useState<Sort>({ key: "date", dir: "desc" });
   const [page, setPage] = useState(1);
@@ -177,11 +187,12 @@ function CollectionsPage() {
   );
 
   const today = new Date().toISOString().slice(0, 10);
-  // everyone with an invoice, for the resident filter
-  const people = useMemo(() => {
+  // every sponsor with an invoice, for the Sponsor filter
+  const payers = useMemo(() => {
     const seen = new Map<string, string>();
     for (const r of [...rows, ...scheduled]) {
-      if (!seen.has(personKey(r))) seen.set(personKey(r), r.residentName || "Booking");
+      const key = payerKey(r);
+      if (key !== SELF && !seen.has(key)) seen.set(key, sponsorName(r.sponsor));
     }
     return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [rows, scheduled]);
@@ -191,7 +202,7 @@ function CollectionsPage() {
     const needle = q.trim().toLowerCase();
     const keep = (r: LedgerRow) =>
       (category === "all" || categoryOf(r.type) === category) &&
-      (person === "all" || personKey(r) === person) &&
+      (payer === "all" || payerKey(r) === payer) &&
       (!from || r.date >= from) &&
       (!to || r.date <= to) &&
       (!needle ||
@@ -199,7 +210,7 @@ function CollectionsPage() {
           .toLowerCase()
           .includes(needle));
     return { billed: rows.filter(keep), scheduled: scheduled.filter(keep) };
-  }, [rows, scheduled, category, person, from, to, q]);
+  }, [rows, scheduled, category, payer, from, to, q]);
 
   const counts = useMemo(
     () =>
@@ -225,18 +236,18 @@ function CollectionsPage() {
   }, [filtered, tab, sort, today]);
 
   // a new view starts on its first page
-  useEffect(() => setPage(1), [tab, q, from, to, person, category, pageSize]);
+  useEffect(() => setPage(1), [tab, q, from, to, payer, category, pageSize]);
 
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
   const current = Math.min(page, pageCount);
   const shown = sorted.slice((current - 1) * pageSize, current * pageSize);
 
-  const filtering = Boolean(q || from || to || person !== "all" || category !== "all");
+  const filtering = Boolean(q || from || to || payer !== "all" || category !== "all");
   const resetFilters = () => {
     setQ("");
     setFrom("");
     setTo("");
-    setPerson("all");
+    setPayer("all");
     setCategory("all");
   };
 
@@ -399,15 +410,16 @@ function CollectionsPage() {
           <FilterField label="Search">
             <SearchFilter value={q} onChange={setQ} placeholder="Invoice no., name or ID" label="Search invoices" />
           </FilterField>
-          <FilterField label="Resident">
+          <FilterField label="Sponsor">
             <Dropdown
-              value={person}
-              onChange={(e) => setPerson(e.target.value)}
-              aria-label="Resident"
+              value={payer}
+              onChange={(e) => setPayer(e.target.value)}
+              aria-label="Sponsor"
               className="h-9 w-48 rounded-md border border-input bg-background px-2 text-sm"
             >
-              <option value="all">All residents</option>
-              {people.map(([key, name]) => (
+              <option value="all">All sponsors</option>
+              <option value={SELF}>Self-funded</option>
+              {payers.map(([key, name]) => (
                 <option key={key} value={key}>
                   {name}
                 </option>
