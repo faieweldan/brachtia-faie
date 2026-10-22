@@ -228,21 +228,27 @@ export function dayBefore(iso: string) {
  * 2026), and neither is stored - both follow from payment, check-in, checkout
  * and dates:
  *   status   No room · Reserved (fee unpaid) · Booked (fee paid, not in) ·
- *            Occupied (checked in) · Inactive (checked out)
- *   timing   Upcoming (Reserved/Booked) · Current (Occupied) · Former (Inactive)
+ *            Occupied (checked in) · Moved out (left, checkout not settled)
+ *            · Inactive (checked out and settled)
+ *   timing   Upcoming (Reserved/Booked) · Current (Occupied) · Settlement open
+ *            (Moved out) · Former (Inactive)
  *
  * The status is the pill. The timing is quiet text under the dates, where
  * "when" is already being read - never beside the place.
  */
-export type PersonStatus = "none" | "held" | "booked" | "active" | "inactive";
+export type PersonStatus = "none" | "held" | "booked" | "active" | "moved_out" | "inactive";
 
 export function personStatus(p: {
   inactive?: boolean | undefined;
+  /** the day they handed the room back (their tenancy's moved_out_on) - the room is no longer theirs */
+  movedOut?: string | undefined;
   bedStatus?: string | undefined;
   /** placed through a stay to come, on a bed somebody else is the resident of */
   upcomingAs?: "reserved" | "booked" | undefined;
 }): PersonStatus {
   if (p.inactive) return "inactive";
+  // before any bed is read: a room they left is the next person's (22 Oct 2026)
+  if (p.movedOut) return "moved_out";
   if (p.upcomingAs) return p.upcomingAs === "reserved" ? "held" : "booked";
   if (p.bedStatus === "active" || p.bedStatus === "notice") return "active";
   if (p.bedStatus === "booked") return "booked";
@@ -255,6 +261,7 @@ export const PERSON_LABEL: Record<PersonStatus, string> = {
   held: "Reserved",
   booked: "Booked",
   active: "Occupied",
+  moved_out: "Moved out",
   inactive: "Inactive",
 };
 
@@ -285,6 +292,7 @@ export function timingLine(
   checkInOn?: string | undefined,
 ) {
   if (status === "inactive") return "Former";
+  if (status === "moved_out") return "Settlement open";
   if (status === "held" || status === "booked") {
     if (!start) return "Upcoming";
     // a check-in booked for after the start date: they are expected that day (10 Oct 2026)
@@ -309,7 +317,7 @@ export function timingLine(
 /** The timing line's colour, the same on every list: red when late, orange when coming due. */
 export function timingTone(line: string) {
   if (line.endsWith("overdue")) return "font-medium text-rose-700";
-  if (line.startsWith("Coming due")) return "font-medium text-orange-700";
+  if (line.startsWith("Coming due") || line === "Settlement open") return "font-medium text-orange-700";
   return "";
 }
 

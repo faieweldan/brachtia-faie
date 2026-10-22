@@ -822,6 +822,31 @@ export const releaseAfterCheckout = createServerFn({ method: "POST" })
     return { ok: true as const, promoted: beds.map((b) => b.next).filter(Boolean) as string[] };
   });
 
+/**
+ * Moved out (Dani, 22 Oct 2026): the room is handed back before the checkout
+ * is settled. The day goes on their tenancy, the bed goes to whoever has it
+ * next (or is emptied), and rent not billed yet for after the day is dropped -
+ * SQL move_out, one transaction. The checkout statement stays open; settling
+ * it later makes them Inactive.
+ */
+export const moveOut = createServerFn({ method: "POST" })
+  .inputValidator((data: { residentId: string; on: string }) => data)
+  .handler(async ({ data }) => {
+    if (!isUuid(data.residentId)) throw new Error("No resident.");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data.on)) throw new Error("Pick the day they moved out.");
+    const supabase = await admin();
+    const { data: res, error } = await supabase.rpc("move_out", { p_resident: data.residentId, p_on: data.on });
+    if (error && notMigrated(error))
+      throw new Error("The database needs the move-out update (20261026100000_moved_out.sql) first.");
+    if (error) throw new Error(error.message);
+    const out = res as { ok: boolean; error?: string; beds?: { next: string | null }[]; rentDropped?: number };
+    if (!out.ok) throw new Error(out.error ?? "Could not move them out.");
+    return {
+      promoted: (out.beds ?? []).map((b) => b.next).filter(Boolean) as string[],
+      rentDropped: out.rentDropped ?? 0,
+    };
+  });
+
 /** The assigned resident has arrived: their bed goes Booked -> Active. Never by date alone. */
 export async function activateAtCheckIn(supabase: any, residentId: string) {
   const { data: res, error } = await supabase.rpc("activate_at_checkin", { p_resident: residentId });

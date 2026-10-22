@@ -23,6 +23,8 @@ const STATUS_STYLES: Record<string, string> = {
   booked: "bg-violet-100 text-violet-900 border-violet-200",
   active: "bg-emerald-100 text-emerald-900 border-emerald-200",
   notice: "bg-rose-100 text-rose-900 border-rose-200",
+  // left the room, money not settled yet - Brachtia still has to close it
+  moved_out: "bg-orange-100 text-orange-900 border-orange-200",
   due: "bg-amber-100 text-amber-900 border-amber-200",
   paid: "bg-emerald-100 text-emerald-900 border-emerald-200",
   partial: "bg-sky-100 text-sky-900 border-sky-200",

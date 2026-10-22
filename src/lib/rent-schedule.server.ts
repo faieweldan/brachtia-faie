@@ -246,7 +246,11 @@ export async function plannedRent(
       .sort()
       .at(-1) ?? "";
   const keptStarts = new Set(kept.map((r) => day(r.period_start)));
-  const periods = buildPeriods(terms, lastBilledEnd).filter((p) => !keptStarts.has(p.start));
+  // moved out early (22 Oct 2026): no rent for a period that starts after they left.
+  // Read on its own, so rent keeps working before 20261026100000_moved_out.sql is run.
+  const { data: out } = await supabase.from("tenancies").select("moved_out_on").eq("id", tenancyId).maybeSingle();
+  const movedOut = day(out?.moved_out_on);
+  const periods = buildPeriods(terms, lastBilledEnd).filter((p) => !keptStarts.has(p.start) && !(movedOut && p.start > movedOut));
 
   // who and where, as the initial invoice and the resident's record have them
   const { data: resident } = await supabase

@@ -109,6 +109,8 @@ function ResidentsListPage() {
     if (isInactive(r)) return "inactive" as const;
     const placed = findBedForResident(units, r);
     const st = personStatus({
+      // moved out, settlement open: still Current - Brachtia has their money to close (22 Oct 2026)
+      movedOut: savedDates.data?.[r.id]?.movedOut,
       bedStatus: placed?.bed.status,
       upcomingAs: placed?.upcoming
         ? placed.bed.upcoming?.find((u) => u.residentId === r.id)?.status
@@ -592,6 +594,7 @@ function ResidentsListPage() {
                               {(() => {
                                 const st = personStatus({
                                   inactive: isInactive(r),
+                                  movedOut: savedDates.data?.[r.id]?.movedOut,
                                   bedStatus: placed?.bed.status,
                                   upcomingAs: placed?.upcoming
                                     ? placed.bed.upcoming?.find((u) => u.residentId === r.id)

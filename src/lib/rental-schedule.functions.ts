@@ -165,7 +165,14 @@ export const saveRentalSchedule = createServerFn({ method: "POST" })
   });
 
 /** A resident's tenancy as every screen reads it - only ever from the tenancies table. */
-export type ServerTenancy = { id: string; start: string; end: string; rent: number };
+export type ServerTenancy = {
+  id: string;
+  start: string;
+  end: string;
+  rent: number;
+  /** the day they handed the room back, before the checkout settled - empty while they live there */
+  movedOut: string;
+};
 
 /**
  * Every resident's latest tenancy, from the tenancies table - the ONE place the
@@ -187,7 +194,8 @@ export const tenancyDatesByResident = createServerFn({ method: "GET" }).handler(
   const data = await every(() =>
     supabase
       .from("tenancies")
-      .select("id, resident_id, enquiry_id, start_date, end_date, created_at")
+      // "*": moved_out_on is read when the database has it (20261026100000_moved_out.sql)
+      .select("*")
       .order("start_date", { ascending: true, nullsFirst: true })
       .order("created_at", { ascending: true })
       .order("id"),
@@ -230,7 +238,7 @@ export const tenancyDatesByResident = createServerFn({ method: "GET" }).handler(
   for (const [residentId, t] of latest) {
     const invoiceRent = t.enquiry_id ? byEnquiry.get(String(t.enquiry_id)) : byResident.get(residentId);
     const rent = scheduleRent.get(String(t.id)) || invoiceRent || 0;
-    out[residentId] = { id: String(t.id), start: day(t.start_date), end: day(t.end_date), rent };
+    out[residentId] = { id: String(t.id), start: day(t.start_date), end: day(t.end_date), rent, movedOut: day(t.moved_out_on) };
   }
   return out;
 });
