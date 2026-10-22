@@ -85,9 +85,11 @@ export function MigrationPanel({
       await onDone();
       setOutcomes(result);
       const done = result.filter((o) => o.result === "imported").length;
+      const updated = result.filter((o) => o.result === "updated").length;
       const failed = result.filter((o) => o.result === "failed").length;
-      if (failed) toast.error(`${done} imported · ${failed} failed - see the list`);
-      else toast.success(`${done} residents imported`);
+      const also = updated ? ` · ${updated} updated` : "";
+      if (failed) toast.error(`${done} imported${also} · ${failed} failed - see the list`);
+      else toast.success(`${done} residents imported${also}`);
     } catch (err) {
       setOutcomes(result);
       toast.error(
@@ -180,7 +182,7 @@ export function MigrationPanel({
         <p className="text-xs text-muted-foreground">
           {totals.blocked
             ? `${totals.blocked} blocked - fix them in the master file and check again before importing.`
-            : `${importable.length} will be created. A QuickBooks ID already in the system is skipped.`}
+            : `${importable.length} will be created. Anyone already in the system keeps their record - only a renamed TA or invoice copy is updated.`}
         </p>
         <Button onClick={runImport} disabled={!canImport || busy || !!outcomes}>
           {busy ? "Importing…" : outcomes ? "Imported" : `Import ${importable.length} residents`}
@@ -318,13 +320,14 @@ function DocLink({ url, marked }: { url: string; marked: string }) {
 function Outcomes({ outcomes }: { outcomes: ImportOutcome[] }) {
   const failed = outcomes.filter((o) => o.result === "failed");
   const skipped = outcomes.filter((o) => o.result === "skipped");
-  const done = outcomes.length - failed.length - skipped.length;
+  const updated = outcomes.filter((o) => o.result === "updated");
+  const done = outcomes.length - failed.length - skipped.length - updated.length;
   return (
     <div className="mb-3 rounded-xl border border-border bg-card px-4 py-3 text-sm">
       <p className="font-medium">
-        {done} imported{skipped.length ? ` · ${skipped.length} skipped` : ""}{failed.length ? ` · ${failed.length} failed` : ""}
+        {done} imported{updated.length ? ` · ${updated.length} updated` : ""}{skipped.length ? ` · ${skipped.length} skipped` : ""}{failed.length ? ` · ${failed.length} failed` : ""}
       </p>
-      {[...failed, ...skipped].map((o) => (
+      {[...failed, ...updated, ...skipped].map((o) => (
         <p key={o.sourceRow} className="mt-1 text-xs text-muted-foreground">
           Row {o.sourceRow} · {o.name} ({o.quickbooksId}): {"reason" in o ? o.reason : ""}
         </p>

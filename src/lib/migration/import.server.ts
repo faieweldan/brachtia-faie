@@ -35,7 +35,7 @@ import type { MigrationPreviewRow } from "@/lib/migration/sheet3";
 
 export type ImportOutcome =
   | { sourceRow: number; quickbooksId: string; name: string; result: "imported"; residentId: string }
-  | { sourceRow: number; quickbooksId: string; name: string; result: "skipped" | "failed"; reason: string };
+  | { sourceRow: number; quickbooksId: string; name: string; result: "skipped" | "failed" | "updated"; reason: string };
 
 async function must<T>(p: PromiseLike<{ data: T; error: any }>, what: string): Promise<T> {
   const { data, error } = await p;
@@ -48,7 +48,13 @@ export async function importResident(sb: any, row: MigrationPreviewRow, today: s
   if (row.status === "blocked") return { ...base, result: "skipped", reason: "Blocked in the check" };
 
   const { data: already } = await sb.from("residents").select("id").eq("quickbooks_id", row.quickbooksId).maybeSingle();
-  if (already) return { ...base, result: "skipped", reason: "Already in the system (same QuickBooks ID)" };
+  if (already) {
+    // already in: only the names Brachtia renamed follow the master (refreshMigratedNames)
+    const changed = await refreshMigratedNames(sb, already.id, row);
+    return changed.length
+      ? { ...base, result: "updated", reason: `Already in - ${changed.join(" and ")} updated` }
+      : { ...base, result: "skipped", reason: "Already in the system (same QuickBooks ID)" };
+  }
 
   const rec = row.record;
   let residentId = "";
@@ -349,6 +355,86 @@ export async function applyAdminNextRent(sb: any, tenancyId: string, due: string
       "Next payment line",
     );
   }
+}
+
+/**
+ * A resident already imported, uploaded again (Dani, 22 Oct 2026: Brachtia is
+ * renaming every TA and invoice copy). Delete and re-import would lose what was
+ * recorded since and give a new Resident ID, so only these follow the master:
+ *   - the TA copy: a new link is a new version of the same agreement, Signed,
+ *     superseding the old one (kept as history in the Tenancy tab); its number
+ *     follows the Agreement No.
+ *   - the initial invoice's number and original copy.
+ * Only on a migrated record: an agreement or invoice the system made is never touched.
+ * Dates, room and money are not changed here - those need a re-import.
+ */
+export async function refreshMigratedNames(sb: any, residentId: string, row: MigrationPreviewRow): Promise<string[]> {
+  const rec = row.record;
+  const changed: string[] = [];
+
+  const { data: ag } = await sb
+    .from("tenancy_agreements")
+    .select("id, agreement_no")
+    .eq("resident_id", residentId)
+    .eq("kind", "initial")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (ag) {
+    const { data: docs } = await sb
+      .from("agreement_documents")
+      .select("id, version, status, effective_date, period_start, period_end, merge_values")
+      .eq("agreement_id", ag.id)
+      .eq("doc_type", "agreement")
+      .order("version", { ascending: false });
+    const latest = (docs ?? [])[0];
+    if (latest?.merge_values?.source === "migrated") {
+      if (rec.taUrl && latest.merge_values.original_url !== rec.taUrl) {
+        await must(
+          sb.from("agreement_documents").insert({
+            agreement_id: ag.id,
+            doc_type: "agreement",
+            version: Number(latest.version ?? 1) + 1,
+            status: "signed",
+            effective_date: latest.effective_date,
+            period_start: latest.period_start,
+            period_end: latest.period_end,
+            merge_values: { source: "migrated", original_url: rec.taUrl },
+            supersedes: latest.id,
+          }),
+          "New TA copy",
+        );
+        changed.push("TA copy");
+      }
+      if (rec.agreementNo && ag.agreement_no !== rec.agreementNo) {
+        await must(sb.from("tenancy_agreements").update({ agreement_no: rec.agreementNo }).eq("id", ag.id), "Agreement No.");
+        changed.push("TA number");
+      }
+    }
+  }
+
+  const { migratedOriginal } = await import("@/lib/migration/import-plan");
+  const { data: invs } = await sb
+    .from("invoices")
+    .select("id, number, notes")
+    .eq("resident_id", residentId)
+    .eq("invoice_type", "initial")
+    .neq("status", "void")
+    .order("created_at", { ascending: true })
+    .limit(1);
+  const inv = (invs ?? [])[0];
+  const original = inv && migratedOriginal(inv.notes);
+  if (inv && original) {
+    if (rec.invoiceNo && inv.number !== rec.invoiceNo) {
+      await must(sb.from("invoices").update({ number: rec.invoiceNo }).eq("id", inv.id), "Invoice number");
+      changed.push("invoice number");
+    }
+    if (rec.invoiceUrl && original.url !== rec.invoiceUrl) {
+      await must(sb.from("invoices").update({ notes: migratedNote(rec.invoiceUrl) }).eq("id", inv.id), "Invoice copy");
+      changed.push("invoice copy");
+    }
+  }
+  return changed;
 }
 
 /** Remove everything one import made, so a failed resident can simply be imported again. */
