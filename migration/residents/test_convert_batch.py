@@ -751,3 +751,22 @@ class PetronasHalfYearlyTests(ConverterTests):
         r = resident(**{"PAYOR?": "SPONSOR", "SPONSOR NAME": "PETRONAS", "Tag": "B4", "Payment Frequency": "BI-MONTHLY"})
         _, _, rows, _, _ = self.convert(r)
         self.assertEqual(rows[0]["Payment frequency"], "semiannual")
+
+
+class WholeUnitGroup(unittest.TestCase):
+    """One row, a whole unit let to 4 people: the TA names the lead (Dani, 22 Oct 2026)."""
+
+    def test_lead_from_ta_and_others_in_notes(self):
+        import convert_batch as cb
+        lead = cb.unit_group("00357   00358   00359   00360", "TA2026_C-19-02_00358.pdf", "INV-IP_00358")
+        self.assertEqual((lead["id"], lead["index"]), ("00358", 1))
+        self.assertEqual(cb.group_line("A \nB\nC\nD", lead["index"]), "B")
+        cells = {"StudentName": "A\nB\nC\nD", "IDNumber": "1\n2\n3\n4", "MobileNumber": "", "Email": "a@x\nb@x\nc@x\nd@x"}
+        note = cb.group_note(cells.get, lead)
+        self.assertIn("00357 A, 1, a@x", note)
+        self.assertNotIn("00358", note)
+
+    def test_no_lead_named_is_not_a_group(self):
+        import convert_batch as cb
+        self.assertIsNone(cb.unit_group("00357 00358", "TA2026_C-19-02.pdf"))
+        self.assertIsNone(cb.unit_group("00358", "TA2026_C-19-02_00358.pdf"))

@@ -739,7 +739,40 @@ NATIONAL_DIAL = {code: dial.lstrip("+") for code, dial in re.findall(
 # Same converter for every batch (Dani, 14 Oct 2026): a later tab may spell a
 # column differently, or not have one Batch 1 had.
 # the Sponsor tab says "Payment Status" / "Balance Due" for the initial payment
-COLUMN_ALIASES = {"Remark": "Remarks", "Payment Status": "IP Status", "Balance Due": "Balance Due on IP",
+# A whole unit let to a group in one row (Dani, 22 Oct 2026: C-19-02, 4 tenants):
+# "00357 00358 00359 00360" with one name, NRIC, phone and email per line. The
+# TA copy / invoice copy name the lead ("TA2026_C-19-02_00358") - only they go in,
+# paying the row's rent for the whole unit; the others are kept in Internal Notes.
+GROUP_COPY_COLUMNS = ("TACopy", "Initial Payment Invoice Copy")
+GROUP_PERSON_COLUMNS = ("StudentName", "IDNumber", "MobileNumber", "Email")
+
+
+def unit_group(ids_text, *copies):
+    ids = [i.zfill(5) if i.isdigit() else i for i in re.split(r"[\s,/]+", text(ids_text)) if i]
+    if len(ids) < 2:
+        return None
+    named = [i for i in ids if any(i in text(c) for c in copies)]
+    if len(named) != 1:
+        return None
+    return {"id": named[0], "index": ids.index(named[0]), "ids": ids}
+
+
+def group_line(value, index):
+    lines = [l.strip() for l in text(value).split("\n") if l.strip()]
+    return lines[index] if index < len(lines) else (lines[0] if len(lines) == 1 else "")
+
+
+def group_note(read, lead):
+    others = []
+    for n, i in enumerate(lead["ids"]):
+        if i == lead["id"]:
+            continue
+        parts = [group_line(read(c), n) for c in GROUP_PERSON_COLUMNS]
+        others.append(f"{i} " + ", ".join(p for p in parts if p))
+    return "Shares the whole unit with: " + "; ".join(others)
+
+
+COLUMN_ALIASES = {"Student Id": "StudentID", "Remark": "Remarks", "Payment Status": "IP Status", "Balance Due": "Balance Due on IP",
                   # the Sponsor tab (master 7): its total is what was invoiced
                   "Total Initial Payment": "Total Initial Payment Made"}
 OPTIONAL_SOURCE = {"SPONSOR NAME", "IP Status", "Residence", "Tag"}
@@ -812,6 +845,10 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
     for r in range(2, raw_ws.max_row + 1):
         row_qb = text(val_ws.cell(r, cols[("StudentID", 1)]).value)
         row_qb = row_qb.zfill(5) if row_qb.isdigit() else row_qb
+        # a whole unit let to a group, one row: the TA and invoice name the lead
+        lead = unit_group(row_qb, *(val_ws.cell(r, cols[(c, 1)]).value for c in GROUP_COPY_COLUMNS if (c, 1) in cols))
+        if lead:
+            row_qb = lead["id"]
         corrected = fixes["set"].get(row_qb, {})
 
         def cell(name, occ=1):
@@ -819,7 +856,12 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
                 return corrected[name]
             if (name, occ) not in cols:
                 return None
-            return val_ws.cell(r, cols[(name, occ)]).value
+            value = val_ws.cell(r, cols[(name, occ)]).value
+            if lead and name == "StudentID":
+                return lead["id"]
+            if lead and name in GROUP_PERSON_COLUMNS:
+                return group_line(value, lead["index"])
+            return value
 
         def raw_cell(name, occ=1):
             return raw_ws.cell(r, cols[(name, occ)])
@@ -1130,6 +1172,10 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
         remark = re.sub(r"^\s*B\d{1,2}\s*[,.;:-]?\s*", "", remark) if batch else remark
         if remark.strip().upper() in CHECK_MARKS:
             remark = ""
+        if lead:
+            remark = join_notes(remark, group_note(lambda c: val_ws.cell(r, cols[(c, 1)]).value if (c, 1) in cols else None, lead))
+            flag(WARNING, "Resident Name", f"Whole unit let to {len(lead['ids'])} people in one row - {lead['id']} (named by the TA/invoice) "
+                 "goes in with the unit's rent; the others are listed in Internal Notes")
         out_row["Internal Notes"] = join_notes(fixes["internalNotes"].get(row_qb, ""), remark)
         # a duplicate row is left out by its row number ("row 91"), not its ID
         left_out = fixes["leaveOut"].get(row_qb) or fixes["leaveOut"].get(f"row {r}")
