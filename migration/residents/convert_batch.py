@@ -972,7 +972,8 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
         out_row["Unit ID"] = text(cell("UnitID"))
         # the system writes "03A" where the master list writes "3A"
         out_row["Unit no. "] = re.sub(r"-(\d)A$", r"-0\1A", text(cell("Unit")).upper())
-        out_row["Room"] = text(cell("Room"))
+        # the Sponsor tab writes "Room A" - the system's room is "A" (22 Oct 2026)
+        out_row["Room"] = re.sub(r"^room\s+", "", text(cell("Room")), flags=re.I)
         out_row["Bed"] = text(cell("Bed"))
         unit_type = types.get(out_row["Unit no. "], "")
         if out_row["Room"].lower() == "unit" and out_row["Bed"].lower() in ("unit", ""):
