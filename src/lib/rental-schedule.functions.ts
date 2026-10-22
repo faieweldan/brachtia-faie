@@ -183,26 +183,34 @@ export type ServerTenancy = { id: string; start: string; end: string; rent: numb
  */
 export const tenancyDatesByResident = createServerFn({ method: "GET" }).handler(async () => {
   const supabase = await admin();
-  const { data, error } = await supabase
-    .from("tenancies")
-    .select("id, resident_id, enquiry_id, start_date, end_date, created_at")
-    .order("start_date", { ascending: true, nullsFirst: true })
-    .order("created_at", { ascending: true });
-  if (error) throw new Error(error.message);
+  const { allRows: every } = await import("@/lib/all-rows");
+  const data = await every(() =>
+    supabase
+      .from("tenancies")
+      .select("id, resident_id, enquiry_id, start_date, end_date, created_at")
+      .order("start_date", { ascending: true, nullsFirst: true })
+      .order("created_at", { ascending: true })
+      .order("id"),
+  );
   // the latest tenancy wins - a renewal is the newest
   const latest = new Map<string, any>();
   for (const t of (data ?? []) as any[]) if (t.resident_id) latest.set(String(t.resident_id), t);
 
   // two whole reads - an id list of every resident would not fit in the request's address
-  const [{ data: rs }, { data: inv }] = await Promise.all([
-    supabase.from("rental_schedules").select("tenancy_id, monthly_rent"),
-    supabase
-      .from("invoices")
-      .select("enquiry_id, monthly_rent, created_at")
-      .eq("invoice_type", "initial")
-      .neq("status", "void")
-      .not("enquiry_id", "is", null)
-      .order("created_at", { ascending: true }),
+  // every page - one query stops at 1,000 rows (all-rows.ts)
+  const { allRows } = await import("@/lib/all-rows");
+  const [rs, inv] = await Promise.all([
+    allRows(() => supabase.from("rental_schedules").select("tenancy_id, monthly_rent").order("id")),
+    allRows(() =>
+      supabase
+        .from("invoices")
+        .select("enquiry_id, monthly_rent, created_at")
+        .eq("invoice_type", "initial")
+        .neq("status", "void")
+        .not("enquiry_id", "is", null)
+        .order("created_at", { ascending: true })
+        .order("id"),
+    ),
   ]);
   const scheduleRent = new Map<string, number>();
   for (const r of (rs ?? []) as any[]) if (Number(r.monthly_rent) > 0) scheduleRent.set(String(r.tenancy_id), Number(r.monthly_rent));

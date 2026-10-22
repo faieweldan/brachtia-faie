@@ -150,6 +150,12 @@ function InventoryPage() {
     queryKey: ["admin", "check-in-days"],
     queryFn: async () => (await import("@/lib/admin.functions")).listCheckInDays(),
   });
+  // the rent each resident agreed (their rent terms, else their booking's invoice) - the
+  // bed's list price is only for an empty bed (Dani, 22 Oct 2026: MARA RM360 showed RM500)
+  const agreed = useQuery({
+    queryKey: ["tenancy-dates"],
+    queryFn: async () => (await import("@/lib/rental-schedule.functions")).tenancyDatesByResident(),
+  });
   const { data: site } = useQuery({
     queryKey: ["admin", "residences"],
     queryFn: () => listResidences(),
@@ -515,6 +521,7 @@ function InventoryPage() {
                           onRelease={() => void release(bed)}
                           onReleaseHold={(enquiryId) => void releaseHold(enquiryId)}
                           checkInDays={checkInDays.data}
+                          agreedRent={agreed.data}
                         />
                       ))}
                     </tbody>
@@ -576,6 +583,7 @@ function BedLine({
   onRelease,
   onReleaseHold,
   checkInDays,
+  agreedRent,
 }: {
   unit: Unit;
   room: BedRow["room"];
@@ -587,10 +595,14 @@ function BedLine({
   onRelease: () => void;
   onReleaseHold: (enquiryId: string) => void;
   checkInDays?: Record<string, string> | undefined;
+  agreedRent?: Record<string, { rent: number }> | undefined;
 }) {
   const today = klToday();
   // who is on the bed, and when - the shared reader (placement.ts bedStays)
-  const stays: Stay[] = bedStays(bed, residents).map((st) => ({ ...st, rent: st.key === "now" ? rent : st.rent || rent }));
+  const stays: Stay[] = bedStays(bed, residents).map((st) => ({
+    ...st,
+    rent: (st.residentId && agreedRent?.[st.residentId]?.rent) || (st.key === "now" ? rent : st.rent || rent),
+  }));
 
   // the room's own status: whoever is physically in it decides
   const roomStatus = roomStatusOf(bed);
