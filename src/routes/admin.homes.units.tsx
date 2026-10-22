@@ -629,7 +629,6 @@ function UnitSetupPage() {
               { label: "Units", value: totals.units },
               { label: "Rooms", value: totals.rooms },
               { label: "Beds", value: totals.beds },
-              ...(totals.whole ? [{ label: "Let whole", value: totals.whole }] : []),
               // only once a unit is out of service, so Units still adds up (22 Oct 2026)
               ...(totals.deactivated ? [{ label: "Deactivated", value: totals.deactivated }] : []),
               { label: "Residences", value: totals.residences },
@@ -676,7 +675,6 @@ function UnitSetupPage() {
                                 { label: "Units", value: s.units },
                                 { label: "Rooms", value: s.rooms },
                                 { label: "Beds", value: s.beds },
-                                ...(s.whole ? [{ label: "Let whole", value: s.whole }] : []),
                                 ...(s.deactivated ? [{ label: "Deactivated", value: s.deactivated }] : []),
                               ]}
                             />
@@ -778,7 +776,7 @@ function UnitSetupPage() {
   );
 }
 
-/** Units, rooms, beds and whole-unit lets in a set of units - all of them, or one residence. */
+/** Units, rooms, beds and deactivated units in a set of units - all of them, or one residence. */
 function statsFor(all: Unit[]) {
   // units in service only - a deactivated one is counted on its own, so the two add up (22 Oct 2026)
   const list = all.filter((u) => !u.deactivatedAt);
@@ -787,10 +785,6 @@ function statsFor(all: Unit[]) {
     units: list.length,
     rooms: lettable.length,
     beds: lettable.reduce((n, r) => n + r.beds.length, 0),
-    // let whole right now - every unit with a whole-unit rate can be, so that count says nothing
-    whole: list.filter((u) =>
-      u.rooms.some((r) => r.letter.toLowerCase() === "unit" && r.beds.some((b) => b.residentId || b.enquiryId || b.status !== "vacant")),
-    ).length,
     deactivated: all.length - list.length,
   };
 }
