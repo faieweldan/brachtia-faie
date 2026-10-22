@@ -319,12 +319,9 @@ export const updateEnquiry = createServerFn({ method: "POST" })
           const { rowToProperty, rowToRoomType } = await import("@/lib/site-mappers");
           const property = rowToProperty(residence);
           const roomType = rowToRoomType(room, residenceSlug);
-          // a term the card sends stands: admin may choose it over the dates (20 Oct 2026)
-          const term = patch["term"]
-            ? String(patch["term"])
-            : moveIn && moveOut
-              ? termForRange(moveIn, moveOut)
-              : String(current.term ?? "long");
+          const term = moveIn && moveOut
+            ? termForRange(moveIn, moveOut)
+            : String(patch["term"] ?? current.term ?? "long");
           const rent = Number(roomType.rent[term as "long" | "short"]?.[occupancy as "single" | "twin"] ?? 0);
           /*
            * A booking names its add-ons. Everything that writes them - the

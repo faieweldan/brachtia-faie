@@ -63,19 +63,6 @@ type Stay = {
   moveOut: string;
   paymentTerm: string;
   addons: string[];
-  /** "auto" = from the dates; "short"/"long" = admin chose it (an old-rule booking, 20 Oct 2026) */
-  term: "auto" | "short" | "long";
-};
-
-/*
- * The term a booking was saved with, when it is not what its dates give: admin
- * chose it. The rule changed (7 months -> over 6 months is long term), and a
- * student who enquired before keeps the old term (Kodhai & Kavindra, 20 Oct 2026).
- */
-const chosenTerm = (row: any): Stay["term"] => {
-  const t = String(row.term ?? "");
-  if (t !== "short" && t !== "long") return "auto";
-  return row.move_in && row.move_out && termForRange(row.move_in, row.move_out) !== t ? t : "auto";
 };
 
 const fromRow = (row: any): Stay => ({
@@ -87,7 +74,6 @@ const fromRow = (row: any): Stay => ({
   moveOut: String(row.move_out ?? ""),
   paymentTerm: String(row.payment_term ?? ""),
   addons: bookingAddonNames(row),
-  term: chosenTerm(row),
 });
 
 const selectClass = "mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm";
@@ -265,7 +251,7 @@ export function StayDetailsCard({
         : null) ??
       null;
     const roomType = roomRow && resRow ? rowToRoomType(roomRow, resRow.slug) : null;
-    const term = s.moveIn && s.moveOut ? (s.term !== "auto" ? s.term : termForRange(s.moveIn, s.moveOut)) : null;
+    const term = s.moveIn && s.moveOut ? termForRange(s.moveIn, s.moveOut) : null;
     // a whole unit is let as one home, so no per-person room rate prices it
     const wholeUnit = s.occupancy === "unit";
     const occupancy: Occupancy = s.occupancy === "twin" ? "twin" : "single";
@@ -806,10 +792,12 @@ export function StayDetailsCard({
           </div>
           <div>
             <label className="text-xs text-muted-foreground">Room preference</label>
+            {/* a whole unit has no room to prefer - it is "—" and stays so (22 Oct 2026) */}
             <Dropdown
-              value={draft.roomCode}
+              value={draft.occupancy === "unit" ? "" : draft.roomCode}
               onChange={(e) => set({ roomCode: e.target.value })}
               className={selectClass}
+              disabled={draft.occupancy === "unit"}
             >
               <option value="">—</option>
               {roomChoices.map((r) => {
@@ -832,7 +820,9 @@ export function StayDetailsCard({
             <label className="text-xs text-muted-foreground">Occupancy</label>
             <Dropdown
               value={draft.occupancy}
-              onChange={(e) => set({ occupancy: e.target.value, addons: [] })}
+              onChange={(e) =>
+                set({ occupancy: e.target.value, addons: [], ...(e.target.value === "unit" ? { roomCode: "" } : {}) })
+              }
               className={selectClass}
             >
               <option value="">—</option>
@@ -875,25 +865,9 @@ export function StayDetailsCard({
               <p className="mt-1 text-xs text-rose-700">Move out must be after move in.</p>
             ) : null}
           </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Term</label>
-            <Choice
-              value={draft.term}
-              onChange={(v) => set({ term: v as Stay["term"] })}
-              options={[
-                {
-                  value: "auto" as const,
-                  label: `From dates${draft.moveIn && draft.moveOut ? ` (${termForRange(draft.moveIn, draft.moveOut) === "short" ? "Short" : "Long"} term)` : ""}`,
-                },
-                { value: "short" as const, label: "Short term" },
-                { value: "long" as const, label: "Long term" },
-              ]}
-              className="mt-1"
-            />
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
-              Choose only for a booking made under the old rule (7 months and above = long term)
-            </p>
-          </div>
+          <Derived label="Term" hint="From move in and move out">
+            {termLabel}
+          </Derived>
           <Derived label="Stay duration">{stayLength(draft.moveIn, draft.moveOut)}</Derived>
           <Derived
             label="Monthly rent (RM)"
@@ -966,7 +940,7 @@ export function StayDetailsCard({
           <Item label="Occupancy">{SHARING_SHORT[row.occupancy] ?? (row.occupancy || "—")}</Item>
           <Item label="Move in">{row.move_in ? fmtDate(row.move_in) : "—"}</Item>
           <Item label="Move out">{row.move_out ? fmtDate(row.move_out) : "—"}</Item>
-          <Item label="Term">{chosenTerm(row) !== "auto" ? `${termLabel} · set by admin` : termLabel}</Item>
+          <Item label="Term">{termLabel}</Item>
           <Item label="Stay duration">{stayLength(row.move_in, row.move_out)}</Item>
           <Item
             label="Monthly rent (RM)"
