@@ -624,12 +624,14 @@ function UnitSetupPage() {
         {units.length > 0 ? (
           // every residence together
           <StatStrip
-            className="mb-4 sm:grid-cols-5"
+            className="mb-4"
             items={[
               { label: "Units", value: totals.units },
               { label: "Rooms", value: totals.rooms },
               { label: "Beds", value: totals.beds },
-              { label: "Whole unit", value: totals.whole },
+              ...(totals.whole ? [{ label: "Let whole", value: totals.whole }] : []),
+              // only once a unit is out of service, so Units still adds up (22 Oct 2026)
+              ...(totals.deactivated ? [{ label: "Deactivated", value: totals.deactivated }] : []),
               { label: "Residences", value: totals.residences },
             ]}
           />
@@ -670,12 +672,12 @@ function UnitSetupPage() {
                           const s = statsFor(list);
                           return (
                             <StatStrip
-                              className="sm:grid-cols-4"
                               items={[
                                 { label: "Units", value: s.units },
                                 { label: "Rooms", value: s.rooms },
                                 { label: "Beds", value: s.beds },
-                                { label: "Whole unit", value: s.whole },
+                                ...(s.whole ? [{ label: "Let whole", value: s.whole }] : []),
+                                ...(s.deactivated ? [{ label: "Deactivated", value: s.deactivated }] : []),
                               ]}
                             />
                           );
@@ -783,7 +785,11 @@ function statsFor(list: Unit[]) {
     units: list.length,
     rooms: lettable.length,
     beds: lettable.reduce((n, r) => n + r.beds.length, 0),
-    whole: list.filter((u) => u.wholeUnit).length,
+    // let whole right now - every unit with a whole-unit rate can be, so that count says nothing
+    whole: list.filter((u) =>
+      u.rooms.some((r) => r.letter.toLowerCase() === "unit" && r.beds.some((b) => b.residentId || b.enquiryId || b.status !== "vacant")),
+    ).length,
+    deactivated: list.filter((u) => u.deactivatedAt).length,
   };
 }
 
@@ -796,8 +802,10 @@ function StatStrip({
   className?: string;
 }) {
   return (
+    // as many columns as counts - a count that is not there leaves no gap
     <div
-      className={`grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border ${className}`}
+      className={`grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:[grid-template-columns:repeat(var(--n),minmax(0,1fr))] ${className}`}
+      style={{ "--n": items.length } as React.CSSProperties}
     >
       {items.map((s) => (
         <div key={s.label} className="bg-card px-4 py-3">

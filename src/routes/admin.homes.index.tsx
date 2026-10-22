@@ -462,8 +462,8 @@ function InventoryPage() {
         ) : null}
         {grouped.map(([unitId, unitRows]) => {
           const unit = unitRows[0]!.unit;
-          // a unit is sold by room and whole (22 Oct 2026): the line that cannot be
-          // sold now is still shown, saying why and until when (bedBlockedBy)
+          // a line that cannot be sold is not shown (Dani, 22 Oct 2026): the Whole
+          // unit line only when it is let or every bed is free; a let whole unit hides its rooms
           const sellable = unitRows.filter(({ unit: u, room, bed }) => !bedBlockedBy(u, room, bed));
           const expanded = open[unitId] !== false;
           return (
@@ -520,9 +520,8 @@ function InventoryPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {collapseSingles(unitRows, roomTypes).map(({ room, bed, asSingle }) => (
+                      {collapseSingles(sellable, roomTypes).map(({ room, bed, asSingle }) => (
                         <BedLine
-                          blocked={bedBlockedBy(unit, room, bed)}
                           key={bed.id}
                           unit={unit}
                           room={room}
@@ -597,7 +596,6 @@ function BedLine({
   onReleaseHold,
   checkInDays,
   agreedRent,
-  blocked = "",
 }: {
   unit: Unit;
   room: BedRow["room"];
@@ -610,8 +608,6 @@ function BedLine({
   onReleaseHold: (enquiryId: string) => void;
   checkInDays?: Record<string, string> | undefined;
   agreedRent?: Record<string, { rent: number }> | undefined;
-  /** why this line cannot be sold now - the whole unit, or a room in it, is let */
-  blocked?: string;
 }) {
   const today = klToday();
   // who is on the bed, and when - the shared reader (placement.ts bedStays)
@@ -657,8 +653,6 @@ function BedLine({
               <StatusPill status={st.status} label={PERSON_LABEL[st.status]} />
             ),
           )
-        ) : blocked ? (
-          <span className="text-xs text-muted-foreground">Not available · {blocked}</span>
         ) : (
           <StatusPill status={roomStatus} />
         )}
@@ -746,7 +740,7 @@ function BedLine({
         )}
         {/* only a bed nobody is in or coming to - later stays are booked from the
             booking, where the dates are (Dani, 10 Oct 2026) */}
-        {!stays.length && !blocked ? (
+        {!stays.length ? (
           <Button size="sm" variant="outline" onClick={onReserve}>
             Reserve
           </Button>
