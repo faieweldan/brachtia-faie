@@ -204,23 +204,32 @@ export const tenancyDatesByResident = createServerFn({ method: "GET" }).handler(
     allRows(() =>
       supabase
         .from("invoices")
-        .select("enquiry_id, monthly_rent, created_at")
+        .select("enquiry_id, resident_id, monthly_rent, notes, created_at")
         .eq("invoice_type", "initial")
         .neq("status", "void")
-        .not("enquiry_id", "is", null)
         .order("created_at", { ascending: true })
         .order("id"),
     ),
   ]);
   const scheduleRent = new Map<string, number>();
   for (const r of (rs ?? []) as any[]) if (Number(r.monthly_rent) > 0) scheduleRent.set(String(r.tenancy_id), Number(r.monthly_rent));
-  // the newest initial invoice wins
-  const invoiceRent = new Map<string, number>();
-  for (const r of (inv ?? []) as any[]) if (Number(r.monthly_rent) > 0) invoiceRent.set(String(r.enquiry_id), Number(r.monthly_rent));
+  // the newest initial invoice wins, found as initialInvoiceFor finds it: by the booking, or - a
+  // tenancy with no booking (every migrated resident) - by the resident. Keyed by booking only,
+  // all 181 migrated residents fell through to the bed's list price (Dani, 22 Oct 2026:
+  // RM1,050 for an agreed RM1,200). A later IP difference invoice holds no move-in rent.
+  const { IP_DIFFERENCE_NOTE } = await import("@/lib/invoice-category");
+  const byEnquiry = new Map<string, number>();
+  const byResident = new Map<string, number>();
+  for (const r of (inv ?? []) as any[]) {
+    if (!(Number(r.monthly_rent) > 0) || String(r.notes ?? "").startsWith(IP_DIFFERENCE_NOTE)) continue;
+    if (r.enquiry_id) byEnquiry.set(String(r.enquiry_id), Number(r.monthly_rent));
+    if (r.resident_id) byResident.set(String(r.resident_id), Number(r.monthly_rent));
+  }
 
   const out: Record<string, ServerTenancy> = {};
   for (const [residentId, t] of latest) {
-    const rent = scheduleRent.get(String(t.id)) || invoiceRent.get(String(t.enquiry_id ?? "")) || 0;
+    const invoiceRent = t.enquiry_id ? byEnquiry.get(String(t.enquiry_id)) : byResident.get(residentId);
+    const rent = scheduleRent.get(String(t.id)) || invoiceRent || 0;
     out[residentId] = { id: String(t.id), start: day(t.start_date), end: day(t.end_date), rent };
   }
   return out;
