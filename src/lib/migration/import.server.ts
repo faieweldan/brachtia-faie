@@ -188,7 +188,7 @@ export async function importResident(sb: any, row: MigrationPreviewRow, today: s
           invoice_date: row.tenancyStart,
           // issued and paid before the system: dated then, not today
           issued_at: `${row.tenancyStart}T00:00:00+08:00`,
-          notes: migratedNote(rec.invoiceUrl),
+          notes: migratedNote(rec.invoiceUrl, row.earlierStay),
         })
         .select("id")
         .single(),
@@ -430,9 +430,36 @@ export async function refreshMigratedNames(sb: any, residentId: string, row: Mig
       await must(sb.from("invoices").update({ number: rec.invoiceNo }).eq("id", inv.id), "Invoice number");
       changed.push("invoice number");
     }
+    const { isEarlierStay } = await import("@/lib/migration/import-plan");
+    const earlier = row.earlierStay || isEarlierStay(inv.notes);
     if (rec.invoiceUrl && original.url !== rec.invoiceUrl) {
-      await must(sb.from("invoices").update({ notes: migratedNote(rec.invoiceUrl) }).eq("id", inv.id), "Invoice copy");
+      await must(sb.from("invoices").update({ notes: migratedNote(rec.invoiceUrl, earlier) }).eq("id", inv.id), "Invoice copy");
       changed.push("invoice copy");
+    } else if (row.earlierStay && !isEarlierStay(inv.notes)) {
+      await must(sb.from("invoices").update({ notes: migratedNote(original.url, true) }).eq("id", inv.id), "Earlier stay");
+      changed.push("initial payment marked as from an earlier stay");
+    }
+  }
+
+  /*
+   * The rent terms of a renewal marked from an earlier stay start at the new
+   * tenancy, not after the old advance - moved there while nothing has been
+   * billed on them yet (a bill already issued is never rewritten).
+   */
+  if (row.earlierStay) {
+    const { migratedRentTerms } = await import("@/lib/migration/import-plan");
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kuala_Lumpur" });
+    const terms = migratedRentTerms(row, today);
+    const { data: t } = await sb.from("tenancies").select("id").eq("resident_id", residentId).order("start_date", { ascending: false }).limit(1).maybeSingle();
+    const { data: s } = t ? await sb.from("rental_schedules").select("first_period_start").eq("tenancy_id", t.id).maybeSingle() : { data: null };
+    if (t && s && terms && String(s.first_period_start).slice(0, 10) > terms.first_period_start) {
+      const { count } = await sb.from("invoices").select("id", { count: "exact", head: true }).eq("tenancy_id", t.id).eq("invoice_type", "rental").neq("status", "scheduled").neq("status", "void");
+      if (!count) {
+        await must(sb.from("rental_schedules").update({ ...terms, updated_at: new Date().toISOString() }).eq("tenancy_id", t.id), "Rent terms");
+        const { syncScheduledRent } = await import("@/lib/rent-schedule.server");
+        await syncScheduledRent(sb, String(t.id));
+        changed.push(`rent from ${terms.first_period_start}`);
+      }
     }
   }
   return changed;

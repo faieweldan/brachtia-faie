@@ -63,8 +63,9 @@ export function migratedRentTerms(row: MigrationPreviewRow, today: string) {
     tenancyEnd: row.tenancyEnd,
     frequency: schedule,
     monthlyRent,
-    proratedRent: row.charges.proratedRent,
-    advanceRent: row.charges.advanceRent,
+    // a renewal on its new tenancy: the old initial payment pays nothing towards it
+    proratedRent: row.earlierStay ? 0 : row.charges.proratedRent,
+    advanceRent: row.earlierStay ? 0 : row.charges.advanceRent,
     today,
   });
   // Sheet3 says nothing more is owed: no schedule (19 Oct 2026)
@@ -107,9 +108,18 @@ export const MIGRATED = "Migrated";
 export const MIGRATED_MEANING = "Original record from before the system. The signed copy is kept as a link.";
 
 /** The note an imported invoice carries - the original copy's link at its end. */
-export function migratedNote(originalUrl: string) {
-  return `${MIGRATED} · original record from before the system${originalUrl ? ` · ${originalUrl}` : ""}`;
+export function migratedNote(originalUrl: string, earlierStay = false) {
+  return `${MIGRATED} · original record from before the system${earlierStay ? ` · ${EARLIER_STAY}` : ""}${originalUrl ? ` · ${originalUrl}` : ""}`;
 }
+
+/**
+ * A renewal migrated on its new tenancy (Dani, 23 Oct 2026): its initial payment
+ * is from the stay before, so it pays nothing towards this term - the rent
+ * terms run from the new start, and a full term's rent is not covered by it.
+ * Kept on the initial invoice's note, where every reader of it already looks.
+ */
+export const EARLIER_STAY = "from an earlier stay";
+export const isEarlierStay = (notes: string | null | undefined) => String(notes ?? "").includes(EARLIER_STAY);
 
 /** Whether an invoice (by its notes) was imported, and its original copy. */
 export function migratedOriginal(notes: string | null | undefined) {

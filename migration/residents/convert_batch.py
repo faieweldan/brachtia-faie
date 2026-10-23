@@ -711,9 +711,9 @@ def join_notes(*parts: str) -> str:
 
 def load_corrections(path: Path | None) -> dict:
     if not path or not path.exists():
-        return {"set": {}, "leaveOut": {}, "remarksHandled": {}, "applicationRows": {}, "application": {}, "nextRent": {}, "internalNotes": {}, "balanceDue": {}, "redCleared": {}, "checkedFirst": []}
+        return {"set": {}, "leaveOut": {}, "remarksHandled": {}, "applicationRows": {}, "application": {}, "nextRent": {}, "internalNotes": {}, "balanceDue": {}, "redCleared": {}, "earlierStay": {}, "checkedFirst": []}
     c = json.loads(path.read_text())
-    fixes = {k: c.get(k, {}) for k in ("set", "leaveOut", "remarksHandled", "applicationRows", "application", "nextRent", "internalNotes", "balanceDue", "redCleared")}
+    fixes = {k: c.get(k, {}) for k in ("set", "leaveOut", "remarksHandled", "applicationRows", "application", "nextRent", "internalNotes", "balanceDue", "redCleared", "earlierStay")}
     fixes["checkedFirst"] = c.get("checkedFirst", [])
     return fixes
 
@@ -1178,6 +1178,11 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
             flag(WARNING, "Resident Name", f"Whole unit let to {len(lead['ids'])} people in one row - {lead['id']} (named by the TA/invoice) "
                  "goes in with the unit's rent; the others are listed in Internal Notes")
         out_row["Internal Notes"] = join_notes(fixes["internalNotes"].get(row_qb, ""), remark)
+        # a renewal migrated on its new tenancy: its initial payment is from the stay
+        # before, so it pays nothing towards this term (corrections "earlierStay", 23 Oct 2026)
+        if row_qb in fixes["earlierStay"]:
+            out_row["Initial payment from an earlier stay"] = "Yes"
+            flag(WARNING, "Initial Payment", f"From an earlier stay: {fixes['earlierStay'][row_qb]} - rent is billed from the new tenancy start")
         # a duplicate row is left out by its row number ("row 91"), not its ID
         left_out = fixes["leaveOut"].get(row_qb) or fixes["leaveOut"].get(f"row {r}")
         # a name the team filled red has a problem they are still checking (Dani, 19 Oct 2026)

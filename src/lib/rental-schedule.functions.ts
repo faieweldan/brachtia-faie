@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { SCHEDULES } from "@/lib/reference-data";
+import { isEarlierStay } from "@/lib/migration/import-plan";
 import type { ScheduleTerms } from "@/lib/rental-schedule";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -96,7 +97,8 @@ export const getResidentRent = createServerFn({ method: "GET" })
             confirmedAt: String(s.confirmed_at ?? ""),
           }
         : null,
-      advance: initial ? { amount: initial.advance, rent: initial.rent } : none,
+      // a renewal's initial payment from the stay before pays nothing towards this term (23 Oct 2026)
+      advance: initial && !isEarlierStay(initial.invoice.notes) ? { amount: initial.advance, rent: initial.rent } : none,
     };
   });
 

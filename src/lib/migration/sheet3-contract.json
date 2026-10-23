@@ -583,6 +583,16 @@
       "transform": "Monthly rent x the months in the current period"
     },
     {
+      "key": "initial_payment_earlier_stay",
+      "sheet3": "Initial payment from an earlier stay",
+      "source": null,
+      "db": "invoices.notes",
+      "required": false,
+      "kind": "calculated",
+      "addedToSheet3": true,
+      "transform": "Yes for a renewal migrated on its new tenancy: the initial payment is from the stay before, so it pays nothing towards this term (corrections earlierStay, Dani 23 Oct 2026)"
+    },
+    {
       "key": "invoice_copy",
       "sheet3": "Copy of Invoice",
       "source": "Initial Payment Invoice Copy",

@@ -40,6 +40,8 @@ export type MigrationPreviewRow = {
   nextPeriodEnd: string;
   /** Sheet3 says nothing more is owed ("Fully paid" / "Paid to the end of the tenancy") */
   paidToEndBySheet: boolean;
+  /** a renewal migrated on its new tenancy: the initial payment is from the stay before (23 Oct 2026) */
+  earlierStay: boolean;
   nextPaymentDue: string;
   nextPaymentAmount: number | null;
   /**
@@ -481,6 +483,9 @@ export function previewSheet3Grid(grid: unknown[][], system: SystemSnapshot): Mi
       }
     }
 
+    // a renewal migrated on its new tenancy: its initial payment is from the stay before
+    // and pays nothing towards this term - rent runs from the new start (23 Oct 2026)
+    const earlierStay = /^y(es)?$/i.test(text(value("Initial payment from an earlier stay")));
     const next =
       start && end && schedule && rent && rent > 0
         ? nextRentAfter({
@@ -489,8 +494,8 @@ export function previewSheet3Grid(grid: unknown[][], system: SystemSnapshot): Mi
             frequency: schedule,
             monthlyRent: rent,
             // the pro-rated month and the advance's whole months are paid
-            proratedRent: safeCharges.proratedRent,
-            advanceRent: safeCharges.advanceRent,
+            proratedRent: earlierStay ? 0 : safeCharges.proratedRent,
+            advanceRent: earlierStay ? 0 : safeCharges.advanceRent,
             // they live here already: paid up to the current period (Dani, 12 Oct 2026)
             today: system.today ?? new Date().toISOString().slice(0, 10),
           })
@@ -506,8 +511,8 @@ export function previewSheet3Grid(grid: unknown[][], system: SystemSnapshot): Mi
     const sheetAmount = text(value("Next payment amount")) ? money(value("Next payment amount")) : null;
     // and Brachtia's next billing period: the schedule starts from it, so every later bill follows (19 Oct 2026)
     const periodText = text(value("Next billing period"));
-    const paidToEndBySheet = /^(fully paid|paid to the end)/i.test(periodText);
-    const [pStart = "", pEnd = ""] = periodText.split(/\s*[–—]\s*|\s+-\s*|\s*-\s+/).map((p) => toDate(p));
+    const paidToEndBySheet = !earlierStay && /^(fully paid|paid to the end)/i.test(periodText);
+    const [pStart = "", pEnd = ""] = (earlierStay ? "" : periodText).split(/\s*[–—]\s*|\s+-\s*|\s*-\s+/).map((p) => toDate(p));
     const sheetPeriod = pStart && pEnd && pEnd >= pStart ? { start: pStart, end: pEnd } : null;
     if (next && sheetPeriod && (sheetPeriod.start !== next.start || sheetPeriod.end !== next.end)) {
       add("warning", "Next billing period", `Set by Brachtia admin: ${fmtDate(sheetPeriod.start)} – ${fmtDate(sheetPeriod.end)} (the system works out ${fmtDate(next.start)} – ${fmtDate(next.end)}).`);
@@ -594,6 +599,7 @@ export function previewSheet3Grid(grid: unknown[][], system: SystemSnapshot): Mi
       nextPeriodStart: sheetPeriod?.start ?? next?.start ?? "",
       nextPeriodEnd: sheetPeriod?.end ?? next?.end ?? "",
       paidToEndBySheet,
+      earlierStay,
       nextBillingPeriod: paidToEndBySheet
         ? periodText
         : sheetPeriod
