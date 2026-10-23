@@ -128,6 +128,7 @@ export function ResidentInvoiceDialog({
   tenancyId,
   editing,
   accessCard,
+  line,
   onClose,
   onCreated,
 }: {
@@ -146,6 +147,8 @@ export function ResidentInvoiceDialog({
   editing?: BillingInvoice | undefined;
   /** a lost or damaged access card's charge - the line it starts with; the new form waits for it to be paid */
   accessCard?: { label: string; amount: number };
+  /** a charge to start from - e.g. the rest of a full term's rent (ResidentPayments) */
+  line?: { label: string; amount: number };
   onClose: () => void;
   /** the new invoice's type, and its number - Payments brings it into view */
   onCreated: (type: "rental" | "charge", number?: string) => void;
@@ -181,6 +184,8 @@ export function ResidentInvoiceDialog({
         ? [first.line]
         : accessCard
           ? [{ label: accessCard.label, kind: "charge", amount: accessCard.amount, quantity: 1 }]
+          : line
+            ? [{ label: line.label, kind: "charge", amount: line.amount, quantity: 1 }]
           : [firstLine(startAs)],
   );
   // a scheduled invoice's date is the day it is billed

@@ -31,6 +31,7 @@ import {
 import { TONE, sumBy, type Tone } from "@/lib/billing-tone";
 import { invoiceRef, invoiceTitle } from "@/lib/invoice-category";
 import { getResidentRent } from "@/lib/rental-schedule.functions";
+import { rentForDays } from "@/lib/rental-schedule";
 import { RentalScheduleDialog } from "@/components/admin/RentalScheduleDialog";
 import { fmtDate, money } from "@/lib/ops-store";
 import { getResidentBilling, setMigratedCopy, type BillingInvoice } from "@/lib/resident-billing.functions";
@@ -126,7 +127,7 @@ export function ResidentPayments({
   }, [openCheckout, isLoading]);
   const [paying, setPaying] = useState<PayableInvoice | null>(null);
   // a new invoice: rent or a charge
-  const [raising, setRaising] = useState<{ as: "rental" | "charge"; card?: { label: string; amount: number } } | null>(null);
+  const [raising, setRaising] = useState<{ as: "rental" | "charge"; card?: { label: string; amount: number }; line?: { label: string; amount: number } } | null>(null);
   // from the Access Card panel: the charge invoice opens, filled at Schedule B's price
   /*
    * Bring one invoice into view, outlined for a moment: from the Access Card
@@ -230,6 +231,20 @@ export function ResidentPayments({
   // not billed yet - every one to the end of the tenancy, each billed on its own day
   const today = new Date().toISOString().slice(0, 10);
   const schedule = rent?.schedule ?? null;
+  /*
+   * Full term (Dani, 23 Oct 2026): the whole stay's rent is on the initial
+   * payment, so there is no schedule to set and no rent bill to make - billing
+   * it again would charge it twice. The row shows the term and what the
+   * initial payment paid towards it; anything short is billed once, as a charge.
+   */
+  const fullTerm = !schedule && (b?.paymentFrequency ?? "") === "full";
+  const termStart = rent?.tenancy?.start || invoiceDetails.tenancyStart;
+  const termEnd = rent?.tenancy?.end || invoiceDetails.tenancyEnd;
+  const termRent = fullTerm ? rentForDays(termStart, termEnd, b?.monthlyRent ?? 0) : 0;
+  const termPaid = rent?.advance.amount ?? 0;
+  // a later charge for the rest counts too, so the row does not ask twice
+  const restBilled = charges.filter((c) => /^Rent .* balance/i.test(c.items[0]?.label ?? "")).reduce((n, c) => n + c.total, 0);
+  const termShort = Math.max(0, Math.round((termRent - termPaid - restBilled) * 100) / 100);
   const tenancyId = rent?.tenancy?.id ?? "";
   const forTenancy = (i: BillingInvoice) => !i.tenancyId || !tenancyId || i.tenancyId === tenancyId;
   const issuedRent = rental.filter(forTenancy);
@@ -348,7 +363,11 @@ export function ResidentPayments({
             icon={CalendarClock}
             title="Rental payments"
             tone={
-              overdue.length
+              fullTerm
+                ? termShort > 0
+                  ? "due"
+                  : "done"
+                : overdue.length
                 ? "late"
                 : !schedule || rentalDue > 0
                   ? "due"
@@ -357,7 +376,11 @@ export function ResidentPayments({
                     : "idle"
             }
             status={
-              overdue.length
+              fullTerm
+                ? termShort > 0
+                  ? `${money(termShort)} not covered`
+                  : "Paid in full"
+                : overdue.length
                 ? `${overdue.length} overdue`
                 : !schedule
                   ? "Setup required"
@@ -370,7 +393,11 @@ export function ResidentPayments({
                         : "Not started"
             }
             detail={
-              !schedule
+              fullTerm
+                ? `Full term ${spanLabel(termStart, termEnd)} · ${money(termRent)} rent · ${money(termPaid)} paid on the initial payment${
+                    restBilled > 0 ? ` · ${money(restBilled)} billed after` : ""
+                  }`
+                : !schedule
                 ? "The rent, payment schedule or tenancy dates are missing"
                 : nextRent
                   ? `Next: ${spanLabel(
@@ -384,14 +411,32 @@ export function ResidentPayments({
             open={!!open["rental"]}
             onToggle={rentRows.length ? () => toggle("rental") : undefined}
             action={
-              <Button
-                size="sm"
-                variant={schedule ? "ghost" : "outline"}
-                className="h-8 shrink-0"
-                onClick={() => setSettingSchedule(true)}
-              >
-                {schedule ? "Edit schedule" : "Set payment schedule"}
-              </Button>
+              fullTerm ? (
+                termShort > 0 ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 shrink-0"
+                    onClick={() =>
+                      setRaising({
+                        as: "charge",
+                        line: { label: `Rent ${spanLabel(termStart, termEnd)} - balance after the advance rental`, amount: termShort },
+                      })
+                    }
+                  >
+                    Bill {money(termShort)}
+                  </Button>
+                ) : null
+              ) : (
+                <Button
+                  size="sm"
+                  variant={schedule ? "ghost" : "outline"}
+                  className="h-8 shrink-0"
+                  onClick={() => setSettingSchedule(true)}
+                >
+                  {schedule ? "Edit schedule" : "Set payment schedule"}
+                </Button>
+              )
             }
           >
             <table className="w-full text-left text-xs sm:text-sm">
@@ -595,6 +640,7 @@ export function ResidentPayments({
           open
           startAs={raising.as}
           {...(raising.card ? { accessCard: raising.card } : {})}
+          {...(raising.line ? { line: raising.line } : {})}
           {...(tenancyId ? { tenancyId } : {})}
           residentId={residentId}
           details={invoiceDetails}

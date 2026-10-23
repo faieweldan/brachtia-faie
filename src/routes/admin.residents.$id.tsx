@@ -1311,7 +1311,12 @@ function PayScheduleField({ residentId, saved }: { residentId: string; saved: st
         search={{ tab: "payments" } as never}
         className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
       >
-        {rent?.schedule ? "Change it in Payments → Rent schedule" : "Set up the rent schedule in Payments"}
+        {rent?.schedule
+          ? "Change it in Payments → Rent schedule"
+          : value === "full"
+            ? // the whole stay's rent is on the initial payment - nothing to schedule (23 Oct 2026)
+              "Full term - see Payments → Rental payments"
+            : "Set up the rent schedule in Payments"}
       </Link>
     </div>
   );
