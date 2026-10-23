@@ -711,9 +711,9 @@ def join_notes(*parts: str) -> str:
 
 def load_corrections(path: Path | None) -> dict:
     if not path or not path.exists():
-        return {"set": {}, "leaveOut": {}, "remarksHandled": {}, "applicationRows": {}, "application": {}, "nextRent": {}, "internalNotes": {}, "balanceDue": {}, "checkedFirst": []}
+        return {"set": {}, "leaveOut": {}, "remarksHandled": {}, "applicationRows": {}, "application": {}, "nextRent": {}, "internalNotes": {}, "balanceDue": {}, "redCleared": {}, "checkedFirst": []}
     c = json.loads(path.read_text())
-    fixes = {k: c.get(k, {}) for k in ("set", "leaveOut", "remarksHandled", "applicationRows", "application", "nextRent", "internalNotes", "balanceDue")}
+    fixes = {k: c.get(k, {}) for k in ("set", "leaveOut", "remarksHandled", "applicationRows", "application", "nextRent", "internalNotes", "balanceDue", "redCleared")}
     fixes["checkedFirst"] = c.get("checkedFirst", [])
     return fixes
 
@@ -1183,7 +1183,11 @@ def convert(source: Path, labels: Path, out: Path, report: Path, corrections: Pa
         # a name the team filled red has a problem they are still checking (Dani, 19 Oct 2026)
         name_fill = raw_ws.cell(r, cols[("StudentName", 1)]).fill
         if not left_out and name_fill.fill_type and str(name_fill.fgColor.rgb).upper() == "FFFF0000":
-            left_out = "Name is red in the master - the team is still checking it"
+            # the team cleared it, the red not yet taken off (corrections "redCleared", Dani 23 Oct 2026)
+            if row_qb in fixes["redCleared"]:
+                flag(WARNING, "Resident Name", f"Red in the master, cleared: {fixes['redCleared'][row_qb]}")
+            else:
+                left_out = "Name is red in the master - the team is still checking it"
         if left_out:
             out_row["_left_out"] = left_out
         if corrected:
