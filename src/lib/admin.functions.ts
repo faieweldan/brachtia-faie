@@ -101,7 +101,72 @@ export const getResidentCheckIn = createServerFn({ method: "GET" })
     // the check-in appointment is the record - what admin reschedules is what shows (10 Oct 2026)
     const { checkInFor } = await import("@/lib/checkin.server");
     const c = await checkInFor(supabase, data.id);
-    return { status: c.status, on: c.on, slot: c.slot };
+    // completed = they have arrived (recordCheckIn, or the appointment marked Completed)
+    const { data: appt } = c.appointmentId
+      ? await supabase.from("appointments").select("status").eq("id", c.appointmentId).maybeSingle()
+      : { data: null };
+    return { status: c.status, on: c.on, slot: c.slot, arrived: (appt as any)?.status === "completed" };
+  });
+
+/**
+ * Record a check-in from the resident page (Dani, 23 Oct 2026): the day and time
+ * they arrived, picked on a calendar - for a migrated resident with no
+ * appointment, or an appointment nobody completed. The same record and rule as
+ * the Appointments page: their check-in appointment, at that time, Completed -
+ * and their bed Booked -> Active first (activateAtCheckIn), so it is only saved
+ * if the bed can be theirs.
+ */
+export const recordCheckIn = createServerFn({ method: "POST" })
+  .inputValidator((data: { residentId: string; on: string; slot: string }) => data)
+  .handler(async ({ data }) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data.on)) throw new Error("Pick the day they checked in.");
+    if (!/^\d{2}:\d{2}$/.test(data.slot)) throw new Error("Pick the time they checked in.");
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kuala_Lumpur" });
+    if (data.on > today) throw new Error("A check-in is recorded once they have arrived - not for a later day.");
+    const supabase = await admin();
+    const { data: resident } = await supabase.from("residents").select("*").eq("id", data.residentId).maybeSingle();
+    if (!resident) throw new Error("Resident not found.");
+
+    const { activateAtCheckIn } = await import("@/lib/homes.functions");
+    const live = await activateAtCheckIn(supabase, data.residentId);
+    if (!live.ok) throw new Error(live.error);
+
+    const { CHECKIN_TYPE } = await import("@/lib/checkin");
+    const startsAt = new Date(`${data.on}T${data.slot}:00+08:00`).toISOString();
+    const now = new Date().toISOString();
+    const { data: existing } = await supabase
+      .from("appointments")
+      .select("id")
+      .eq("type_slug", CHECKIN_TYPE)
+      .eq("resident_id", data.residentId)
+      .neq("status", "cancelled")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (existing) {
+      const { error } = await supabase.from("appointments").update({ starts_at: startsAt, status: "completed", updated_at: now }).eq("id", existing.id);
+      if (error) throw new Error(error.message);
+    } else {
+      const r = resident as any;
+      const { data: type } = await supabase.from("appointment_types").select("duration_minutes").eq("slug", CHECKIN_TYPE).maybeSingle();
+      const { error } = await supabase.from("appointments").insert({
+        type_slug: CHECKIN_TYPE,
+        mode: "in_person",
+        starts_at: startsAt,
+        duration_minutes: Number((type as any)?.duration_minutes ?? 60),
+        resident_id: data.residentId,
+        enquiry_id: r.enquiry_id ?? null,
+        full_name: String(r.full_name ?? ""),
+        email: String(r.email ?? ""),
+        phone: String(r.mobile ?? ""),
+        university: String(r.university ?? ""),
+        status: "completed",
+        source: "resident-page",
+        updated_at: now,
+      } as any);
+      if (error) throw new Error(error.message);
+    }
+    return { ok: true as const };
   });
 
 export const listEnquiries = createServerFn({ method: "GET" })

@@ -20,7 +20,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { getResidentCheckIn } from "@/lib/admin.functions";
+import { getResidentCheckIn, recordCheckIn } from "@/lib/admin.functions";
+import { DateInput } from "@/components/ui/date-input";
 import { refreshMoney } from "@/lib/billing-client";
 
 import { RELATIONSHIP_OPTIONS, idLabelFor } from "@/lib/reference-data";
@@ -896,7 +897,7 @@ function ResidentProfilePage() {
         ) : null}
         {/* on the card every tab shares: a resident without a tenancy yet
             still has an arrival to arrange (Dani, 30 Sep 2026) */}
-        {!isNew && form.id ? <CheckInLine residentId={form.id} /> : null}
+        {!isNew && form.id ? <CheckInLine residentId={form.id} canRecord={person === "booked"} /> : null}
       </Panel>
 
       <Panel>
@@ -1404,31 +1405,89 @@ function AdminField({
  * for a reminder" means the admin sends it - the website does not yet
  * (30 Sep 2026).
  */
-function CheckInLine({ residentId }: { residentId: string }) {
+function CheckInLine({ residentId, canRecord }: { residentId: string; canRecord: boolean }) {
+  const queryClient = useQueryClient();
   const { data } = useQuery({
     queryKey: ["admin", "resident-checkin", residentId],
     queryFn: () => getResidentCheckIn({ data: { id: residentId } }),
   });
+  // recording the day they arrived - for a migrated resident, or an appointment nobody completed (23 Oct 2026)
+  const [recording, setRecording] = useState(false);
+  const today = klToday();
+  const [on, setOn] = useState("");
+  const [slot, setSlot] = useState("12:00");
+  const [busy, setBusy] = useState(false);
   if (!data) return null;
+  const when = data.on
+    ? `${new Date(`${data.on}T00:00:00`).toLocaleDateString("en-MY", { weekday: "short", day: "numeric", month: "short" })}, ${data.slot}`
+    : "";
+
+  async function save() {
+    setBusy(true);
+    try {
+      await recordCheckIn({ data: { residentId, on, slot } });
+      toast.success("Check-in recorded - the room is now Occupied");
+      setRecording(false);
+      // the bed, the resident's status and the appointment all moved
+      await queryClient.invalidateQueries();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Check-in not recorded");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3 text-sm">
       <span className="text-muted-foreground">Check-in:</span>
       {/* StatusPill's look, without its capitalising every word */}
       <span
         className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-          data.status === "booked"
+          data.arrived || data.status === "booked"
             ? "border-emerald-200 bg-emerald-100 text-emerald-900"
             : data.status === "remind"
               ? "border-amber-200 bg-amber-100 text-amber-900"
               : "border-border bg-muted text-muted-foreground"
         }`}
       >
-        {data.status === "booked"
-          ? `Booked · ${new Date(`${data.on}T00:00:00`).toLocaleDateString("en-MY", { weekday: "short", day: "numeric", month: "short" })}, ${data.slot}`
-          : data.status === "remind"
-            ? "Asked for a reminder"
-            : "Not chosen"}
+        {data.arrived
+          ? `Checked in · ${when}`
+          : data.status === "booked"
+            ? `Booked · ${when}`
+            : data.status === "remind"
+              ? "Asked for a reminder"
+              : "Not chosen"}
       </span>
+      {data.arrived || !canRecord ? null : recording ? (
+        <span className="flex flex-wrap items-center gap-2">
+          <DateInput value={on} max={today} onChange={(e) => setOn(e.target.value)} className="h-8 w-40" />
+          <input
+            type="time"
+            value={slot}
+            onChange={(e) => setSlot(e.target.value)}
+            aria-label="Check-in time"
+            className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+          />
+          <Button size="sm" className="h-8" disabled={!on || busy} onClick={() => void save()}>
+            {busy ? "Saving…" : "Save"}
+          </Button>
+          <Button size="sm" variant="ghost" className="h-8" onClick={() => setRecording(false)}>
+            Cancel
+          </Button>
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            setOn(data.on && data.on <= today ? data.on : today);
+            if (data.slot) setSlot(data.slot);
+            setRecording(true);
+          }}
+          className="text-xs text-brand-deep underline underline-offset-2 hover:no-underline"
+        >
+          Record check-in
+        </button>
+      )}
     </div>
   );
 }
