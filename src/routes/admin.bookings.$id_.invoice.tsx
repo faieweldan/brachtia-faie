@@ -63,6 +63,8 @@ const KINDS = [
   { value: "advance", label: "Advance rent" },
   { value: "refundable", label: "Refundable" },
   { value: "onetime", label: "One-time" },
+  // taken off the total - e.g. a deposit already held, moved over from another room
+  { value: "contra", label: "Contra", negative: true },
 ];
 
 // written the way the quote and invoice PDFs write it

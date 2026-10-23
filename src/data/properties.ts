@@ -1107,7 +1107,9 @@ export function stayQuote(
  * looked like it disagreed, so every figure anyone pays keeps its cents.
  */
 export function formatRM(amount: number) {
-  return `RM ${amount.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // a minus amount (a Contra line) reads "-RM 50.00", not "RM -50.00"
+  const text = Math.abs(amount).toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `${amount < 0 && text !== "0.00" ? "-" : ""}RM ${text}`;
 }
 
 /**

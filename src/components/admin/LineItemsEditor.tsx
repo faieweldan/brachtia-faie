@@ -55,7 +55,8 @@ export function LineItemsEditor<T extends EditableLine>({
   /** the blank line Add line appends */
   newLine: () => T;
   /** a Type column, when the document's lines have kinds */
-  kinds?: { value: string; label: string }[];
+  /** negative: a type that takes off (Contra) - its amount is always minus */
+  kinds?: { value: string; label: string; negative?: boolean }[];
   /** Price and Qty columns; otherwise one Amount per line */
   quantity?: boolean;
   describe?: (line: T, i: number) => Describe;
@@ -74,7 +75,17 @@ export function LineItemsEditor<T extends EditableLine>({
   const worth = (l: T) => (Number(l.amount) || 0) * lineQty(l.quantity);
   const total = lines.reduce((n, l) => n + worth(l), 0);
   const sign = negative ? "- " : "";
-  const edit = (i: number, patch: Partial<EditableLine>) => onChange(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+  // a Contra line deducts: whatever is typed, its amount is minus (Dani, 23 Oct 2026)
+  const takesOff = (kind?: string) => !!kinds?.find((k) => k.value === kind)?.negative;
+  const signed = (kind: string | undefined, v: number) => (takesOff(kind) ? -Math.abs(v) : Math.abs(v));
+  const edit = (i: number, patch: Partial<EditableLine>) =>
+    onChange(
+      lines.map((l, j) => {
+        if (j !== i) return l;
+        const next = { ...l, ...patch };
+        return { ...next, amount: signed(next.kind, Number(next.amount) || 0) };
+      }),
+    );
 
   return (
     <div className="space-y-2">
@@ -155,7 +166,7 @@ export function LineItemsEditor<T extends EditableLine>({
                         value={l.amount}
                         aria-label="Price"
                         className="h-8 w-24 text-right tabular-nums"
-                        onChange={(e) => edit(i, { amount: Math.max(0, Number(e.target.value) || 0) })}
+                        onChange={(e) => edit(i, { amount: Number(e.target.value) || 0 })}
                       />
                       <Input
                         type="number"
@@ -176,7 +187,7 @@ export function LineItemsEditor<T extends EditableLine>({
                       className="h-8 w-28 text-right tabular-nums"
                       // one amount per line: the quantity goes back to 1
                       onChange={(e) =>
-                        edit(i, { amount: Math.max(0, Number(e.target.value) || 0), ...(l.quantity != null ? { quantity: 1 } : {}) })
+                        edit(i, { amount: Number(e.target.value) || 0, ...(l.quantity != null ? { quantity: 1 } : {}) })
                       }
                     />
                   )}
