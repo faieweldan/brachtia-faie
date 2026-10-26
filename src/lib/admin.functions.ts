@@ -585,6 +585,28 @@ export const advanceEnquiryStage = createServerFn({ method: "POST" })
       if ((paid as any)?.fee_received_at || (paid as any)?.resident_id) {
         throw new Error("This booking has been paid for, so it cannot be closed as a duplicate");
       }
+      /*
+       * A closed booking is nobody coming, so the bed it held goes back on sale
+       * (Dani, 26 Oct 2026) - the same release as the Release room button, so
+       * its unpaid invoice is cancelled with it. A bed left held by a closed
+       * booking was hidden from every other student, and nothing on the closed
+       * booking's page offered to let it go.
+       */
+      const { releaseBooking } = await import("@/lib/booking-lifecycle");
+      const release = await releaseBooking(supabase, data.id);
+      if (!release.ok) {
+        throw new Error("A payment is recorded on this booking, so it cannot be closed");
+      }
+      if (release.released || release.voided.length) {
+        await logBookingEvent(supabase, {
+          enquiryId: data.id,
+          staff,
+          kind: "room_released",
+          summary: release.voided.length
+            ? `Room released · ${release.voided.join(", ")} cancelled`
+            : "Room released",
+        });
+      }
     }
 
     switch (data.to) {

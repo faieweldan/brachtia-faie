@@ -232,7 +232,7 @@ export async function releaseBooking(supabase: any, enquiryId: string) {
     .eq("id", enquiryId);
   if (enquiryRes.error) throw new Error(enquiryRes.error.message);
   // the booking's hold goes - nobody else's, and no bed row (10 Oct 2026), under the unit's lock (14 Oct 2026)
-  const { error: holdErr } = await supabase.rpc("release_hold", {
+  const { data: released, error: holdErr } = await supabase.rpc("release_hold", {
     p_enquiry: enquiryId,
     p_resident: null,
     p_bed: null,
@@ -242,6 +242,8 @@ export async function releaseBooking(supabase: any, enquiryId: string) {
   return {
     ok: true as const,
     voided: ((voidRes.voided ?? []) as unknown[]).map((v) => String(v)),
+    /** how many beds the booking held - 0 when it had none */
+    released: Number(released ?? 0),
   };
 }
 
