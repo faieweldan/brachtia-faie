@@ -509,13 +509,14 @@ export function ResidentPayments({
                         ) : (
                           <PdfPreviewButton
                             variant="ghost"
-                            className="h-7 px-1.5 text-xs font-medium text-brand-deep"
+                            className="h-7 gap-1 px-1.5 text-xs font-medium text-brand-deep"
                             title={`Invoice ${inv.number}`}
                             fileName={`Brachtia-${inv.number}.pdf`}
                             build={async () =>
                               (await import("@/lib/invoice-pdf")).invoicePdfUrl(inv.doc)
                             }
                           >
+                            <Eye className="size-3.5" />
                             {invoiceRef(inv.number, inv.type)}
                           </PdfPreviewButton>
                         )}
