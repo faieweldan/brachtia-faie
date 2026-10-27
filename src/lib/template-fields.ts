@@ -63,8 +63,6 @@ const end = (c: MappingContext) =>
   c.stay?.end || (c.tenancy?.["end_date"] ?? c.bed?.["tenancy_end"] ?? c.enquiry?.["move_out"]);
 const r = (k: string) => (c: MappingContext) => c.resident?.[k];
 /** The resident has uploaded this document (a key from resident-documents). */
-const hasDoc = (c: MappingContext, key: string) =>
-  Array.isArray(c.resident?.["docs"]) && (c.resident!["docs"] as any[]).some((d) => d?.key === key && d?.path);
 const e = (k: string) => (c: MappingContext) => c.enquiry?.[k];
 
 /*
@@ -192,8 +190,11 @@ export const TEMPLATE_FIELDS: TemplateField[] = [
   { key: "signatory_title", label: "Signatory's title", source: "Signatory", get: (c) => c.signatory?.title ?? "" },
   { key: "today", label: "Today's date", source: "Other", get: () => fmtDate(new Date().toISOString()) },
   // for tick boxes on a PDF form: "yes" ticks it, empty leaves it (30 Sep 2026)
-  { key: "has_id_copy", label: "Tick: IC / passport copy uploaded", source: "Resident Record", get: (c) => (hasDoc(c, "id") ? "yes" : "") },
-  { key: "has_photo", label: "Tick: passport photo uploaded", source: "Resident Record", get: (c) => (hasDoc(c, "photo") ? "yes" : "") },
+  // the access card's section a) rows: ticked for a new application like the rest of
+  // section a), whether or not the file is uploaded - the file itself is attached
+  // apart, in the draft (Dani, 27 Oct 2026)
+  { key: "has_id_copy", label: "Tick: IC / passport copy (new application)", source: "Other", get: (c) => (isNewCardApplication(c.cardReason) ? "yes" : "") },
+  { key: "has_photo", label: "Tick: passport photo (new application)", source: "Other", get: (c) => (isNewCardApplication(c.cardReason) ? "yes" : "") },
   { key: "has_agreement", label: "Tick: tenancy agreement generated", source: "Tenancy Record", get: (c) => (c.agreement ? "yes" : "") },
   /*
    * The access card form's own ticks (Dani, 2 Oct 2026). The owner's papers

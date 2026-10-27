@@ -653,6 +653,7 @@ export async function renderGeneratedPdf(
         tick_owner_ta: "",
         has_id_copy: "",
         has_photo: "",
+        has_agreement: "",
         tick_replace_ic: "yes",
         tick_replace_damage: reason === "Damaged Card" || reason === "Unit Change" ? "yes" : "",
         tick_replace_loss: reason === "Lost Card" ? "yes" : "",
