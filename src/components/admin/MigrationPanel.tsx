@@ -7,6 +7,7 @@ import { Panel } from "@/components/admin/ops-ui";
 import { fmtDate, money } from "@/lib/ops-store";
 import { initialLines, initialPaymentOf } from "@/lib/migration/import-plan";
 import { SCHEDULES } from "@/lib/reference-data";
+import { isWholeUnitLetter, roomName } from "@/lib/room-name";
 import type { MigrationPreview, MigrationPreviewRow } from "@/lib/migration/sheet3";
 import type { ImportOutcome } from "@/lib/migration/import.server";
 
@@ -215,7 +216,8 @@ export function ResidentLine({ row, today, open, onToggle }: { row: MigrationPre
         <span className="min-w-0 flex-1">
           <span className="font-medium">{row.residentName || "Unnamed resident"}</span>
           <span className="ml-2 text-xs text-muted-foreground">
-            {row.quickbooksId} · {r.unitNo} · Room {r.room} · {row.wholeRoom ? "Whole room" : row.place.split(" · ").at(-1)}
+            {row.quickbooksId} · {r.unitNo} · {roomName(r.room)}
+            {isWholeUnitLetter(r.room) ? "" : ` · ${row.wholeRoom ? "Whole room" : row.place.split(" · ").at(-1)}`}
           </span>
         </span>
         {row.issues.length ? (
