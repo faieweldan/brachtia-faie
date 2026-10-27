@@ -5,7 +5,7 @@
  */
 
 import { roomName } from "@/lib/room-name";
-import { soldBedLabel, soldOccupancy } from "@/lib/placement";
+import { occupancyLabel, soldBedLabel, soldOccupancy } from "@/lib/placement";
 import { COUNTRIES, SCHEDULES } from "@/lib/reference-data";
 import { stayLength } from "@/lib/stay-length";
 
@@ -171,9 +171,10 @@ export const TEMPLATE_FIELDS: TemplateField[] = [
   { key: "residence", label: "Residence", source: "Room Record", get: (c) => c.residence?.["name"] },
   { key: "unit_no", label: "Unit no.", source: "Room Record", get: (c) => c.unit?.["unit_no"] },
   { key: "room_no", label: "Room", source: "Room Record", get: (c) => (c.room ? roomName(String(c.room["letter"] ?? "")) : "") },
-  // as sold: a twin room let whole is a single (placement.ts soldOccupancy, 14 Oct 2026)
+  // as sold: a twin room let whole is a single (placement.ts soldOccupancy, 14 Oct 2026),
+  // printed as its label - "Twin Sharing" for every residence (occupancyLabel, 27 Oct 2026)
   { key: "bed", label: "Bed", source: "Room Record", get: (c) => (c.bed ? soldBedLabel(c.room as any, c.bed as any, c.letWhole) : undefined) },
-  { key: "occupancy", label: "Occupancy", source: "Room Record", get: (c) => (c.room ? soldOccupancy(c.room as any, c.letWhole) : undefined) ?? c.resident?.["occupancy"] },
+  { key: "occupancy", label: "Occupancy", source: "Room Record", get: (c) => occupancyLabel((c.room ? soldOccupancy(c.room as any, c.letWhole) : undefined) ?? c.resident?.["occupancy"]) || undefined },
   { key: "unit_type", label: "Unit type", source: "Room Record", get: (c) => c.unit?.["unit_type"] },
   { key: "inclusions", label: "Inclusions", source: "Room Record", get: (c) => rentalTermList(c, "included") },
   { key: "exclusions", label: "Exclusions", source: "Room Record", get: (c) => rentalTermList(c, "excluded") },

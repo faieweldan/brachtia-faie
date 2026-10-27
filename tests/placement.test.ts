@@ -399,7 +399,7 @@ describe("a placement is described as sold, not as built", () => {
     expect(soldOccupancy(single, true)).toBe("single");
   });
   test("a twin room shared stays twin, a single stays single", () => {
-    expect(soldOccupancyLabel(shared)).toBe("Twin sharing");
+    expect(soldOccupancyLabel(shared)).toBe("Twin Sharing");
     expect(soldBedLabel(shared, shared.beds[1])).toBe("Twin 2");
     expect(soldOccupancy(single)).toBe("single");
     expect(soldBedLabel(single, single.beds[0])).toBe("Single");

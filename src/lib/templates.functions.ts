@@ -192,12 +192,17 @@ export const createTemplate = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const db = await admin();
+    // a residence's own copy takes the place of its document in the list
+    // (General Terms, A, B ...): the sort_order of that doc_key's first template
+    const { data: slot } = data.docKey
+      ? await db.from("document_templates").select("sort_order").eq("doc_key", data.docKey).order("sort_order").limit(1).maybeSingle()
+      : { data: null };
     const { data: t, error } = await db
       .from("document_templates")
       .insert({
         name: data.name,
         category: data.category,
-        sort_order: 100,
+        sort_order: slot?.sort_order ?? 100,
         doc_key: data.docKey ?? "",
         ...(data.residenceId ? { residence_id: data.residenceId } : {}),
       })

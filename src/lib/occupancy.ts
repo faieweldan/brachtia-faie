@@ -16,3 +16,7 @@ export const occupancyKey = (v: string | null | undefined): "single" | "twin" | 
 /** an occupancy as an invoice prints it */
 export const occupancyPrinted = (v: string | null | undefined) =>
   ({ twin: "Twin sharing (per pax)", unit: "Whole unit", single: "Single", "": "Single" })[occupancyKey(v)];
+
+/** an occupancy as the agreement and the booking screens name it (27 Oct 2026) */
+export const occupancyLabel = (v: string | null | undefined) =>
+  ({ twin: "Twin Sharing", unit: "Whole unit", single: "Single", "": "" })[occupancyKey(v)];

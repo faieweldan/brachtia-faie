@@ -2,7 +2,8 @@ import type { Bed, Resident, Unit, UnitRoom } from "@/lib/ops-store";
 import { residentForBed, residentIdOf, residentSponsorLabel } from "@/lib/ops-store";
 import { universityAbbr } from "@/data/form-options";
 
-export { occupancyKey, occupancyPrinted } from "@/lib/occupancy";
+export { occupancyKey, occupancyLabel, occupancyPrinted } from "@/lib/occupancy";
+import { occupancyLabel } from "@/lib/occupancy";
 
 /**
  * Who has a claim on a unit, and when (Dani, 8 Oct 2026).
@@ -47,9 +48,9 @@ export const soldWhole = (room: SoldRoom | null | undefined, letWhole?: boolean 
 export const soldOccupancy = (room: SoldRoom | null | undefined, letWhole?: boolean | undefined) =>
   room?.occupancy === "twin" && soldWhole(room, letWhole) ? "single" : String(room?.occupancy ?? "");
 
-/** "Twin sharing" or "Single", as sold */
+/** "Twin Sharing" or "Single", as sold */
 export const soldOccupancyLabel = (room: SoldRoom | null | undefined, letWhole?: boolean | undefined) =>
-  soldOccupancy(room, letWhole) === "twin" ? "Twin sharing" : "Single";
+  occupancyLabel(soldOccupancy(room, letWhole)) || "Single";
 
 /** the bed as the resident has it: "Single" for a twin room let whole, else its label ("Twin 1") */
 export const soldBedLabel = (

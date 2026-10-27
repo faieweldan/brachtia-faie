@@ -92,7 +92,6 @@ export function TemplatesTab() {
             <thead className="text-left text-xs text-muted-foreground">
               <tr className="border-b border-border">
                 <th className="py-2 pr-3 font-medium">Template</th>
-                <th className="py-2 pr-3 font-medium">Residence</th>
                 <th className="py-2 pr-3 font-medium">Version</th>
                 <th className="py-2 pr-3 font-medium">Last Updated</th>
                 <th className="py-2 pr-3 font-medium">Status</th>
@@ -103,16 +102,26 @@ export function TemplatesTab() {
               // set up = has a file uploaded; the rest are listed apart below
               const rows = (data ?? []).filter((t) => t.category === cat && t.versions.length > 0);
               if (!rows.length) return null;
+              // one heading per residence instead of its name on every row; rows
+              // keep the list's order (document_templates.sort_order) (27 Oct 2026)
+              const groups = [...new Set(rows.map((t) => t.residenceId))]
+                .map((id) => ({ id, name: residences.nameOf(id), rows: rows.filter((t) => t.residenceId === id) }))
+                .sort((a, b) => (a.id === null ? -1 : b.id === null ? 1 : a.name.localeCompare(b.name)));
               return (
                 <tbody key={cat}>
                   <tr>
-                    <td colSpan={6} className="bg-muted/60 px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-brand-deep">
+                    <td colSpan={5} className="bg-muted/60 px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-brand-deep">
                       {cat}
                     </td>
                   </tr>
-                  {rows.map((t) => (
-                    <TemplateRow key={t.id} t={t} residence={residences.nameOf(t.residenceId)} />
-                  ))}
+                  {groups.map((g) => [
+                    <tr key={`h-${g.id}`}>
+                      <td colSpan={5} className="px-2 pb-1 pt-3 text-xs font-medium text-muted-foreground">
+                        {g.name}
+                      </td>
+                    </tr>,
+                    ...g.rows.map((t) => <TemplateRow key={t.id} t={t} />),
+                  ])}
                 </tbody>
               );
             })}
@@ -124,21 +133,21 @@ export function TemplatesTab() {
             {(data ?? []).some((t) => !t.versions.length) ? (
               <tbody>
                 <tr>
-                  <td colSpan={6} className="bg-muted/60 px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <td colSpan={5} className="bg-muted/60 px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Not set up yet
                   </td>
                 </tr>
                 {(data ?? [])
                   .filter((t) => !t.versions.length)
                   .map((t) => (
-                    <TemplateRow key={t.id} t={t} residence="" />
+                    <TemplateRow key={t.id} t={t} />
                   ))}
               </tbody>
             ) : null}
             {retired.length ? (
               <tbody>
                 <tr>
-                  <td colSpan={6} className="bg-muted/60 px-2 py-1.5">
+                  <td colSpan={5} className="bg-muted/60 px-2 py-1.5">
                     <button
                       type="button"
                       onClick={() => setShowRetired((v) => !v)}
@@ -150,7 +159,7 @@ export function TemplatesTab() {
                   </td>
                 </tr>
                 {showRetired
-                  ? retired.map((t) => <TemplateRow key={t.id} t={t} residence={residences.nameOf(t.residenceId)} />)
+                  ? retired.map((t) => <TemplateRow key={t.id} t={t} note={residences.nameOf(t.residenceId)} />)
                   : null}
               </tbody>
             ) : null}
@@ -162,14 +171,17 @@ export function TemplatesTab() {
   );
 }
 
-function TemplateRow({ t, residence }: { t: DocTemplate; residence: string }) {
+/** `note`: the residence, for a deactivated row that sits outside the residence headings */
+function TemplateRow({ t, note }: { t: DocTemplate; note?: string }) {
   const active = t.versions.find((v) => v.status === "active");
   const shown = active ?? t.versions[0];
   const hasDraft = t.versions.some((v) => v.status === "draft");
   return (
     <tr className="border-b border-border last:border-0">
-      <td className="py-2.5 pr-3 font-medium text-brand-deep">{t.name}</td>
-      <td className="py-2.5 pr-3 text-muted-foreground">{t.versions.length ? residence : "—"}</td>
+      <td className="py-2.5 pl-4 pr-3 font-medium text-brand-deep">
+        {t.name}
+        {note ? <span className="ml-2 text-xs font-normal text-muted-foreground">{note}</span> : null}
+      </td>
       <td className="py-2.5 pr-3">{shown ? `v${shown.version}` : "—"}</td>
       <td className="py-2.5 pr-3 text-muted-foreground">{fmtDay(shown?.updatedAt)}</td>
       <td className="py-2.5 pr-3">
