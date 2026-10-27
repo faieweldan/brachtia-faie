@@ -438,7 +438,7 @@ export function ResidentPayments({
                   className="h-8 shrink-0"
                   onClick={() => setSettingSchedule(true)}
                 >
-                  {schedule ? "Edit schedule" : "Set payment schedule"}
+                  {schedule ? "Schedule" : "Set payment schedule"}
                 </Button>
               )
             }
@@ -532,7 +532,7 @@ export function ResidentPayments({
                       <td className="px-3 py-2 text-right">
                         {inv.scheduled ? (
                           <Button size="sm" variant="outline" onClick={() => setEditingRent(inv)}>
-                            Edit
+                            View
                           </Button>
                         ) : inv.outstanding > 0 ? (
                           <Button size="sm" variant="outline" onClick={() => pay(inv)}>

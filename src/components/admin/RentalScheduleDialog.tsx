@@ -216,11 +216,13 @@ export function RentalScheduleDialog({
       <DialogContent className="admin-ui max-h-[92vh] gap-5 overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="text-base font-bold text-brand-deep">
-            {schedule ? "Edit payment schedule" : "Set payment schedule"}
+            {schedule ? "Payment schedule" : "Set payment schedule"}
           </DialogTitle>
           <DialogDescription>
             {schedule
-              ? "Invoices already billed stay as they are. Scheduled ones are rebuilt from these terms, except any you edited."
+              ? `Rent, cycle and dates come from the tenancy - change them there.${
+                  short ? " Only the shorter final period's amount can be adjusted here." : ""
+                }`
               : `Confirm the rent terms. Every rent invoice is listed as Scheduled and billed ${BILL_LEAD_DAYS} days before its period starts.`}
           </DialogDescription>
         </DialogHeader>

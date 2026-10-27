@@ -332,7 +332,7 @@ export function ResidentInvoiceDialog({
           <DialogTitle className="text-base font-bold text-brand-deep">
             {editing
               ? editing.scheduled
-                ? "Edit scheduled invoice"
+                ? "Scheduled invoice"
                 : `Edit ${editing.number}`
               : "Generate invoice"}
           </DialogTitle>
@@ -341,7 +341,7 @@ export function ResidentInvoiceDialog({
               .filter(Boolean)
               .join(" · ")}
             {editing?.scheduled
-              ? ". Billed on its billing date. Once changed, it keeps your changes when the schedule changes."
+              ? ". Worked out from the payment schedule and billed on its billing date - nothing here is changed by hand."
               : ""}
           </DialogDescription>
         </DialogHeader>
@@ -459,9 +459,12 @@ export function ResidentInvoiceDialog({
           >
             Preview
           </PdfPreviewButton>
-          <Button disabled={saving || !lines.length} onClick={() => void save()}>
-            {saving ? "Saving…" : editing ? "Save changes" : "Generate invoice"}
-          </Button>
+          {/* a scheduled invoice is only looked at - there is nothing to save (Dani, 27 Oct 2026) */}
+          {editing?.scheduled ? null : (
+            <Button disabled={saving || !lines.length} onClick={() => void save()}>
+              {saving ? "Saving…" : editing ? "Save changes" : "Generate invoice"}
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>
