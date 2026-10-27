@@ -769,7 +769,8 @@ function TemplateWorkspace() {
             />
           ) : !editing && docx.data ? (
             <DocumentView
-              pdf={pagePdf.data}
+              // a failed request shows its own reason, not only "Could not show the document" (27 Oct 2026)
+              pdf={pagePdf.data ?? (pagePdf.error ? { ok: false, error: pagePdf.error.message } : undefined)}
               pdfLoading={pagePdf.isFetching}
               docxBase64={pagePdf.data?.ok === false && docx.data.kind === "docx" ? docx.data.base64 : undefined}
             />
