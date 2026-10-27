@@ -50,6 +50,12 @@ export function PdfPageViewer({
   const [fit, setFit] = useState<"width" | "page" | null>("width");
   const [error, setError] = useState("");
   /*
+   * pdf.js could not open or draw the file - Safari left the page blank and
+   * said nothing (Dani, 27 Oct 2026). The browser's own PDF viewer shows it
+   * instead: every browser has one, so a preview is never an empty sheet.
+   */
+  const [native, setNative] = useState(false);
+  /*
    * The whole screen, for a phone (Dani, 5 Oct 2026): the page in its box was
    * too small to read. A layer over the page rather than the browser's own
    * full screen, which an iPhone does not give to a page.
@@ -62,7 +68,7 @@ export function PdfPageViewer({
       pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
       const loaded = await pdfjs.getDocument({ url, ...PDFJS_OPTIONS }).promise;
       if (live) { setPdf(loaded as unknown as LoadedPdf); setError(""); }
-    }).catch(() => live && setError("Could not open this PDF preview."));
+    }).catch(() => live && setNative(true));
     return () => { live = false; };
   }, [url]);
 
@@ -105,11 +111,18 @@ export function PdfPageViewer({
         canvas.style.height = `${viewport.height}px`;
         const context = canvas.getContext("2d");
         if (!context) continue;
-        await pdfPage.render({ canvas, canvasContext: context, viewport, transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0] }).promise;
+        try {
+          await pdfPage.render({ canvas, canvasContext: context, viewport, transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0] }).promise;
+        } catch {
+          if (!cancelled) setNative(true);
+          return;
+        }
         // a redrawn document, or a new zoom, keeps the page being read
         if (n === Math.min(keep, pdf.numPages)) goTo(n);
       }
-    })();
+    })().catch(() => {
+      if (!cancelled) setNative(true);
+    });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pdf, zoom, fit, full]);
@@ -173,11 +186,15 @@ export function PdfPageViewer({
         onScroll={onScroll}
         className={`relative overflow-auto bg-muted p-4 ${full || fill ? "min-h-0 flex-1" : "h-[68vh] min-h-[520px]"}`}
       >
+        {native ? (
+          // the browser's own viewer - its own buttons, but the document shows
+          <iframe src={url} title={fileName} className="h-full min-h-[520px] w-full rounded-md border-0 bg-background" />
+        ) : null}
         {error ? <p className="py-20 text-center text-sm text-destructive">{error}</p> : null}
-        {!pdf && !error ? <p className="py-20 text-center text-sm text-muted-foreground">Preparing pages…</p> : null}
+        {!pdf && !error && !native ? <p className="py-20 text-center text-sm text-muted-foreground">Preparing pages…</p> : null}
         {/* every page, one under the other - each its own sheet */}
         <div className="space-y-4">
-          {Array.from({ length: pdf?.numPages ?? 0 }, (_, i) => (
+          {Array.from({ length: native ? 0 : (pdf?.numPages ?? 0) }, (_, i) => (
             <canvas
               key={i}
               ref={(el) => {
