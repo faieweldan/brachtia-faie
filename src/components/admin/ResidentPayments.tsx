@@ -237,11 +237,13 @@ export function ResidentPayments({
    * it again would charge it twice. The row shows the term and what the
    * initial payment paid towards it; anything short is billed once, as a charge.
    */
-  const rentNow = schedule?.monthlyRent || details.monthlyRent || b?.monthlyRent || 0;
+  // the rent in force: the resident page's own (rentInForce - the rent terms and their
+  // dated changes), the one every screen shows; the first invoice's only before any terms
+  const rentNow = details.monthlyRent || b?.monthlyRent || 0;
   const fullTerm = !schedule && (b?.paymentFrequency ?? "") === "full";
   const termStart = rent?.tenancy?.start || invoiceDetails.tenancyStart;
   const termEnd = rent?.tenancy?.end || invoiceDetails.tenancyEnd;
-  const termRent = fullTerm ? rentForDays(termStart, termEnd, b?.monthlyRent ?? 0) : 0;
+  const termRent = fullTerm ? rentForDays(termStart, termEnd, rentNow) : 0;
   const termPaid = rent?.advance.amount ?? 0;
   // a later charge for the rest counts too, so the row does not ask twice
   const restBilled = charges.filter((c) => /^Rent .* balance/i.test(c.items[0]?.label ?? "")).reduce((n, c) => n + c.total, 0);
@@ -294,7 +296,7 @@ export function ResidentPayments({
 
         <CollectedBar billed={billed} collected={collected}>
           {[
-            // the rent in force - the rent terms', not the first invoice's: a room change moves it (27 Oct 2026)
+            // the rent in force, not the first invoice's: a room change moves it (27 Oct 2026)
             rentNow ? `${money(rentNow)} / month` : null,
             frequency || null,
             nextDue ? `Next ${fmtDate(nextDue)}` : null,
