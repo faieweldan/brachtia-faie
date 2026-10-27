@@ -6,6 +6,7 @@
 
 import { roomName } from "@/lib/room-name";
 import { occupancyLabel, soldBedLabel, soldOccupancy } from "@/lib/placement";
+import { isNewCardApplication } from "@/lib/tenancy-docs";
 import { COUNTRIES, SCHEDULES } from "@/lib/reference-data";
 import { stayLength } from "@/lib/stay-length";
 
@@ -205,22 +206,22 @@ export const TEMPLATE_FIELDS: TemplateField[] = [
     key: "tick_owner_letter",
     label: "Tick: authorize letter from the owner (admin ticks)",
     source: "Other",
-    get: (c) => (!c.cardReason || c.cardReason === "Initial Tenancy" ? "yes" : ""),
+    get: (c) => (isNewCardApplication(c.cardReason) ? "yes" : ""),
   },
   {
     key: "tick_owner_ta",
     label: "Tick: owner's tenancy agreement copy (admin ticks)",
     source: "Other",
-    get: (c) => (!c.cardReason || c.cardReason === "Initial Tenancy" ? "yes" : ""),
+    get: (c) => (isNewCardApplication(c.cardReason) ? "yes" : ""),
   },
   // section b) "Copy of IC / Passport": its own field, so it is not ticked with section a's
   {
     key: "tick_replace_ic",
     label: "Tick: replacement - IC / passport copy",
     source: "Other",
-    get: (c) => (c.cardReason && c.cardReason !== "Initial Tenancy" ? "yes" : ""),
+    get: (c) => (!isNewCardApplication(c.cardReason) ? "yes" : ""),
   },
-  { key: "tick_new_application", label: "Tick: new application", source: "Other", get: (c) => (!c.cardReason || c.cardReason === "Initial Tenancy" ? "yes" : "") },
+  { key: "tick_new_application", label: "Tick: new application", source: "Other", get: (c) => (isNewCardApplication(c.cardReason) ? "yes" : "") },
   {
     key: "tick_replace_damage",
     label: "Tick: replacement - damage / change",

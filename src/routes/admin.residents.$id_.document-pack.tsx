@@ -19,6 +19,7 @@ import {
 import { generateDocumentPack } from "@/lib/tenancy-docs.functions";
 import { STAFF } from "@/data/form-options";
 import { createCardFromDraft } from "@/lib/access-card.functions";
+import { isNewCardApplication } from "@/lib/tenancy-docs";
 import { fillPackDocx, getPackTemplates, listRetiredPackDocs, previewPackPdf } from "@/lib/templates.functions";
 import { isDocumentOwn, isTickResult, renderTemplate, type MappingResult } from "@/lib/template-fields";
 import { MARK_CSS, Paper } from "@/components/admin/TemplatePaper";
@@ -95,10 +96,11 @@ function DocumentPackPage() {
   const [seen, setSeen] = useState<Set<DocKey>>(() => new Set([card ? "access_card" : "agreement"]));
   /*
    * The resident's IC copy and photo, attached to the access card form - ticked
-   * when they are on file, each one can be left out (Dani, 2 Oct 2026).
+   * when they are on file, each one can be left out (Dani, 2 Oct 2026). A
+   * replacement attaches the IC copy only, as its section b) asks (27 Oct 2026).
    */
   const files = (resident?.docs ?? []).filter((d) => (d.key === "id" || d.key === "photo") && d.path);
-  const [attach, setAttach] = useState<Record<string, boolean>>({ id: true, photo: true });
+  const [attach, setAttach] = useState<Record<string, boolean>>({ id: true, photo: isNewCardApplication(card) });
   const attachments = files.filter((d) => attach[d.key]).map((d) => d.path!);
   useEffect(() => setSeen((s) => (s.has(selected) ? s : new Set([...s, selected]))), [selected]);
   const [generating, setGenerating] = useState(false);

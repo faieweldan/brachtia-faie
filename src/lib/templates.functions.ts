@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { isNewCardApplication } from "@/lib/tenancy-docs";
 import type { PdfBox } from "@/lib/pdf-boxes";
 import { z } from "zod";
 
@@ -643,8 +644,8 @@ export async function renderGeneratedPdf(
    * pack's - a new application's - are turned round here.
    */
   const { data: cardRow } = await db.from("access_card_forms").select("reason, template_version_id").eq("id", id).maybeSingle();
-  const reason = String(cardRow?.reason ?? "Initial Tenancy");
-  const replacement = reason !== "Initial Tenancy";
+  const reason = String(cardRow?.reason ?? "");
+  const replacement = !isNewCardApplication(reason);
   const ticks: Record<string, string> = replacement
     ? {
         tick_new_application: "",

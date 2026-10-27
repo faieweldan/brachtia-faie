@@ -69,6 +69,13 @@ export const DOC_STATUSES = [
   { key: "stamped", label: "Stamped" },
 ];
 
+/**
+ * A first card (no reason, or "Initial Tenancy") rather than a replacement: section
+ * a) of the form, ticked and with the IC copy and photo attached; a replacement
+ * gets section b), the IC copy only (27 Oct 2026).
+ */
+export const isNewCardApplication = (reason?: string | null) => !reason || reason === "Initial Tenancy";
+
 export const ACCESS_CARD_REASONS = [
   "Initial Tenancy",
   "Lost Card",
