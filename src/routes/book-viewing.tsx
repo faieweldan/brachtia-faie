@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
@@ -140,6 +140,8 @@ function BookViewingPage() {
   const [dialIso, setDialIso] = useState("MY");
   const [mobileNumber, setMobileNumber] = useState("");
   const [nationalityIso, setNationalityIso] = useState<string | undefined>(undefined);
+  // the calling code follows the nationality until the student picks one themselves (27 Oct 2026)
+  const dialPicked = useRef(false);
   const [universityChoice, setUniversityChoice] = useState("");
   const [universityOther, setUniversityOther] = useState("");
   // studying or working - asked first, because it decides what else is asked
@@ -516,7 +518,10 @@ function BookViewingPage() {
                 <PhoneField
                   id="bv-mobile"
                   dialIso={dialIso}
-                  onDialChange={setDialIso}
+                  onDialChange={(iso) => {
+                    dialPicked.current = true;
+                    setDialIso(iso);
+                  }}
                   number={mobileNumber}
                   onNumberChange={setMobileNumber}
                   error={errors['mobile']}
@@ -662,7 +667,10 @@ function BookViewingPage() {
                     id="bv-nat"
                     value={nationalityIso}
                     placeholder="Search your country"
-                    onChange={(c: Country) => setNationalityIso(c.iso)}
+                    onChange={(c: Country) => {
+                      setNationalityIso(c.iso);
+                      if (!dialPicked.current) setDialIso(c.iso);
+                    }}
                     className="w-full"
                     invalid={Boolean(errors['nationality'])}
                   />

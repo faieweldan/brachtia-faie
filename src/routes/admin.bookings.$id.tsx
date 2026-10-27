@@ -117,6 +117,7 @@ import { SlaCountdown } from "@/components/admin/SlaCountdown";
 
 import { fetchDaySlots } from "@/lib/public.functions";
 import { formatSlot } from "@/lib/slots";
+import { ViewingMessageCard } from "@/components/admin/ViewingMessageCard";
 import { UnitBeds } from "@/components/admin/UnitBeds";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -900,22 +901,6 @@ function BookingDetail() {
     setVDate(v ? new Date(v.starts_at) : undefined);
     setVMode(v?.mode === "virtual" ? "virtual" : "in_person");
     setVStaff(v?.assigned_staff ?? "");
-  }
-
-  function copyViewingMessage(v: any) {
-    const when = new Date(v.starts_at).toLocaleDateString("en-MY", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
-    const text = `Hi ${r.full_name ?? ""}, your viewing is confirmed for ${when} at ${formatSlot(
-      v.starts_at,
-    )} (${v.mode === "virtual" ? "virtual tour" : "in person"}) at ${
-      v.residence_name || r.residence_name || "our residence"
-    }. Booking ID: ${r.reference ?? ""}. See you then! — Brachtia Homes`;
-    void navigator.clipboard.writeText(text);
-    toast.success("Message copied");
   }
 
   /**
@@ -1849,9 +1834,6 @@ function BookingDetail() {
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={() => copyViewingMessage(viewing)}>
-                    Copy message
-                  </Button>
                   {/* the same Google / Apple-Outlook pair the student is given */}
                   <AddToCalendar
                     fileName={`viewing-${row.reference ?? viewing.id}.ics`}
@@ -1879,6 +1861,16 @@ function BookingDetail() {
                     Cancel
                   </Button>
                 </div>
+                <ViewingMessageCard
+                  key={`${viewing.id}-${viewing.starts_at}`}
+                  viewingId={viewing.id}
+                  startsAt={viewing.starts_at}
+                  virtual={viewing.mode === "virtual"}
+                  residence={viewing.residence_name || row.residence_name || "our residence"}
+                  studentName={row.full_name ?? ""}
+                  reference={row.reference ?? ""}
+                  phone={row.phone ?? ""}
+                />
               </div>
             ) : viewingPanel ? (
               <div className="space-y-4">

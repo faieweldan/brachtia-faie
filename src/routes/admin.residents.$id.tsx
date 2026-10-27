@@ -26,6 +26,7 @@ import { refreshMoney } from "@/lib/billing-client";
 
 import { RELATIONSHIP_OPTIONS, idLabelFor } from "@/lib/reference-data";
 import { getDeclarationForResident } from "@/lib/declaration.functions";
+import { DECLARATION_VERSION } from "@/lib/declaration";
 import { StaffPicker } from "@/components/admin/Dropdown";
 import { getProfileReview, isPendingReview, markProfileReviewed } from "@/lib/profile-link.functions";
 import {
@@ -194,14 +195,18 @@ function DeclarationStatus({ residentId }: { residentId: string }) {
     );
   }
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-4 sm:grid-cols-2">
       <ReadOnlyField label="Signed by" value={state.signedName} />
       {/* the time is the evidence, not the day - see fmtDateTime */}
       <ReadOnlyField label="Signed on" value={fmtDateTime(state.signedAt)} />
+      {/* which wording they agreed to, and whether it is still the one we use (27 Oct 2026) */}
       <ReadOnlyField
-        label="Version"
-        value={`${state.version}${state.readToEnd ? " · read to the end" : ""}`}
+        label="Wording"
+        value={`Version ${state.version.replace(/^v/i, "")}${
+          state.version === DECLARATION_VERSION ? " (current)" : " (older - ask them to sign the current one)"
+        }`}
       />
+      <ReadOnlyField label="Read in full" value={state.readToEnd ? "Yes, scrolled to the end before signing" : "No"} />
     </div>
   );
 }

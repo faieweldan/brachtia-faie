@@ -7,7 +7,7 @@
 import { roomName } from "@/lib/room-name";
 import { occupancyLabel, soldBedLabel, soldOccupancy } from "@/lib/placement";
 import { isNewCardApplication } from "@/lib/tenancy-docs";
-import { COUNTRIES, SCHEDULES } from "@/lib/reference-data";
+import { COUNTRIES, SCHEDULES, cleanPhone, dialFor } from "@/lib/reference-data";
 import { stayLength } from "@/lib/stay-length";
 
 export type FieldSource = "Resident Record" | "Booking Record" | "Initial Payment" | "Room Record" | "Tenancy Record" | "Signatory" | "Other";
@@ -62,6 +62,13 @@ const start = (c: MappingContext) =>
 const end = (c: MappingContext) =>
   c.stay?.end || (c.tenancy?.["end_date"] ?? c.bed?.["tenancy_end"] ?? c.enquiry?.["move_out"]);
 const r = (k: string) => (c: MappingContext) => c.resident?.[k];
+/**
+ * A phone written the one right way, as the quote and invoice write it; a number
+ * stored without its code takes the resident's own country's, not always +60
+ * (27 Oct 2026).
+ */
+const phone = (k: string) => (c: MappingContext) =>
+  cleanPhone(String(c.resident?.[k] ?? ""), dialFor(String(c.resident?.["nationality"] ?? "")) || "+60");
 /** The resident has uploaded this document (a key from resident-documents). */
 const e = (k: string) => (c: MappingContext) => c.enquiry?.[k];
 
@@ -101,17 +108,13 @@ const payLine = (prefix: string) => (c: MappingContext) =>
   money(payLines(c).find((l) => String(l.label).startsWith(prefix))?.amount);
 
 /**
- * Inclusions/exclusions from the residence's rental_terms, picked by rental
- * type: whole-unit rentals use the "unit" lists, room rentals the "room" lists.
+ * What the rent includes and excludes, as the residence records it (Admin ›
+ * Website › Residences › Terms & fees). One list per residence (Dani, 27 Oct
+ * 2026) - there is no default: a residence not filled in leaves the field
+ * blank on the pack, where staff see it, instead of another residence's list.
  */
-const DEFAULT_RENTAL_TERMS: Record<string, { included: string[]; excluded: string[] }> = {
-  room: { included: ["Wi-Fi", "Monthly Basic Common Area Cleaning", "Sewerage Charges"], excluded: ["Electricity", "Water Charges"] },
-  unit: { included: ["Wi-Fi"], excluded: ["Monthly Basic Common Area Cleaning", "Electricity", "Water", "Sewerage Charges"] },
-};
 const rentalTermList = (c: MappingContext, part: "included" | "excluded") => {
-  const terms = (c.residence?.["rental_terms"] as any) ?? DEFAULT_RENTAL_TERMS;
-  const kind: "room" | "unit" = c.unit?.["whole_unit"] ? "unit" : "room";
-  const list = terms?.[kind]?.[part] ?? DEFAULT_RENTAL_TERMS[kind]![part];
+  const list = (c.residence?.["rental_terms"] as any)?.[part];
   return Array.isArray(list) ? list.join(", ") : "";
 };
 
@@ -121,7 +124,7 @@ export const TEMPLATE_FIELDS: TemplateField[] = [
   { key: "passport_no", label: "NRIC / Passport no.", source: "Resident Record", get: r("id_number") },
   { key: "resident_id", label: "Resident ID", source: "Resident Record", get: r("resident_code") },
   { key: "email", label: "Email", source: "Resident Record", get: r("email") },
-  { key: "mobile", label: "Mobile", source: "Resident Record", get: r("mobile") },
+  { key: "mobile", label: "Mobile", source: "Resident Record", get: phone("mobile") },
   { key: "nationality", label: "Nationality", source: "Resident Record", get: (c) => countryName(c.resident?.["nationality"]) },
   { key: "gender", label: "Gender", source: "Resident Record", get: r("gender") },
   { key: "dob", label: "Date of birth", source: "Resident Record", get: (c) => fmtDate(c.resident?.["dob"]) },
@@ -144,7 +147,7 @@ export const TEMPLATE_FIELDS: TemplateField[] = [
   { key: "employment_type", label: "Employment type", source: "Resident Record", get: r("employment_type") },
   { key: "ec_name", label: "Emergency contact name", source: "Resident Record", get: r("ec_name") },
   { key: "ec_relationship", label: "Emergency contact relationship", source: "Resident Record", get: r("ec_relationship") },
-  { key: "ec_mobile", label: "Emergency contact mobile", source: "Resident Record", get: r("ec_mobile") },
+  { key: "ec_mobile", label: "Emergency contact mobile", source: "Resident Record", get: phone("ec_mobile") },
   { key: "ec_email", label: "Emergency contact email", source: "Resident Record", get: r("ec_email") },
   { key: "ec_address", label: "Emergency contact address", source: "Resident Record", get: r("ec_address") },
   { key: "payer_name", label: "Payer name", source: "Resident Record", get: r("payer_name") },

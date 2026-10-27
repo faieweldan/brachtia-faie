@@ -1,17 +1,10 @@
 import { useState } from "react";
-import { Check, Copy, FileText, MessageCircle } from "lucide-react";
-import { toast } from "sonner";
 
-import { MessageToggle } from "@/components/admin/MessageToggle";
-
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { PdfPreviewButton } from "@/components/admin/PdfPreview";
+import { MessageCard, useSentOnce, type MessageAttachment } from "@/components/admin/MessageCard";
 import { company, formatRM } from "@/data/properties";
 import { greetingName } from "@/lib/greeting";
 import { LANDLORD_ENTITY } from "@/lib/declaration";
 import { BOOKING_FEE } from "@/lib/invoices";
-import { waDigits } from "@/lib/reference-data";
 
 /**
  * The message that asks for the money, ready the moment the invoice exists.
@@ -56,8 +49,8 @@ const paymentMessage = (d: {
 
   // built as paragraphs, so a line that has nothing to say can be left out
   // without taking a blank line with it
-  const facts = [`Amount due: ${formatRM(d.amount)}`];
-  if (d.dueDate) facts.push(`Payment due by: ${d.dueDate}`);
+  const facts = [`💰 Amount due: *${formatRM(d.amount)}*`];
+  if (d.dueDate) facts.push(`📅 Payment due by: *${d.dueDate}*`);
   if (splitFee) {
     facts.push(`To secure your room now: ${formatRM(BOOKING_FEE)} booking fee`);
     facts.push(`Balance after that: ${formatRM(d.amount - BOOKING_FEE)}`);
@@ -68,7 +61,7 @@ const paymentMessage = (d: {
 
   return [
     `Dear ${greetingName(d.name)},`,
-    `Please find your invoice details here — ${d.reference}.`,
+    `Please find your invoice details here — *${d.reference}*.`,
     facts.join("\n"),
     [
       "I've attached the invoice, which has our bank details on it.",
@@ -88,7 +81,7 @@ const paymentMessage = (d: {
   ].join("\n\n");
 };
 
-export type InvoiceAttachment = { label: string; fileName: string; build: () => Promise<string> };
+export type InvoiceAttachment = MessageAttachment;
 
 export function InvoiceMessageCard({
   studentName,
@@ -122,103 +115,26 @@ export function InvoiceMessageCard({
     paymentMessage({ name: studentName, reference, amount, paid, dueDate, isBalance, paidBefore }),
   );
   /*
-   * Like the signing message (Dani, 6 Oct 2026): open by itself until it is
-   * copied, closed after. Remembered per invoice and amount on this browser, so
-   * the balance message - a new amount - opens again after the fee is paid.
+   * Open by itself until it is sent, closed after. Remembered per invoice and
+   * amount on this browser, so the balance message - a new amount - opens again
+   * after the fee is paid.
    */
-  const key = `brachtia-invoice-msg-${reference}-${amount}`;
-  const wasCopied = () => {
-    try {
-      return !!localStorage.getItem(key);
-    } catch {
-      return false;
-    }
-  };
-  const [copied, setCopied] = useState(wasCopied);
-  const [open, setOpen] = useState(() => !wasCopied());
-
-  async function copy() {
-    await navigator.clipboard.writeText(message);
-    toast.success("Message copied", { description: "Paste it into WhatsApp." });
-    try {
-      localStorage.setItem(key, new Date().toISOString());
-    } catch {
-      /* not remembered - it opens again next time */
-    }
-    setCopied(true);
-    setOpen(false);
-  }
-
-  const digits = waDigits(phone);
+  const { sent, markSent, open, setOpen } = useSentOnce(`brachtia-invoice-msg-${reference}-${amount}`);
 
   return (
-    <div
+    <MessageCard
       id={id}
-      className={`scroll-mt-6 rounded-xl border p-4 ${copied ? "border-emerald-200 bg-emerald-50/60" : "border-amber-300 bg-amber-50"}`}
-    >
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <div>
-          <p className="text-sm font-semibold text-brand-deep">
-            {isBalance ? "Ask for the balance" : "Ask for payment"}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {reference} · {formatRM(amount)} due
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {copied ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-900">
-              <Check className="size-3" /> Copied
-            </span>
-          ) : (
-            <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
-              Not sent yet
-            </span>
-          )}
-          <MessageToggle open={open} onToggle={() => setOpen((v) => !v)} />
-        </div>
-      </div>
-
-      {open ? (
-        <div className="space-y-3">
-          {/* editable, so a staff member can add a line before sending */}
-          <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={11} className="bg-background" />
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => void copy()}>
-              <Copy className="size-4" /> Copy message
-            </Button>
-            {digits ? (
-              <Button asChild size="sm" variant="outline">
-                <a
-                  href={`https://wa.me/${digits}?text=${encodeURIComponent(message)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <MessageCircle className="size-4" /> Open in WhatsApp
-                </a>
-              </Button>
-            ) : null}
-          </div>
-          {attachments.length ? (
-            // WhatsApp cannot take files from a link: download these and attach them
-            <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
-              <span className="text-xs text-muted-foreground">Attach</span>
-              {attachments.map((a) => (
-                <PdfPreviewButton
-                  key={a.fileName}
-                  size="sm"
-                  variant="ghost"
-                  title={a.label}
-                  fileName={a.fileName}
-                  build={a.build}
-                >
-                  <FileText className="size-4" /> {a.label}
-                </PdfPreviewButton>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
+      title={isBalance ? "Ask for the balance" : "Ask for payment"}
+      subtitle={`${reference} · ${formatRM(amount)} due`}
+      message={message}
+      onMessageChange={setMessage}
+      phone={phone}
+      sent={sent}
+      open={open}
+      onOpenChange={setOpen}
+      onSent={markSent}
+      rows={12}
+      attachments={attachments}
+    />
   );
 }

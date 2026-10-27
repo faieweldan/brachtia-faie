@@ -1,14 +1,9 @@
 import { greetingName } from "@/lib/greeting";
 import { useEffect, useRef, useState } from "react";
-import { Check, Copy, FileText, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { MessageToggle } from "@/components/admin/MessageToggle";
-import { PdfPreviewButton } from "@/components/admin/PdfPreview";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { MessageCard, type MessageAttachment } from "@/components/admin/MessageCard";
 import { recordBookingEvent } from "@/lib/booking-activity.functions";
-import { waDigits } from "@/lib/reference-data";
 
 /**
  * The WhatsApp message sent once the booking fee is in and the resident created:
@@ -21,7 +16,11 @@ import { waDigits } from "@/lib/reference-data";
  * it as sent, with the staff member's name.
  */
 
-/** Brachtia's wording, word for word. Only the link is filled in. */
+/**
+ * Brachtia's wording, word for word. Only the link is filled in. A blank line
+ * between its parts and *bold* on what to do, so it reads like the other
+ * messages once pasted (Dani, 27 Oct 2026).
+ */
 const welcomeMessage = (name: string, link: string, hasProof: boolean) =>
   [
     `Dear ${greetingName(name)},`,
@@ -30,12 +29,10 @@ const welcomeMessage = (name: string, link: string, hasProof: boolean) =>
     hasProof
       ? "Attached is one document with your updated invoice, payment receipt and proof of payment for your records."
       : "Attached is one document with your updated invoice and payment receipt for your records.",
-    "To help us prepare for your arrival, please complete the Resident Form and provide the required details and documents:",
-    `🔗 Resident Form: ${link}`,
+    `To help us prepare for your arrival, please complete the *Resident Form* and provide the required details and documents:\n🔗 ${link}`,
     "Once completed, our team will proceed with the next steps for your tenancy and move-in.",
-    "Thank you,",
-    "Brachtia Homes 🏡",
-  ].join("\n");
+    "Thank you,\nBrachtia Homes 🏡",
+  ].join("\n\n");
 
 async function makeMessage(residentId: string, name: string, hasProof: boolean) {
   const { getOrCreateProfileLink } = await import("@/lib/profile-link.functions");
@@ -44,7 +41,7 @@ async function makeMessage(residentId: string, name: string, hasProof: boolean) 
 }
 
 /** A PDF the message says is attached - opened here, downloaded, then attached in WhatsApp. */
-export type WelcomeAttachment = { label: string; fileName: string; build: () => Promise<string> };
+export type WelcomeAttachment = MessageAttachment;
 
 export function WelcomeMessageCard({
   residentId,
@@ -75,37 +72,23 @@ export function WelcomeMessageCard({
   highlight?: boolean;
 }) {
   const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(false);
   // open by itself until it is sent, like the signing message (Dani, 6 Oct 2026)
   const [open, setOpen] = useState(Boolean(highlight) || !sent);
   useEffect(() => {
     if (highlight) setOpen(true);
   }, [highlight]);
 
-  async function prepare() {
-    setLoading(true);
-    try {
-      setMessage(await makeMessage(residentId, studentName, hasProof));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not create the link");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // not sent yet: have it ready, so the step is one click
+  // the link is made (or the live one reused) when the message is to be seen
   useEffect(() => {
-    if (sent) return;
+    if (!open || message) return;
     let live = true;
-    setLoading(true);
     makeMessage(residentId, studentName, hasProof)
       .then((m) => live && setMessage(m))
-      .catch(() => live && toast.error("Could not create the link"))
-      .finally(() => live && setLoading(false));
+      .catch(() => live && toast.error("Could not create the link"));
     return () => {
       live = false;
     };
-  }, [residentId, sent, hasProof]);
+  }, [open, message, residentId, hasProof]);
 
   // logged once, by whoever sends it
   const logged = useRef(sent);
@@ -121,90 +104,20 @@ export function WelcomeMessageCard({
       });
   }
 
-  async function copy() {
-    await navigator.clipboard.writeText(message);
-    toast.success("Message copied", { description: "Paste it into WhatsApp." });
-    markSent();
-    setOpen(false);
-  }
-
-  const digits = waDigits(phone);
-
   return (
-    <div
+    <MessageCard
       id={id}
-      className={`scroll-mt-6 rounded-xl border p-4 transition-shadow duration-500 ${
-        highlight ? "ring-2 ring-brand-deep/20" : ""
-      } ${sent ? "border-emerald-200 bg-emerald-50/60" : "border-amber-300 bg-amber-50"}`}
-    >
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-brand-deep">Welcome message</p>
-        <div className="flex items-center gap-2">
-          {sent ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-900">
-              <Check className="size-3" /> Sent
-            </span>
-          ) : (
-            <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
-              Not sent yet
-            </span>
-          )}
-          {message ? <MessageToggle open={open} onToggle={() => setOpen((v) => !v)} /> : null}
-        </div>
-      </div>
-      {message && open ? (
-        <div className="space-y-3">
-          {/* editable, so a staff member can add a line before sending */}
-          <Textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={9} className="bg-background" />
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => void copy()}>
-              <Copy className="size-4" /> Copy message
-            </Button>
-            {digits ? (
-              <Button asChild size="sm" variant="outline">
-                <a
-                  href={`https://wa.me/${digits}?text=${encodeURIComponent(message)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={markSent}
-                >
-                  <MessageCircle className="size-4" /> Open in WhatsApp
-                </a>
-              </Button>
-            ) : null}
-          </div>
-          {attachments.length ? (
-            // WhatsApp cannot take files from a link: download these and attach them
-            <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
-              <span className="text-xs text-muted-foreground">Attach</span>
-              {attachments.map((a) => (
-                <PdfPreviewButton
-                  key={a.fileName}
-                  size="sm"
-                  variant="ghost"
-                  title={a.label}
-                  fileName={a.fileName}
-                  build={a.build}
-                >
-                  <FileText className="size-4" /> {a.label}
-                </PdfPreviewButton>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      ) : message ? null : (
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={loading}
-          onClick={() => {
-            setOpen(true);
-            void prepare();
-          }}
-        >
-          <MessageCircle className="size-4" /> {loading ? "Preparing…" : "Prepare message"}
-        </Button>
-      )}
-    </div>
+      highlight={highlight}
+      title="Welcome message"
+      message={message}
+      onMessageChange={setMessage}
+      phone={phone}
+      sent={sent}
+      open={open}
+      onOpenChange={setOpen}
+      onSent={markSent}
+      rows={14}
+      attachments={attachments}
+    />
   );
 }

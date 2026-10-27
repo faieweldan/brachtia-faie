@@ -86,6 +86,7 @@ const EDITABLE_KEYS = [
   "fee_config",
   "addons",
   "unit_rates",
+  "rental_terms",
 ];
 
 const NAV = [
@@ -442,6 +443,19 @@ function ResidenceEditor() {
                   placeholder="e.g. Rental payable bi-monthly"
                   hint="Free-text line shown on the residence terms — not a selectable option."
                 />
+              </div>
+
+              {/* what the rent covers, as the tenancy documents word it - not the website's list */}
+              <div className="grid gap-6 sm:grid-cols-2">
+                {(["included", "excluded"] as const).map((part) => (
+                  <StringList
+                    key={part}
+                    label={part === "included" ? "Rent includes (tenancy documents)" : "Rent excludes (tenancy documents)"}
+                    items={form.rental_terms?.[part] ?? []}
+                    onChange={(v) => set("rental_terms", { ...(form.rental_terms ?? {}), [part]: v })}
+                    placeholder={part === "included" ? "e.g. Wi-Fi" : "e.g. Electricity"}
+                  />
+                ))}
               </div>
 
               {/* Fee table */}

@@ -27,7 +27,7 @@ export type Placement = {
   bed: any;
   room: any | null;
   unit: any | null;
-  residence: { id: string; name: string; slug: string } | null;
+  residence: { id: string; name: string; slug: string; rental_terms?: unknown } | null;
   /** "tenancy": a room they are not the resident of now - still to come, or left */
   via: "live" | "tenancy";
   /** a twin room let whole as one single - the placement's own record (let_whole) */
@@ -52,7 +52,7 @@ export async function bedSurroundings(sb: any, roomId: string | null | undefined
     ? await sb.from("units").select("*").eq("id", room.unit_id).maybeSingle()
     : { data: null };
   const { data: residence } = unit
-    ? await sb.from("residences").select("id, name, slug").eq("id", unit.residence_id).maybeSingle()
+    ? await sb.from("residences").select("id, name, slug, rental_terms").eq("id", unit.residence_id).maybeSingle()
     : { data: null };
   return { room, unit: unit ?? null, residence: residence ?? null };
 }

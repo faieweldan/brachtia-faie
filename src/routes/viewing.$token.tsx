@@ -19,7 +19,7 @@ import { toast } from "sonner";
 
 import { getViewingLink, confirmViewingFromLink } from "@/lib/public.functions";
 import { formatSlot } from "@/lib/slots";
-import { company, formatRate } from "@/data/properties";
+import { company, formatRate, whatsappUrl } from "@/data/properties";
 import { stayLength } from "@/lib/stay-length";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -597,6 +597,18 @@ function ViewingLinkPage() {
             {skipping ? <Loader2 className="size-4 animate-spin" /> : null} Request booking invoice{" "}
             <ArrowRight className="size-4" />
           </Button>
+          {/* the way out when a detail is wrong, instead of confirming it (Dani, 27 Oct 2026) */}
+          <p className="mt-3 text-center text-xs text-muted-foreground">
+            Details not right?{" "}
+            <a
+              href={whatsappUrl(`Hi, some details on my booking ${String(booking["reference"] ?? "")} need changing:`)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-brand underline underline-offset-2"
+            >
+              Message us on WhatsApp
+            </a>
+          </p>
 
           <div className="mt-5 rounded-2xl bg-brand-canvas p-4 text-sm text-foreground">
             <p>
