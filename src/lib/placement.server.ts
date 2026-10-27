@@ -51,8 +51,11 @@ export async function bedSurroundings(sb: any, roomId: string | null | undefined
   const { data: unit } = room
     ? await sb.from("units").select("*").eq("id", room.unit_id).maybeSingle()
     : { data: null };
+  // "*", like the room and unit above: naming rental_terms failed the whole
+  // query on a database without the column yet, and with no residence the
+  // pack found none of its templates (27 Oct 2026)
   const { data: residence } = unit
-    ? await sb.from("residences").select("id, name, slug, rental_terms").eq("id", unit.residence_id).maybeSingle()
+    ? await sb.from("residences").select("*").eq("id", unit.residence_id).maybeSingle()
     : { data: null };
   return { room, unit: unit ?? null, residence: residence ?? null };
 }

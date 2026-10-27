@@ -442,7 +442,9 @@ function DocumentPackPage() {
                   <p className="font-semibold">Not ready to generate</p>
                   <ul className="mt-1 list-disc pl-4">
                     {noFile.map((i) => (
-                      <li key={i.key}>{i.label} – no file uploaded</li>
+                      <li key={i.key}>
+                        {i.label} – {pack.data?.[TEMPLATE_KEY[i.key]!] ? "no file uploaded" : "no active template for this residence"}
+                      </li>
                     ))}
                   </ul>
                   <Link to="/admin/settings" className="mt-1 inline-block font-medium underline">
