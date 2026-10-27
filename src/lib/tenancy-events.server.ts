@@ -183,9 +183,11 @@ export async function processResident(sb: any, residentId: string): Promise<Even
       if (!ev.settledAt) {
         if (before.some((e) => !e.settledAt)) continue;
         const paid = !ev.invoiceId || (await settled(sb, ev.invoiceId));
-        // the date came and the IP is not fully paid: nothing moves, nothing is backdated
+        // the date passed and the IP is not fully paid: nothing moves, nothing is backdated.
+        // Paid on the day itself is on time (Dani, 27 Oct 2026: a change dated today was
+        // overdue from the moment it was made, so paying it that day asked for a new date)
         if (!paid) {
-          if (ev.date <= today && !ev.overdue) {
+          if (ev.date < today && !ev.overdue) {
             ev.overdue = true;
             changed = true;
           }

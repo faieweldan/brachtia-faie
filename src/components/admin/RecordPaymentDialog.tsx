@@ -161,10 +161,9 @@ export function RecordPaymentDialog({
       void afterPaymentRecorded(queryClient, res);
       // an Update Tenancy IP paid in full: what it set going (Dani, 7 Oct 2026)
       toastTenancyOutcomes(res.tenancyChange);
-      if (res.tenancyChange?.length) {
-        void queryClient.invalidateQueries({ queryKey: ["tenancy-events"] });
-        void queryClient.invalidateQueries({ queryKey: ["tenancy-docs"] });
-      }
+      // any payment can move a tenancy change along (paid, new date needed) - not only one it made happen
+      void queryClient.invalidateQueries({ queryKey: ["tenancy-events"] });
+      void queryClient.invalidateQueries({ queryKey: ["tenancy-docs"] });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not record the payment");
     } finally {
