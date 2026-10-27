@@ -561,6 +561,15 @@ const SPONSOR_CODES: Record<string, string> = {
   yayasan: "YYS",
 };
 
+/**
+ * Who sponsors this resident, as a short label. The payor name counts only when
+ * the payor is a sponsor - a self-payer's payor name is their own name, and a
+ * parent paying is still self-funded (the same rule as the billing list).
+ */
+export function residentSponsorLabel(r: Pick<Resident, "sponsor" | "payerName" | "payerRelationship">): string {
+  return sponsorLabel(r.sponsor || (r.payerRelationship === "Sponsor" ? r.payerName : ""));
+}
+
 export function sponsorLabel(raw?: string): string {
   const v = (raw ?? "").trim();
   if (!v || /^self$/i.test(v)) return "Self";

@@ -1,5 +1,5 @@
 import type { Bed, Resident, Unit, UnitRoom } from "@/lib/ops-store";
-import { residentForBed, residentIdOf, sponsorLabel } from "@/lib/ops-store";
+import { residentForBed, residentIdOf, residentSponsorLabel } from "@/lib/ops-store";
 import { universityAbbr } from "@/data/form-options";
 
 export { occupancyKey, occupancyPrinted } from "@/lib/occupancy";
@@ -386,7 +386,7 @@ export function bedStays(bed: Bed, residents: Resident[]): BedStay[] {
       code: person ? residentIdOf(person) : undefined,
       university: person?.university || bed.university,
       nationality: person?.nationality || bed.nationality,
-      sponsor: person ? sponsorLabel(person.payerName || person.sponsor) : undefined,
+      sponsor: person ? residentSponsorLabel(person) : undefined,
       // an older hold kept only the move-in date, in hold_until
       start: bed.tenancyStart || (bed.status === "held" ? bed.holdUntil?.slice(0, 10) : undefined),
       end: bed.tenancyEnd,
@@ -406,7 +406,7 @@ export function bedStays(bed: Bed, residents: Resident[]): BedStay[] {
       code: u.code,
       university: who?.university || universityAbbr(u.university) || undefined,
       nationality: who?.nationality,
-      sponsor: who ? sponsorLabel(who.payerName || who.sponsor) : undefined,
+      sponsor: who ? residentSponsorLabel(who) : undefined,
       start: u.start,
       end: u.end,
       rent: u.rent,

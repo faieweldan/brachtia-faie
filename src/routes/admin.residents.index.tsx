@@ -25,7 +25,7 @@ import {
   refreshResidents,
   refreshUnits,
   saveResidentRecord,
-  sponsorLabel,
+  residentSponsorLabel,
   stayDates,
   useOps,
 } from "@/lib/ops-store";
@@ -74,7 +74,7 @@ function ResidentsListPage() {
   const [sort, setSort] = useState<{ by: "balance" | "profile"; dir: 1 | -1 } | null>(null);
   const sortBy = (by: "balance" | "profile") =>
     setSort((s) => (s?.by !== by ? { by, dir: by === "balance" ? -1 : 1 } : s.dir === (by === "balance" ? -1 : 1) ? { by, dir: (s.dir * -1) as 1 | -1 } : null));
-  const sponsorOf = (r: (typeof residents)[number]) => sponsorLabel(r.payerName || r.sponsor);
+  const sponsorOf = (r: (typeof residents)[number]) => residentSponsorLabel(r);
   const sponsors = useMemo(() => {
     const full = new Set(residents.map(sponsorOf));
     const base = new Set([...full].filter((s) => s.includes("(")).map((s) => s.replace(/\s*\(.*\)$/, "")));
