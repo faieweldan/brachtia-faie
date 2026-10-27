@@ -237,6 +237,7 @@ export function ResidentPayments({
    * it again would charge it twice. The row shows the term and what the
    * initial payment paid towards it; anything short is billed once, as a charge.
    */
+  const rentNow = schedule?.monthlyRent || details.monthlyRent || b?.monthlyRent || 0;
   const fullTerm = !schedule && (b?.paymentFrequency ?? "") === "full";
   const termStart = rent?.tenancy?.start || invoiceDetails.tenancyStart;
   const termEnd = rent?.tenancy?.end || invoiceDetails.tenancyEnd;
@@ -293,7 +294,8 @@ export function ResidentPayments({
 
         <CollectedBar billed={billed} collected={collected}>
           {[
-            b?.monthlyRent ? `${money(b.monthlyRent)} / month` : null,
+            // the rent in force - the rent terms', not the first invoice's: a room change moves it (27 Oct 2026)
+            rentNow ? `${money(rentNow)} / month` : null,
             frequency || null,
             nextDue ? `Next ${fmtDate(nextDue)}` : null,
           ]
