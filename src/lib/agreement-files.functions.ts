@@ -152,7 +152,9 @@ export const fullAgreementPdf = createServerFn({ method: "POST" })
     const { data: rows } = await db.from("agreement_documents").select("id, doc_type, version, status, generated_pdf_path, merge_values").eq("agreement_id", ag.id);
     const latest = new Map<string, any>();
     for (const r of (rows ?? []) as any[]) if (!latest.has(r.doc_type) || latest.get(r.doc_type).version < r.version) latest.set(r.doc_type, r);
-    const docs = ORDER.map((t) => latest.get(t)).filter(Boolean);
+    // a Schedule C marked not needed is not part of it (tenancy-docs notNeeded)
+    const { notNeeded } = await import("@/lib/tenancy-docs");
+    const docs = ORDER.map((t) => latest.get(t)).filter((d) => d && !notNeeded(d.merge_values));
     /*
      * A migrated Tenancy Agreement is the signed original on Brachtia's Drive -
      * it has no file of ours and never will (Dani, 27 Oct 2026: the full

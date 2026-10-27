@@ -50,6 +50,17 @@ export const DOC_TYPE_LABELS: Record<AgreementDocType, string> = {
   sched_c: "Schedule C – Inventory & Condition Record",
 };
 
+/**
+ * Schedule C marked not needed (Dani, 27 Oct 2026): some residents skip the
+ * move-in check. Kept on the document itself - { reason, at } in merge_values -
+ * so the Tenancy tab, the signing link, the full agreement and the work queue
+ * all read the one fact.
+ */
+export function notNeeded(mergeValues: unknown): { reason: string; at: string } | null {
+  const v = (mergeValues as Record<string, any> | null)?.["not_needed"];
+  return v && typeof v === "object" ? { reason: String(v.reason ?? ""), at: String(v.at ?? "") } : null;
+}
+
 export const DOC_STATUSES = [
   { key: "generated", label: "Generated" },
   { key: "pending_signature", label: "Pending Signature" },

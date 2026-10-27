@@ -313,7 +313,7 @@ export function UpdateTenancyDialog({
   const owed = basis.data?.initialOwed ?? 0;
   const stop =
     owed > 0
-      ? `The initial payment has ${formatRM(owed)} still owed - record it on Payments first.`
+      ? `Initial payment incomplete. ${formatRM(owed)} outstanding. Clear balance to update tenancy.`
       : step === 1
       ? !wantRoom && !wantDate
         ? "Pick what is changing."
@@ -437,7 +437,7 @@ export function UpdateTenancyDialog({
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
           {owed > 0 ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              The initial payment is not fully paid ({formatRM(owed)} still owed). The tenancy can be updated once it is paid.
+              Initial payment incomplete. {formatRM(owed)} outstanding. Clear balance to update tenancy.
             </div>
           ) : null}
           {openEvents.length ? (

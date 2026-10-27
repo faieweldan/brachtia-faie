@@ -54,6 +54,7 @@ import {
   ACCESS_CARD_STATUSES,
   DOC_STATUSES,
   DOC_TYPE_LABELS,
+  notNeeded,
   type AccessCardForm,
   type AgreementDoc,
   type AgreementDocType,
@@ -218,7 +219,11 @@ function DocumentRow({
         </td>
         <td className="py-2.5 pr-3">
           {/* Schedule C is checked by the resident and reviewed here (1 Oct 2026) */}
-          {doc.docType === "sched_c" ? (
+          {doc.docType === "sched_c" && notNeeded(doc.mergeValues) ? (
+            <span title={notNeeded(doc.mergeValues)!.reason}>
+              <StatusPill status="pending" label="Not needed" />
+            </span>
+          ) : doc.docType === "sched_c" ? (
             <InventoryPill stage={doc.stage ?? "open"} periodEnd={doc.periodEnd} />
           ) : (
             <StatusPill status={doc.status} label={docLabel(doc.status)} />
@@ -227,7 +232,9 @@ function DocumentRow({
         <td className="py-2.5 text-right">
           <span className="inline-flex flex-wrap justify-end gap-1.5">
             {doc.docType === "sched_c" ? (
-              <InventoryActions docId={doc.id} stage={doc.stage ?? "open"} periodEnd={doc.periodEnd} onChanged={onChanged} />
+              <ScheduleCNeeded doc={doc} onChanged={onChanged}>
+                <InventoryActions docId={doc.id} stage={doc.stage ?? "open"} periodEnd={doc.periodEnd} onChanged={onChanged} />
+              </ScheduleCNeeded>
             ) : (
             <>
             {doc.mergeValues["source"] === "migrated" ? (
@@ -1070,3 +1077,68 @@ export function currentMergeValues(
 
 export { money };
 
+/**
+ * Schedule C not needed (Dani, 27 Oct 2026, option A): a link beside its actions
+ * opens a one-line reason; once marked, the row says why and when, with Restore.
+ * Offered only while the move-in check is untouched.
+ */
+function ScheduleCNeeded({ doc, onChanged, children }: { doc: AgreementDoc; onChanged: () => void; children: React.ReactNode }) {
+  const marked = notNeeded(doc.mergeValues);
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function save(next: string | null) {
+    setBusy(true);
+    try {
+      const { setScheduleCNotNeeded } = await import("@/lib/inventory.functions");
+      await setScheduleCNotNeeded({ data: { docId: doc.id, reason: next } });
+      setOpen(false);
+      setReason("");
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Not saved");
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (marked)
+    return (
+      <span className="flex flex-col items-end gap-0.5">
+        <Button size="sm" variant="ghost" disabled={busy} onClick={() => void save(null)}>
+          Restore
+        </Button>
+        <span className="text-xs text-muted-foreground">
+          {marked.reason} · {fmtDate(marked.at.slice(0, 10))}
+        </span>
+      </span>
+    );
+  return (
+    <span className="flex flex-col items-end gap-1.5">
+      <span className="inline-flex items-center gap-1.5">
+        {children}
+        {(doc.stage ?? "open") === "open" && !open ? (
+          <Button size="sm" variant="ghost" onClick={() => setOpen(true)}>
+            Not needed
+          </Button>
+        ) : null}
+      </span>
+      {open ? (
+        <span className="flex items-center gap-1.5">
+          <Input
+            value={reason}
+            autoFocus
+            placeholder="Reason, e.g. same room, inventory unchanged"
+            className="h-8 w-48 sm:w-72"
+            onChange={(e) => setReason(e.target.value)}
+          />
+          <Button size="sm" disabled={busy || !reason.trim()} onClick={() => void save(reason)}>
+            Save
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+        </span>
+      ) : null}
+    </span>
+  );
+}

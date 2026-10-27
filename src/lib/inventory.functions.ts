@@ -41,6 +41,31 @@ async function residentOf(sb: any, docId: string): Promise<string> {
   return String(ag.resident_id);
 }
 
+/**
+ * Schedule C not needed, or needed again (reason null). Only while the move-in
+ * check is untouched - a check the resident has started is never thrown away.
+ */
+export const setScheduleCNotNeeded = createServerFn({ method: "POST" })
+  .inputValidator((d: { docId: string; reason: string | null }) => d)
+  .handler(async ({ data }) => {
+    const sb = await admin();
+    const residentId = await residentOf(sb, data.docId);
+    const { data: doc } = await sb.from("agreement_documents").select("status, merge_values").eq("id", data.docId).maybeSingle();
+    const mv = { ...((doc?.merge_values ?? {}) as Record<string, unknown>) };
+    if (data.reason !== null) {
+      const reason = data.reason.trim();
+      if (!reason) throw new Error("Say why Schedule C is not needed.");
+      const { readInventory } = await import("@/lib/inventory.server");
+      const f = await readInventory(sb, residentId, data.docId, "in");
+      if (doc?.status === "signed" || (f && f.status !== "open"))
+        throw new Error("The resident has started this check - it cannot be marked not needed.");
+      mv["not_needed"] = { reason, at: new Date().toISOString() };
+    } else delete mv["not_needed"];
+    const { error } = await sb.from("agreement_documents").update({ merge_values: mv }).eq("id", data.docId);
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });
+
 /** Both checks, as they stand, with the resident's signature to look at. */
 export const getInventoryReview = createServerFn({ method: "GET" })
   .inputValidator((d) => z.object({ docId: z.string().uuid() }).parse(d))

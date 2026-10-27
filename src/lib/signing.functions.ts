@@ -82,7 +82,7 @@ async function documentsOf(sb: any, residentId: string): Promise<SigningDoc[]> {
     .order("created_at", { ascending: false })
     .limit(1);
   if (ag?.length) {
-    const { data: rows } = await sb.from("agreement_documents").select("id, doc_type, version, status, template_version_id").eq("agreement_id", ag[0].id);
+    const { data: rows } = await sb.from("agreement_documents").select("id, doc_type, version, status, template_version_id, merge_values").eq("agreement_id", ag[0].id);
     // the latest version of each document
     const latest = new Map<string, any>();
     for (const r of (rows ?? []) as any[]) if (!latest.has(r.doc_type) || latest.get(r.doc_type).version < r.version) latest.set(r.doc_type, r);
@@ -94,6 +94,8 @@ async function documentsOf(sb: any, residentId: string): Promise<SigningDoc[]> {
        * upload (Dani, 1 Oct 2026). Open from the check-in day until 48 hours
        * after the check-in time; the room has to be seen to be checked.
        */
+      // marked not needed: nothing for the resident to do (tenancy-docs notNeeded)
+      if (t === "sched_c" && (await import("@/lib/tenancy-docs")).notNeeded(r.merge_values)) continue;
       if (t === "sched_c") {
         const { readInventory } = await import("@/lib/inventory.server");
         const signed = SIGNED.has(r.status);
