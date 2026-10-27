@@ -13,20 +13,13 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
-    plugins: [
-      {
-        // tslib's ESM entry reads the helpers off the UMD file's default export;
-        // in the server build that default was undefined, so every pdf-lib PDF
-        // failed on Lovable ("Cannot destructure property '__extends'", Access
-        // Card preview, 27 Oct 2026). Use the plain ESM file of the tslib each
-        // package already gets (pdf-lib 1.x, Supabase its own 2.x).
-        name: "tslib-esm",
-        enforce: "pre",
-        async resolveId(source, importer, options) {
-          if (source !== "tslib") return null;
-          return this.resolve("tslib/tslib.es6.js", importer, { ...options, skipSelf: true });
-        },
-      },
-    ],
+    resolve: {
+      // tslib's own entry files read the helpers off a default export that the
+      // bundler leaves undefined, so every pdf-lib PDF failed on Lovable
+      // ("Cannot destructure property '__extends'", Access Card Form, 27 Oct
+      // 2026). Its plain ESM file exports them directly. One tslib for the
+      // whole app: package.json "overrides".
+      alias: [{ find: /^tslib$/, replacement: "tslib/tslib.es6.mjs" }],
+    },
   },
 });
