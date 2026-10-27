@@ -149,11 +149,18 @@ export const fullAgreementPdf = createServerFn({ method: "POST" })
     const db = await admin();
     const { data: ag } = await db.from("tenancy_agreements").select("id, resident_id").eq("id", data.agreementId).maybeSingle();
     if (!ag) throw new Error("Agreement not found");
-    const { data: rows } = await db.from("agreement_documents").select("id, doc_type, version, status, generated_pdf_path").eq("agreement_id", ag.id);
+    const { data: rows } = await db.from("agreement_documents").select("id, doc_type, version, status, generated_pdf_path, merge_values").eq("agreement_id", ag.id);
     const latest = new Map<string, any>();
     for (const r of (rows ?? []) as any[]) if (!latest.has(r.doc_type) || latest.get(r.doc_type).version < r.version) latest.set(r.doc_type, r);
     const docs = ORDER.map((t) => latest.get(t)).filter(Boolean);
-    if (!data.draft && (!docs.length || docs.some((d) => !DONE.has(d.status) || !d.generated_pdf_path))) throw new Error("Every document has to be signed first");
+    /*
+     * A migrated Tenancy Agreement is the signed original on Brachtia's Drive -
+     * it has no file of ours and never will (Dani, 27 Oct 2026: the full
+     * agreement could not open once the schedules were signed). It counts as
+     * signed, and the full agreement names it with its link.
+     */
+    const migrated = (d: any) => d?.merge_values?.source === "migrated";
+    if (!data.draft && (!docs.length || docs.some((d) => !DONE.has(d.status) || (!d.generated_pdf_path && !migrated(d))))) throw new Error("Every document has to be signed first");
     if (data.draft && !docs.length) throw new Error("No document has been made yet");
 
     const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
@@ -167,6 +174,18 @@ export const fullAgreementPdf = createServerFn({ method: "POST" })
       if (file) await addBytes(new Uint8Array(await file.arrayBuffer()));
     };
     for (const d of docs) {
+      if (migrated(d) && !d.generated_pdf_path) {
+        const page = out.addPage([595.28, 841.89]);
+        const bold = await out.embedFont(StandardFonts.HelveticaBold);
+        const plain = await out.embedFont(StandardFonts.Helvetica);
+        const url = String(d.merge_values?.original_url ?? "");
+        page.drawText("Tenancy Agreement", { x: 56, y: 760, size: 18, font: bold });
+        page.drawText("Signed before the system. The signed original is kept by Brachtia:", { x: 56, y: 730, size: 11, font: plain });
+        // a long link runs over two lines rather than off the page
+        const lines = url.match(/.{1,85}/g) ?? [];
+        lines.forEach((l, i) => page.drawText(l, { x: 56, y: 708 - i * 14, size: 9, font: plain, color: rgb(0.1, 0.3, 0.6) }));
+        continue;
+      }
       if (d.status === "stamped") await add(stampPath(String(ag.resident_id), d.id));
       if (DONE.has(d.status) && d.generated_pdf_path) await add(d.generated_pdf_path);
       else if (data.draft) {
