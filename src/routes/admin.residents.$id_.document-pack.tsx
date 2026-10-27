@@ -414,7 +414,8 @@ function DocumentPackPage() {
               <DocumentView
                 // a different document starts on its page 1; the same one keeps its place
                 key={docKey}
-                pdf={pdfDoc.data}
+                // a failed request shows its own reason, not only "Could not show the document" (27 Oct 2026)
+                pdf={pdfDoc.data ?? (pdfDoc.error ? { ok: false, error: pdfDoc.error.message } : undefined)}
                 pdfLoading={pdfDoc.isFetching}
                 docxBase64={filledDoc.data?.base64}
               />
