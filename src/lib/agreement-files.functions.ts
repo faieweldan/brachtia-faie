@@ -157,7 +157,8 @@ export const fullAgreementPdf = createServerFn({ method: "POST" })
      * A migrated Tenancy Agreement is the signed original on Brachtia's Drive -
      * it has no file of ours and never will (Dani, 27 Oct 2026: the full
      * agreement could not open once the schedules were signed). It counts as
-     * signed, and the full agreement names it with its link.
+     * signed, and the full agreement is the documents signed here - the original
+     * opens from its own "Open original" (Dani, 27 Oct 2026).
      */
     const migrated = (d: any) => d?.merge_values?.source === "migrated";
     if (!data.draft && (!docs.length || docs.some((d) => !DONE.has(d.status) || (!d.generated_pdf_path && !migrated(d))))) throw new Error("Every document has to be signed first");
@@ -174,18 +175,8 @@ export const fullAgreementPdf = createServerFn({ method: "POST" })
       if (file) await addBytes(new Uint8Array(await file.arrayBuffer()));
     };
     for (const d of docs) {
-      if (migrated(d) && !d.generated_pdf_path) {
-        const page = out.addPage([595.28, 841.89]);
-        const bold = await out.embedFont(StandardFonts.HelveticaBold);
-        const plain = await out.embedFont(StandardFonts.Helvetica);
-        const url = String(d.merge_values?.original_url ?? "");
-        page.drawText("Tenancy Agreement", { x: 56, y: 760, size: 18, font: bold });
-        page.drawText("Signed before the system. The signed original is kept by Brachtia:", { x: 56, y: 730, size: 11, font: plain });
-        // a long link runs over two lines rather than off the page
-        const lines = url.match(/.{1,85}/g) ?? [];
-        lines.forEach((l, i) => page.drawText(l, { x: 56, y: 708 - i * 14, size: 9, font: plain, color: rgb(0.1, 0.3, 0.6) }));
-        continue;
-      }
+      // the migrated original is opened from "Open original" - the full agreement is what was signed here
+      if (migrated(d) && !d.generated_pdf_path) continue;
       if (d.status === "stamped") await add(stampPath(String(ag.resident_id), d.id));
       if (DONE.has(d.status) && d.generated_pdf_path) await add(d.generated_pdf_path);
       else if (data.draft) {
