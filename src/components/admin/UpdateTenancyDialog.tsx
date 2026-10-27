@@ -310,8 +310,11 @@ export function UpdateTenancyDialog({
   const tooEarly = !!occupiedUntil && effectiveMove <= occupiedUntil;
   const moveAfterEnd = moved && effectiveMove > end;
   // what stops each step going on - said where the Next button is
+  const owed = basis.data?.initialOwed ?? 0;
   const stop =
-    step === 1
+    owed > 0
+      ? `The initial payment has ${formatRM(owed)} still owed - record it on Payments first.`
+      : step === 1
       ? !wantRoom && !wantDate
         ? "Pick what is changing."
         : ""
@@ -432,6 +435,11 @@ export function UpdateTenancyDialog({
         </DialogHeader>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
+          {owed > 0 ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              The initial payment is not fully paid ({formatRM(owed)} still owed). The tenancy can be updated once it is paid.
+            </div>
+          ) : null}
           {openEvents.length ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
               Still scheduled: {openEvents.map((o) => `${o.name}, ${fmtDate(o.date)}`).join("; ")}. A new change can be made once it is effective.
@@ -666,7 +674,7 @@ export function UpdateTenancyDialog({
               Next <ArrowRight className="ml-1 size-4" />
             </Button>
           ) : (
-            <Button disabled={busy || !!openEvents.length || !events.length || !approvedBy || !preview.data} onClick={() => void confirm()}>
+            <Button disabled={busy || owed > 0 || !!openEvents.length || !events.length || !approvedBy || !preview.data} onClick={() => void confirm()}>
               {busy ? "Saving…" : action}
             </Button>
           )}

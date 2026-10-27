@@ -83,6 +83,24 @@ async function depositPosition(sb: any, residentId: string) {
 }
 
 /** What the window starts from: the deposits held, the rent today, the tenancy, the Website rates, the credit. */
+/**
+ * What is still owed on the move-in initial payment (Dani, 27 Oct 2026: Update
+ * Tenancy let a resident with an unpaid initial payment through to Confirm).
+ * Found as every rent rule finds it (initialInvoiceFor); a tenancy is changed
+ * only once it is paid - the same rule as a checkout other than a cancellation.
+ */
+async function initialOwed(sb: any, residentId: string, tenancyId: string | null | undefined): Promise<number> {
+  if (!tenancyId) return 0;
+  const { data: t } = await sb.from("tenancies").select("resident_id, enquiry_id").eq("id", tenancyId).maybeSingle();
+  if (!t) return 0;
+  const { initialInvoiceFor } = await import("@/lib/rent-schedule.server");
+  const ip = await initialInvoiceFor(sb, { resident_id: residentId, enquiry_id: t.enquiry_id } as any);
+  if (!ip) return 0;
+  const { data: pays } = await sb.from("payments").select("amount").eq("invoice_id", ip.invoice.id);
+  const paid = ((pays ?? []) as any[]).reduce((n, p) => n + Number(p.amount || 0), 0);
+  return Math.max(0, r2(Number(ip.invoice.total || 0) - paid));
+}
+
 export const getTenancyChangeBasis = createServerFn({ method: "GET" })
   .inputValidator((d) => z.object({ residentId: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
@@ -102,6 +120,8 @@ export const getTenancyChangeBasis = createServerFn({ method: "GET" })
       rent: now.rent,
       // no rent terms: the scheduled invoices cannot be made again
       hasSchedule: now.hasSchedule,
+      // the move-in money still owed - nothing can change until it is paid
+      initialOwed: await initialOwed(sb, data.residentId, t?.tenancyId),
       ...(await (async () => {
         const p = await depositPosition(sb, data.residentId);
         return { held: p.covered, heldCash: p.cash, waivedHeld: p.waived };
@@ -210,6 +230,8 @@ async function planChangeWith(sb: any, data: PlanRequest) {
   const { officialStay, rentInForce } = await import("@/lib/tenancy-facts.server");
   const stay = await officialStay(sb, { residentId: data.residentId, tenancyId: data.tenancyId });
   if (stay.source !== "tenancy") throw new Error("This resident has no tenancy to update.");
+  if ((await initialOwed(sb, data.residentId, stay.tenancyId)) > 0)
+    throw new Error("The initial payment has to be paid in full before the tenancy can be updated.");
   if (stay.end !== data.change.oldEnd)
     throw new Error("The change was read differently - close the window and start again.");
   const today = klToday();
