@@ -85,7 +85,7 @@ export type Unit = {
   block: string;
   floor: string;
   unitType: string; // 4-bedroom / 3-bedroom / studio
-  gender: string; // Female / Male / Any
+  gender: string; // Female / Male
   wholeUnit: boolean;
   wholeUnitRent: number;
   notes: string;
@@ -829,4 +829,5 @@ export const LEVELS = [
   "Other",
 ];
 
-export const GENDERS = ["Female", "Male", "Any"];
+// one list everywhere - a person, a bed and a unit are Female or Male
+export { GENDERS } from "@/data/form-options";

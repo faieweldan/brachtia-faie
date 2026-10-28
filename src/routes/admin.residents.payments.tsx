@@ -117,7 +117,8 @@ const TABS: {
   // kept as a record, never deleted - an initial, a rental or a charge that was
   // voided still has to be findable when somebody asks what happened to it
   { key: "cancelled", label: "Cancelled", test: (r, today) => is(r, today, "Cancelled") },
-  // rent made ahead - listed apart, never counted as owed until its billing day
+  // rent made ahead - its own view above the statuses, never counted as owed
+  // until its billing day
   { key: "scheduled", label: "Scheduled", test: () => true },
 ];
 
@@ -396,12 +397,24 @@ function CollectionsPage() {
 
       <Panel className="overflow-hidden p-0">
         {/* where the money stands */}
+        {/* billed first; scheduled rent is not an invoice yet, so it has no status */}
         <StatusTabs
-          label="Invoice status"
-          value={tab}
-          onChange={setTab}
-          tabs={TABS.map((t) => ({ key: t.key, label: t.label, count: counts[t.key], alignRight: t.key === "scheduled" }))}
+          label="Invoice view"
+          value={tab === "scheduled" ? "scheduled" : "billed"}
+          onChange={(k) => setTab(k === "scheduled" ? "scheduled" : "all")}
+          tabs={[
+            { key: "billed", label: "Issued invoices", count: counts.all },
+            { key: "scheduled", label: "Scheduled invoices", count: counts.scheduled },
+          ]}
         />
+        {tab !== "scheduled" ? (
+          <StatusTabs
+            label="Invoice status"
+            value={tab}
+            onChange={setTab}
+            tabs={TABS.filter((t) => t.key !== "scheduled").map((t) => ({ key: t.key, label: t.label, count: counts[t.key] }))}
+          />
+        ) : null}
 
         {/* narrowing it down */}
         <div className="flex flex-wrap items-end gap-x-3 gap-y-3 px-5 py-4">
