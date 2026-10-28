@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { DateInput } from "@/components/ui/date-input";
 import { DocumentViewDialog } from "@/components/admin/DocumentViewDialog";
 import { PdfPreviewDialog } from "@/components/admin/PdfPreview";
@@ -176,7 +177,8 @@ function DocumentRow({
 
   return (
     <>
-      <tr className="border-t border-border">
+      {/* a Schedule C hidden from the signing link greys out (Dani, 28 Oct 2026) */}
+      <tr className={doc.docType === "sched_c" && notNeeded(doc.mergeValues) ? "border-t border-border opacity-50" : "border-t border-border"}>
         <td className="py-2.5 pr-3" style={{ paddingLeft: depth ? "1.75rem" : undefined }}>
           <span className="flex items-center gap-1.5">
             {hasHistory ? (
@@ -219,11 +221,7 @@ function DocumentRow({
         </td>
         <td className="py-2.5 pr-3">
           {/* Schedule C is checked by the resident and reviewed here (1 Oct 2026) */}
-          {doc.docType === "sched_c" && notNeeded(doc.mergeValues) ? (
-            <span title={notNeeded(doc.mergeValues)!.reason}>
-              <StatusPill status="pending" label="Not needed" />
-            </span>
-          ) : doc.docType === "sched_c" ? (
+          {doc.docType === "sched_c" ? (
             <InventoryPill stage={doc.stage ?? "open"} periodEnd={doc.periodEnd} />
           ) : (
             <StatusPill status={doc.status} label={docLabel(doc.status)} />
@@ -1078,22 +1076,19 @@ export function currentMergeValues(
 export { money };
 
 /**
- * Schedule C not needed (Dani, 27 Oct 2026, option A): a link beside its actions
- * opens a one-line reason; once marked, the row says why and when, with Restore.
- * Offered only while the move-in check is untouched.
+ * Schedule C in the signing link, or hidden from it (Dani, 28 Oct 2026): one
+ * switch - off greys the row and leaves Schedule C out of the link and the full
+ * agreement, for a resident who never needs it or is not ready for it yet. On
+ * again puts it back. Offered only while the move-in check is untouched.
  */
 function ScheduleCNeeded({ doc, onChanged, children }: { doc: AgreementDoc; onChanged: () => void; children: React.ReactNode }) {
-  const marked = notNeeded(doc.mergeValues);
-  const [open, setOpen] = useState(false);
-  const [reason, setReason] = useState("");
+  const hidden = notNeeded(doc.mergeValues) !== null;
   const [busy, setBusy] = useState(false);
-  async function save(next: string | null) {
+  async function toggle(show: boolean) {
     setBusy(true);
     try {
       const { setScheduleCNotNeeded } = await import("@/lib/inventory.functions");
-      await setScheduleCNotNeeded({ data: { docId: doc.id, reason: next } });
-      setOpen(false);
-      setReason("");
+      await setScheduleCNotNeeded({ data: { docId: doc.id, reason: show ? null : "" } });
       onChanged();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Not saved");
@@ -1101,43 +1096,12 @@ function ScheduleCNeeded({ doc, onChanged, children }: { doc: AgreementDoc; onCh
       setBusy(false);
     }
   }
-  if (marked)
-    return (
-      <span className="flex flex-col items-end gap-0.5">
-        <Button size="sm" variant="ghost" disabled={busy} onClick={() => void save(null)}>
-          Restore
-        </Button>
-        <span className="text-xs text-muted-foreground">
-          {marked.reason} · {fmtDate(marked.at.slice(0, 10))}
-        </span>
-      </span>
-    );
+  const title = hidden ? "Hidden from signing link" : "In signing link";
   return (
-    <span className="flex flex-col items-end gap-1.5">
-      <span className="inline-flex items-center gap-1.5">
-        {children}
-        {(doc.stage ?? "open") === "open" && !open ? (
-          <Button size="sm" variant="ghost" onClick={() => setOpen(true)}>
-            Not needed
-          </Button>
-        ) : null}
-      </span>
-      {open ? (
-        <span className="flex items-center gap-1.5">
-          <Input
-            value={reason}
-            autoFocus
-            placeholder="Reason, e.g. same room, inventory unchanged"
-            className="h-8 w-48 sm:w-72"
-            onChange={(e) => setReason(e.target.value)}
-          />
-          <Button size="sm" disabled={busy || !reason.trim()} onClick={() => void save(reason)}>
-            Save
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
-            Cancel
-          </Button>
-        </span>
+    <span className="inline-flex items-center gap-2">
+      {children}
+      {hidden || (doc.stage ?? "open") === "open" ? (
+        <Switch checked={!hidden} disabled={busy} title={title} aria-label={title} onCheckedChange={(on) => void toggle(on)} />
       ) : null}
     </span>
   );

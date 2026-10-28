@@ -53,12 +53,12 @@ export const setScheduleCNotNeeded = createServerFn({ method: "POST" })
     const { data: doc } = await sb.from("agreement_documents").select("status, merge_values").eq("id", data.docId).maybeSingle();
     const mv = { ...((doc?.merge_values ?? {}) as Record<string, unknown>) };
     if (data.reason !== null) {
+      // no reason asked any more: the switch only hides it (28 Oct 2026)
       const reason = data.reason.trim();
-      if (!reason) throw new Error("Say why Schedule C is not needed.");
       const { readInventory } = await import("@/lib/inventory.server");
       const f = await readInventory(sb, residentId, data.docId, "in");
       if (doc?.status === "signed" || (f && f.status !== "open"))
-        throw new Error("The resident has started this check - it cannot be marked not needed.");
+        throw new Error("The resident has started this check - it cannot be hidden from the link.");
       mv["not_needed"] = { reason, at: new Date().toISOString() };
     } else delete mv["not_needed"];
     const { error } = await sb.from("agreement_documents").update({ merge_values: mv }).eq("id", data.docId);
