@@ -37,7 +37,8 @@ export function SigningMessageCard({ residentId, phone, packId, fresh }: { resid
   const [message, setMessage] = useState("");
   const [link, setLink] = useState("");
   // anything still empty in the documents: not sent until it is filled (Dani, 28 Oct 2026)
-  const { data: gaps = [] } = useQuery({ queryKey: ["signing-gaps", residentId], queryFn: () => getSigningGaps({ data: { residentId } }), staleTime: 0 });
+  const check = useQuery({ queryKey: ["signing-gaps", residentId], queryFn: () => getSigningGaps({ data: { residentId } }), staleTime: 0 });
+  const gaps = check.data ?? [];
 
   // the link is made (or the live one reused) only when the message is opened
   useEffect(() => {
@@ -56,6 +57,14 @@ export function SigningMessageCard({ residentId, phone, packId, fresh }: { resid
     };
   }, [open, message, residentId]);
 
+  // nothing to copy until the check has answered - it read as "no gaps" while loading,
+  // so the link could be copied and sent before the warning came (Dani, 28 Oct 2026)
+  if (!check.data)
+    return (
+      <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+        {check.isError ? "Could not check the documents. Reload the page before sending." : "Checking the documents before sending…"}
+      </div>
+    );
   if (gaps.length)
     return (
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">

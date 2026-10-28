@@ -250,6 +250,12 @@ export const signDocument = createServerFn({ method: "POST" })
     if (norm(data.typedName) !== norm(String(own.resident.full_name ?? ""))) {
       return { ok: false as const, error: "Type your full name exactly as it appears on the document." };
     }
+    // a document with a field still empty is not signed, whatever link reached it (Dani, 28 Oct 2026)
+    if (data.kind === "agreement") {
+      const { documentGaps } = await import("@/lib/templates.functions");
+      const gaps = await documentGaps(sb, data.id);
+      if (gaps.length) return { ok: false as const, error: `This document is not ready to sign yet (${gaps.join(", ")} missing). Brachtia will send it again once it is complete.` };
+    }
     // TODO(OTP): when email codes arrive, check a fresh code for this link here
 
     const png = Uint8Array.from(atob(data.png), (c) => c.charCodeAt(0));
