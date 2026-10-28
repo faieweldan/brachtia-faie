@@ -136,6 +136,8 @@ export const getTenancyChangeBasis = createServerFn({ method: "GET" })
       // credit already there - the preview applies it, event by event, as confirm will
       accountCredit: (await creditBalance(sb, data.residentId)).balance,
       open: (await ev.readEvents(sb, data.residentId)).filter(ev.isOpen).map((e) => ({ name: e.name, date: e.date, settled: !!e.settledAt })),
+      // whether the residence has a card form - none: no new form, no new-card fee
+      hasCardForm: await (await import("@/lib/template-versions.server")).hasCardForm(sb, data.residentId),
       // the residence's Schedule B prices, for the fixed fees the review shows
       charges: (await (await import("@/lib/charges.server")).residentCharges(sb, data.residentId)).charges,
       roomTypes: ((types ?? []) as any[]).map((r) => ({ code: String(r.code ?? ""), residence_id: r.residence_id ?? undefined, unit_type: r.unit_type ?? undefined, occupancies: r.occupancies ?? undefined, rent: r.rent ?? undefined })),
@@ -266,12 +268,19 @@ async function planChangeWith(sb: any, data: PlanRequest) {
       `An earlier change is still scheduled: ${open.map((o) => `${o.name}, ${o.date}`).join("; ")}.`,
     );
 
+  // a residence without a card form gets no new form and no new-card fee (hasCardForm, 28 Oct 2026)
+  const { hasCardForm } = await import("@/lib/template-versions.server");
+  const cardForm = await hasCardForm(sb, data.residentId);
+  const docsFor = (f: Parameters<typeof T.documentsFor>[0]) => {
+    const d = T.documentsFor(f);
+    return { ...d, accessCard: d.accessCard && cardForm };
+  };
   // every document each event needs can be made from the agreement on file - or nothing is saved
   const { updateTenancyDocumentPreflight } = await import("@/lib/tenancy-docs.functions");
   const documents = await updateTenancyDocumentPreflight(
     sb,
     data.residentId,
-    plan.map((p) => ({ date: p.date, name: T.eventName(p.flags), plan: T.documentsFor(p.flags) })),
+    plan.map((p) => ({ date: p.date, name: T.eventName(p.flags), plan: docsFor(p.flags) })),
   );
   if (!documents.ok) throw new Error(documents.error);
 
@@ -298,7 +307,7 @@ async function planChangeWith(sb: any, data: PlanRequest) {
       e.waived,
     );
     heldDeposits = d.heldAfter;
-    const fees = T.fixedCharges(p.flags, residence.charges).filter((c) => !e.waivedFees.includes(c.key));
+    const fees = T.fixedCharges(p.flags, residence.charges, cardForm).filter((c) => !e.waivedFees.includes(c.key));
     const unpriced = fees.find((c) => c.missing);
     if (unpriced) requireCharge(residence.charges, unpriced.label, residence.residenceName);
     const ip = T.eventInvoice(d.ipLines, fees, 0);
@@ -312,7 +321,7 @@ async function planChangeWith(sb: any, data: PlanRequest) {
       d,
       ip,
       billOn: ip.total > 0 ? T.ipBillOn(p.date, today) : "",
-      docs: T.documentsFor(p.flags),
+      docs: docsFor(p.flags),
       rentBefore,
       rent,
     };

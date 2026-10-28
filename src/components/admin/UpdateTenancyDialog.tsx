@@ -260,7 +260,7 @@ export function UpdateTenancyDialog({
       ) as Deposits;
       const d = eventDeposits(held, required, waived.filter((w) => w.startsWith(`${i}:dep:`)).map((w) => w.split(":")[2]!));
       // the residence's Schedule B prices; an exception is an explicit waiver
-      const fees = fixedCharges(p.flags, basis.data?.charges ?? []).map((c) => ({ ...c, waived: waived.includes(`${i}:fee:${c.key}`) }));
+      const fees = fixedCharges(p.flags, basis.data?.charges ?? [], basis.data?.hasCardForm ?? true).map((c) => ({ ...c, waived: waived.includes(`${i}:fee:${c.key}`) }));
       credit += d.credit;
       const ip = eventInvoice(d.ipLines, fees.filter((f) => !f.waived), credit);
       credit = ip.creditLeft;
@@ -280,7 +280,7 @@ export function UpdateTenancyDialog({
         fees,
         ip,
         billOn: ip.total > 0 ? ipBillOn(p.date, today) : "",
-        docs: documentNames(documentsFor(p.flags)),
+        docs: documentNames({ ...documentsFor(p.flags), accessCard: documentsFor(p.flags).accessCard && (basis.data?.hasCardForm ?? true) }),
       };
       rent = r;
       held = d.heldAfter;

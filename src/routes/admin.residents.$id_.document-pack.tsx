@@ -153,6 +153,8 @@ function DocumentPackPage() {
   const menu = useMemo(() => {
     const items = MENU.flatMap((g) => g.items)
       .filter((i) => !(retired.data ?? []).includes(TEMPLATE_KEY[i.key]!))
+      // no card form for this residence (Solstice): no Access Card Form tab (28 Oct 2026)
+      .filter((i) => i.key !== "access_card" || !pack.data || pack.data["access_card_form"] !== null)
       // a replacement card is the access card form alone
       .filter((i) => !card || i.key === "access_card");
     const categoryOf = (key: DocKey) =>

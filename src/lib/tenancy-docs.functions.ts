@@ -100,6 +100,10 @@ const DOC_KEY_OF: Record<AgreementDocType, string> = {
   sched_b: "schedule_b",
   sched_c: "schedule_c",
 };
+async function cardFormFor(db: any, residentId: string) {
+  const { hasCardForm } = await import("@/lib/template-versions.server");
+  return hasCardForm(db, residentId);
+}
 async function docTypesInUse(db: any): Promise<AgreementDocType[]> {
   const retired = await retiredDocKeys(db);
   return (["agreement", "sched_a", "sched_b", "sched_c"] as AgreementDocType[]).filter((t) => !retired.has(DOC_KEY_OF[t]));
@@ -238,7 +242,8 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
     if (existing?.length) throw new Error("This resident already has a document pack");
     {
       const types: string[] = [...(await docTypesInUse(db))];
-      if (!(await retiredDocKeys(db)).has("access_card_form")) types.push("access_card");
+      // the card form only where the residence has one (hasCardForm, 28 Oct 2026)
+      if (await cardFormFor(db, data.residentId)) types.push("access_card");
       await requireFiles(db, data.residentId, types);
     }
 
@@ -280,7 +285,7 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
     );
     if (dErr) throw new Error(dErr.message);
 
-    if (!(await retiredDocKeys(db)).has("access_card_form")) {
+    if (await cardFormFor(db, data.residentId)) {
       // Brachtia fills it and hands it to ARC - nothing for the resident to sign (Dani, 2 Oct 2026)
       const { data: card, error: cErr } = await db
         .from("access_card_forms")

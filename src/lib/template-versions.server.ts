@@ -40,3 +40,13 @@ export async function activeVersionIds(db: any, residenceId?: string | null): Pr
   for (const [k, v] of Object.entries(await activeVersions(db, residenceId))) out[k] = v.id;
   return out;
 }
+
+/**
+ * Whether the resident's residence has an access card form (Dani, 28 Oct 2026).
+ * The Arc's building takes our form; Solstice has none - a residence without
+ * an Active card form template (its own, or one for all residences) gets no
+ * form: not in the pack, not after a unit change, no replacement.
+ */
+export async function hasCardForm(db: any, residentId: string): Promise<boolean> {
+  return Boolean((await activeVersions(db, await residenceIdOf(db, residentId)))["access_card_form"]);
+}

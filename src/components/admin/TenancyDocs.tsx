@@ -614,14 +614,19 @@ function AccessCardTable({
     }
   }
 
+  // a residence without a card form (Solstice): no Access Card panel (28 Oct 2026)
+  if (replacement.data && !replacement.data.cardForm && !cards.length) return null;
+
   return (
     <Panel
       title="Access Card"
       description="Made by Brachtia and handed to ARC."
       action={
-        <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
-          <Plus className="mr-1 size-3.5" /> New Access Card Form
-        </Button>
+        replacement.data?.cardForm === false ? undefined : (
+          <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
+            <Plus className="mr-1 size-3.5" /> New Access Card Form
+          </Button>
+        )
       }
     >
       {waiting ? (
@@ -734,8 +739,7 @@ function AccessCardTable({
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-brand-deep">New Access Card Form</DialogTitle>
             <DialogDescription>
-              The invoice opens at the Schedule B price - lost RM60, damaged RM30. The new form is made when that invoice is
-              paid.
+              The invoice opens at this residence's Schedule B price. The new form is made when that invoice is paid.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">

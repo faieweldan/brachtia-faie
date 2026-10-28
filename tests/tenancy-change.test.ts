@@ -94,6 +94,8 @@ describe("events", () => {
     expect(fixedCharges(changeFlags({ ...base, newUnitId: "u15", newRoomId: "u15-b" }), ARC).map((c) => c.amount)).toEqual([100, 20]);
     // each residence its own Schedule B: Solstice's card after a unit change is RM50 (28 Oct 2026)
     expect(fixedCharges(changeFlags({ ...base, newUnitId: "u15", newRoomId: "u15-b" }), SOLSTICE).map((c) => c.amount)).toEqual([100, 50]);
+    // no card form for the residence (Solstice, 28 Oct 2026): no new-card fee on a unit change
+    expect(fixedCharges(changeFlags({ ...base, newUnitId: "u15", newRoomId: "u15-b" }), SOLSTICE, false).map((c) => c.amount)).toEqual([100]);
     // a residence without the price: shown as missing, never charged as some other residence's
     expect(fixedCharges(changeFlags({ ...base, newRoomId: "u12-b" }), [])).toEqual([{ key: "change_fee", label: "Resident-requested room/unit change", amount: 0, missing: true }]);
   });

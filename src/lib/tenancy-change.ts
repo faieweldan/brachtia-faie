@@ -161,14 +161,15 @@ export function eventName(f: ChangeFlags): string {
  * Arc's card after a unit change is RM20, Solstice's RM50. `missing` names a
  * charge the residence has no price for; confirm refuses while there is one.
  */
-export function fixedCharges(f: ChangeFlags, charges: Charge[]) {
+export function fixedCharges(f: ChangeFlags, charges: Charge[], cardForm = true) {
   const line = (key: string, label: string) => {
     const amount = chargeAmount(charges, label);
     return { key, label, amount: amount ?? 0, missing: amount === null };
   };
   return [
     ...(isMove(f) ? [line("change_fee", ROOM_CHANGE_CHARGE)] : []),
-    ...(f.unit ? [line("card_change", CARD_AFTER_UNIT_CHANGE_CHARGE)] : []),
+    // a new card only where the residence has a card form - Solstice has none (28 Oct 2026)
+    ...(f.unit && cardForm ? [line("card_change", CARD_AFTER_UNIT_CHANGE_CHARGE)] : []),
   ];
 }
 

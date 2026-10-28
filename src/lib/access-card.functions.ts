@@ -176,6 +176,8 @@ export const startReplacementCard = createServerFn({ method: "POST" })
     const sb = await admin();
     const waiting = await readReplacement(sb, data.residentId);
     if (waiting?.invoiceId) throw new Error(`A replacement is already waiting for payment of ${waiting.invoiceNumber || "its invoice"}.`);
+    const { hasCardForm } = await import("@/lib/template-versions.server");
+    if (!(await hasCardForm(sb, data.residentId))) throw new Error("This residence has no access card form.");
     // the price first: a residence without one stops here, before the card is ended
     const line = await replacementLine(sb, data.residentId, data.reason);
     const { data: cards, error } = await sb.from("access_card_forms").select("id, status").eq("resident_id", data.residentId);
@@ -214,7 +216,8 @@ export const getReplacementCard = createServerFn({ method: "GET" })
     const request = await readReplacement(sb, data.residentId);
     // the line "Raise the invoice" opens with, at the residence's price now
     const line = request && !request.invoiceId ? await replacementLine(sb, data.residentId, request.reason).catch(() => null) : null;
-    return { request, line };
+    const { hasCardForm } = await import("@/lib/template-versions.server");
+    return { request, line, cardForm: await hasCardForm(sb, data.residentId) };
   });
 
 /** Step 2: the invoice generated from the access card - it is the one to wait for. */
@@ -245,6 +248,9 @@ export async function replacementAfterPayment(sb: any, invoiceId: string) {
  * Tenancy - there the card in use is handed back, so it is ended as Returned.
  */
 export async function makeCardForm(sb: any, residentId: string, reason: string, ended?: string[]) {
+  // a residence without a card form gets none - also for a change saved before this rule (28 Oct 2026)
+  const { hasCardForm } = await import("@/lib/template-versions.server");
+  if (!(await hasCardForm(sb, residentId))) return;
   const { data: cards } = await sb.from("access_card_forms").select("id, status").eq("resident_id", residentId).order("created_at");
   const all = (cards ?? []) as { id: string; status: string }[];
   let before = ended ?? [];
