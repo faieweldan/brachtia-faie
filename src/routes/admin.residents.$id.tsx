@@ -247,14 +247,23 @@ function ResidentProfilePage() {
   // a resident's uploaded file, open in the preview window
   const [docPreview, setDocPreview] = useState<{ title: string; fileName: string; url: string } | null>(null);
   const isEditing = (key: string) => !!editing[key];
+  const [savingKey, setSavingKey] = useState("");
   const editAction = (key: string) => (
     <Button
       size="sm"
       variant={isEditing(key) ? "default" : "ghost"}
-      onClick={() => setEditing((e) => ({ ...e, [key]: !e[key] }))}
+      disabled={savingKey === key}
+      onClick={() => {
+        if (!isEditing(key)) return setEditing((e) => ({ ...e, [key]: true }));
+        // Done saves the section - it only closed it, so an edit was gone on refresh (Dani, 28 Oct 2026)
+        setSavingKey(key);
+        void save()
+          .then((ok) => ok && setEditing((e) => ({ ...e, [key]: false })))
+          .finally(() => setSavingKey(""));
+      }}
     >
       {isEditing(key) ? (
-        "Done"
+        savingKey === key ? "Saving…" : "Save"
       ) : (
         <>
           <Pencil className="mr-1 size-3.5" /> Edit
@@ -356,22 +365,25 @@ function ResidentProfilePage() {
   const tenancy = saved;
   const placed = findBedForResident(units, form);
 
-  async function save() {
-    if (!form) return;
+  async function save(): Promise<boolean> {
+    if (!form) return false;
     let saved;
     try {
       saved = await saveResidentRecord(form);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not save resident");
-      return;
+      return false;
     }
+    // the documents read the profile live - their empty-field check reads it again
+    void queryClient.invalidateQueries({ queryKey: ["signing-gaps", form.id] });
     if (isNew) {
       // the server assigned the real id, so move onto that address
       toast.success("Resident created");
       void navigate({ to: "/admin/residents/$id", params: { id: saved.id }, replace: true });
-      return;
+      return true;
     }
     toast.success("Resident saved");
+    return true;
   }
 
   /** A real tenancy row (13 Oct 2026) - the pages no longer keep their own copy. */
