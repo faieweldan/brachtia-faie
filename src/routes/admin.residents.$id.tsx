@@ -244,9 +244,6 @@ function ResidentProfilePage() {
   const [confirmName, setConfirmName] = useState("");
   // Update Tenancy: a room, occupancy or date change, and its documents (Dani, 3 Oct 2026)
   const [updateTenancyOpen, setUpdateTenancyOpen] = useState(false);
-  // Moved out: the day they handed the room back (22 Oct 2026)
-  const [movingOut, setMovingOut] = useState(false);
-  const [moveOutOn, setMoveOutOn] = useState("");
   // a resident's uploaded file, open in the preview window
   const [docPreview, setDocPreview] = useState<{ title: string; fileName: string; url: string } | null>(null);
   const isEditing = (key: string) => !!editing[key];
@@ -521,28 +518,6 @@ function ResidentProfilePage() {
   }
 
   /**
-   * Moved out before the checkout is settled (Dani, 22 Oct 2026): the room goes
-   * to whoever has it next now; the statement is settled later, and settling it
-   * makes them Inactive (checkedOut).
-   */
-  async function confirmMoveOut() {
-    if (!form || !moveOutOn) return;
-    try {
-      const { moveOut } = await import("@/lib/homes.functions");
-      const { promoted } = await moveOut({ data: { residentId: form.id, on: moveOutOn } });
-      await Promise.all([refreshUnits(), queryClient.invalidateQueries({ queryKey: ["tenancy-dates"] })]);
-      setMovingOut(false);
-      toast.success(`${form.fullName || "Resident"} moved out`, {
-        description: promoted.length
-          ? `Room handed to ${promoted.join(", ")} - Booked until they check in.`
-          : "The room is free. Their checkout statement stays open until it is settled.",
-      });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not move them out");
-    }
-  }
-
-  /**
    * They have left: their bed goes to whoever has it next - Booked, not
    * Occupied, until that person checks in - or is emptied. Done by the server
    * in one step; the browser used to empty the bed itself, which would have
@@ -672,20 +647,7 @@ function ResidentProfilePage() {
                     Update Tenancy
                   </Button>
                 ) : null}
-                {/* left the room before the money is settled: it goes to the next person now (22 Oct 2026) */}
-                {person === "active" && placed && !placed.upcoming ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    title="They have handed the room back. The room is freed now; the checkout statement is settled later."
-                    onClick={() => {
-                      setMoveOutOn(klToday());
-                      setMovingOut(true);
-                    }}
-                  >
-                    Moved out
-                  </Button>
-                ) : null}
+                {/* handing the room back is the checkout statement's Room step - no button of its own here (28 Oct 2026) */}
                 {/* any time: a resident can cancel, end early or leave at the end (Dani, 2 Oct 2026) */}
                 {!isFormer ? (
                   <Button
@@ -726,34 +688,6 @@ function ResidentProfilePage() {
               </Button>
             ) : null}
           </div>
-
-          <Dialog open={movingOut} onOpenChange={setMovingOut}>
-            <DialogContent className="admin-ui">
-              <DialogHeader>
-                <DialogTitle className="text-base font-bold text-brand-deep">
-                  {form.fullName || "This resident"} has moved out?
-                </DialogTitle>
-                <DialogDescription>
-                  Future room assignments go to the next guest or revert to Vacant. Rent billing stops after
-                  the checkout date. The checkout statement remains open; settling it changes their status to
-                  Inactive.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">Day they handed the room back</p>
-                <Input
-                  type="date"
-                  value={moveOutOn}
-                  min={stay.start || undefined}
-                  onChange={(e) => setMoveOutOn(e.target.value)}
-                  aria-label="Move-out day"
-                />
-              </div>
-              <Button disabled={!moveOutOn} onClick={() => void confirmMoveOut()}>
-                Free the room
-              </Button>
-            </DialogContent>
-          </Dialog>
 
           <Dialog open={deleting} onOpenChange={setDeleting}>
             <DialogContent className="admin-ui">
@@ -1176,6 +1110,7 @@ function ResidentProfilePage() {
             onCardChargeOpened={clearCardCharge}
             focusInvoice={focusInvoice}
             onInactive={checkedOut}
+            onRoomHandedBack={refreshUnits}
             residentId={form.id}
             quickbooksId={form.quickbooksId}
             tenancyEnd={stay.end}

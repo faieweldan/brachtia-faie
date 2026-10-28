@@ -131,6 +131,23 @@ async function moneyNow(residentId: string, type?: CheckoutType) {
 }
 
 /** Everything the admin card shows. */
+/**
+ * The day the room was handed back - the latest tenancy's moved_out_on, the
+ * stay move_out writes to (Dani, 28 Oct 2026). One reader for the statement's
+ * Room step and for the Close check. "*": read when the database has the column.
+ */
+async function handedBackOn(sb: any, residentId: string): Promise<string | null> {
+  const { data } = await sb
+    .from("tenancies")
+    .select("*")
+    .eq("resident_id", residentId)
+    .order("start_date", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data?.moved_out_on ? String(data.moved_out_on).slice(0, 10) : null;
+}
+
 export const getCheckout = createServerFn({ method: "GET" })
   .inputValidator((d) => rid.parse(d))
   .handler(async ({ data }) => {
@@ -171,6 +188,8 @@ export const getCheckout = createServerFn({ method: "GET" })
       draftTotals: totals(now.deposits, s?.draft.lines ?? [...now.outstanding, ...now.forfeits]),
       photos: await photoUrls(sb, [...new Set(paths)]),
       initialPaid: now.initialPaid,
+      /** the Room step: the day they handed the room back, or null */
+      handedBackOn: await handedBackOn(sb, data.residentId),
       /** the kind the dates say, and the kind in use */
       suggested: now.suggested,
       type: now.type,
@@ -400,6 +419,9 @@ export const markCheckoutInactive = createServerFn({ method: "POST" })
     const { readStatement, writeStatement } = await import("@/lib/checkout.server");
     const s = await readStatement(sb, data.residentId);
     if (!s?.settled) throw new Error("The resident has to sign the statement first.");
+    // the Room step comes first - a cancellation never had the keys, its room is released on closing
+    if ((s.draft.type ?? "end_of_tenancy") !== "cancellation" && !(await handedBackOn(sb, data.residentId)))
+      throw new Error("Hand the room back first.");
     if (s.settled.refund > 0 && !s.refund) throw new Error("Record the refund first.");
     if (s.settled.owed > 0) {
       const { data: cs } = await sb.from("invoices").select("status").eq("number", s.settled.csInvoiceNumber ?? "").maybeSingle();

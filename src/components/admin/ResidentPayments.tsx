@@ -63,6 +63,7 @@ export function ResidentPayments({
   focusInvoice = null,
   onCardChargeOpened,
   onInactive,
+  onRoomHandedBack,
   residentId,
   quickbooksId,
   tenancyEnd,
@@ -78,6 +79,8 @@ export function ResidentPayments({
   onCardChargeOpened?: () => void;
   /** checkout settled: the resident becomes Inactive and their bed is freed */
   onInactive?: () => Promise<void>;
+  /** the checkout statement's Room step freed the room: the page reloads the rooms */
+  onRoomHandedBack?: () => Promise<void>;
   residentId: string;
   quickbooksId?: string;
   tenancyEnd?: string;
@@ -599,7 +602,7 @@ export function ResidentPayments({
             ))}
             {/* wraps the statement, so the outline from the Checkout button has something to draw round */}
             <div id="checkout-settlement" className="scroll-mt-24 p-1">
-              <CheckoutStatement residentId={residentId} phone={details.phone} onInactive={onInactive} />
+              <CheckoutStatement residentId={residentId} phone={details.phone} onInactive={onInactive} onRoomHandedBack={onRoomHandedBack} />
             </div>
           </Row>
 

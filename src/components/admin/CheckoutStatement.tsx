@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Dropdown, StaffPicker } from "@/components/admin/Dropdown";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Camera, Check, FileText, Loader2, Plus, Send, Undo2, X } from "lucide-react";
+import { Camera, Check, FileText, KeyRound, Loader2, Plus, Send, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ import { compressImage } from "@/lib/compress";
 import { METHOD_RULES, ruleFor } from "@/lib/payment-methods";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { klToday } from "@/lib/kl-date";
+import { fmtDate } from "@/lib/ops-store";
 
 /**
  * The checkout statement on the resident's Payments tab (Dani, 2 Oct 2026) -
@@ -41,6 +42,12 @@ import { klToday } from "@/lib/kl-date";
  *
  *   Start → edit → Issue (v1) → the resident signs → Record refund
  *   Changed after issuing → Issue again (v2); v1 is kept, v2 is signed
+ *
+ * Two tracks, closed together (Dani, 28 Oct 2026): Room - the day they handed
+ * the room back, confirmed by hand, frees it for the next resident and stops
+ * rent; Money - the statement. A room can go back while a bill is still to
+ * come, and the deposit stays held. Close checkout needs both. This replaced a
+ * separate "Moved out" button on the resident page: one way to free a room.
  *
  * Built from the same pieces as every invoice (Dani, 12 Oct 2026): the lines
  * are LineItemsEditor, the preview is PdfPreviewButton, the sums and "credit
@@ -83,11 +90,14 @@ export function CheckoutStatement({
   residentId,
   phone,
   onInactive,
+  onRoomHandedBack,
 }: {
   residentId: string;
   phone: string;
   /** frees the bed and marks the resident Inactive on their record */
   onInactive?: (() => Promise<void> | void) | undefined;
+  /** the room went back: the page reloads the rooms */
+  onRoomHandedBack?: (() => Promise<void> | void) | undefined;
 }) {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["checkout", residentId], queryFn: () => getCheckout({ data: { residentId } }) });
@@ -144,6 +154,8 @@ export function CheckoutStatement({
   const paidIn = type === "cancellation";
   // the money is in or out: the resident can be made inactive
   const moneyDone = !!settled && (settled.refund > 0 ? !!s?.refund : settled.owed > 0 ? q.data.csPaid : true);
+  // a cancellation never had the keys: its reserved room is released on closing
+  const roomDone = paidIn || !!q.data.handedBackOn;
 
   async function addPhoto(i: number, file: File | undefined) {
     if (!file) return;
@@ -234,6 +246,17 @@ export function CheckoutStatement({
         </div>
         <p className="text-xs text-muted-foreground">{TYPE_HINT[type]}</p>
       </div>
+
+      <RoomStep
+        residentId={residentId}
+        cancellation={paidIn}
+        handedBackOn={q.data.handedBackOn}
+        closedAt={s.inactiveAt ?? null}
+        onDone={async () => {
+          await Promise.all([refresh(), qc.invalidateQueries({ queryKey: ["tenancy-dates"] })]);
+          await onRoomHandedBack?.();
+        }}
+      />
 
       {/* deposits held - or, for a cancellation, what was paid - read from the resident's invoices */}
       <div className="overflow-hidden rounded-xl border border-border">
@@ -444,25 +467,29 @@ export function CheckoutStatement({
         </div>
       ) : null}
 
-      {/* last step: the resident becomes inactive, and the bed is freed (Dani, 2 Oct 2026) */}
+      {/* last step: room and money both done - the resident becomes Inactive (Dani, 2 and 28 Oct 2026) */}
       {settled ? (
         s.inactiveAt ? (
           <p className="rounded-xl border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-            Resident made inactive {fmt(s.inactiveAt)}.
+            Checkout closed {fmt(s.inactiveAt)}. The resident is Inactive.
           </p>
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border p-3 text-sm">
             <span className="text-muted-foreground">
-              {moneyDone
-                ? "Paid. Make the resident inactive - their bed is freed."
-                : settled.owed > 0
+              {!moneyDone
+                ? settled.owed > 0
                   ? `Waiting for ${settled.csInvoiceNumber || "the settlement invoice"} to be paid.`
-                  : "Waiting for the refund to be recorded."}
+                  : "Waiting for the refund to be recorded."
+                : !roomDone
+                  ? "Money settled. Hand the room back above to close."
+                  : paidIn
+                    ? "Money settled. Closing releases the reserved room; the resident becomes Inactive."
+                    : "Room handed back and money settled. Closing makes the resident Inactive."}
             </span>
             <Button
               size="sm"
               variant="outline"
-              disabled={!moneyDone || !!busy}
+              disabled={!moneyDone || !roomDone || !!busy}
               onClick={() =>
                 void run(
                   "inactive",
@@ -470,17 +497,92 @@ export function CheckoutStatement({
                     await markCheckoutInactive({ data: { residentId } });
                     await onInactive?.();
                   },
-                  "Resident made inactive",
+                  "Checkout closed",
                 )
               }
             >
-              Make this resident inactive
+              Close checkout
             </Button>
           </div>
         )
       ) : null}
 
       <PdfPreviewDialog title={pdf?.title ?? ""} fileName={`${(pdf?.title ?? "statement").replace(/\//g, "-")}.pdf`} url={pdf?.url ?? null} onClose={() => setPdf(null)} />
+    </div>
+  );
+}
+
+/**
+ * The Room track (Dani, 28 Oct 2026): staff confirm by hand the day the room
+ * was handed back - never filled in from the end date, the bed must not go
+ * before the keys do. Saving is move_out: the day goes on the tenancy, the bed
+ * goes to whoever has it next (or is emptied), rent after the day is dropped.
+ */
+function RoomStep({
+  residentId,
+  cancellation,
+  handedBackOn,
+  closedAt,
+  onDone,
+}: {
+  residentId: string;
+  cancellation: boolean;
+  handedBackOn: string | null;
+  closedAt: string | null;
+  onDone: () => Promise<void>;
+}) {
+  const [on, setOn] = useState(klToday());
+  const [busy, setBusy] = useState(false);
+  const done = !!handedBackOn || (cancellation && !!closedAt);
+
+  async function handBack() {
+    setBusy(true);
+    try {
+      const { moveOut } = await import("@/lib/homes.functions");
+      const { promoted } = await moveOut({ data: { residentId, on } });
+      await onDone();
+      toast.success("Room handed back", {
+        description: promoted.length ? `Room handed to ${promoted.join(", ")} - Booked until they check in.` : "The room is free. Rent stops on that day.",
+      });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not hand the room back");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-border">
+      <div className="flex items-center justify-between bg-muted/50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <span className="flex items-center gap-1">
+          <KeyRound className="size-3.5" /> Room
+        </span>
+        <span className={done ? "text-emerald-700" : ""}>{done ? "Done" : "To do"}</span>
+      </div>
+      <div className="border-t border-border px-3 py-2 text-sm">
+        {handedBackOn ? (
+          <p className="flex items-center gap-1 text-emerald-800">
+            <Check className="size-4" /> Handed back on {fmtDate(handedBackOn)}. Rent stopped that day.
+          </p>
+        ) : cancellation ? (
+          <p className="text-muted-foreground">
+            {closedAt ? "Reserved room released." : "They never moved in. The reserved room is released when this checkout is closed."}
+          </p>
+        ) : (
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="space-y-1">
+              <span className="text-xs text-muted-foreground">Handed back on</span>
+              <DateInput value={on} max={klToday()} onChange={(e) => setOn(e.target.value)} className="h-9 w-40" />
+            </label>
+            <Button size="sm" variant="outline" disabled={!on || busy} onClick={() => void handBack()}>
+              {busy ? <Loader2 className="size-4 animate-spin" /> : null} Room handed back
+            </Button>
+            <p className="w-full text-xs text-muted-foreground">
+              The room goes to the next resident now. The deposit stays held until the money below is settled.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -824,7 +824,7 @@ export const releaseAfterCheckout = createServerFn({ method: "POST" })
 
 /**
  * Moved out (Dani, 22 Oct 2026): the room is handed back before the checkout
- * is settled. The day goes on their tenancy, the bed goes to whoever has it
+ * is settled - the checkout statement's Room step (28 Oct 2026). The day goes on their tenancy, the bed goes to whoever has it
  * next (or is emptied), and rent not billed yet for after the day is dropped -
  * SQL move_out, one transaction. The checkout statement stays open; settling
  * it later makes them Inactive.
@@ -834,6 +834,9 @@ export const moveOut = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     if (!isUuid(data.residentId)) throw new Error("No resident.");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data.on)) throw new Error("Pick the day they moved out.");
+    // confirmed by hand on the day the keys come back - never ahead of it (28 Oct 2026)
+    const { klToday } = await import("@/lib/kl-date");
+    if (data.on > klToday()) throw new Error("The room cannot be handed back on a day still to come.");
     const supabase = await admin();
     const { data: res, error } = await supabase.rpc("move_out", { p_resident: data.residentId, p_on: data.on });
     if (error && notMigrated(error))
