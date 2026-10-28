@@ -32,6 +32,8 @@ export type MappingContext = {
   letWhole?: boolean | undefined;
   /** the rent in force (tenancy-facts.server rentInForce) - before any copy; unset without rent terms */
   rentInForce?: number | null;
+  /** the billed Initial Payment invoices' lines (tenancy-events.server billedInitialLines); null before one is billed */
+  initialPayment?: { lines: { label: string; amount: number }[]; total: number } | null;
 };
 
 export type TemplateField = {
@@ -101,11 +103,23 @@ const scheduleName = (v: unknown) => {
 };
 
 /** The saved quote's first-payment lines, e.g. "Security deposit (2 months)". */
-const payLines = (c: MappingContext): { label: string; amount: number }[] =>
+/*
+ * The first-payment lines: the billed Initial Payment invoices first - the
+ * latest word, after any staff edit or Update Tenancy difference (28 Oct 2026) -
+ * and the quote saved with the booking only while no IP is billed yet.
+ */
+const quoteLines = (c: MappingContext): { label: string; amount: number }[] =>
   (c.enquiry?.["quote_snapshot"] as any)?.quote?.firstPayment ?? [];
-/** Amount of the first-payment line whose label starts with `prefix`. */
-const payLine = (prefix: string) => (c: MappingContext) =>
-  money(payLines(c).find((l) => String(l.label).startsWith(prefix))?.amount);
+const payLines = (c: MappingContext): { label: string; amount: number }[] => c.initialPayment?.lines ?? quoteLines(c);
+/**
+ * Every first-payment line that is this item, added up - "Utilities deposit"
+ * and "Utility deposit" alike, as the invoices write either (tenancy-change
+ * MONEY_ITEMS matches the same way).
+ */
+const payLine = (match: RegExp) => (c: MappingContext) => {
+  const hits = payLines(c).filter((l) => match.test(String(l.label).trim()));
+  return money(hits.length ? hits.reduce((n, l) => n + (Number(l.amount) || 0), 0) : undefined);
+};
 
 /**
  * What the rent includes and excludes, as the residence records it (Admin ›
@@ -161,14 +175,14 @@ export const TEMPLATE_FIELDS: TemplateField[] = [
   { key: "booking_move_in", label: "Move-in date", source: "Booking Record", get: (c) => fmtDate(c.enquiry?.["move_in"] ?? c.resident?.["move_in"]) },
   { key: "booking_move_out", label: "Move-out date", source: "Booking Record", get: (c) => fmtDate(c.enquiry?.["move_out"]) },
   { key: "lease_months", label: "Lease length (months)", source: "Booking Record", get: r("lease_months") },
-  // — Initial Payment: the first-payment lines from the saved quote —
-  { key: "deposit", label: "Security deposit", source: "Initial Payment", get: payLine("Security deposit") },
-  { key: "utilities_deposit", label: "Utilities deposit", source: "Initial Payment", get: payLine("Utilities deposit") },
-  { key: "access_card_deposit", label: "Access card deposit", source: "Initial Payment", get: payLine("Access card deposit") },
-  { key: "first_month_rent", label: "First month rent", source: "Initial Payment", get: payLine("First month rent") },
-  { key: "advance_rental", label: "Advance rental", source: "Initial Payment", get: payLine("Advance rental") },
-  { key: "admin_charges", label: "Admin charges", source: "Initial Payment", get: payLine("Admin") },
-  { key: "first_payment_total", label: "Total initial payment", source: "Initial Payment", get: (c) => money((c.enquiry?.["quote_snapshot"] as any)?.quote?.totalUpfront ?? c.enquiry?.["first_payment"]) },
+  // — Initial Payment: the billed IP invoices' lines, else the saved quote —
+  { key: "deposit", label: "Security deposit", source: "Initial Payment", get: payLine(/^security deposit/i) },
+  { key: "utilities_deposit", label: "Utilities deposit", source: "Initial Payment", get: payLine(/^utilit(y|ies) deposit/i) },
+  { key: "access_card_deposit", label: "Access card deposit", source: "Initial Payment", get: payLine(/^access card deposit/i) },
+  { key: "first_month_rent", label: "First month rent", source: "Initial Payment", get: payLine(/^first month rent/i) },
+  { key: "advance_rental", label: "Advance rental", source: "Initial Payment", get: payLine(/^advance rent/i) },
+  { key: "admin_charges", label: "Admin charges", source: "Initial Payment", get: payLine(/^admin/i) },
+  { key: "first_payment_total", label: "Total initial payment", source: "Initial Payment", get: (c) => money(c.initialPayment?.total ?? (c.enquiry?.["quote_snapshot"] as any)?.quote?.totalUpfront ?? c.enquiry?.["first_payment"]) },
   { key: "total_stay", label: "Total for whole stay", source: "Initial Payment", get: (c) => money((c.enquiry?.["quote_snapshot"] as any)?.quote?.totalStay) },
   { key: "residence", label: "Residence", source: "Room Record", get: (c) => c.residence?.["name"] },
   { key: "unit_no", label: "Unit no.", source: "Room Record", get: (c) => c.unit?.["unit_no"] },

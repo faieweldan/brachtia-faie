@@ -627,6 +627,44 @@ export async function raiseIp(
 /* ---------------------------------------------------------------- deposits */
 
 /**
+ * The money lines of every Initial Payment billed to the resident - the move-in
+ * IP and each later difference IP - added up by label, plus the move-in IP's
+ * total (Dani, 28 Oct 2026). What the tenancy agreement reads its deposits and
+ * fees from: the invoice as it stands, not the quote saved when the booking was
+ * made, which a booking made or changed by staff may not have (Diana Iusupova's
+ * pack printed Security deposit 0.00 beside an IP billing RM 600). Voided and
+ * not-yet-billed IPs are left out. null when no IP has been billed.
+ */
+export async function billedInitialLines(sb: any, residentId: string) {
+  const { data: inv } = await sb
+    .from("invoices")
+    .select("id, total, notes, created_at")
+    .eq("resident_id", residentId)
+    .eq("invoice_type", "initial")
+    .not("status", "in", "(void,scheduled)")
+    .order("created_at", { ascending: true });
+  const all = (inv ?? []) as any[];
+  if (!all.length) return null;
+  const { IP_DIFFERENCE_NOTE } = await import("@/lib/invoice-category");
+  const moveIn = [...all].reverse().find((i) => !String(i.notes ?? "").startsWith(IP_DIFFERENCE_NOTE)) ?? all[0];
+  const { data: items } = await sb
+    .from("invoice_items")
+    .select("invoice_id, label, amount, quantity, sort_order")
+    .in("invoice_id", all.map((i) => i.id))
+    .order("sort_order");
+  const order = new Map(all.map((i, n) => [i.id, n]));
+  const sum = new Map<string, number>();
+  for (const i of ((items ?? []) as any[]).sort((a, b) => (order.get(a.invoice_id) ?? 0) - (order.get(b.invoice_id) ?? 0))) {
+    const label = String(i.label ?? "").trim();
+    sum.set(label, r2((sum.get(label) ?? 0) + Number(i.amount || 0) * Number(i.quantity ?? 1)));
+  }
+  return {
+    lines: [...sum].map(([label, amount]) => ({ label, amount })),
+    total: r2(Number(moveIn.total || 0)),
+  };
+}
+
+/**
  * The deposits actually held: the deposit lines of every IP paid in full (the
  * move-in one and each Update Tenancy IP since) - a scheduled or unpaid IP holds
  * nothing yet (7 Oct 2026 review).
