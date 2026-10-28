@@ -65,7 +65,7 @@ describe("booking release", () => {
       {},
       { void_unpaid_booking_invoices: () => ({ ok: true, voided: ["INV/IP/00012"] }) },
     );
-    expect(await releaseBooking(db.sb, E)).toEqual({ ok: true, voided: ["INV/IP/00012"] });
+    expect(await releaseBooking(db.sb, E)).toEqual({ ok: true, released: 0, voided: ["INV/IP/00012"] });
     expect(db.rpcs).toEqual(["void_unpaid_booking_invoices", "release_hold"]);
   });
 });
