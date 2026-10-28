@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { CopyLinkButton } from "@/components/admin/CopyLinkButton";
 import { toast } from "sonner";
 
 import { MessageCard, useSentOnce } from "@/components/admin/MessageCard";
 import { getOrCreateProfileLink } from "@/lib/profile-link.functions";
+import { getSigningGaps } from "@/lib/tenancy-docs.functions";
 
 /**
  * The message a resident is sent when their documents are ready, with their
@@ -34,6 +36,8 @@ export function SigningMessageCard({ residentId, phone, packId, fresh }: { resid
   const { sent, markSent, open, setOpen } = useSentOnce(`brachtia-signing-copied-${packId}`, fresh);
   const [message, setMessage] = useState("");
   const [link, setLink] = useState("");
+  // anything still empty in the documents: not sent until it is filled (Dani, 28 Oct 2026)
+  const { data: gaps = [] } = useQuery({ queryKey: ["signing-gaps", residentId], queryFn: () => getSigningGaps({ data: { residentId } }), staleTime: 0 });
 
   // the link is made (or the live one reused) only when the message is opened
   useEffect(() => {
@@ -52,6 +56,12 @@ export function SigningMessageCard({ residentId, phone, packId, fresh }: { resid
     };
   }, [open, message, residentId]);
 
+  if (gaps.length)
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        {gaps.join(", ")} missing. Fill {gaps.length === 1 ? "it" : "them"} in before sending.
+      </div>
+    );
   return (
     <MessageCard
       title={<><span aria-hidden>📩</span> Signing message</>}

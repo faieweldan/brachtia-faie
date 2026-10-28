@@ -147,6 +147,20 @@ function toCard(row: any): AccessCardForm {
   };
 }
 
+/**
+ * What the documents in the signing link still have empty, by field name - the
+ * link is not sent until there is none (Dani, 28 Oct 2026, hard block).
+ */
+export const getSigningGaps = createServerFn({ method: "GET" })
+  .inputValidator((data: { residentId: string }) => data)
+  .handler(async ({ data }) => {
+    const db = await admin();
+    const { documentsOf } = await import("@/lib/signing.functions");
+    const { documentGaps } = await import("@/lib/templates.functions");
+    const docs = (await documentsOf(db, data.residentId)).filter((d) => d.kind === "agreement" && !d.signed && !d.form);
+    return [...new Set((await Promise.all(docs.map((d) => documentGaps(db, d.id)))).flat())];
+  });
+
 /** everything the Tenancy tab shows, in one round trip */
 export const getTenancyDocs = createServerFn({ method: "GET" })
   .inputValidator((data: { residentId: string }) => data)

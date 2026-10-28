@@ -72,7 +72,7 @@ async function residentFor(sb: any, token: string) {
  * ({{Resident_signature}}). A form Brachtia fills and hands in - the access
  * card form, as it is now - is not theirs to sign (Dani, 30 Sep 2026).
  */
-async function documentsOf(sb: any, residentId: string): Promise<SigningDoc[]> {
+export async function documentsOf(sb: any, residentId: string): Promise<SigningDoc[]> {
   const { asksResidentSignature } = await import("@/lib/templates.functions");
   const out: SigningDoc[] = [];
   const { data: ag } = await sb

@@ -723,10 +723,12 @@ async function renderDocumentPdf(
     if (file) return { ok: true, bytes: new Uint8Array(await file.arrayBuffer()), gaps: [] };
   }
   if (!versionId) return { ok: false, error: "No template was active for this document when it was generated." };
-  const { data: v } = await db.from("template_versions").select("content_html, file_path, boxes, version").eq("id", versionId).maybeSingle();
+  const { data: v } = await db.from("template_versions").select("content_html, file_path, boxes, version, mappings").eq("id", versionId).maybeSingle();
   const bytes = v ? await loadDocx(db, v.file_path) : null;
   if (!v || !bytes) return { ok: false, error: "This document's template has no file - it was generated from the web copy only." };
   const values: Record<string, string | null> = {};
+  // unsigned: what was saved empty is filled from the records as they are now
+  if (kind === "agreement" && !signedPath) saved = (await fromRecords(db, id, v, saved)).values;
   // a placeholder with no saved value stays showing, so the gap is seen
   for (const k of await placeholdersOf(db, v)) values[k] = extra[k] ?? saved[k] ?? null;
   const { signatureImages } = await import("@/lib/signatory.server");
@@ -745,6 +747,37 @@ async function renderDocumentPdf(
   const { fillDocx } = await import("@/lib/docx-fill");
   const r = await pdfResult(await fillDocx(bytes, values, images));
   return r.ok ? { ok: true, bytes: Uint8Array.from(atob(r.base64), (c) => c.charCodeAt(0)), gaps } : r;
+}
+
+/**
+ * An unsigned document's values (Dani, 28 Oct 2026): as saved, with what was
+ * saved empty filled from the resident's records as they are now - an address
+ * typed into the profile after the pack was made reaches the TA without making
+ * it again. A saved value is never replaced: what staff or an Update Tenancy
+ * change wrote stays. gaps: what is still empty and not mapped "Left blank",
+ * by its field's name - the resident's own signing fields aside.
+ */
+async function fromRecords(db: any, docId: string, v: any, saved: Record<string, string>) {
+  const { data: d } = await db.from("agreement_documents").select("tenancy_agreements!inner(resident_id)").eq("id", docId).maybeSingle();
+  const residentId = d?.tenancy_agreements?.resident_id as string | undefined;
+  const keys = (await placeholdersOf(db, v)).filter((k) => !/^resident_signature/i.test(k.trim()));
+  const results = residentId ? testMappingFor(keys, (await buildContext(db, residentId)).ctx, v.mappings ?? {}) : [];
+  const values = { ...saved };
+  const gaps: string[] = [];
+  for (const k of keys) {
+    const r = results.find((x) => x.key === k);
+    if (!String(values[k] ?? "").trim() && r?.value.trim()) values[k] = r.value;
+    if (!String(values[k] ?? "").trim() && r?.source !== "Left blank") gaps.push(r?.label || k);
+  }
+  return { values, gaps: [...new Set(gaps)] };
+}
+
+/** What an unsigned document still has empty - the signing link is not sent while there is any. */
+export async function documentGaps(db: any, docId: string): Promise<string[]> {
+  const { data: doc } = await db.from("agreement_documents").select("template_version_id, merge_values, status").eq("id", docId).maybeSingle();
+  if (!doc?.template_version_id || !["generated", "pending_signature"].includes(doc.status)) return [];
+  const { data: v } = await db.from("template_versions").select("content_html, file_path, boxes, mappings").eq("id", doc.template_version_id).maybeSingle();
+  return v ? (await fromRecords(db, docId, v, doc.merge_values ?? {})).gaps : [];
 }
 
 /**

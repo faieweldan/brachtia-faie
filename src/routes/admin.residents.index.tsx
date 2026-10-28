@@ -61,7 +61,7 @@ function ResidentsListPage() {
     return m;
   }, [ledger]);
   const [q, setQ] = useState("");
-  const [view, setView] = useState<"active" | "upcoming" | "moved_out" | "inactive" | "all">("active");
+  const [view, setView] = useState<"active" | "upcoming" | "moved_out" | "inactive" | "all">("all");
   const [university, setUniversity] = useState("");
   const [residence, setResidence] = useState("");
   // admin's own labels (13 Oct 2026): show only residents carrying this one
@@ -431,11 +431,12 @@ function ResidentsListPage() {
             <div className="mb-4 flex flex-wrap gap-2">
               {(
                 [
+                  // All first and open by default: a search finds the person whatever their stage (Dani, 28 Oct 2026)
+                  { key: "all", label: "All", count: residents.length },
                   { key: "active", label: "Current", count: counts.active },
                   { key: "upcoming", label: "Upcoming", count: counts.upcoming },
                   { key: "moved_out", label: "Moved out", count: counts.moved_out },
                   { key: "inactive", label: "Former", count: counts.inactive },
-                  { key: "all", label: "All", count: residents.length },
                 ] as const
               ).map((t) => (
                 <button
