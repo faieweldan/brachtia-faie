@@ -296,6 +296,36 @@ export function rentForDays(from: string, to: string, rent: number): number {
   return round2(total);
 }
 
+/**
+ * The rent for a whole stay, [start, end], at `rent` a month and each rent
+ * change from its own day (Dani, 28 Oct 2026 - the agreement's "Total for whole
+ * stay"). Priced day by day like every rent line (rentForDays), rounded month
+ * by month as the invoices round: a stay from 27 Oct 2026 to 14 Mar 2027 at
+ * RM 1,700 is 274.19 + 4 x 1,700 + 767.74 = 7,841.93.
+ */
+export function stayRent(start: string, end: string, rent: number, steps: RentStep[] = []): number {
+  if (!start || !end || end < start) return 0;
+  const sorted = [...steps].filter((s) => s.from).sort((a, b) => a.from.localeCompare(b.from));
+  const rentOn = (d: string) => {
+    const s = sorted.filter((x) => x.from <= d).at(-1);
+    return s ? s.newRent : sorted.length ? sorted[0]!.oldRent : rent;
+  };
+  let total = 0;
+  for (let from = start, guard = 0; from <= end && guard < 600; guard++) {
+    const monthEnd = shiftDate(from.slice(0, 8) + "01", { months: 1, days: -1 });
+    const to = monthEnd < end ? monthEnd : end;
+    // a rent change inside the month splits it
+    const cuts = sorted.map((x) => x.from).filter((d) => d > from && d <= to);
+    let partStart = from;
+    for (const cut of [...cuts, shiftDate(to, { days: 1 })]) {
+      total += rentForDays(partStart, shiftDate(cut, { days: -1 }), rentOn(partStart));
+      partStart = cut;
+    }
+    from = shiftDate(to, { days: 1 });
+  }
+  return round2(total);
+}
+
 export type StepSplit = {
   /** the days before the move, at the old rent - "" when the period starts in the new room */
   before: { start: string; end: string; amount: number } | null;

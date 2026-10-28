@@ -9,6 +9,7 @@ import { occupancyLabel, soldBedLabel, soldOccupancy } from "@/lib/placement";
 import { isNewCardApplication } from "@/lib/tenancy-docs";
 import { COUNTRIES, SCHEDULES, cleanPhone, dialFor } from "@/lib/reference-data";
 import { stayLength } from "@/lib/stay-length";
+import { stayRent, type RentStep } from "@/lib/rental-schedule";
 
 export type FieldSource = "Resident Record" | "Booking Record" | "Initial Payment" | "Room Record" | "Tenancy Record" | "Signatory" | "Other";
 export const FIELD_SOURCES: FieldSource[] = ["Resident Record", "Booking Record", "Initial Payment", "Room Record", "Tenancy Record", "Signatory", "Other"];
@@ -34,6 +35,8 @@ export type MappingContext = {
   rentInForce?: number | null;
   /** the billed Initial Payment invoices' lines (tenancy-events.server billedInitialLines); null before one is billed */
   initialPayment?: { lines: { label: string; amount: number }[]; total: number } | null;
+  /** the tenancy's rent changes, each from its day (rent-schedule.server readRentSteps) */
+  rentSteps?: RentStep[];
 };
 
 export type TemplateField = {
@@ -132,6 +135,20 @@ const rentalTermList = (c: MappingContext, part: "included" | "excluded") => {
   return Array.isArray(list) ? list.join(", ") : "";
 };
 
+/*
+ * The rent for the whole stay, added up from the official tenancy dates and the
+ * rent with its changes (Dani, 28 Oct 2026) - not the quote saved at booking,
+ * which a staff-made booking lacks and an extension leaves behind. The quote
+ * only when the dates or rent are not known.
+ */
+const wholeStay = (c: MappingContext) => {
+  const from = String(start(c) ?? "").slice(0, 10);
+  const to = String(end(c) ?? "").slice(0, 10);
+  const monthly = Number(rent(c)) || 0;
+  if (from && to && (monthly > 0 || c.rentSteps?.length)) return money(stayRent(from, to, monthly, c.rentSteps ?? []));
+  return money((c.enquiry?.["quote_snapshot"] as any)?.quote?.totalStay);
+};
+
 export const TEMPLATE_FIELDS: TemplateField[] = [
   // — Resident Record: everything on the profile —
   { key: "resident_full_name", label: "Full name", source: "Resident Record", get: r("full_name") },
@@ -183,7 +200,7 @@ export const TEMPLATE_FIELDS: TemplateField[] = [
   { key: "advance_rental", label: "Advance rental", source: "Initial Payment", get: payLine(/^advance rent/i) },
   { key: "admin_charges", label: "Admin charges", source: "Initial Payment", get: payLine(/^admin/i) },
   { key: "first_payment_total", label: "Total initial payment", source: "Initial Payment", get: (c) => money(c.initialPayment?.total ?? (c.enquiry?.["quote_snapshot"] as any)?.quote?.totalUpfront ?? c.enquiry?.["first_payment"]) },
-  { key: "total_stay", label: "Total for whole stay", source: "Initial Payment", get: (c) => money((c.enquiry?.["quote_snapshot"] as any)?.quote?.totalStay) },
+  { key: "total_stay", label: "Total for whole stay", source: "Initial Payment", get: wholeStay },
   { key: "residence", label: "Residence", source: "Room Record", get: (c) => c.residence?.["name"] },
   { key: "unit_no", label: "Unit no.", source: "Room Record", get: (c) => c.unit?.["unit_no"] },
   { key: "room_no", label: "Room", source: "Room Record", get: (c) => (c.room ? roomName(String(c.room["letter"] ?? "")) : "") },
