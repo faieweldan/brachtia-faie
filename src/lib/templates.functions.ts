@@ -3,7 +3,7 @@ import { isNewCardApplication } from "@/lib/tenancy-docs";
 import type { PdfBox } from "@/lib/pdf-boxes";
 import { z } from "zod";
 
-import { detectPlaceholders, isDocumentOwn, isTickResult, testMappingFor, unmapped, type MappingContext, type Mappings } from "@/lib/template-fields";
+import { detectPlaceholders, FIELD_BY_KEY, isDocumentOwn, isTickResult, mappingFor, testMappingFor, unmapped, type MappingContext, type Mappings } from "@/lib/template-fields";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -753,11 +753,11 @@ async function renderDocumentPdf(
 /**
  * An unsigned document is read as things stand now (Dani, 28 Oct 2026) - one
  * source, no making it again: the template active for its residence and type
- * (a new Schedule A reaches packs already made), and its values from the
- * resident's records, so a profile filled in or corrected later is on it. Only
- * the values that belong to the document itself (isDocumentOwn - its dates,
- * what the rent includes) and any the records have no value for keep what was
- * saved. Signed, the file is the record and none of this applies.
+ * (a new Schedule A reaches packs already made), and the person's details
+ * (Resident Record, Signatory) from the records, so a profile filled in or
+ * corrected later is on it. The stay's room, dates and money keep what was
+ * saved - an Update Tenancy change made them for its own date - and are filled
+ * from the records only where empty. Signed, the file is the record.
  */
 export async function readVersionId(db: any, docId: string, fallback: string | null): Promise<string | null> {
   const { data: d } = await db.from("agreement_documents").select("doc_type, tenancy_agreements!inner(resident_id)").eq("id", docId).maybeSingle();
@@ -776,8 +776,10 @@ async function fromRecords(db: any, docId: string, v: any, saved: Record<string,
   const gaps: string[] = [];
   for (const k of keys) {
     const r = results.find((x) => x.key === k);
-    const own = isDocumentOwn(k) && String(saved[k] ?? "").trim();
-    if (!own && r?.value.trim()) values[k] = r.value;
+    // the person is read live; the stay's room, dates and money stay as made (an Update Tenancy change sets them for its own date)
+    const m = mappingFor(k, v.mappings ?? {});
+    const person = m?.kind === "field" && ["Resident Record", "Signatory"].includes(FIELD_BY_KEY.get(m.key)?.source ?? "");
+    if (r?.value.trim() && (person || !String(values[k] ?? "").trim())) values[k] = r.value;
     if (!String(values[k] ?? "").trim() && r?.source !== "Left blank") gaps.push(r?.label || k);
   }
   return { values, gaps: [...new Set(gaps)] };
