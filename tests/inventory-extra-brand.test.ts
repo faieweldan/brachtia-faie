@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { BRANDS, emptyRecord, inventoryGaps } from "../src/lib/inventory";
+import { LEGACY_BRANDS as BRANDS, emptyRecord, inventoryGaps } from "../src/lib/inventory";
 
 /*
  * An item added in a room takes a brand from the same list as the fixed rows

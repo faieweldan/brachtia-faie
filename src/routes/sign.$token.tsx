@@ -524,7 +524,13 @@ function Section({
                   // PDF they sign shows every item (Dani, 5 Oct 2026). It stays mounted, hidden,
                   // so what was sent is still what is signed
                   <div className={doc.stage === "returned" ? "hidden" : ""}>
+                  {!doc.list ? (
+                    <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                      The inventory list for your residence is not ready yet. Please contact Brachtia.
+                    </p>
+                  ) : (
                   <InventoryChecklist
+                    list={doc.list}
                     // a new draft each time Brachtia answers, starting from what they answered
                     key={returned.data?.returnedAt ?? "draft"}
                     draftKey={`brachtia-inventory-${doc.key}${returned.data?.returnedAt ? `-${returned.data.returnedAt}` : ""}`}
@@ -537,6 +543,7 @@ function Section({
                     // sent once, the answers are locked - view only (Dani, 5 Oct 2026)
                     locked={doc.stage === "returned"}
                   />
+                  )}
                   </div>
                   )}
                 </>

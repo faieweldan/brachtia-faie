@@ -7,8 +7,13 @@
  * nothing to upload - the resident walks the room and answers - so it is kept
  * here as data, and the signed copy is drawn from their answers.
  *
- * The list is the Schedule C form of 1 Oct 2026. Changing it changes what the
- * next resident is asked; a signed record keeps the items it was signed with.
+ * Each residence has its own list (Dani, 28 Oct 2026): Admin › Website ›
+ * Residences › Schedule C, kept on `residences.inventory` - The Arc's form and
+ * Solstice's are not the same. A check takes its residence's list when it is
+ * sent in (`record.list`), so a later change in Settings changes what the next
+ * resident is asked, never a record already sent. Records sent before 28 Oct
+ * 2026 carry no list: they were made with LEGACY_INVENTORY, The Arc's form of
+ * 1 Oct 2026, and are read with it.
  */
 
 export type InventoryStatus = "present" | "defect" | "not_provided";
@@ -21,7 +26,7 @@ export type InventoryItem = {
   qty: number;
   /**
    * The form's "Brand / Model / Serial No." column. Where it says "Brand", the
-   * brand is picked from BRANDS (the list the form gives for the fridge, for
+   * brand is picked from the residence's brand list (the list the form gives for the fridge, for
    * every "Brand" row - Dani, 1 Oct 2026); some rows list their own choices;
    * a dash in the form is no details at all. SERIAL asks for the card's
    * serial number, typed (form of 2 Oct 2026). Required either way.
@@ -31,7 +36,7 @@ export type InventoryItem = {
 
 /** The form's brand list, on the Refrigerator row; "Other" asks for the name. */
 /* A to Z, "Other" last (Dani, 5 Oct 2026) */
-export const BRANDS = [
+export const LEGACY_BRANDS = [
   "Alpha",
   "BeeBest",
   "Daikin",
@@ -58,8 +63,8 @@ export type InventoryArea = { id: string; name: string; items: InventoryItem[] }
 
 const item = (id: string, name: string, qty = 1, details?: readonly string[] | typeof SERIAL): InventoryItem => ({ id, name, qty, ...(details ? { details } : {}) });
 
-/* the Schedule C form of 1 Oct 2026 (references/agreement and access) */
-export const INVENTORY: InventoryArea[] = [
+/* The Arc's Schedule C form of 1 Oct 2026 - the list a record without its own was made with */
+export const LEGACY_INVENTORY: InventoryArea[] = [
   {
     id: "foyer",
     name: "Foyer",
@@ -70,7 +75,7 @@ export const INVENTORY: InventoryArea[] = [
     name: "Living Hall",
     items: [
       item("living-ceiling-lights", "Ceiling Lights"),
-      item("living-ceiling-fan", "Ceiling Fan", 1, BRANDS),
+      item("living-ceiling-fan", "Ceiling Fan", 1, LEGACY_BRANDS),
       item("living-curtains", "Curtains"),
       item("living-sofa", "Sofa (3 Seater)"),
       item("living-coffee-table", "Coffee Table"),
@@ -83,7 +88,7 @@ export const INVENTORY: InventoryArea[] = [
     name: "Dining",
     items: [
       item("dining-ceiling-lights", "Ceiling Lights"),
-      item("dining-ceiling-fan", "Ceiling Fan", 1, BRANDS),
+      item("dining-ceiling-fan", "Ceiling Fan", 1, LEGACY_BRANDS),
       item("dining-table", "Dining Table"),
       item("dining-chairs", "Dining Chairs", 6),
     ],
@@ -95,11 +100,11 @@ export const INVENTORY: InventoryArea[] = [
       item("kitchen-ceiling-lights", "Ceiling Lights"),
       item("kitchen-cabinet", "Kitchen Cabinet (Top & Bottom)"),
       item("kitchen-hood-hob", "Built In Cooker Hood & Hob"),
-      item("kitchen-induction-cooker", "Portable Induction Cooker", 1, BRANDS),
-      item("kitchen-refrigerator", "Refrigerator", 1, BRANDS),
-      item("kitchen-microwave", "Microwave", 1, BRANDS),
-      item("kitchen-rice-cooker", "Rice Cooker", 1, BRANDS),
-      item("kitchen-kettle", "Electric Jug / Kettle", 1, BRANDS),
+      item("kitchen-induction-cooker", "Portable Induction Cooker", 1, LEGACY_BRANDS),
+      item("kitchen-refrigerator", "Refrigerator", 1, LEGACY_BRANDS),
+      item("kitchen-microwave", "Microwave", 1, LEGACY_BRANDS),
+      item("kitchen-rice-cooker", "Rice Cooker", 1, LEGACY_BRANDS),
+      item("kitchen-kettle", "Electric Jug / Kettle", 1, LEGACY_BRANDS),
       item("kitchen-pot-pan", "Pot with Lid & Pan"),
       item("kitchen-induction-pot", "Induction Pot"),
       item("kitchen-dish-drainer", "Dish Drainer"),
@@ -112,7 +117,7 @@ export const INVENTORY: InventoryArea[] = [
     id: "yard",
     name: "Yard",
     items: [
-      item("yard-washing-machine", "Washing Machine", 1, BRANDS),
+      item("yard-washing-machine", "Washing Machine", 1, LEGACY_BRANDS),
       item("yard-pail-mop", "Pail, Mop & Toilet Brush"),
       item("yard-broom", "Broom, Dustpan & Dustbin"),
       item("yard-ceiling-lights", "Ceiling Lights"),
@@ -123,9 +128,9 @@ export const INVENTORY: InventoryArea[] = [
     name: "Room",
     items: [
       item("room-ceiling-lights", "Ceiling Lights"),
-      item("room-ceiling-fan", "Ceiling Fan", 1, BRANDS),
+      item("room-ceiling-fan", "Ceiling Fan", 1, LEGACY_BRANDS),
       item("room-curtains", "Curtains"),
-      item("room-aircon", "Air Conditioner + Remote", 1, BRANDS),
+      item("room-aircon", "Air Conditioner + Remote", 1, LEGACY_BRANDS),
       item("room-bed", "Bed Frame + Mattress"),
       item("room-mattress-protector", "Mattress Protector (Jean Perry)", 1, ["Single", "Queen", "King"]),
       item("room-bedside", "Bedside Table / Drawer"),
@@ -139,7 +144,7 @@ export const INVENTORY: InventoryArea[] = [
     items: [
       item("bath1-ceiling-lights", "Ceiling Lights"),
       item("bath1-mirror", "Wall Mirror"),
-      item("bath1-water-heater", "Water Heater", 1, BRANDS),
+      item("bath1-water-heater", "Water Heater", 1, LEGACY_BRANDS),
     ],
   },
   {
@@ -148,7 +153,7 @@ export const INVENTORY: InventoryArea[] = [
     items: [
       item("bath2-ceiling-lights", "Ceiling Lights"),
       item("bath2-mirror", "Wall Mirror"),
-      item("bath2-water-heater", "Water Heater", 1, BRANDS),
+      item("bath2-water-heater", "Water Heater", 1, LEGACY_BRANDS),
     ],
   },
   {
@@ -186,7 +191,7 @@ export type ExtraItem = {
   status: InventoryStatus | "";
   remark: string;
   photos?: string[];
-  /** its brand, from the same list as the fixed rows (BRANDS) - optional: not everything added has one (Dani, 14 Oct 2026) */
+  /** its brand, from the same list as the fixed rows (brandsOf) - optional: not everything added has one (Dani, 14 Oct 2026) */
   detail?: string;
 };
 
@@ -194,7 +199,12 @@ export type ExtraItem = {
 export const MAX_PHOTOS = 4;
 export type Meters = { keys: string; water: string; electric: string };
 
+/** A residence's Schedule C: its areas and items, and the brands a "Brand" row picks from. */
+export type InventoryList = { areas: InventoryArea[]; brands: readonly string[] };
+
 export type InventoryRecord = {
+  /** the list it was answered against - none: LEGACY_INVENTORY (before 28 Oct 2026) */
+  list?: InventoryList;
   answers: Record<string, InventoryAnswer>;
   extras: ExtraItem[];
   meters: Meters;
@@ -205,14 +215,56 @@ export type InventoryRecord = {
 export type InventoryMode = "in" | "out";
 export const MODE_LABEL: Record<InventoryMode, string> = { in: "Move-in check", out: "Move-out check" };
 
-export const emptyRecord = (): InventoryRecord => ({
+export const emptyRecord = (list?: InventoryList): InventoryRecord => ({
+  ...(list ? { list } : {}),
   answers: {},
   extras: [],
   meters: { keys: "", water: "", electric: "" },
   generalRemarks: "",
 });
 
-export const ALL_ITEMS = INVENTORY.flatMap((a) => a.items);
+/** the areas a record was answered against */
+export const areasOf = (r: InventoryRecord): InventoryArea[] => r.list?.areas ?? LEGACY_INVENTORY;
+/** the brands its "Brand" rows and added items pick from */
+export const brandsOf = (r: InventoryRecord): readonly string[] => r.list?.brands ?? LEGACY_BRANDS;
+export const allItems = (r: InventoryRecord) => areasOf(r).flatMap((a) => a.items);
+
+/**
+ * A residence's Schedule C as Settings keeps it (`residences.inventory`):
+ *   { brands: [...], areas: [{ id, name, items: [{ id, name, qty, details }] }] }
+ * details: "brand" (picked from brands), "serial" (typed), a list of choices,
+ * or nothing. Read into the list a check is answered against - "brand" becomes
+ * the brands themselves, with "Other" last. Null when the residence has none.
+ */
+
+export function listFromResidence(residence: { inventory?: unknown } | null | undefined): InventoryList | null {
+  const raw = residence?.inventory as { brands?: unknown; areas?: unknown } | undefined;
+  if (!raw || !Array.isArray(raw.areas)) return null;
+  const named = (v: unknown) => String(v ?? "").trim();
+  const brandList = (Array.isArray(raw.brands) ? raw.brands : []).map(named).filter((b) => b && b !== OTHER);
+  const brands = [...brandList, OTHER];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsonb
+  const areas: InventoryArea[] = (raw.areas as any[])
+    .map((a) => ({
+      id: named(a?.id),
+      name: named(a?.name),
+      items: (Array.isArray(a?.items) ? a.items : [])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsonb
+        .map((i: any): InventoryItem | null => {
+          const id = named(i?.id);
+          const name = named(i?.name);
+          if (!id || !name) return null;
+          const qty = Math.max(0, Number(i?.qty) || 0) || 1;
+          const d = i?.details;
+          const details =
+            d === "brand" ? brands : d === SERIAL ? SERIAL : Array.isArray(d) && d.map(named).filter(Boolean).length ? d.map(named).filter(Boolean) : undefined;
+          return { id, name, qty, ...(details ? { details } : {}) };
+        })
+        .filter((i: InventoryItem | null): i is InventoryItem => !!i),
+    }))
+    .filter((a) => a.id && a.name && a.items.length);
+  return areas.length ? { areas, brands } : null;
+}
 
 /** What still stops the check being sent, and the rows it is about - in list order. */
 export type InventoryGap = { label: string; rows: string[] };
@@ -227,7 +279,7 @@ export type InventoryGap = { label: string; rows: string[] };
 export function inventoryGaps(r: InventoryRecord): InventoryGap[] {
   // every row, in the order the page shows them
   const rows: { id: string; status: string; remark: string; photos: number; needsDetail: boolean; extra: boolean }[] = [];
-  for (const area of INVENTORY) {
+  for (const area of areasOf(r)) {
     for (const i of area.items) {
       const a = r.answers[i.id];
       const needsDetail = !!i.details && !!a?.status && a.status !== "not_provided" && (!a.detail?.trim() || a.detail === OTHER);
@@ -259,7 +311,7 @@ export const inventoryProblems = (r: InventoryRecord): string[] => inventoryGaps
 /** Every defect in a record, in list order - what admin reviews first. `key` is the item's id, or the added item's. */
 export function inventoryDefects(r: InventoryRecord): { key: string; area: string; name: string; remark: string; photos: string[] }[] {
   const out: { key: string; area: string; name: string; remark: string; photos: string[] }[] = [];
-  for (const area of INVENTORY) {
+  for (const area of areasOf(r)) {
     for (const it of area.items) {
       const a = r.answers[it.id];
       if (a?.status === "defect") out.push({ key: it.id, area: area.name, name: it.name, remark: a.remark, photos: a.photos ?? [] });
@@ -274,7 +326,7 @@ export function inventoryDefects(r: InventoryRecord): { key: string; area: strin
 /** Every item marked Not provided, in list order. */
 export function inventoryNotProvided(r: InventoryRecord): { key: string; area: string; name: string; remark: string; photos: string[] }[] {
   const out: { key: string; area: string; name: string; remark: string; photos: string[] }[] = [];
-  for (const area of INVENTORY) {
+  for (const area of areasOf(r)) {
     for (const it of area.items) {
       const a = r.answers[it.id];
       if (a?.status === "not_provided") out.push({ key: it.id, area: area.name, name: it.name, remark: a.remark, photos: [] });

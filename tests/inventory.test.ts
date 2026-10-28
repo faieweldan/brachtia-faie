@@ -1,20 +1,20 @@
 import { describe, expect, test } from "bun:test";
 
-import { ALL_ITEMS, emptyRecord, inventoryDefects, inventoryProblems, inventoryWindow } from "../src/lib/inventory";
+import { LEGACY_INVENTORY, emptyRecord, inventoryDefects, inventoryProblems, inventoryWindow } from "../src/lib/inventory";
 
 const allPresent = () => {
   const r = emptyRecord();
-  for (const i of ALL_ITEMS) r.answers[i.id] = { status: "present", remark: "", ...(i.details ? { detail: i.details[0]! } : {}) };
+  for (const i of LEGACY_INVENTORY.flatMap((a) => a.items)) r.answers[i.id] = { status: "present", remark: "", ...(i.details ? { detail: i.details[0]! } : {}) };
   return r;
 };
 
 describe("Schedule C - what stops submitting", () => {
   test("nothing answered: every item is still to check", () => {
-    expect(inventoryProblems(emptyRecord())).toEqual([`${ALL_ITEMS.length} items not checked yet`]);
+    expect(inventoryProblems(emptyRecord())).toEqual([`${LEGACY_INVENTORY.flatMap((a) => a.items).length} items not checked yet`]);
   });
   test("the keys and cards are items of their own (form of 1 Oct 2026)", () => {
-    expect(ALL_ITEMS.map((i) => i.name)).toContain("Main Grill Key");
-    expect(ALL_ITEMS.map((i) => i.name)).toContain("Car Sticker");
+    expect(LEGACY_INVENTORY.flatMap((a) => a.items).map((i) => i.name)).toContain("Main Grill Key");
+    expect(LEGACY_INVENTORY.flatMap((a) => a.items).map((i) => i.name)).toContain("Car Sticker");
   });
   test("a brand or type is needed where the form has one - not when the item is not there", () => {
     const r = allPresent();

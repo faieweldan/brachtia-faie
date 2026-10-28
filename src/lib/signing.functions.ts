@@ -51,6 +51,8 @@ export type SigningDoc = {
   submitted?: boolean;
   /** Schedule C: where the check is - see InventoryFile's status */
   stage?: "open" | "review" | "returned" | "submitted" | "signed";
+  /** Schedule C: the residence's list it is answered against (checkList) - null: none set yet */
+  list?: import("@/lib/inventory").InventoryList | null;
   /** Schedule C: until when it can still be filled in (ISO), while open */
   closes?: string;
   /** unique on the page - Schedule C's move-in and move-out share a document */
@@ -97,7 +99,7 @@ export async function documentsOf(sb: any, residentId: string): Promise<SigningD
       // marked not needed: nothing for the resident to do (tenancy-docs notNeeded)
       if (t === "sched_c" && (await import("@/lib/tenancy-docs")).notNeeded(r.merge_values)) continue;
       if (t === "sched_c") {
-        const { readInventory } = await import("@/lib/inventory.server");
+        const { checkList, readInventory } = await import("@/lib/inventory.server");
         const signed = SIGNED.has(r.status);
         const inFile = signed ? null : await readInventory(sb, residentId, r.id, "in");
         const stage = signed ? "signed" : (inFile?.status ?? "open");
@@ -112,6 +114,7 @@ export async function documentsOf(sb: any, residentId: string): Promise<SigningD
           stage,
           form: "inventory",
           mode: "in",
+          list: await checkList(sb, residentId, r.id, "in"),
           // set below, once the documents to sign before it are known
           locked: "",
         });
@@ -128,6 +131,7 @@ export async function documentsOf(sb: any, residentId: string): Promise<SigningD
             stage: outFile.status,
             form: "inventory",
             mode: "out",
+            list: await checkList(sb, residentId, r.id, "out"),
             locked: "",
           });
         }
@@ -365,7 +369,11 @@ export const sendInventoryForReview = createServerFn({ method: "POST" })
     if (doc.stage !== "open") return { ok: false as const, error: "This check is with Brachtia already - contact them if something is not right." };
     const { inventoryProblems, liveDecisions } = await import("@/lib/inventory");
     // the schema's optional qty reads as "string | undefined"; the record type means the same
-    const record = data.record as import("@/lib/inventory").InventoryRecord;
+    // answered against its residence's list - the server's, never one sent from the page
+    const { checkList } = await import("@/lib/inventory.server");
+    const list = await checkList(sb, found.resident.id, data.id, data.mode);
+    if (!list) return { ok: false as const, error: "This residence's Schedule C list is not set up yet - please contact Brachtia." };
+    const record = { ...(data.record as import("@/lib/inventory").InventoryRecord), list };
     const problems = inventoryProblems(record);
     if (problems.length) return { ok: false as const, error: `Not finished yet: ${problems.join(", ")}.` };
     const { photoFolder, readInventory, writeInventory } = await import("@/lib/inventory.server");

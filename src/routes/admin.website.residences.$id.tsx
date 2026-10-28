@@ -32,6 +32,7 @@ import {
 } from "@/components/admin/fields";
 import { GalleryEditor, ImageList } from "@/components/admin/GalleryEditor";
 import { ImageField } from "@/components/admin/ImageUploader";
+import { InventoryEditor } from "@/components/admin/InventoryEditor";
 
 export const Route = createFileRoute("/admin/website/residences/$id")({
   component: ResidenceEditor,
@@ -88,6 +89,7 @@ const EDITABLE_KEYS = [
   "unit_rates",
   "rental_terms",
   "additional_charges",
+  "inventory",
 ];
 
 const NAV = [
@@ -97,6 +99,7 @@ const NAV = [
   { id: "location", label: "Location" },
   { id: "terms", label: "Terms & fees" },
   { id: "addons", label: "Add-ons" },
+  { id: "inventory", label: "Schedule C" },
   { id: "rooms", label: "Room types" },
   { id: "whole-unit", label: "Whole unit" },
 ];
@@ -519,6 +522,14 @@ function ResidenceEditor() {
               description="Optional extras residents can add in the cost calculator."
             >
               <AddonsEditor items={form.addons ?? []} onChange={(v) => set("addons", v)} />
+            </Section>
+
+            <Section
+              id="inventory"
+              title="Schedule C - Inventory"
+              description="The checklist residents of this residence answer at move-in and move-out. A check keeps the list it was sent with."
+            >
+              <InventoryEditor value={form.inventory ?? {}} onChange={(v) => set("inventory", v)} />
             </Section>
 
             <RoomsSection residenceId={id} rooms={rooms} />

@@ -23,9 +23,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  ALL_ITEMS,
-  BRANDS,
-  INVENTORY,
+  allItems,
+  areasOf,
+  brandsOf,
   MAX_PHOTOS,
   OTHER,
   SERIAL,
@@ -36,6 +36,7 @@ import {
   type DefectDecision,
   type ExtraItem,
   type InventoryMode,
+  type InventoryList,
   type InventoryRecord,
   type InventoryStatus,
 } from "@/lib/inventory";
@@ -83,6 +84,7 @@ export function InventoryChecklist({
   mode,
   baseline,
   initial,
+  list,
   decisions,
   photos,
   disabled = false,
@@ -90,6 +92,8 @@ export function InventoryChecklist({
 }: {
   /** where this browser keeps the answers between visits */
   draftKey: string;
+  /** the residence's Schedule C the check is answered against (checkList) */
+  list: InventoryList;
   onChange: (r: InventoryRecord) => void;
   mode: InventoryMode;
   /** at move-out: the record signed at move-in, shown beside each item */
@@ -109,13 +113,14 @@ export function InventoryChecklist({
       const saved = localStorage.getItem(draftKey);
       if (saved) {
         const r = JSON.parse(saved) as Partial<InventoryRecord>;
-        return { ...emptyRecord(), ...r, meters: { ...emptyRecord().meters, ...r.meters }, extras: r.extras ?? [] };
+        return { ...emptyRecord(), ...r, meters: { ...emptyRecord().meters, ...r.meters }, extras: r.extras ?? [], list };
       }
     } catch {
       /* no saved draft - start empty */
     }
-    return initial ?? emptyRecord();
+    return initial ? { ...initial, list } : emptyRecord(list);
   });
+  const areas = areasOf(record);
   const [closed, setClosed] = useState<Record<string, boolean>>({});
   /*
    * A room closes by itself once every row in it is answered in full - status,
@@ -125,23 +130,23 @@ export function InventoryChecklist({
    */
   const complete = (areaId: string) => {
     const ids = new Set([
-      ...(INVENTORY.find((x) => x.id === areaId)?.items.map((i) => i.id) ?? []),
+      ...(areas.find((x) => x.id === areaId)?.items.map((i) => i.id) ?? []),
       ...record.extras.filter((e) => e.areaId === areaId && e.name.trim()).map((e) => e.id),
     ]);
     return !inventoryGaps(record).some((g) => g.rows.some((r) => ids.has(r)));
   };
   const wasComplete = useRef<Record<string, boolean> | null>(null);
   useEffect(() => {
-    const now = Object.fromEntries(INVENTORY.map((x) => [x.id, complete(x.id)]));
+    const now = Object.fromEntries(areas.map((x) => [x.id, complete(x.id)]));
     const before = wasComplete.current;
     wasComplete.current = now;
     // the first look - a draft reopened - closes nothing
     if (!before) return;
-    const done = INVENTORY.find((x) => now[x.id] && !before[x.id]);
+    const done = areas.find((x) => now[x.id] && !before[x.id]);
     if (!done) return;
-    const i = INVENTORY.indexOf(done);
-    setClosed((c) => ({ ...c, [done.id]: true, ...(INVENTORY[i + 1] ? { [INVENTORY[i + 1]!.id]: false } : {}) }));
-    const next = INVENTORY[i + 1];
+    const i = areas.indexOf(done);
+    setClosed((c) => ({ ...c, [done.id]: true, ...(areas[i + 1] ? { [areas[i + 1]!.id]: false } : {}) }));
+    const next = areas[i + 1];
     if (next) setTimeout(() => document.getElementById(`inventory-area-${next.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [record]);
@@ -150,7 +155,7 @@ export function InventoryChecklist({
   useEffect(() => {
     const go = (ev: Event) => {
       const id = (ev as CustomEvent<string>).detail;
-      const area = INVENTORY.find((x) => x.items.some((i) => i.id === id))?.id ?? record.extras.find((e) => e.id === id)?.areaId;
+      const area = areas.find((x) => x.items.some((i) => i.id === id))?.id ?? record.extras.find((e) => e.id === id)?.areaId;
       if (area) setClosed((c) => ({ ...c, [area]: false }));
       setTimeout(() => {
         const el = document.getElementById(rowId(id));
@@ -162,7 +167,7 @@ export function InventoryChecklist({
     };
     window.addEventListener("inventory-goto", go);
     return () => window.removeEventListener("inventory-goto", go);
-  }, [record.extras]);
+  }, [record.extras, areas]);
 
   useEffect(() => {
     onChange(record);
@@ -191,10 +196,10 @@ export function InventoryChecklist({
     setRecord((r) => ({ ...r, meters: { ...r.meters, [k]: v.slice(0, 30) } }));
 
   const named = record.extras.filter((e) => e.name.trim());
-  const total = ALL_ITEMS.length + named.length;
-  const checked = ALL_ITEMS.filter((i) => record.answers[i.id]?.status).length + named.filter((e) => e.status).length;
+  const total = allItems(record).length + named.length;
+  const checked = allItems(record).filter((i) => record.answers[i.id]?.status).length + named.filter((e) => e.status).length;
   const defects =
-    ALL_ITEMS.filter((i) => record.answers[i.id]?.status === "defect").length + named.filter((e) => e.status === "defect").length;
+    allItems(record).filter((i) => record.answers[i.id]?.status === "defect").length + named.filter((e) => e.status === "defect").length;
   const pct = total ? Math.round((checked / total) * 100) : 0;
   const was = (id: string) => baseline?.answers[id];
 
@@ -239,7 +244,7 @@ export function InventoryChecklist({
         </div>
       </div>
 
-      {INVENTORY.map((area) => {
+      {areas.map((area) => {
         const mine = record.extras.filter((e) => e.areaId === area.id);
         const areaTotal = area.items.length + mine.filter((e) => e.name.trim()).length;
         const done = area.items.filter((i) => record.answers[i.id]?.status).length + mine.filter((e) => e.name.trim() && e.status).length;
@@ -376,7 +381,7 @@ export function InventoryChecklist({
                         <span className="hidden text-sm text-muted-foreground md:inline">—</span>
                       ) : (
                         <DetailSelect
-                          options={BRANDS}
+                          options={brandsOf(record)}
                           value={e.detail ?? ""}
                           needed={false}
                           onChange={(detail) => setExtra(e.id, { detail })}

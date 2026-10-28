@@ -15,7 +15,7 @@ import { STAFF } from "@/data/form-options";
 import { StaffTag } from "@/components/admin/RecordPaymentDialog";
 import { confirmInventory, getInventoryReview, inventoryPdfUrl, openMoveOutCheck, returnInventory } from "@/lib/inventory.functions";
 import {
-  INVENTORY,
+  areasOf,
   MODE_LABEL,
   REVIEW_HOURS,
   STATUS_LABEL,
@@ -442,7 +442,7 @@ function InventoryReviewDialog({
                           <th className="px-3 py-2 font-semibold">Remarks</th>
                         </tr>
                       </thead>
-                      {INVENTORY.map((area) => (
+                      {areasOf(record).map((area) => (
                         <tbody key={area.id} className="border-t border-border">
                           <tr>
                             <td colSpan={5} className="bg-muted/50 px-3 py-1.5 text-xs font-semibold text-brand-deep">

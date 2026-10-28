@@ -14,7 +14,7 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf
 import { company } from "@/data/properties";
 import {
   ACKNOWLEDGEMENT,
-  INVENTORY,
+  areasOf,
   MODE_LABEL,
   VERDICT_LABEL,
   type DefectDecision,
@@ -166,7 +166,7 @@ export async function inventoryPdf(input: InventoryPdfInput): Promise<Uint8Array
   type Line = { kind: "area"; name: string } | { kind: "item"; name: string; detail: string; qty: string; status: string };
   const verdictOf = (key: string) => input.decisions?.[key]?.verdict;
   const lines: Line[] = [];
-  for (const area of INVENTORY) {
+  for (const area of areasOf(r)) {
     lines.push({ kind: "area", name: area.name });
     for (const it of area.items) {
       const a = r.answers[it.id];
@@ -302,7 +302,7 @@ export async function inventoryPdf(input: InventoryPdfInput): Promise<Uint8Array
 
   heading("REMARKS");
   let any = false;
-  for (const area of INVENTORY) {
+  for (const area of areasOf(r)) {
     const rows = [
       ...area.items.map((it) => ({ key: it.id, name: it.name, a: r.answers[it.id] })),
       ...r.extras

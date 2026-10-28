@@ -1692,6 +1692,7 @@ export type Database = {
       residences: {
         Row: {
           additional_charges: Json
+          inventory: Json
           addons: Json
           apartment_footnote: string | null
           building_facilities: Json
@@ -1729,6 +1730,7 @@ export type Database = {
         }
         Insert: {
           additional_charges?: Json
+          inventory?: Json
           addons?: Json
           apartment_footnote?: string | null
           building_facilities?: Json
@@ -1766,6 +1768,7 @@ export type Database = {
         }
         Update: {
           additional_charges?: Json
+          inventory?: Json
           addons?: Json
           apartment_footnote?: string | null
           building_facilities?: Json

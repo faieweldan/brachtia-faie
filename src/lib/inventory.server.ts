@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { roomName } from "@/lib/room-name";
-import type { DefectDecision, InventoryMode, InventoryRecord } from "@/lib/inventory";
+import type { DefectDecision, InventoryList, InventoryMode, InventoryRecord } from "@/lib/inventory";
 
 /*
  * Schedule C, kept as files beside the signed documents (1 Oct 2026):
@@ -178,4 +178,24 @@ export async function buildInventoryPdf(
     },
   });
   return { bytes, signatory: signatory?.name ?? "", at: now.toISOString() };
+}
+
+/**
+ * The list a check is answered against (28 Oct 2026). Once sent, its own -
+ * `record.list`, or LEGACY_INVENTORY for one sent before lists were kept. A
+ * move-out check is answered against the move-in check's list. A check not yet
+ * sent: the residence's Schedule C as Settings has it now. Null when the
+ * residence has none.
+ */
+export async function checkList(sb: any, residentId: string, docId: string, mode: InventoryMode): Promise<InventoryList | null> {
+  const { LEGACY_INVENTORY, LEGACY_BRANDS, listFromResidence } = await import("@/lib/inventory");
+  const legacy: InventoryList = { areas: LEGACY_INVENTORY, brands: LEGACY_BRANDS };
+  const own = await readInventory(sb, residentId, docId, mode);
+  if (own?.record) return own.record.list ?? legacy;
+  if (mode === "out") {
+    const moveIn = await readInventory(sb, residentId, docId, "in");
+    if (moveIn?.record) return moveIn.record.list ?? legacy;
+  }
+  const { placementForResident } = await import("@/lib/placement.server");
+  return listFromResidence((await placementForResident(sb, residentId))?.residence as any);
 }
