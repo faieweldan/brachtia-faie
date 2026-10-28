@@ -1,6 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import {
+  CARD_AFTER_UNIT_CHANGE_CHARGE,
+  CARD_DAMAGED_CHARGE,
+  CARD_LOST_CHARGE,
+  requireCharge,
+} from "@/lib/charge-list";
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /**
@@ -13,8 +20,8 @@ import { z } from "zod";
  * A replacement - a lost or damaged card (Dani, 2 Oct 2026):
  *   1. admin picks Lost or Damaged - the card in use is ended (Lost/Damaged)
  *      at once, so the building can block it
- *   2. the additional-charge invoice opens, filled at Schedule B's price
- *      (damaged RM30, lost RM60) - admin checks it and generates it
+ *   2. the additional-charge invoice opens, filled at the residence's Schedule B
+ *      price (Website › Residences) - admin checks it and generates it
  *   3. once that invoice is paid in full, the new form is made, Pending
  *      Approval, with the old form's attachments - the payment is the trigger
  * The request waits beside the forms until then: access-card/_request-<resident>.json
@@ -40,13 +47,24 @@ export type CardExtras = {
 
 /**
  * What the resident pays for a replacement - Brachtia's own price, Schedule B
- * clause 11 (Dani, 2 Oct 2026), not ARC's fee on its form.
+ * clause 11 (Dani, 2 Oct 2026), not ARC's fee on its form. The price is the
+ * resident's residence's (Website › Residences, 28 Oct 2026): The Arc's lost
+ * card RM60, Solstice's RM50.
  */
-export const REPLACEMENT_FEE: Record<string, { amount: number; label: string }> = {
-  "Damaged Card": { amount: 30, label: "Residence access card (damaged)" },
-  "Lost Card": { amount: 60, label: "Residence access card (lost)" },
-  "Unit Change": { amount: 20, label: "Additional access card following room/unit change" },
+export const REPLACEMENT_CHARGE: Record<string, string> = {
+  "Damaged Card": CARD_DAMAGED_CHARGE,
+  "Lost Card": CARD_LOST_CHARGE,
+  "Unit Change": CARD_AFTER_UNIT_CHANGE_CHARGE,
 };
+
+/** the invoice line a replacement starts with, at the residence's price */
+async function replacementLine(sb: any, residentId: string, reason: string) {
+  const label = REPLACEMENT_CHARGE[reason];
+  if (!label) throw new Error("Choose Lost or Damaged.");
+  const { residentCharges } = await import("@/lib/charges.server");
+  const { residenceName, charges } = await residentCharges(sb, residentId);
+  return { label, amount: requireCharge(charges, label, residenceName) };
+}
 
 async function admin(): Promise<any> {
   const { requireAdminSession } = await import("@/lib/admin-session.server");
@@ -158,6 +176,8 @@ export const startReplacementCard = createServerFn({ method: "POST" })
     const sb = await admin();
     const waiting = await readReplacement(sb, data.residentId);
     if (waiting?.invoiceId) throw new Error(`A replacement is already waiting for payment of ${waiting.invoiceNumber || "its invoice"}.`);
+    // the price first: a residence without one stops here, before the card is ended
+    const line = await replacementLine(sb, data.residentId, data.reason);
     const { data: cards, error } = await sb.from("access_card_forms").select("id, status").eq("resident_id", data.residentId);
     if (error) throw new Error(error.message);
     const live = ((cards ?? []) as { id: string; status: string }[]).filter((c) => !ENDED.includes(c.status)).map((c) => c.id);
@@ -173,8 +193,7 @@ export const startReplacementCard = createServerFn({ method: "POST" })
       at: new Date().toISOString(),
       ended: [...new Set([...(waiting?.ended ?? []), ...live])],
     });
-    const fee = REPLACEMENT_FEE[data.reason]!;
-    return { label: fee.label, amount: fee.amount };
+    return line;
   });
 
 /** Step 1 undone before an invoice is raised - the ended card stays ended. */
@@ -192,7 +211,10 @@ export const getReplacementCard = createServerFn({ method: "GET" })
   .inputValidator((d) => z.object({ residentId: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
     const sb = await admin();
-    return { request: await readReplacement(sb, data.residentId) };
+    const request = await readReplacement(sb, data.residentId);
+    // the line "Raise the invoice" opens with, at the residence's price now
+    const line = request && !request.invoiceId ? await replacementLine(sb, data.residentId, request.reason).catch(() => null) : null;
+    return { request, line };
   });
 
 /** Step 2: the invoice generated from the access card - it is the one to wait for. */

@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { LineItemsEditor } from "@/components/admin/LineItemsEditor";
+import { useResidentCharges } from "@/components/admin/ChargePicker";
 import { Textarea } from "@/components/ui/textarea";
 import { refreshMoney } from "@/lib/billing-client";
 import type { InvoiceDoc } from "@/lib/invoice-pdf";
@@ -154,6 +155,7 @@ export function ResidentInvoiceDialog({
   onCreated: (type: "rental" | "charge", number?: string) => void;
 }) {
   const queryClient = useQueryClient();
+  const charges = useResidentCharges(residentId);
   const [kind, setKind] = useState<string>(startAs);
   const [frequency, setFrequency] = useState(
     editing?.doc.payment_frequency || details.paymentFrequency || "bimonthly",
@@ -422,6 +424,7 @@ export function ResidentInvoiceDialog({
           readOnly={Boolean(editing?.scheduled)}
           // an additional charge: Schedule B's list is the box's own dropdown
           describe={() => (kind === "charge" ? "charge" : "text")}
+          charges={charges}
         />
 
         {/* the description belongs to the schedule too, for the same reason */}

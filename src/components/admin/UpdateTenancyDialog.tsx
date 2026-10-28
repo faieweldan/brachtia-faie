@@ -78,7 +78,7 @@ type PricedEvent = {
   bed: BedRow | null;
   periodEnd: string;
   deposits: ReturnType<typeof eventDeposits>;
-  fees: { key: string; label: string; amount: number; waived: boolean }[];
+  fees: { key: string; label: string; amount: number; missing: boolean; waived: boolean }[];
   ip: ReturnType<typeof eventInvoice>;
   billOn: string;
   docs: string[];
@@ -259,8 +259,8 @@ export function UpdateTenancyDialog({
         DEPOSIT_KEYS.map((k) => [k, k === "card_deposit" ? held.card_deposit : requiredTyped[`${i}:${k}`] != null ? Number(requiredTyped[`${i}:${k}`]) || 0 : byFormula[k]]),
       ) as Deposits;
       const d = eventDeposits(held, required, waived.filter((w) => w.startsWith(`${i}:dep:`)).map((w) => w.split(":")[2]!));
-      // RM100 and RM20 are fixed; an exception is an explicit waiver
-      const fees = fixedCharges(p.flags).map((c) => ({ ...c, waived: waived.includes(`${i}:fee:${c.key}`) }));
+      // the residence's Schedule B prices; an exception is an explicit waiver
+      const fees = fixedCharges(p.flags, basis.data?.charges ?? []).map((c) => ({ ...c, waived: waived.includes(`${i}:fee:${c.key}`) }));
       credit += d.credit;
       const ip = eventInvoice(d.ipLines, fees.filter((f) => !f.waived), credit);
       credit = ip.creditLeft;
@@ -891,7 +891,10 @@ function EventCard({
           {e.fees.map((f) => (
             <label key={f.key} className="flex items-center gap-3 text-xs">
               <span className="w-36 text-muted-foreground">{f.label}</span>
-              <span className="w-28 text-right tabular-nums">{money(f.amount)}</span>
+              <span className="w-28 text-right tabular-nums">{f.missing ? "No price" : money(f.amount)}</span>
+              {f.missing && !f.waived ? (
+                <span className="text-amber-700">Set it in Website › Residences › Additional charges, or waive it.</span>
+              ) : null}
               <span className="flex items-center gap-1.5">
                 <input type="checkbox" className="size-4 accent-brand" checked={f.waived} onChange={(x) => onWaive(`fee:${f.key}`, x.target.checked)} />
                 Waive fee

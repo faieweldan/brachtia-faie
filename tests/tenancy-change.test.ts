@@ -2,6 +2,15 @@ import { describe, expect, test } from "bun:test";
 
 import { changeFlags, dateChange, depositsOf, documentsFor, eventDeposits, eventInvoice, fixedCharges, ipBillOn, moneyOf, planEvents, sixMonthsAfter } from "@/lib/tenancy-change";
 
+const ARC = [
+  { label: "Resident-requested room/unit change", amount: 100 },
+  { label: "Additional access card following room/unit change", amount: 20 },
+];
+const SOLSTICE = [
+  { label: "Resident-requested room/unit change", amount: 100 },
+  { label: "Additional access card following room/unit change", amount: 50 },
+];
+
 // Update Tenancy's rules (Dani, 2-3 Oct 2026)
 const base = {
   oldUnitId: "u12",
@@ -79,10 +88,14 @@ describe("events", () => {
     expect(documentsFor(ev[0]!.flags)).toEqual({ newAgreement: true, scheduleA: false, scheduleC: false, accessCard: false });
   });
   test("RM100 only with a room, unit or occupancy change; RM20 only with another unit", () => {
-    expect(fixedCharges(changeFlags({ ...base, newEnd: "2028-10-31" }))).toEqual([]);
-    expect(fixedCharges(changeFlags({ ...base, newRoomId: "u12-b" })).map((c) => c.amount)).toEqual([100]);
-    expect(fixedCharges(changeFlags({ ...base, newOccupancy: "twin" })).map((c) => c.amount)).toEqual([100]);
-    expect(fixedCharges(changeFlags({ ...base, newUnitId: "u15", newRoomId: "u15-b" })).map((c) => c.amount)).toEqual([100, 20]);
+    expect(fixedCharges(changeFlags({ ...base, newEnd: "2028-10-31" }), ARC)).toEqual([]);
+    expect(fixedCharges(changeFlags({ ...base, newRoomId: "u12-b" }), ARC).map((c) => c.amount)).toEqual([100]);
+    expect(fixedCharges(changeFlags({ ...base, newOccupancy: "twin" }), ARC).map((c) => c.amount)).toEqual([100]);
+    expect(fixedCharges(changeFlags({ ...base, newUnitId: "u15", newRoomId: "u15-b" }), ARC).map((c) => c.amount)).toEqual([100, 20]);
+    // each residence its own Schedule B: Solstice's card after a unit change is RM50 (28 Oct 2026)
+    expect(fixedCharges(changeFlags({ ...base, newUnitId: "u15", newRoomId: "u15-b" }), SOLSTICE).map((c) => c.amount)).toEqual([100, 50]);
+    // a residence without the price: shown as missing, never charged as some other residence's
+    expect(fixedCharges(changeFlags({ ...base, newRoomId: "u12-b" }), [])).toEqual([{ key: "change_fee", label: "Resident-requested room/unit change", amount: 0, missing: true }]);
   });
   test("the IP is billed 14 days before, or today when that has passed", () => {
     expect(ipBillOn("2026-12-01", "2026-11-10")).toBe("2026-11-17");

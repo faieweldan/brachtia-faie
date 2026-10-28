@@ -87,6 +87,7 @@ const EDITABLE_KEYS = [
   "addons",
   "unit_rates",
   "rental_terms",
+  "additional_charges",
 ];
 
 const NAV = [
@@ -491,6 +492,11 @@ function ResidenceEditor() {
                   </div>
                 ))}
               </div>
+
+              <AdditionalCharges
+                items={form.additional_charges ?? []}
+                onChange={(v) => set("additional_charges", v)}
+              />
 
               <div className="grid gap-6 lg:grid-cols-2">
                 <StringList
@@ -1050,6 +1056,65 @@ const slugify = (v: string) =>
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "") || `addon-${Date.now()}`;
+
+type ChargeRow = { label: string; amount: number | null };
+
+/**
+ * Schedule B clause 11, this residence's own prices (Dani, 28 Oct 2026) - the
+ * list the invoice and checkout pickers show, and the price of a lost or
+ * damaged card and of a room or unit change. Keep it the same as this
+ * residence's Schedule B document. No price = "reasonable cost", typed on the
+ * invoice.
+ */
+function AdditionalCharges({ items, onChange }: { items: ChargeRow[]; onChange: (v: ChargeRow[]) => void }) {
+  const patch = (i: number, p: Partial<ChargeRow>) =>
+    onChange(items.map((it, idx) => (idx === i ? { ...it, ...p } : it)));
+  return (
+    <div className="space-y-2">
+      <div>
+        <span className="text-xs font-medium text-muted-foreground">Additional charges (Schedule B)</span>
+        <p className="text-[11px] text-muted-foreground">
+          The same prices as this residence&apos;s Schedule B. Leave the price empty for &quot;reasonable cost&quot;.
+        </p>
+      </div>
+      <div className="overflow-hidden rounded-md border border-border">
+        <div className="grid grid-cols-[1fr_8rem_2.25rem] items-center gap-2 border-b border-border bg-muted px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <span>Charge</span>
+          <span>Price (RM)</span>
+          <span />
+        </div>
+        {items.length === 0 ? (
+          <p className="px-3 py-2 text-xs text-muted-foreground">No charges yet for this residence.</p>
+        ) : null}
+        {items.map((c, i) => (
+          <div key={i} className="grid grid-cols-[1fr_8rem_2.25rem] items-center gap-2 border-b border-border/60 px-3 py-1.5 last:border-0">
+            <Input className="h-8 text-xs" value={c.label} onChange={(e) => patch(i, { label: e.target.value })} />
+            <Input
+              className="h-8 text-xs"
+              type="number"
+              placeholder="Reasonable cost"
+              value={c.amount ?? ""}
+              onChange={(e) => patch(i, { amount: e.target.value === "" ? null : Number(e.target.value) })}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              aria-label="Remove charge"
+              onClick={() => onChange(items.filter((_, idx) => idx !== i))}
+            >
+              <Trash2 className="size-4 text-destructive" />
+            </Button>
+          </div>
+        ))}
+      </div>
+      <Button type="button" variant="outline" size="sm" onClick={() => onChange([...items, { label: "", amount: null }])}>
+        <Plus className="mr-1 size-3.5" /> Add charge
+      </Button>
+    </div>
+  );
+}
 
 function AddonsEditor({
   items,

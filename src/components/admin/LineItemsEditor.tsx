@@ -5,6 +5,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChargeInput } from "@/components/admin/ChargePicker";
+import type { Charge } from "@/lib/charge-list";
 import { lineQty } from "@/lib/invoices";
 import { formatRM } from "@/data/properties";
 
@@ -40,6 +41,7 @@ export function LineItemsEditor<T extends EditableLine>({
   kinds,
   quantity = false,
   describe = () => "text",
+  charges = [],
   readOnly = false,
   extra,
   action,
@@ -60,6 +62,8 @@ export function LineItemsEditor<T extends EditableLine>({
   /** Price and Qty columns; otherwise one Amount per line */
   quantity?: boolean;
   describe?: (line: T, i: number) => Describe;
+  /** the residence's Schedule B list, for a line described "charge" */
+  charges?: Charge[];
   /** shown, not edited - an issued or scheduled document */
   readOnly?: boolean;
   extra?: (line: T, i: number) => ReactNode;
@@ -132,6 +136,7 @@ export function LineItemsEditor<T extends EditableLine>({
                   {how === "charge" ? (
                     <ChargeInput
                       value={l.label}
+                      charges={charges}
                       placeholder={placeholder}
                       onChange={(label) => edit(i, { label })}
                       onPick={(label, amount) => edit(i, { label, ...(amount != null ? { amount } : {}) })}

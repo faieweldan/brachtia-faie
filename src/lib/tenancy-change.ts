@@ -1,3 +1,4 @@
+import { CARD_AFTER_UNIT_CHANGE_CHARGE, ROOM_CHANGE_CHARGE, chargeAmount, type Charge } from "@/lib/charge-list";
 import { planCredit } from "@/lib/credit-plan";
 
 /*
@@ -154,11 +155,20 @@ export function eventName(f: ChangeFlags): string {
   return [room, date].filter(Boolean).join(" + ");
 }
 
-/** the fixed Schedule B charges an event carries - none for a date change alone */
-export function fixedCharges(f: ChangeFlags) {
+/**
+ * The fixed Schedule B charges an event carries - none for a date change
+ * alone - at the residence's prices (Website › Residences, 28 Oct 2026): The
+ * Arc's card after a unit change is RM20, Solstice's RM50. `missing` names a
+ * charge the residence has no price for; confirm refuses while there is one.
+ */
+export function fixedCharges(f: ChangeFlags, charges: Charge[]) {
+  const line = (key: string, label: string) => {
+    const amount = chargeAmount(charges, label);
+    return { key, label, amount: amount ?? 0, missing: amount === null };
+  };
   return [
-    ...(isMove(f) ? [{ key: "change_fee", label: "Resident-requested room/unit change", amount: 100 }] : []),
-    ...(f.unit ? [{ key: "card_change", label: "Additional access card following room/unit change", amount: 20 }] : []),
+    ...(isMove(f) ? [line("change_fee", ROOM_CHANGE_CHARGE)] : []),
+    ...(f.unit ? [line("card_change", CARD_AFTER_UNIT_CHANGE_CHARGE)] : []),
   ];
 }
 

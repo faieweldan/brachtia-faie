@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+
+import { requireCharge } from "@/lib/charge-list";
 import { ipDifferenceNote } from "@/lib/invoice-category";
 import { klToday } from "@/lib/kl-date";
 
@@ -134,6 +136,8 @@ export const getTenancyChangeBasis = createServerFn({ method: "GET" })
       // credit already there - the preview applies it, event by event, as confirm will
       accountCredit: (await creditBalance(sb, data.residentId)).balance,
       open: (await ev.readEvents(sb, data.residentId)).filter(ev.isOpen).map((e) => ({ name: e.name, date: e.date, settled: !!e.settledAt })),
+      // the residence's Schedule B prices, for the fixed fees the review shows
+      charges: (await (await import("@/lib/charges.server")).residentCharges(sb, data.residentId)).charges,
       roomTypes: ((types ?? []) as any[]).map((r) => ({ code: String(r.code ?? ""), residence_id: r.residence_id ?? undefined, unit_type: r.unit_type ?? undefined, occupancies: r.occupancies ?? undefined, rent: r.rent ?? undefined })),
     };
   });
@@ -282,6 +286,10 @@ async function planChangeWith(sb: any, data: PlanRequest) {
     await rentInForce(sb, data.residentId, data.tenancyId, shiftDate(plan[0]!.date, { days: -1 }))
   ).rent;
   let heldDeposits = await heldNow(sb, data.residentId);
+  // the fixed fees at the residence's Schedule B prices - read only when an event moves the resident
+  const residence = plan.some((p) => T.isMove(p.flags))
+    ? await (await import("@/lib/charges.server")).unitCharges(sb, data.change.oldUnitId)
+    : { residenceName: "", charges: [] };
   const priced = plan.map((p, i) => {
     const e = data.events[i]!;
     const d = T.eventDeposits(
@@ -290,7 +298,9 @@ async function planChangeWith(sb: any, data: PlanRequest) {
       e.waived,
     );
     heldDeposits = d.heldAfter;
-    const fees = T.fixedCharges(p.flags).filter((c) => !e.waivedFees.includes(c.key));
+    const fees = T.fixedCharges(p.flags, residence.charges).filter((c) => !e.waivedFees.includes(c.key));
+    const unpriced = fees.find((c) => c.missing);
+    if (unpriced) requireCharge(residence.charges, unpriced.label, residence.residenceName);
     const ip = T.eventInvoice(d.ipLines, fees, 0);
     const rentBefore = rent;
     rent = e.rent || rent;

@@ -10,6 +10,7 @@ import { DateInput } from "@/components/ui/date-input";
 import { Textarea } from "@/components/ui/textarea";
 import { PdfPreviewButton, PdfPreviewDialog } from "@/components/admin/PdfPreview";
 import { LineItemsEditor } from "@/components/admin/LineItemsEditor";
+import { useResidentCharges } from "@/components/admin/ChargePicker";
 import { StaffTag } from "@/components/admin/RecordPaymentDialog";
 import { ReturnMessage } from "@/components/admin/InventoryReturnMessage";
 import { formatRM as money } from "@/data/properties"; // with sen, as the statement PDF prints it
@@ -100,6 +101,7 @@ export function CheckoutStatement({
   onRoomHandedBack?: (() => Promise<void> | void) | undefined;
 }) {
   const qc = useQueryClient();
+  const charges = useResidentCharges(residentId);
   const q = useQuery({ queryKey: ["checkout", residentId], queryFn: () => getCheckout({ data: { residentId } }) });
   const s = q.data?.statement ?? null;
   const [lines, setLines] = useState<CheckoutLine[]>([]);
@@ -293,6 +295,7 @@ export function CheckoutStatement({
         // what admin adds picks from Schedule B; what the kind of checkout keeps is named by it.
         // Every amount can still be changed - Brachtia may give some back (Dani, 6 Oct 2026)
         describe={(l) => (l.source === "deduction" ? "charge" : l.source === "forfeit" ? "fixed" : "text")}
+        charges={charges}
         action={(_, i) => (
           <label
             title="Add a photo (optional)"

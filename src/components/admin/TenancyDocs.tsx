@@ -28,7 +28,6 @@ import { DateInput } from "@/components/ui/date-input";
 import { DocumentViewDialog } from "@/components/admin/DocumentViewDialog";
 import { PdfPreviewDialog } from "@/components/admin/PdfPreview";
 import {
-  REPLACEMENT_FEE,
   REPLACEMENT_REASONS,
   accessCardReceiptNames,
   accessCardReceiptUrl,
@@ -653,8 +652,9 @@ function AccessCardTable({
                 size="sm"
                 variant="outline"
                 onClick={() => {
-                  const fee = REPLACEMENT_FEE[waiting.reason];
-                  if (fee) onCardCharge?.({ label: fee.label, amount: fee.amount });
+                  const line = replacement.data?.line;
+                  if (line) onCardCharge?.(line);
+                  else toast.error("This residence has no price for this card. Add it in Website › Residences › Terms & fees › Additional charges.");
                 }}
               >
                 Raise the invoice

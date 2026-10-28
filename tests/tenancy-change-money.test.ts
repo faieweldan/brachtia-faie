@@ -49,10 +49,16 @@ const lastDay = (month: string) => {
   return `${month}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`;
 };
 
+// The Arc's Schedule B prices for the fixed fees (residences.additional_charges)
+const ARC = [
+  { label: "Resident-requested room/unit change", amount: 100 },
+  { label: "Additional access card following room/unit change", amount: 20 },
+];
+
 describe("the Initial Payment, from the rules", () => {
   test("1. higher deposit and a room change: top-up + RM100, no RM20", () => {
     const d = eventDeposits(held, { ...held, security: 1500 });
-    const ip = eventInvoice(d.ipLines, fixedCharges(room), 0);
+    const ip = eventInvoice(d.ipLines, fixedCharges(room, ARC), 0);
     expect(ip.lines.map((l) => [l.label, l.amount])).toEqual([
       ["Security deposit - difference", 300],
       ["Resident-requested room/unit change", 100],
@@ -62,13 +68,13 @@ describe("the Initial Payment, from the rules", () => {
 
   test("2. higher deposit and another unit: top-up + RM100 + RM20 = RM420", () => {
     const d = eventDeposits(held, { ...held, security: 1500 });
-    expect(eventInvoice(d.ipLines, fixedCharges(unit), 0).total).toBe(420);
+    expect(eventInvoice(d.ipLines, fixedCharges(unit, ARC), 0).total).toBe(420);
   });
 
   test("7. no deposit difference: the fee only, no credit", () => {
     const d = eventDeposits(held, held);
     expect(d.credit).toBe(0);
-    expect(eventInvoice(d.ipLines, fixedCharges(room), 0).total).toBe(100);
+    expect(eventInvoice(d.ipLines, fixedCharges(room, ARC), 0).total).toBe(100);
   });
 });
 
