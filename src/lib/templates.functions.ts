@@ -722,6 +722,7 @@ async function renderDocumentPdf(
     const { data: file } = await db.storage.from("resident-documents").download(signedPath);
     if (file) return { ok: true, bytes: new Uint8Array(await file.arrayBuffer()), gaps: [] };
   }
+  if (kind === "agreement" && !signedPath) versionId = await readVersionId(db, id, versionId);
   if (!versionId) return { ok: false, error: "No template was active for this document when it was generated." };
   const { data: v } = await db.from("template_versions").select("content_html, file_path, boxes, version, mappings").eq("id", versionId).maybeSingle();
   const bytes = v ? await loadDocx(db, v.file_path) : null;
@@ -750,13 +751,22 @@ async function renderDocumentPdf(
 }
 
 /**
- * An unsigned document's values (Dani, 28 Oct 2026): as saved, with what was
- * saved empty filled from the resident's records as they are now - an address
- * typed into the profile after the pack was made reaches the TA without making
- * it again. A saved value is never replaced: what staff or an Update Tenancy
- * change wrote stays. gaps: what is still empty and not mapped "Left blank",
- * by its field's name - the resident's own signing fields aside.
+ * An unsigned document is read as things stand now (Dani, 28 Oct 2026) - one
+ * source, no making it again: the template active for its residence and type
+ * (a new Schedule A reaches packs already made), and its values from the
+ * resident's records, so a profile filled in or corrected later is on it. Only
+ * the values that belong to the document itself (isDocumentOwn - its dates,
+ * what the rent includes) and any the records have no value for keep what was
+ * saved. Signed, the file is the record and none of this applies.
  */
+export async function readVersionId(db: any, docId: string, fallback: string | null): Promise<string | null> {
+  const { data: d } = await db.from("agreement_documents").select("doc_type, tenancy_agreements!inner(resident_id)").eq("id", docId).maybeSingle();
+  if (!d) return fallback;
+  const { templateVersionsFor } = await import("@/lib/tenancy-docs.functions");
+  return (await templateVersionsFor(db, d.tenancy_agreements.resident_id))[d.doc_type] || fallback;
+}
+
+/** gaps: what is still empty and not mapped "Left blank", by its field's name - the resident's own signing fields aside */
 async function fromRecords(db: any, docId: string, v: any, saved: Record<string, string>) {
   const { data: d } = await db.from("agreement_documents").select("tenancy_agreements!inner(resident_id)").eq("id", docId).maybeSingle();
   const residentId = d?.tenancy_agreements?.resident_id as string | undefined;
@@ -766,7 +776,8 @@ async function fromRecords(db: any, docId: string, v: any, saved: Record<string,
   const gaps: string[] = [];
   for (const k of keys) {
     const r = results.find((x) => x.key === k);
-    if (!String(values[k] ?? "").trim() && r?.value.trim()) values[k] = r.value;
+    const own = isDocumentOwn(k) && String(saved[k] ?? "").trim();
+    if (!own && r?.value.trim()) values[k] = r.value;
     if (!String(values[k] ?? "").trim() && r?.source !== "Left blank") gaps.push(r?.label || k);
   }
   return { values, gaps: [...new Set(gaps)] };
@@ -775,8 +786,10 @@ async function fromRecords(db: any, docId: string, v: any, saved: Record<string,
 /** What an unsigned document still has empty - the signing link is not sent while there is any. */
 export async function documentGaps(db: any, docId: string): Promise<string[]> {
   const { data: doc } = await db.from("agreement_documents").select("template_version_id, merge_values, status").eq("id", docId).maybeSingle();
-  if (!doc?.template_version_id || !["generated", "pending_signature"].includes(doc.status)) return [];
-  const { data: v } = await db.from("template_versions").select("content_html, file_path, boxes, mappings").eq("id", doc.template_version_id).maybeSingle();
+  if (!doc || !["generated", "pending_signature"].includes(doc.status)) return [];
+  const versionId = await readVersionId(db, docId, doc.template_version_id);
+  if (!versionId) return [];
+  const { data: v } = await db.from("template_versions").select("content_html, file_path, boxes, mappings").eq("id", versionId).maybeSingle();
   return v ? (await fromRecords(db, docId, v, doc.merge_values ?? {})).gaps : [];
 }
 

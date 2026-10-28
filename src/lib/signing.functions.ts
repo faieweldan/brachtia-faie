@@ -134,7 +134,9 @@ export async function documentsOf(sb: any, residentId: string): Promise<SigningD
         continue;
       }
       // already signed stays listed; otherwise only if it asks for their signature
-      if (!SIGNED.has(r.status) && !(await asksResidentSignature(sb, r.template_version_id))) continue;
+      // unsigned: asked by the template it is read with now (readVersionId)
+      const { readVersionId } = await import("@/lib/templates.functions");
+      if (!SIGNED.has(r.status) && !(await asksResidentSignature(sb, await readVersionId(sb, r.id, r.template_version_id)))) continue;
       out.push({ kind: "agreement", id: r.id, key: r.id, label: LABEL[t] ?? t, signed: SIGNED.has(r.status), locked: "" });
     }
   }
@@ -295,7 +297,10 @@ export const signDocument = createServerFn({ method: "POST" })
     }
 
     const table = data.kind === "agreement" ? "agreement_documents" : "access_card_forms";
-    const { error } = await sb.from(table).update({ status: "signed", generated_pdf_path: `${base}.pdf` }).eq("id", data.id);
+    // the template it was signed on is the one it was read with (readVersionId), recorded with the file
+    const { readVersionId } = await import("@/lib/templates.functions");
+    const signedOn = data.kind === "agreement" ? { template_version_id: await readVersionId(sb, data.id, null) ?? undefined } : {};
+    const { error } = await sb.from(table).update({ status: "signed", generated_pdf_path: `${base}.pdf`, ...signedOn }).eq("id", data.id);
     if (error) return { ok: false as const, error: error.message };
     return { ok: true as const };
   });
