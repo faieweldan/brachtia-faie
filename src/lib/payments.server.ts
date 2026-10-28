@@ -31,6 +31,9 @@ export const PAYMENT_ERRORS: Record<string, string> = {
   nothing_owing: "Nothing is owed on this invoice",
   request_key_reused:
     "This payment was already saved with other details. Close the box, check the invoice, and record it again if it is still owed.",
+  reason_needed: "Say why the payment is being amended",
+  payment_not_found: "This payment is no longer on the invoice - it may have been amended already",
+  not_amendable: "Account credit is applied by the system and cannot be amended here",
 };
 
 export class PaymentRefused extends Error {
@@ -93,6 +96,11 @@ export async function recordInvoicePayment(sb: any, input: PaymentInput): Promis
     p_request_key: input.requestKey ?? null,
     p_cap_to_owing: !!input.capToOwing,
   });
+  return fromDatabase(data, error);
+}
+
+/** what record_invoice_payment and amend_invoice_payment answer, read the same way */
+function fromDatabase(data: any, error: any): RecordedPayment {
   if (error) throw new Error(`The payment could not be saved: ${error.message}`);
   const out = data as any;
   if (!out?.ok) throw new PaymentRefused(String(out?.error ?? "unknown"));
@@ -105,4 +113,44 @@ export async function recordInvoicePayment(sb: any, input: PaymentInput): Promis
     replayed: !!out.replayed,
     invoice: { ...out.invoice, total: Number(out.invoice?.total ?? 0) },
   };
+}
+
+export type AmendInput = Omit<PaymentInput, "invoiceId" | "capToOwing"> & {
+  /** the payment typed wrong */
+  paymentId: string;
+  /** why - kept with the old payment for accounts */
+  reason: string;
+};
+
+export type AmendedPayment = RecordedPayment & {
+  /** the receipt number the wrong payment had - the one now replaced */
+  oldReceipt: string;
+};
+
+/**
+ * Amend a payment typed wrong (28 Oct 2026): the wrong payment and its receipt
+ * are kept, whole, with the reason (payment_amendments), and the corrected one
+ * is saved by record_invoice_payment - a new receipt, the balance and status
+ * worked out as for any payment. One database step
+ * (amend_invoice_payment, 20261028100000_amend_payment.sql), all or nothing.
+ */
+export async function amendInvoicePayment(sb: any, input: AmendInput): Promise<AmendedPayment> {
+  if (!isValidAmount(input.amount)) throw new PaymentRefused("invalid_amount");
+  if (String(input.reason ?? "").trim().length < 3) throw new PaymentRefused("reason_needed");
+  if (input.requestKey != null && !isRequestKey(input.requestKey))
+    throw new Error("The payment could not be saved: its request key is not valid");
+  const { data, error } = await sb.rpc("amend_invoice_payment", {
+    p_payment: input.paymentId,
+    p_reason: input.reason,
+    p_amended_by: input.recordedBy ?? "",
+    p_amount: input.amount,
+    p_paid_on: input.paidOn || null,
+    p_method: input.method ?? "",
+    p_reference: input.reference ?? "",
+    p_proof_path: input.proofPath ?? "",
+    p_description: input.description ?? "",
+    p_request_key: input.requestKey ?? null,
+  });
+  const saved = fromDatabase(data, error);
+  return { ...saved, oldReceipt: String((data as any)?.amended?.old_receipt?.number ?? "") };
 }

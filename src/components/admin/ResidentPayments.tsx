@@ -37,7 +37,7 @@ import { fmtDate, money } from "@/lib/ops-store";
 import { getResidentBilling, setMigratedCopy, type BillingInvoice } from "@/lib/resident-billing.functions";
 import {
   ProofLink,
-  ReplaceProofButton,
+  AmendPaymentButton,
   StaffTag,
   RecordPaymentDialog,
   type PayableInvoice,
@@ -934,7 +934,10 @@ export function InvoiceDetail({ invoice, onPay }: { invoice: BillingInvoice; onP
                 </span>
                 <span className="flex items-center gap-3">
                   <ProofLink path={p.proofPath} />
-                  {p.proofPath ? <ReplaceProofButton paymentId={p.id} oldPath={p.proofPath} /> : null}
+                  <AmendPaymentButton
+                    invoice={invoice}
+                    payment={{ ...p, receipt: receipt?.number ?? "" }}
+                  />
                   <span className="tabular-nums text-emerald-700">{money(p.amount)}</span>
                   {receipt ? (
                     <PdfPreviewButton

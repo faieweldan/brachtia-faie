@@ -78,8 +78,10 @@ describe("13. one payment form, one payment step", () => {
     expect(callers).toEqual(["src/components/admin/RecordPaymentDialog.tsx"]);
     const dialog = readFileSync("src/components/admin/RecordPaymentDialog.tsx", "utf8");
     expect(dialog).toContain("useState(() => crypto.randomUUID())");
+    // the key goes with the form, to whichever save it is, and is renewed once saved
+    expect(dialog).toMatch(/recordedBy,\n\s+requestKey,\n\s+\};/);
     expect(dialog).toMatch(
-      /requestKey,\n\s+\},\n\s+\}\);\n\s+setRequestKey\(crypto\.randomUUID\(\)\)/,
+      /: await recordPayment\(\{ data: \{ \.\.\.form, invoiceId: invoice\.id \} \}\);\n\s+setRequestKey\(crypto\.randomUUID\(\)\)/,
     );
   });
 
@@ -100,6 +102,58 @@ describe("13. one payment form, one payment step", () => {
       /from\("(payments|receipts)"\)\s*\.\s*(insert|upsert)\b/.test(readFileSync(f, "utf8")),
     );
     expect(writers).toEqual(["src/lib/migration/import.server.ts"]);
+  });
+});
+
+describe("14. Amend payment is the same form and the same payment step (28 Oct 2026)", () => {
+  test("only RecordPaymentDialog calls amendPayment, sending the same form as Record payment", () => {
+    const callers = files("src").filter((f) => /\bamendPayment\(/.test(readFileSync(f, "utf8")));
+    expect(callers).toEqual(["src/components/admin/RecordPaymentDialog.tsx"]);
+    expect(readFileSync("src/components/admin/RecordPaymentDialog.tsx", "utf8")).toContain(
+      "await amendPayment({ data: { ...form, paymentId: amending.id, reason: reason.trim() } })",
+    );
+  });
+
+  test("Record and Amend check the form and finish the same way on the server", () => {
+    const src = readFileSync("src/lib/admin.functions.ts", "utf8");
+    for (const fn of ["recordPayment", "amendPayment"])
+      expect(src).toMatch(
+        new RegExp(
+          `${fn} = createServerFn[\\s\\S]*?checkPaymentForm\\(data\\)[\\s\\S]*?afterPaymentSaved\\(supabase, saved`,
+        ),
+      );
+  });
+
+  test("the corrected payment is saved by record_invoice_payment, and the wrong one is kept", () => {
+    const sql = readFileSync("supabase/migrations/20261028100000_amend_payment.sql", "utf8");
+    expect(sql).toMatch(
+      /function public\.amend_invoice_payment[\s\S]*?insert into public\.payment_amendments[\s\S]*?public\.record_invoice_payment\(/,
+    );
+    expect(sql).toContain("create table if not exists public.payment_amendments");
+  });
+
+  test("Replace proof is gone - a proof is corrected by amending the payment", () => {
+    for (const f of files("src"))
+      expect(readFileSync(f, "utf8")).not.toMatch(/ReplaceProofButton|replacePaymentProof/);
+  });
+
+  test("an amount that is not money, or no reason, is refused before the database", async () => {
+    const { amendInvoicePayment } = await import("../src/lib/payments.server");
+    const db = fakeDb({});
+    const base = { paymentId: INV, paidOn: "2026-09-18", method: "Cash", reason: "Typed wrong" };
+    await expect(amendInvoicePayment(db.sb, { ...base, amount: 0 })).rejects.toThrow(
+      "Enter the amount received",
+    );
+    await expect(amendInvoicePayment(db.sb, { ...base, amount: 10, reason: " " })).rejects.toThrow(
+      "Say why the payment is being amended",
+    );
+    expect(db.rpcs).toEqual([]);
+  });
+
+  test("account credit is applied by the system and is not amended by staff", async () => {
+    const { canAmend, CREDIT_METHOD } = await import("../src/lib/payment-methods");
+    expect(canAmend(CREDIT_METHOD)).toBe(false);
+    expect(canAmend("DuitNow QR Pay")).toBe(true);
   });
 });
 

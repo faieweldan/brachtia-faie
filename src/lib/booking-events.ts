@@ -24,6 +24,7 @@ export type BookingEventKind =
   | "invoice_edited"
   | "invoice_cancelled"
   | "payment_recorded"
+  | "payment_amended"
   | "welcome_sent"
   | "stage_changed"
   | "stay_updated"

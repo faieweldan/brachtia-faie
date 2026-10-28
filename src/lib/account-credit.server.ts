@@ -28,7 +28,7 @@ import { klToday } from "@/lib/kl-date";
  * Server only - each is handed the service-role client by a server function.
  */
 const BUCKET = "resident-documents";
-export const CREDIT_METHOD = "Account credit";
+export { CREDIT_METHOD } from "@/lib/payment-methods";
 
 export type CreditEntry = {
   id: string;

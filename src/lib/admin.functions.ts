@@ -2645,44 +2645,181 @@ export const cancelInvoice = createServerFn({ method: "POST" })
     return { ok: true, cancelled: targets.length };
   });
 
+/** What Record payment and Amend payment both send - the same form. */
+type PaymentForm = {
+  amount: number;
+  paidOn: string;
+  method: string;
+  reference?: string;
+  proofPath?: string;
+  /** what the money is for - "Booking fee" */
+  description?: string;
+  /** the staff member recording it - shown as "by Syazwani" */
+  recordedBy?: string;
+  /** one per save attempt, from the payment box */
+  requestKey?: string;
+};
+
+/** The form's rules, checked on the server too: who is recording it, and what this way of paying needs (1 Oct 2026). */
+async function checkPaymentForm(data: PaymentForm) {
+  const { STAFF } = await import("@/data/form-options");
+  if (!STAFF.includes(String(data.recordedBy ?? "")))
+    throw new Error("Choose who is recording this payment");
+  const { paymentMissing } = await import("@/lib/payment-methods");
+  const missing = paymentMissing({
+    method: data.method ?? "",
+    reference: data.reference ?? "",
+    proofPath: data.proofPath ?? "",
+  });
+  if (missing) throw new Error(missing);
+}
+
+/**
+ * What follows the money, once it is saved - the same after a payment recorded
+ * and a payment amended: the booking's activity line, an access card or Update
+ * Tenancy event waiting on the invoice being paid, the booking's stage and the
+ * resident made from the fee. Safe to run again on a retry.
+ */
+async function afterPaymentSaved(
+  supabase: any,
+  saved: import("@/lib/payments.server").RecordedPayment,
+  log: { kind: "payment_recorded" | "payment_amended"; prefix: string },
+) {
+  const invoice = saved.invoice;
+  const payment = saved.payment;
+  const receipt = saved.receipt;
+  const amount = Number(payment.amount);
+  const balance = saved.balance;
+
+  // the activity line, once per payment - a retry finds the one already written
+  if (invoice.enquiry_id) {
+    const { data: logged } = saved.replayed
+      ? await supabase
+          .from("booking_events")
+          .select("id")
+          .eq("enquiry_id", invoice.enquiry_id)
+          .eq("kind", log.kind)
+          .eq("ref", String(payment.id))
+          .limit(1)
+      : { data: [] };
+    if (!(logged ?? []).length) {
+      // money on a booking's invoice is recorded by the booking's staff member
+      const payStaff = await staffFor(supabase, invoice.enquiry_id);
+      const receiptNo = String(receipt?.number ?? "");
+      const forWhat = payment.description ? ` (${payment.description})` : "";
+      await logBookingEvent(supabase, {
+        enquiryId: invoice.enquiry_id,
+        staff: payStaff,
+        kind: log.kind,
+        ref: String(payment.id),
+        summary: `${log.prefix}${rm(amount)}${forWhat} received for ${invoice.number} by ${words(payment.method)}${receiptNo ? ` · Receipt ${receiptNo}` : ""}`,
+      });
+    }
+  }
+
+  let tenancyChange: import("@/lib/tenancy-events.server").EventOutcome[] = [];
+  // a replacement access card waits for its invoice to be paid (Dani, 2 Oct 2026)
+  if (balance <= 0.005) {
+    try {
+      const { replacementAfterPayment } = await import("@/lib/access-card.functions");
+      await replacementAfterPayment(supabase, invoice.id);
+    } catch (err) {
+      console.warn(
+        `access card after payment: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    // and an Update Tenancy event waits for its IP to be paid - what it did is said to admin (Dani, 7 Oct 2026)
+    try {
+      const { tenancyChangeAfterPayment } = await import("@/lib/tenancy-change.functions");
+      tenancyChange = await tenancyChangeAfterPayment(supabase, invoice.id);
+    } catch (err) {
+      console.warn(
+        `tenancy change after payment: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  const enquiryId = (invoice as any).enquiry_id as string | null;
+  let residentId = "";
+  let residentCode = "";
+  let residentCreated = false;
+
+  if (enquiryId) {
+    const now = new Date().toISOString();
+    const patch: Record<string, unknown> = { updated_at: now };
+    const { data: enq } = await supabase
+      .from("enquiries")
+      .select("fee_received_at,status,resident_id")
+      .eq("id", enquiryId)
+      .maybeSingle();
+
+    /*
+     * The booking fee is RM500, and it is the fee in full that confirms the
+     * room - part of it confirms nothing. So the booking's payments are added
+     * up, and only once they reach the fee does the booking become Booked and
+     * the student become a resident. Below it the booking waits where it is.
+     *
+     * The money is not finished either way: the invoice stays part paid, and
+     * its balance is chased on the resident's Payments tab and Collections.
+     */
+    const { data: feePayments } = await supabase
+      .from("payments")
+      .select("amount")
+      .eq("enquiry_id", enquiryId);
+    const paidOnBooking = ((feePayments ?? []) as any[]).reduce(
+      (n, p) => n + Number(p.amount || 0),
+      0,
+    );
+    const feeIn = paidOnBooking + 0.005 >= BOOKING_FEE;
+    const current = String((enq as any)?.status ?? "");
+
+    if (feeIn) {
+      if (enq && !(enq as any).fee_received_at) patch["fee_received_at"] = now;
+      if (enq && current !== "closed" && current !== "booked") {
+        patch["status"] = "booked";
+        patch["stage_changed_at"] = now;
+      }
+    }
+    await supabase
+      .from("enquiries")
+      .update(patch as any)
+      .eq("id", enquiryId);
+
+    /*
+     * The resident is made here rather than by a button someone has to
+     * remember: the fee is in, so they are coming. A booking that already has
+     * a resident simply keeps them. If this fails the payment still stands -
+     * the booking page offers Create resident to put it right.
+     */
+    if (feeIn && current !== "closed") {
+      try {
+        const { residentFromBooking } = await import("@/lib/booking-lifecycle");
+        const made = await residentFromBooking(supabase, enquiryId);
+        residentId = made.residentId;
+        residentCode = made.residentCode;
+        residentCreated = made.changed;
+      } catch (err) {
+        console.warn(`resident from booking: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }
+
+  return { receipt, balance, residentId, residentCode, residentCreated, tenancyChange };
+}
+
 /**
  * Logs a payment against an invoice and issues the matching receipt - in one
  * database step (recordInvoicePayment, 15 Oct 2026): the payment, its receipt
  * and the invoice's status are saved together or not at all. The same
  * requestKey sent again returns that payment and saves nothing, so a double
  * click or a retry after a lost answer is never a second payment. What follows
- * the money (the booking's stage, the resident, an access card, an Update
- * Tenancy event) runs after it, and is safe to run again on a retry.
+ * the money runs after it (afterPaymentSaved).
  */
 export const recordPayment = createServerFn({ method: "POST" })
-  .inputValidator(
-    (data: {
-      invoiceId: string;
-      amount: number;
-      paidOn: string;
-      method: string;
-      reference?: string;
-      proofPath?: string;
-      /** what the money is for - "Booking fee" */
-      description?: string;
-      /** the staff member recording it - shown as "by Syazwani" */
-      recordedBy?: string;
-      /** one per save attempt, from the Record payment box */
-      requestKey?: string;
-    }) => data,
-  )
+  .inputValidator((data: PaymentForm & { invoiceId: string }) => data)
   .handler(async ({ data }) => {
     const supabase = await admin();
-    {
-      const { STAFF } = await import("@/data/form-options");
-      if (!STAFF.includes(String(data.recordedBy ?? ""))) throw new Error("Choose who is recording this payment");
-    }
-    // the same rule the form shows: what this way of paying needs (1 Oct 2026)
-    {
-      const { paymentMissing } = await import("@/lib/payment-methods");
-      const missing = paymentMissing({ method: data.method ?? "", reference: data.reference ?? "", proofPath: data.proofPath ?? "" });
-      if (missing) throw new Error(missing);
-    }
+    await checkPaymentForm(data);
     // the invoice, its payments, its receipt and its status: one step in the database
     const { recordInvoicePayment } = await import("@/lib/payments.server");
     const saved = await recordInvoicePayment(supabase, {
@@ -2696,124 +2833,36 @@ export const recordPayment = createServerFn({ method: "POST" })
       recordedBy: data.recordedBy ?? "",
       requestKey: data.requestKey ?? null,
     });
-    const invoice = saved.invoice;
-    const payment = saved.payment;
-    const receipt = saved.receipt;
-    const amount = Number(payment.amount);
-    const balance = saved.balance;
+    return afterPaymentSaved(supabase, saved, { kind: "payment_recorded", prefix: "" });
+  });
 
-    // the activity line, once per payment - a retry finds the one already written
-    if (invoice.enquiry_id) {
-      const { data: logged } = saved.replayed
-        ? await supabase
-            .from("booking_events")
-            .select("id")
-            .eq("enquiry_id", invoice.enquiry_id)
-            .eq("kind", "payment_recorded")
-            .eq("ref", String(payment.id))
-            .limit(1)
-        : { data: [] };
-      if (!(logged ?? []).length) {
-        // money on a booking's invoice is recorded by the booking's staff member
-        const payStaff = await staffFor(supabase, invoice.enquiry_id);
-        const receiptNo = String(receipt?.number ?? "");
-        const forWhat = payment.description ? ` (${payment.description})` : "";
-        await logBookingEvent(supabase, {
-          enquiryId: invoice.enquiry_id,
-          staff: payStaff,
-          kind: "payment_recorded",
-          ref: String(payment.id),
-          summary: `${rm(amount)}${forWhat} received for ${invoice.number} by ${words(payment.method)}${receiptNo ? ` · Receipt ${receiptNo}` : ""}`,
-        });
-      }
-    }
-
-    let tenancyChange: import("@/lib/tenancy-events.server").EventOutcome[] = [];
-    // a replacement access card waits for its invoice to be paid (Dani, 2 Oct 2026)
-    if (balance <= 0.005) {
-      try {
-        const { replacementAfterPayment } = await import("@/lib/access-card.functions");
-        await replacementAfterPayment(supabase, data.invoiceId);
-      } catch (err) {
-        console.warn(`access card after payment: ${err instanceof Error ? err.message : String(err)}`);
-      }
-      // and an Update Tenancy event waits for its IP to be paid - what it did is said to admin (Dani, 7 Oct 2026)
-      try {
-        const { tenancyChangeAfterPayment } = await import("@/lib/tenancy-change.functions");
-        tenancyChange = await tenancyChangeAfterPayment(supabase, data.invoiceId);
-      } catch (err) {
-        console.warn(`tenancy change after payment: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    }
-
-    const enquiryId = (invoice as any).enquiry_id as string | null;
-    let residentId = "";
-    let residentCode = "";
-    let residentCreated = false;
-
-    if (enquiryId) {
-      const now = new Date().toISOString();
-      const patch: Record<string, unknown> = { updated_at: now };
-      const { data: enq } = await supabase
-        .from("enquiries")
-        .select("fee_received_at,status,resident_id")
-        .eq("id", enquiryId)
-        .maybeSingle();
-
-      /*
-       * The booking fee is RM500, and it is the fee in full that confirms the
-       * room - part of it confirms nothing. So the booking's payments are added
-       * up, and only once they reach the fee does the booking become Booked and
-       * the student become a resident. Below it the booking waits where it is.
-       *
-       * The money is not finished either way: the invoice stays part paid, and
-       * its balance is chased on the resident's Payments tab and Collections.
-       */
-      const { data: feePayments } = await supabase
-        .from("payments")
-        .select("amount")
-        .eq("enquiry_id", enquiryId);
-      const paidOnBooking = ((feePayments ?? []) as any[]).reduce(
-        (n, p) => n + Number(p.amount || 0),
-        0,
-      );
-      const feeIn = paidOnBooking + 0.005 >= BOOKING_FEE;
-      const current = String((enq as any)?.status ?? "");
-
-      if (feeIn) {
-        if (enq && !(enq as any).fee_received_at) patch["fee_received_at"] = now;
-        if (enq && current !== "closed" && current !== "booked") {
-          patch["status"] = "booked";
-          patch["stage_changed_at"] = now;
-        }
-      }
-      await supabase
-        .from("enquiries")
-        .update(patch as any)
-        .eq("id", enquiryId);
-
-      /*
-       * The resident is made here rather than by a button someone has to
-       * remember: the fee is in, so they are coming. A booking that already has
-       * a resident simply keeps them. If this fails the payment still stands -
-       * the booking page offers Create resident to put it right.
-       */
-      if (feeIn && current !== "closed") {
-        try {
-          const { residentFromBooking } = await import("@/lib/booking-lifecycle");
-          const made = await residentFromBooking(supabase, enquiryId);
-          residentId = made.residentId;
-          residentCode = made.residentCode;
-          residentCreated = made.changed;
-        } catch (err) {
-          console.warn(
-            `resident from booking: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-      }
-    }
-
-    return { receipt, balance, residentId, residentCode, residentCreated, tenancyChange };
+/**
+ * Amend a payment typed wrong (28 Oct 2026) - the same form as Record payment,
+ * filled with what was saved, and a reason. The wrong payment and its receipt
+ * are kept with the reason; the corrected one gets a new receipt
+ * (amendInvoicePayment). An issued receipt is never edited.
+ */
+export const amendPayment = createServerFn({ method: "POST" })
+  .inputValidator((data: PaymentForm & { paymentId: string; reason: string }) => data)
+  .handler(async ({ data }) => {
+    const supabase = await admin();
+    await checkPaymentForm(data);
+    const { amendInvoicePayment } = await import("@/lib/payments.server");
+    const saved = await amendInvoicePayment(supabase, {
+      paymentId: data.paymentId,
+      reason: data.reason,
+      amount: data.amount,
+      paidOn: data.paidOn,
+      method: data.method,
+      reference: data.reference ?? "",
+      proofPath: data.proofPath ?? "",
+      description: data.description ?? "",
+      recordedBy: data.recordedBy ?? "",
+      requestKey: data.requestKey ?? null,
+    });
+    const prefix = `Amended ${saved.oldReceipt || "payment"} (${data.reason.trim()}) · `;
+    const done = await afterPaymentSaved(supabase, saved, { kind: "payment_amended", prefix });
+    return { ...done, oldReceipt: saved.oldReceipt };
   });
 
 /** Whether a booking's bed may be released, and the invoice that goes with it. See booking-lifecycle.ts. */

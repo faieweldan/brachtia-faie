@@ -53,3 +53,13 @@ export function paymentMissing(p: { method: string; reference: string; proofPath
   if (rule.proof.required && !p.proofPath) return "Attach the payment proof";
   return "";
 }
+
+/** Credit applied by the system, never typed by staff (account-credit.server.ts). */
+export const CREDIT_METHOD = "Account credit";
+
+/**
+ * Whether staff can amend a payment made this way (28 Oct 2026). Account
+ * credit is applied by the system, so it is corrected where it came from; the
+ * database refuses it too (amend_invoice_payment).
+ */
+export const canAmend = (method: string) => method !== CREDIT_METHOD;
