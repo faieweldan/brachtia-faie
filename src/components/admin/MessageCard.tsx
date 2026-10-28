@@ -36,6 +36,7 @@ export function MessageCard({
   actions,
   id,
   highlight,
+  beforeSend,
 }: {
   title: ReactNode;
   subtitle?: ReactNode;
@@ -54,6 +55,8 @@ export function MessageCard({
   actions?: ReactNode;
   id?: string | undefined;
   highlight?: boolean | undefined;
+  /** checked again at the moment of sending - false stops the copy or WhatsApp */
+  beforeSend?: (() => Promise<boolean>) | undefined;
 }) {
   const digits = waDigits(phone);
 
@@ -63,6 +66,7 @@ export function MessageCard({
   }
 
   async function copy() {
+    if (beforeSend && !(await beforeSend())) return;
     try {
       await navigator.clipboard.writeText(message);
     } catch {
@@ -114,7 +118,17 @@ export function MessageCard({
                     href={`https://wa.me/${digits}?text=${encodeURIComponent(message)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    onClick={done}
+                    onClick={(e) => {
+                      if (!beforeSend) return done();
+                      // the check first; WhatsApp opens only once it passes
+                      e.preventDefault();
+                      const href = e.currentTarget.href;
+                      void beforeSend().then((ok) => {
+                        if (!ok) return;
+                        window.open(href, "_blank", "noopener,noreferrer");
+                        done();
+                      });
+                    }}
                   >
                     <MessageCircle className="size-4" /> Open in WhatsApp
                   </a>

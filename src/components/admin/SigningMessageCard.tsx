@@ -37,7 +37,28 @@ export function SigningMessageCard({ residentId, phone, packId, fresh }: { resid
   const [message, setMessage] = useState("");
   const [link, setLink] = useState("");
   // anything still empty in the documents: not sent until it is filled (Dani, 28 Oct 2026)
-  const check = useQuery({ queryKey: ["signing-gaps", residentId], queryFn: () => getSigningGaps({ data: { residentId } }), staleTime: 0 });
+  // read again on every visit and when the window comes back - the profile may have changed elsewhere
+  const check = useQuery({
+    queryKey: ["signing-gaps", residentId],
+    queryFn: () => getSigningGaps({ data: { residentId } }),
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+  });
+  // and once more at the moment of sending: a field emptied after the card loaded stops it here
+  const readyToSend = async () => {
+    const now = await check.refetch();
+    const missing = now.data ?? null;
+    if (!missing) {
+      toast.error("Could not check the documents. Try again.");
+      return false;
+    }
+    if (missing.length) {
+      toast.error(`${missing.join(", ")} missing. Fill ${missing.length === 1 ? "it" : "them"} in before sending.`);
+      return false;
+    }
+    return true;
+  };
   const gaps = check.data ?? [];
 
   // the link is made (or the live one reused) only when the message is opened
@@ -81,9 +102,21 @@ export function SigningMessageCard({ residentId, phone, packId, fresh }: { resid
       open={open}
       onOpenChange={setOpen}
       onSent={markSent}
+      beforeSend={readyToSend}
       rows={14}
       // the signing link on its own, one click to copy - like the Application Form Link (Dani, 14 Oct 2026)
-      actions={link ? <CopyLinkButton label="Signing link" link={link} copied="Signing link copied" /> : null}
+      actions={
+        link ? (
+          <CopyLinkButton
+            label="Signing link"
+            link={async () => {
+              if (!(await readyToSend())) throw new Error("Not copied - fill in the missing fields first.");
+              return link;
+            }}
+            copied="Signing link copied"
+          />
+        ) : null
+      }
     />
   );
 }
