@@ -331,10 +331,14 @@ async function buildContext(db: any, residentId: string, opts: { newAgreement?: 
   const { loadSignatory } = await import("@/lib/signatory.server");
   const { billedInitialLines } = await import("@/lib/tenancy-events.server");
   const { readRentSteps } = await import("@/lib/rent-schedule.server");
-  const [signatory, initialPayment, rentSteps] = await Promise.all([
+  const [signatory, initialPayment, rentSteps, frequency] = await Promise.all([
     loadSignatory(db),
     billedInitialLines(db, data.residentId),
     stay.tenancyId ? readRentSteps(db, data.residentId, stay.tenancyId).then((r) => r.steps) : Promise.resolve([]),
+    // the frequency the rent is billed with - Payments → Rent schedule, as the profile shows it
+    stay.tenancyId
+      ? db.from("rental_schedules").select("frequency").eq("tenancy_id", stay.tenancyId).maybeSingle().then((r: any) => String(r.data?.frequency ?? ""))
+      : Promise.resolve(""),
   ]);
   const ctx: MappingContext = {
     resident,
@@ -351,6 +355,7 @@ async function buildContext(db: any, residentId: string, opts: { newAgreement?: 
     rentInForce: now.hasSchedule && now.rent > 0 ? now.rent : null,
     initialPayment,
     rentSteps,
+    frequency,
   };
   return { resident, ctx };
 }

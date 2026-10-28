@@ -63,3 +63,18 @@ describe("total for whole stay adds up from the tenancy", () => {
     expect(get("total_stay", { enquiry: { quote_snapshot: { quote: { totalStay: 5000 } } } } as any)).toBe("5,000.00");
   });
 });
+
+describe("the TA follows Update Tenancy and the rent schedule", () => {
+  test("an extension moves the move-out date", () => {
+    const ctx: any = { stay: { start: "2026-01-01", end: "2027-06-30" }, enquiry: { move_in: "2026-01-01", move_out: "2026-12-31" } };
+    expect(get("booking_move_in", ctx)).toBe("1 Jan 2026");
+    expect(get("booking_move_out", ctx)).toBe("30 Jun 2027");
+  });
+  test("the rent schedule's frequency wins over the booking's", () => {
+    const ctx: any = { frequency: "monthly", resident: { pay_schedule: "full" }, enquiry: { payment_term: "full" } };
+    expect(get("payment_schedule", ctx)).not.toBe(get("payment_schedule", { enquiry: { payment_term: "full" } } as any));
+    expect(get("payment_schedule", { resident: { pay_schedule: "full" }, enquiry: { payment_term: "monthly" } } as any)).toBe(
+      get("payment_schedule", { enquiry: { payment_term: "full" } } as any),
+    );
+  });
+});

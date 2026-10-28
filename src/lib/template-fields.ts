@@ -37,6 +37,8 @@ export type MappingContext = {
   initialPayment?: { lines: { label: string; amount: number }[]; total: number } | null;
   /** the tenancy's rent changes, each from its day (rent-schedule.server readRentSteps) */
   rentSteps?: RentStep[];
+  /** the rent schedule's payment frequency (Payments → Rent schedule); "" without one */
+  frequency?: string;
 };
 
 export type TemplateField = {
@@ -188,9 +190,10 @@ export const TEMPLATE_FIELDS: TemplateField[] = [
   { key: "payer_address", label: "Payer address", source: "Resident Record", get: r("payer_address") },
   // — Booking Record —
   { key: "booking_ref", label: "Booking reference", source: "Booking Record", get: e("reference") },
-  { key: "payment_schedule", label: "Payment frequency", source: "Booking Record", get: (c) => scheduleName(c.enquiry?.["payment_term"] || c.resident?.["pay_schedule"]) },
-  { key: "booking_move_in", label: "Move-in date", source: "Booking Record", get: (c) => fmtDate(c.enquiry?.["move_in"] ?? c.resident?.["move_in"]) },
-  { key: "booking_move_out", label: "Move-out date", source: "Booking Record", get: (c) => fmtDate(c.enquiry?.["move_out"]) },
+  { key: "payment_schedule", label: "Payment frequency", source: "Booking Record", get: (c) => scheduleName(c.frequency || c.resident?.["pay_schedule"] || c.enquiry?.["payment_term"]) },
+  // the stay as it stands - an extension or renewal in Update Tenancy moves it (Dani, 28 Oct 2026)
+  { key: "booking_move_in", label: "Move-in date", source: "Booking Record", get: (c) => fmtDate(start(c) ?? c.enquiry?.["move_in"]) },
+  { key: "booking_move_out", label: "Move-out date", source: "Booking Record", get: (c) => fmtDate(end(c) ?? c.enquiry?.["move_out"]) },
   { key: "lease_months", label: "Lease length (months)", source: "Booking Record", get: r("lease_months") },
   // — Initial Payment: the billed IP invoices' lines, else the saved quote —
   { key: "deposit", label: "Security deposit", source: "Initial Payment", get: payLine(/^security deposit/i) },
