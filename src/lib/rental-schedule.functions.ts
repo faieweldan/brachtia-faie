@@ -33,6 +33,8 @@ export type ResidentRent = {
   tenancy: TenancyTerms | null;
   schedule: SavedSchedule | null;
   advance: AdvanceRent;
+  /** the initial invoice the schedule takes its frequency from ("" when none) */
+  initialInvoice: string;
 };
 
 const day = (v: unknown) => String(v ?? "").slice(0, 10);
@@ -59,7 +61,7 @@ export const getResidentRent = createServerFn({ method: "GET" })
       .limit(1)
       .maybeSingle();
     if (error) throw new Error(error.message);
-    if (!t) return { tenancy: null, schedule: null, advance: none };
+    if (!t) return { tenancy: null, schedule: null, advance: none, initialInvoice: "" };
 
     const { initialInvoiceFor, prepareTenancyRent, syncScheduledRent } =
       await import("@/lib/rent-schedule.server");
@@ -99,6 +101,8 @@ export const getResidentRent = createServerFn({ method: "GET" })
         : null,
       // a renewal's initial payment from the stay before pays nothing towards this term (23 Oct 2026)
       advance: initial && !isEarlierStay(initial.invoice.notes) ? { amount: initial.advance, rent: initial.rent } : none,
+      // where the schedule's frequency was taken from - the profile names it (3 Nov 2026)
+      initialInvoice: initial ? String(initial.invoice.number ?? "") : "",
     };
   });
 

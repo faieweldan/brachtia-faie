@@ -1255,7 +1255,7 @@ function addressLine(fields: ResidentField[], form: Resident) {
  * The payment frequency the rent invoices are made with. It was a field of its
  * own on the profile, copied from the booking once - changing it changed no
  * invoice (Dani and Rina, 7 Oct 2026). The booking keeps the quote's; the rent
- * schedule on Payments is the one place to change it.
+ * schedule reads it from the initial invoice, and the line under it says so.
  */
 function PayScheduleField({ residentId, saved }: { residentId: string; saved: string }) {
   const { data: rent } = useQuery({
@@ -1269,19 +1269,28 @@ function PayScheduleField({ residentId, saved }: { residentId: string; saved: st
     <div className="space-y-1.5">
       <p className="text-xs text-muted-foreground">Payment frequency</p>
       <p className="flex h-9 items-center truncate text-sm text-foreground">{label || "—"}</p>
+      {rent?.schedule ? (
+        /*
+         * Where it came from, not where to change it (Dani, 3 Nov 2026): the
+         * rent schedule takes it from the initial invoice and nothing on
+         * Payments changes it - the old link led to a page with no such field.
+         */
+        <p className="text-[11px] text-muted-foreground">
+          {rent.initialInvoice ? `From initial invoice ${rent.initialInvoice}` : "From the rent schedule"}
+        </p>
+      ) : (
       <Link
         to="/admin/residents/$id"
         params={{ id: residentId }}
         search={{ tab: "payments" } as never}
         className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
       >
-        {rent?.schedule
-          ? "Change it in Payments → Rent schedule"
-          : value === "full"
+        {value === "full"
             ? // the whole stay's rent is on the initial payment - nothing to schedule (23 Oct 2026)
               "Full term - see Payments → Rental payments"
             : "Set up the rent schedule in Payments"}
       </Link>
+      )}
     </div>
   );
 }
