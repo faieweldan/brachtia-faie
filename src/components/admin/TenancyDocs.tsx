@@ -273,7 +273,14 @@ function DocumentRow({
               <td className="py-2 pr-3">
                 <StatusPill status={v.status} label={docLabel(v.status)} />
               </td>
-              <td />
+              {/* an earlier version stays open to read - the signed one is what the resident agreed to (3 Nov 2026) */}
+              <td className="py-2 text-right">
+                {v.mergeValues["source"] === "migrated" ? null : (
+                  <Button size="sm" variant="ghost" onClick={() => setViewing({ kind: "agreement", id: v.id, title: `${DOC_TYPE_LABELS[v.docType]} v${v.version}` })}>
+                    View
+                  </Button>
+                )}
+              </td>
             </tr>
           ))
         : null}

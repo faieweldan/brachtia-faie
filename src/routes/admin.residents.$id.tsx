@@ -222,6 +222,17 @@ function ResidentProfilePage() {
   const [form, setForm] = useState<Resident | null>(isNew ? blankResident() : (stored ?? null));
   const { tab: startTab } = Route.useSearch();
   const [tab, setTab] = useState<string>(startTab ?? "profile");
+  /*
+   * A link to this same page with ?tab= (Payment details' "Change it in
+   * Payments -> Rent schedule") only changes the search - the page stays
+   * mounted, so the tab is taken from it here, and the search is then cleared
+   * so the next click changes it again (3 Nov 2026).
+   */
+  useEffect(() => {
+    if (!startTab) return;
+    setTab(startTab);
+    navigate({ to: "/admin/residents/$id", params: { id }, search: {} as never, replace: true });
+  }, [startTab, navigate]);
   // the Checkout button pressed: Payments opens on the checkout settlement
   const [goCheckout, setGoCheckout] = useState(0);
   // a lost or damaged access card: Payments opens its invoice, filled in (Dani, 2 Oct 2026)
