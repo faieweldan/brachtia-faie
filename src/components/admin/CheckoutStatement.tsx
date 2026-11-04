@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Dropdown, StaffPicker } from "@/components/admin/Dropdown";
+import { Dropdown, NoSignatureNote, StaffPicker } from "@/components/admin/Dropdown";
+import { useStaff } from "@/hooks/use-staff";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Camera, Check, FileText, KeyRound, Loader2, Plus, Send, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -107,6 +108,9 @@ export function CheckoutStatement({
   const [lines, setLines] = useState<CheckoutLine[]>([]);
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState("");
+  // who issues it - and signs it for Brachtia (Dani, 4 Nov 2026)
+  const [issuedBy, setIssuedBy] = useState("");
+  const staff = useStaff();
   const [pdf, setPdf] = useState<{ url: string; title: string } | null>(null);
   const [urls, setUrls] = useState<Record<string, string>>({});
   // the kind picked before starting - the dates' suggestion until changed
@@ -347,7 +351,7 @@ export function CheckoutStatement({
             disabled={!!busy}
             title={`${docName} ${s.number} · Preview`}
             fileName={`${s.number.replace(/\//g, "-")}-preview.pdf`}
-            build={async () => pdfUrl((await previewCheckout({ data: { residentId, lines, notes } })).base64)}
+            build={async () => pdfUrl((await previewCheckout({ data: { residentId, lines, notes, issuedBy } })).base64)}
             /* like a draft invoice: not sent from here - the issued version is the one with a PDF to keep */
             downloadable={false}
             downloadHint="Issue it to download the PDF"
@@ -374,15 +378,22 @@ export function CheckoutStatement({
               Save draft
             </Button>
           ) : null}
+          {toIssue ? (
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              Issued by
+              <StaffPicker value={issuedBy} onChange={setIssuedBy} className="h-8 min-w-36 text-xs" />
+            </label>
+          ) : null}
+          {toIssue ? <NoSignatureNote name={issuedBy} /> : null}
           <Button
             size="sm"
-            disabled={!!busy || !toIssue}
+            disabled={!!busy || !toIssue || !issuedBy || staff.unsigned(issuedBy)}
             onClick={() =>
               void run(
                 "issue",
                 async () => {
                   if (unsaved) await save();
-                  await issueCheckout({ data: { residentId } });
+                  await issueCheckout({ data: { residentId, issuedBy } });
                 },
                 latest ? `Version ${latest.v + 1} issued - the resident signs it again` : "Issued - send the resident their link",
               )
@@ -402,6 +413,7 @@ export function CheckoutStatement({
             <div key={v.v} className="flex flex-wrap items-center gap-2 border-t border-border px-3 py-2 text-sm">
               <span className="font-medium">Version {v.v}</span>
               <span className="text-xs text-muted-foreground">Issued {fmt(v.issuedAt)}</span>
+              {v.issuedBy?.name ? <StaffTag name={v.issuedBy.name} /> : null}
               <span className="text-xs tabular-nums text-muted-foreground">· {money(Math.abs(v.net))} {v.net >= 0 ? "refund" : "owed"}</span>
               <span className="ml-auto flex items-center gap-2">
                 {v.signed ? (

@@ -298,24 +298,27 @@ export const uploadCheckoutPhoto = createServerFn({ method: "POST" })
 
 /**
  * Issue the draft as the next version: the deposits as they stand today, the
- * deductions, the PDF with Brachtia's signatory on it. An earlier version is
- * kept as it was; only the latest is for the resident to sign.
+ * deductions, the PDF signed for Brachtia by whoever issues it (Issued by,
+ * Dani 4 Nov 2026). An earlier version is kept as it was; only the latest is
+ * for the resident to sign.
  */
 export const issueCheckout = createServerFn({ method: "POST" })
-  .inputValidator((d) => rid.parse(d))
+  .inputValidator((d) => rid.extend({ issuedBy: z.string().min(1, "Choose who is issuing it").max(80) }).parse(d))
   .handler(async ({ data }) => {
     const sb = await admin();
     const { buildStatementPdf, putFile, readStatement, sha256, totals, writeStatement } = await import("@/lib/checkout.server");
     const s = await readStatement(sb, data.residentId);
     if (!s) throw new Error("Start the statement first.");
     if (s.refund || s.settled) throw new Error("This statement is signed and paid - it can no longer change.");
-    const { loadSignatory } = await import("@/lib/signatory.server");
-    if (!(await loadSignatory(sb))?.token) throw new Error("Save the signatory's signature in Settings → Signatory first.");
+    const { requireSigner, requireStaff } = await import("@/lib/staff.server");
+    await requireStaff(sb, data.issuedBy, "Choose who is issuing it");
+    const issuedBy = await requireSigner(sb, data.issuedBy);
     const now = await moneyNow(data.residentId, s.draft.type);
     const v = (s.versions.at(-1)?.v ?? 0) + 1;
     const version = {
       v,
       issuedAt: new Date().toISOString(),
+      issuedBy,
       type: now.type,
       deposits: now.deposits,
       lines: s.draft.lines,
@@ -336,10 +339,14 @@ export const issueCheckout = createServerFn({ method: "POST" })
  * nothing is saved and no version is made.
  */
 export const previewCheckout = createServerFn({ method: "POST" })
-  .inputValidator((d) => rid.extend({ lines: z.array(lineSchema).max(60), notes: z.string().max(2000) }).parse(d))
+  .inputValidator((d) =>
+    rid.extend({ lines: z.array(lineSchema).max(60), notes: z.string().max(2000), issuedBy: z.string().max(80).optional() }).parse(d),
+  )
   .handler(async ({ data }) => {
     const sb = await admin();
     const { buildStatementPdf, readStatement, totals } = await import("@/lib/checkout.server");
+    // the one chosen in Issued by, as it will be signed; nobody chosen yet: no signature
+    const issuedBy = await (await import("@/lib/staff.server")).signerFor(sb, data.issuedBy);
     const s = await readStatement(sb, data.residentId);
     if (!s) throw new Error("Start the statement first.");
     const now = await moneyNow(data.residentId, s.draft.type);
@@ -354,6 +361,7 @@ export const previewCheckout = createServerFn({ method: "POST" })
       ...totals(now.deposits, lines),
       pdfPath: "",
       pdfSha256: "",
+      issuedBy,
     };
     const bytes = await buildStatementPdf(sb, data.residentId, s, version);
     return { base64: toBase64(bytes) };

@@ -1,7 +1,7 @@
 import { Children, isValidElement, type ReactNode } from "react";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { STAFF } from "@/data/form-options";
+import { useStaff } from "@/hooks/use-staff";
 import { cn } from "@/lib/utils";
 
 /*
@@ -91,16 +91,27 @@ export function StaffPicker({
   placeholder?: string;
   className?: string;
 }) {
+  const staff = useStaff();
   return (
     <Dropdown value={value} onChange={(e) => onChange(e.target.value)} className={cn("h-9 min-w-44", value ? "" : "border-amber-400", className)}>
       <option value="" disabled>
         {placeholder}
       </option>
-      {STAFF.map((n) => (
+      {staff.choices(value).map((n) => (
         <option key={n} value={n}>
           {n}
         </option>
       ))}
     </Dropdown>
   );
+}
+
+/**
+ * Under a picker whose person signs the document (Prepared by, Approved by,
+ * Issued by): said before the button is pressed, not after (Dani, 4 Nov 2026).
+ */
+export function NoSignatureNote({ name }: { name: string }) {
+  const staff = useStaff();
+  if (!staff.unsigned(name)) return null;
+  return <p className="text-[11px] text-amber-700">{name} has no signature yet. Add it in Settings → Staff first.</p>;
 }

@@ -40,8 +40,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar as DayPicker } from "@/components/ui/calendar";
+import { useStaff } from "@/hooks/use-staff";
 import {
-  STAFF,
   SHARING_LABEL,
   SHARING_PREFERENCES,
   UNIVERSITIES,
@@ -210,6 +210,7 @@ function SortHead({
 }
 
 function AppointmentsPage() {
+  const staff = useStaff();
   const queryClient = useQueryClient();
   const ops = useOps();
   const [view, setView] = useState<"list" | "calendar">("list");
@@ -771,7 +772,7 @@ function AppointmentsPage() {
           onChange={(e) => setStaffFilter(e.target.value)}
         >
           <option value="all">All staff</option>
-          {STAFF.map((s) => (
+          {staff.all.map((s) => (
             <option key={s} value={s}>
               {s}
             </option>
@@ -1164,7 +1165,7 @@ function AppointmentsPage() {
                               onChange={(e) => setField("assigned_staff", e.target.value)}
                             >
                               <option value="">Unassigned</option>
-                              {STAFF.map((s) => (
+                              {staff.choices(form.assigned_staff).map((s) => (
                                 <option key={s} value={s}>
                                   {s}
                                 </option>

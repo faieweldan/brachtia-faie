@@ -137,3 +137,8 @@ export function fakeDb(
   };
   return { sb, reads, writes, rpcs, log, files };
 }
+
+/** A fresh files map (fakeDb writes into it): Settings → Staff with the first staff member able to sign - a change that makes documents needs its approver's signature */
+export const signingStaff = (): Record<string, unknown> => ({
+  "staff/list.json": { staff: [{ name: "Syazwani", title: "Admin", token: "@signature:0123456789abcdef", active: true }] },
+});

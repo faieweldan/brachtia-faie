@@ -60,8 +60,8 @@ import { klToday } from "@/lib/kl-date";
 /** whole: a twin room nobody is in, let as one single (its other bed is marked Sold as single) */
 type Candidate = { row: BedRow; convert: boolean; whole?: boolean; blocked?: string; note?: string };
 
+import { useStaff } from "@/hooks/use-staff";
 import {
-  STAFF,
   SHARING_PREFERENCES,
   GENDERS,
   HEARD_ABOUT,
@@ -197,6 +197,7 @@ function genderChip(gender?: string) {
 }
 
 function BookingDetail() {
+  const staff = useStaff();
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -1290,7 +1291,7 @@ function BookingDetail() {
               </Button>
             </PopoverTrigger>
             <PopoverContent align="start" className="w-56 p-1">
-              {STAFF.map((s) => (
+              {staff.choices(row.assigned_staff ?? "").map((s) => (
                 <button
                   key={s}
                   type="button"
@@ -1819,7 +1820,7 @@ function BookingDetail() {
                             <option value="" disabled>
                               Assign staff
                             </option>
-                            {STAFF.map((s) => (
+                            {staff.choices().map((s) => (
                               <option key={s} value={s}>
                                 {s}
                               </option>
@@ -1945,7 +1946,7 @@ function BookingDetail() {
                         <option value="" disabled>
                           Choose who takes the viewing
                         </option>
-                        {STAFF.map((s) => (
+                        {staff.choices(vStaff).map((s) => (
                           <option key={s} value={s}>
                             {s}
                           </option>

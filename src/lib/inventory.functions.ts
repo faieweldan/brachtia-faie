@@ -1,10 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { STAFF } from "@/data/form-options";
-
-// who on the team did it (Dani, 6 Oct 2026), from the same list as Record payment
-const staffName = z.string().refine((v) => STAFF.includes(v), "Choose who is doing this");
+// who on the team did it (Dani, 6 Oct 2026), from the same list as Record payment -
+// checked against Settings → Staff in each handler (requireStaff)
+const staffName = z.string().min(1, "Choose who is doing this").max(80);
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -102,18 +101,20 @@ export const confirmInventory = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ docId: z.string().uuid(), mode: z.enum(["in", "out"]), by: staffName }).parse(d))
   .handler(async ({ data }) => {
     const sb = await admin();
+    const { requireSigner, requireStaff } = await import("@/lib/staff.server");
+    await requireStaff(sb, data.by, "Choose who is doing this");
     const residentId = await residentOf(sb, data.docId);
     const { buildInventoryPdf, inventoryBase, putFile, readInventory, sha256, writeInventory } = await import("@/lib/inventory.server");
     const file = await readInventory(sb, residentId, data.docId, data.mode);
     if (!file || file.status !== "submitted") throw new Error("There is nothing waiting to be confirmed.");
-    const { loadSignatory } = await import("@/lib/signatory.server");
-    if (!(await loadSignatory(sb))?.token) throw new Error("Save the signatory's signature in Settings → Signatory first.");
+    // the one who approves signs for Brachtia (Dani, 4 Nov 2026)
+    const signer = await requireSigner(sb, data.by);
     // the resident's signature as they drew it on the copy they read, and Brachtia's now
     const png = file.submitted ? await (await import("@/lib/inventory.server")).getFile(sb, file.submitted.signaturePath) : null;
     if (!file.submitted || !png) throw new Error("The resident's signature could not be found.");
     const { bytes, signatory, at } = await buildInventoryPdf(sb, residentId, data.docId, file, {
       resident: { png, at: file.submitted.at, typedName: file.submitted.typedName },
-      brachtia: true,
+      brachtia: signer,
     });
     const pdfPath = `${inventoryBase(residentId, data.docId, data.mode)}.pdf`;
     await putFile(sb, pdfPath, bytes, "application/pdf");
@@ -179,6 +180,7 @@ export const returnInventory = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const sb = await admin();
+    await (await import("@/lib/staff.server")).requireStaff(sb, data.by, "Choose who is doing this");
     const residentId = await residentOf(sb, data.docId);
     const { readInventory, writeInventory } = await import("@/lib/inventory.server");
     const { inventoryAnswerables } = await import("@/lib/inventory");

@@ -75,7 +75,6 @@ export const ENQUIRY_STATUS = [
 // one - there is no third answer the allocation could act on
 export const GENDERS = ["Female", "Male"];
 
-export const STAFF = ["Syazwani", "Norfadirah", "Valsala"];
 
 
 export const SHARING_PREFERENCES = [

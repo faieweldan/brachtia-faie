@@ -7,7 +7,8 @@ import { toast } from "sonner";
 import { ArrowRight, ChevronDown, ChevronUp, Search } from "lucide-react";
 
 import { useOps, allBeds } from "@/lib/ops-store";
-import { STAFF, universityAbbr } from "@/data/form-options";
+import { universityAbbr } from "@/data/form-options";
+import { useStaff } from "@/hooks/use-staff";
 import {
   ACTIONS,
   SLA_TONE,
@@ -58,6 +59,7 @@ const shortDate = (d?: string | null) =>
   d ? new Date(d).toLocaleDateString("en-MY", { day: "numeric", month: "short" }) : "—";
 
 function BookingsTable() {
+  const staff = useStaff();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const ops = useOps();
@@ -364,7 +366,7 @@ function BookingsTable() {
         >
           <option value="all">All staff</option>
           <option value="">Unassigned</option>
-          {STAFF.map((s) => (
+          {staff.all.map((s) => (
             <option key={s} value={s}>
               {s}
             </option>

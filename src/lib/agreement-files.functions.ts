@@ -78,8 +78,7 @@ export const uploadExistingAgreement = createServerFn({ method: "POST" })
     if (!files.agreement) throw new Error("Attach the signed Tenancy Agreement");
     // who uploaded it - required (Dani, 6 Oct 2026)
     const preparedBy = String(data.get("preparedBy") ?? "");
-    const { STAFF } = await import("@/data/form-options");
-    if (!STAFF.includes(preparedBy)) throw new Error("Choose who is uploading this agreement");
+    await (await import("@/lib/staff.server")).requireStaff(db, preparedBy, "Choose who is uploading this agreement");
     const pdfs: [string, Uint8Array][] = [];
     for (const t of ORDER) if (files[t]) pdfs.push([t, await asPdf(files[t]!)]);
 

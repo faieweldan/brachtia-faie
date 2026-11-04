@@ -119,7 +119,7 @@ describe("14. Amend payment is the same form and the same payment step (28 Oct 2
     for (const fn of ["recordPayment", "amendPayment"])
       expect(src).toMatch(
         new RegExp(
-          `${fn} = createServerFn[\\s\\S]*?checkPaymentForm\\(data\\)[\\s\\S]*?afterPaymentSaved\\(supabase, saved`,
+          `${fn} = createServerFn[\\s\\S]*?checkPaymentForm\\(supabase, data\\)[\\s\\S]*?afterPaymentSaved\\(supabase, saved`,
         ),
       );
   });

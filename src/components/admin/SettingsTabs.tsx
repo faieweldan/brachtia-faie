@@ -5,11 +5,11 @@ import { Link } from "@tanstack/react-router";
  * (Dani, 6 Oct 2026): Website moved out of the sidebar into Settings, so its
  * pages show the same header and tabs, with Website underlined.
  */
-export type SettingsTab = "templates" | "signatory" | "website";
+export type SettingsTab = "templates" | "staff" | "website";
 
 const TABS: { key: SettingsTab; label: string }[] = [
   { key: "templates", label: "Templates" },
-  { key: "signatory", label: "Signatory" },
+  { key: "staff", label: "Staff" },
   { key: "website", label: "Website" },
 ];
 

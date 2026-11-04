@@ -380,13 +380,16 @@ async function eventMergeValues(sb: any, residentId: string, ev0: TenancyEvent) 
       ...(ev0.plan.newAgreement ? { start: ev0.date } : {}),
       end: ev0.periodEnd,
       rent: ev0.rent,
+      // the one who approved the change signs its documents for Brachtia (Dani, 4 Nov 2026);
+      // an event from before approvers were kept: whoever made the pack
+      signedBy: ev0.approvedBy || previous["prepared_by"] || undefined,
     },
     previous,
   );
   // a revised schedule takes effect on the event's date, not the date the first one did
   const { fmtTemplateDate } = await import("@/lib/template-fields");
   for (const k of Object.keys(mapped)) if (/^(schedule_a_effective_date|effective_date)$/i.test(k)) mapped[k] = fmtTemplateDate(ev0.date);
-  return { ...ev0.mergeValues, ...mapped };
+  return { ...ev0.mergeValues, ...mapped, ...(ev0.approvedBy ? { prepared_by: ev0.approvedBy } : {}) };
 }
 
 /**

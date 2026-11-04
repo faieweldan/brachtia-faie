@@ -2322,16 +2322,30 @@ export const roomChangeCreditKey = (
 /** changeRoomBeforeStart's body - handed the service-role client, so the database tests can run it too */
 export async function applyRoomChange(supabase: any, data: RoomChangeInput) {
   {
-    const { STAFF } = await import("@/data/form-options");
     const { ROOM_CHANGE_REASONS } = await import("@/lib/room-change");
     const { STAY_DATE_REASONS } = await import("@/lib/room-change");
     const reasons: readonly string[] = data.bedId ? ROOM_CHANGE_REASONS : STAY_DATE_REASONS;
-    if (!STAFF.includes(String(data.approvedBy ?? ""))) throw new Error("Choose who approved the change.");
+    const { requireSigner, requireStaff } = await import("@/lib/staff.server");
+    await requireStaff(supabase, data.approvedBy, "Choose who approved the change.");
     if (!reasons.includes(data.reason)) throw new Error("Choose the reason.");
     if (data.reason === "Other" && String(data.note ?? "").trim().length < 3) throw new Error("Say what the other reason is.");
 
     const plan = await roomChangePlan(supabase, data.enquiryId, Number(data.newRent || 0));
     if (!plan.allowed) throw new Error("The tenancy has started. Use Update Tenancy on the resident's page.");
+    /*
+     * A signed TA gets a revised Schedule A below, signed for Brachtia by the
+     * one who approved the change (Dani, 4 Nov 2026) - refused now, before any
+     * money moves, when they have no signature yet.
+     */
+    if (plan.residentId) {
+      const { data: signedDocs } = await supabase
+        .from("agreement_documents")
+        .select("id, tenancy_agreements!inner(resident_id)")
+        .eq("tenancy_agreements.resident_id", plan.residentId)
+        .eq("status", "signed")
+        .limit(1);
+      if (signedDocs?.length) await requireSigner(supabase, data.approvedBy);
+    }
     // the figures the review showed - refused if they moved since (14 Oct 2026)
     if (data.expectedKey && data.expectedKey !== plan.key) {
       return {
@@ -2540,9 +2554,10 @@ export async function applyRoomChange(supabase: any, data: RoomChangeInput) {
             const { data: lastDocs } = await supabase.from("agreement_documents").select("merge_values").eq("agreement_id", ag.id).order("version", { ascending: true });
             const previous: Record<string, string> = Object.assign({}, ...((lastDocs ?? []) as any[]).map((d) => d.merge_values ?? {}));
             const { eventDocumentValues } = await import("@/lib/templates.functions");
-            const mapped = await eventDocumentValues(supabase, plan.residentId, { bedId: data.bedId, ...(data.bedId ? { letWhole: !!data.whole } : {}), start: newStart, end: newEnd, rent: data.newRent }, previous);
+            const mapped = await eventDocumentValues(supabase, plan.residentId, { bedId: data.bedId, ...(data.bedId ? { letWhole: !!data.whole } : {}), start: newStart, end: newEnd, rent: data.newRent, signedBy: data.approvedBy }, previous);
             const { reviseScheduleWith } = await import("@/lib/tenancy-docs.functions");
-            await reviseScheduleWith(supabase, { agreementId: ag.id, docType: "sched_a", mergeValues: { ...previous, ...mapped }, periodStart: newStart, periodEnd: newEnd });
+            // made by the one who approved the change - they sign it for Brachtia
+            await reviseScheduleWith(supabase, { agreementId: ag.id, docType: "sched_a", mergeValues: { ...previous, ...mapped, prepared_by: String(data.approvedBy) }, periodStart: newStart, periodEnd: newEnd });
             ta = "revised";
           } catch (err) {
             console.warn(`stay change ${data.enquiryId}: Schedule A not revised - ${err instanceof Error ? err.message : String(err)}`);
@@ -2661,10 +2676,8 @@ type PaymentForm = {
 };
 
 /** The form's rules, checked on the server too: who is recording it, and what this way of paying needs (1 Oct 2026). */
-async function checkPaymentForm(data: PaymentForm) {
-  const { STAFF } = await import("@/data/form-options");
-  if (!STAFF.includes(String(data.recordedBy ?? "")))
-    throw new Error("Choose who is recording this payment");
+async function checkPaymentForm(supabase: any, data: PaymentForm) {
+  await (await import("@/lib/staff.server")).requireStaff(supabase, data.recordedBy, "Choose who is recording this payment");
   const { paymentMissing } = await import("@/lib/payment-methods");
   const missing = paymentMissing({
     method: data.method ?? "",
@@ -2819,7 +2832,7 @@ export const recordPayment = createServerFn({ method: "POST" })
   .inputValidator((data: PaymentForm & { invoiceId: string }) => data)
   .handler(async ({ data }) => {
     const supabase = await admin();
-    await checkPaymentForm(data);
+    await checkPaymentForm(supabase, data);
     // the invoice, its payments, its receipt and its status: one step in the database
     const { recordInvoicePayment } = await import("@/lib/payments.server");
     const saved = await recordInvoicePayment(supabase, {
@@ -2846,7 +2859,7 @@ export const amendPayment = createServerFn({ method: "POST" })
   .inputValidator((data: PaymentForm & { paymentId: string; reason: string }) => data)
   .handler(async ({ data }) => {
     const supabase = await admin();
-    await checkPaymentForm(data);
+    await checkPaymentForm(supabase, data);
     const { amendInvoicePayment } = await import("@/lib/payments.server");
     const saved = await amendInvoicePayment(supabase, {
       paymentId: data.paymentId,

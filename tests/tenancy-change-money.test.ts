@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { STAFF } from "../src/data/form-options";
+import { FIRST_STAFF } from "../src/lib/staff";
 import {
   MONEY_LABEL,
   changeCreditOutlook,
@@ -16,7 +16,7 @@ import {
   previewTenancyChangeWith,
   type TenancyChangeRequest,
 } from "../src/lib/tenancy-change.functions";
-import { fakeDb } from "./fake-db";
+import { fakeDb, signingStaff } from "./fake-db";
 
 /*
  * Update Tenancy's money preview (Dani, 15 Oct 2026): the IP, the account
@@ -241,7 +241,7 @@ function extension(security = 100): TenancyChangeRequest {
     },
     moveOn: "",
     moveTo: null,
-    approvedBy: STAFF[0]!,
+    approvedBy: FIRST_STAFF[0]!,
     events: [
       {
         date: "2027-07-01",
@@ -303,7 +303,7 @@ describe("the preview, on the server", () => {
   });
 
   test("9. Confirm with a key from figures that have moved is refused before anything is written", async () => {
-    const db = fakeDb(world(), {}, answers);
+    const db = fakeDb(world(), signingStaff(), answers);
     await expect(
       applyTenancyChangeWith(db.sb, { ...extension(), previewKey: "stale" }),
     ).rejects.toThrow("The figures changed while the review was open");
@@ -316,7 +316,7 @@ describe("the preview, on the server", () => {
     const { approvedBy: _a, ...plan } = extension();
     void _a;
     const key = (await previewTenancyChangeWith(fakeDb(world(), {}, answers).sb, plan)).key;
-    const db = fakeDb(world(), {}, answers);
+    const db = fakeDb(world(), signingStaff(), answers);
     const out = await applyTenancyChangeWith(db.sb, { ...extension(), previewKey: key });
     expect(out.events).toMatchObject([{ name: "Extension", ipTotal: 100 }]);
   });

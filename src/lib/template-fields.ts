@@ -23,7 +23,7 @@ export type MappingContext = {
   residence: Record<string, any> | null;
   tenancy: Record<string, any> | null;
   agreement?: Record<string, any> | null;
-  /** who signs for Brachtia - Settings → Signatory */
+  /** who signs for Brachtia - the staff member named on the action (Settings → Staff) */
   signatory?: { name: string; title: string; token: string } | null;
   /** an access card form made on its own - "Lost Card", "Damaged Card" - not with the pack */
   cardReason?: string;
@@ -221,7 +221,7 @@ export const TEMPLATE_FIELDS: TemplateField[] = [
   { key: "monthly_rent", label: "Monthly rent", source: "Tenancy Record", get: (c) => money(rent(c)) },
   // "12 months 4 days", worked out from the tenancy dates the agreement prints
   { key: "duration", label: "Duration (months and days)", source: "Tenancy Record", get: (c) => stayLength(start(c), end(c)) },
-  // — Signatory: Settings → Signatory, the same on every document (30 Sep 2026) —
+  // — Signatory: whoever signs for Brachtia - Prepared by / Approved by, from Settings → Staff (4 Nov 2026) —
   { key: "signatory_signature", label: "Signatory's signature", source: "Signatory", get: (c) => c.signatory?.token ?? "" },
   { key: "signatory_name", label: "Signatory's name", source: "Signatory", get: (c) => c.signatory?.name ?? "" },
   { key: "signatory_title", label: "Signatory's title", source: "Signatory", get: (c) => c.signatory?.title ?? "" },

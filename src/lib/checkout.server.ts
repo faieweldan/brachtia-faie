@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { isWholeUnitLetter, roomName } from "@/lib/room-name";
 import { CHECKOUT_TYPE_LABEL, checkoutDocKind, checkoutTotals, type CheckoutType } from "@/lib/checkout-types";
+import type { Signatory } from "@/lib/signatory";
 
 export * from "@/lib/checkout-types";
 
@@ -54,6 +55,13 @@ export type CheckoutVersion = {
   net: number;
   pdfPath: string;
   pdfSha256: string;
+  /**
+   * Who issued it, and signs for Brachtia (Dani, 4 Nov 2026) - as they were
+   * then, so a later signature in Settings → Staff never changes it. Missing on
+   * versions issued before: those carry the one signatory there was. Null on a
+   * preview before anyone is chosen.
+   */
+  issuedBy?: Signatory | null;
   signed?: {
     at: string;
     typedName: string;
@@ -297,7 +305,7 @@ export async function residentParticulars(sb: any, residentId: string) {
 export async function buildStatementPdf(sb: any, residentId: string, s: CheckoutStatement, v: CheckoutVersion, withRefund = false) {
   const { day } = await import("@/lib/credit-note-pdf");
   const { loadSignatory, loadSignatureImage } = await import("@/lib/signatory.server");
-  const signatory = await loadSignatory(sb);
+  const signatory = v.issuedBy !== undefined ? v.issuedBy : await loadSignatory(sb);
   const photos: Record<string, Uint8Array> = {};
   for (const l of v.lines) for (const p of l.photos) {
     const b = await getFile(sb, p);

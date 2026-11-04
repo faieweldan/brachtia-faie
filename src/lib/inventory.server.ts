@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { roomName } from "@/lib/room-name";
 import type { DefectDecision, InventoryList, InventoryMode, InventoryRecord } from "@/lib/inventory";
+import type { Signatory } from "@/lib/signatory";
 
 /*
  * Schedule C, kept as files beside the signed documents (1 Oct 2026):
@@ -132,7 +133,7 @@ export async function buildInventoryPdf(
    * admin approves. A signature is only ever drawn onto the page that person
    * read and signed - never kept aside and put on another one later.
    */
-  sign: { resident?: { png: Uint8Array; at: string; typedName: string } | null; brachtia: boolean } = { brachtia: false },
+  sign: { resident?: { png: Uint8Array; at: string; typedName: string } | null; brachtia: Signatory | false } = { brachtia: false },
 ) {
   if (!file.record) throw new Error("Nothing has been sent in yet.");
   const { data: res } = await sb.from("residents").select("full_name").eq("id", residentId).maybeSingle();
@@ -145,8 +146,9 @@ export async function buildInventoryPdf(
   const un = placed?.unit ?? null;
   const rs = placed?.residence ?? null;
 
-  const { loadSignatory, loadSignatureImage } = await import("@/lib/signatory.server");
-  const signatory = sign.brachtia ? await loadSignatory(sb) : null;
+  // the staff member approving it (Settings → Staff), handed in by confirmInventory
+  const { loadSignatureImage } = await import("@/lib/signatory.server");
+  const signatory = sign.brachtia || null;
   const now = new Date();
   const effective = file.reviewAt ?? file.submitted?.at ?? now.toISOString();
   const { inventoryPdf } = await import("@/lib/inventory-pdf");

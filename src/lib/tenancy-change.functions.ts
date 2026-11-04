@@ -332,12 +332,14 @@ async function planChangeWith(sb: any, data: PlanRequest) {
 
 export async function applyTenancyChangeWith(sb: any, data: TenancyChangeRequest) {
   // who decided it - a staff member, the same list a cancellation is approved from
-  const { STAFF } = await import("@/data/form-options");
-  if (!STAFF.includes(data.approvedBy)) throw new Error("Choose who approved the change.");
+  const { requireSigner, requireStaff } = await import("@/lib/staff.server");
+  await requireStaff(sb, data.approvedBy, "Choose who approved the change.");
   const planned = await planChangeWith(sb, data);
   const { T, E, flags, today, finalEnd, plan, documents, priced } = planned;
   void today;
-  void plan;
+  // a new agreement or a revised schedule is signed for Brachtia by the approver (Dani, 4 Nov 2026)
+  if (plan.some((p) => { const d = T.documentsFor(p.flags); return d.newAgreement || d.scheduleA || d.scheduleC; }))
+    await requireSigner(sb, data.approvedBy);
   // the review showed figures: they must still be the figures (15 Oct 2026)
   if (data.previewKey && (await previewOf(sb, data, planned)).key !== data.previewKey)
     throw new Error("The figures changed while the review was open - go back to Review and check them again.");
@@ -805,8 +807,7 @@ export const cancelTenancyEvent = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const sb = await admin();
-    const { STAFF } = await import("@/data/form-options");
-    if (!STAFF.includes(data.approvedBy)) throw new Error("Choose who approved the cancellation.");
+    await (await import("@/lib/staff.server")).requireStaff(sb, data.approvedBy, "Choose who approved the cancellation.");
     const { cancelEvent } = await import("@/lib/tenancy-events.server");
     return cancelEvent(sb, data.residentId, data.eventId, data.reason.trim(), data.approvedBy);
   });

@@ -1,7 +1,8 @@
 import { roomName } from "@/lib/room-name";
 import { useEffect, useMemo, useState } from "react";
 import { soldBedLabel } from "@/lib/placement";
-import { Dropdown } from "@/components/admin/Dropdown";
+import { NoSignatureNote, StaffPicker } from "@/components/admin/Dropdown";
+import { useStaff } from "@/hooks/use-staff";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { tenancyDatesByResident } from "@/lib/rental-schedule.functions";
@@ -17,7 +18,6 @@ import {
   type AgreementDocType,
 } from "@/lib/tenancy-docs";
 import { generateDocumentPack } from "@/lib/tenancy-docs.functions";
-import { STAFF } from "@/data/form-options";
 import { createCardFromDraft } from "@/lib/access-card.functions";
 import { isNewCardApplication } from "@/lib/tenancy-docs";
 import { fillPackDocx, getPackTemplates, listRetiredPackDocs, previewPackPdf } from "@/lib/templates.functions";
@@ -106,6 +106,7 @@ function DocumentPackPage() {
   const [generating, setGenerating] = useState(false);
   // who is making the pack - required, shown small (Dani, 6 Oct 2026)
   const [preparedBy, setPreparedBy] = useState("");
+  const staff = useStaff();
 
   const defaults = useMemo<Record<string, string>>(() => {
     if (!resident) return {};
@@ -131,12 +132,16 @@ function DocumentPackPage() {
   }, [resident, placed, saved]);
 
   const [values, setValues] = useState<Record<string, string> | null>(null);
+  // Prepared by signs it (Dani, 4 Nov 2026): the pages show their signature once chosen
+  const signedBy = card ? undefined : preparedBy || undefined;
   const vals = values ?? defaults;
   const fetchPack = useServerFn(getPackTemplates);
   const pack = useQuery({
-    queryKey: ["pack-templates", id, card ?? ""],
+    queryKey: ["pack-templates", id, card ?? "", signedBy ?? ""],
     // a new pack: its values carry the agreement number it will get, as the preview does
-    queryFn: () => fetchPack({ data: { residentId: id, ...(card ? { cardReason: card } : { newAgreement: true }) } }),
+    queryFn: () => fetchPack({ data: { residentId: id, signedBy, ...(card ? { cardReason: card } : { newAgreement: true }) } }),
+    // a new signer redraws the values, keeping the page as it was meanwhile
+    placeholderData: (prev) => prev,
   });
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const tpl = pack.data?.[TEMPLATE_KEY[selected]!] ?? null;
@@ -197,8 +202,8 @@ function DocumentPackPage() {
   const pdfFn = useServerFn(previewPackPdf);
   // the exact pages, from a real Word engine; redrawn after typing pauses
   const pdfDoc = useQuery({
-    queryKey: ["pack-pdf", id, docKey, typed],
-    queryFn: () => pdfFn({ data: { residentId: id, docKey, overrides: typed, newAgreement: !card } }),
+    queryKey: ["pack-pdf", id, docKey, typed, signedBy ?? ""],
+    queryFn: () => pdfFn({ data: { residentId: id, docKey, overrides: typed, newAgreement: !card, signedBy } }),
     enabled: Boolean(tpl?.hasFile),
     // keep the pages on screen while a changed value redraws them - but only
     // the same document's pages, never the last document's while switching
@@ -216,18 +221,18 @@ function DocumentPackPage() {
     for (const [key, t] of Object.entries(pack.data)) {
       if (!t?.hasFile || key === docKey) continue;
       void qc.prefetchQuery({
-        queryKey: ["pack-pdf", id, key, typed],
-        queryFn: () => pdfFn({ data: { residentId: id, docKey: key as typeof docKey, overrides: typed, newAgreement: !card } }),
+        queryKey: ["pack-pdf", id, key, typed, signedBy ?? ""],
+        queryFn: () => pdfFn({ data: { residentId: id, docKey: key as typeof docKey, overrides: typed, newAgreement: !card, signedBy } }),
         staleTime: 60_000,
       });
     }
     // once per document shown and per set of corrections
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [Boolean(pdfDoc.data), pack.data, typed]);
+  }, [Boolean(pdfDoc.data), pack.data, typed, signedBy]);
   // the approximate view, only where no PDF can be made on this server
   const filledDoc = useQuery({
-    queryKey: ["pack-docx", id, docKey, typed],
-    queryFn: () => fillDocx({ data: { residentId: id, docKey, overrides: typed, newAgreement: !card } }),
+    queryKey: ["pack-docx", id, docKey, typed, signedBy ?? ""],
+    queryFn: () => fillDocx({ data: { residentId: id, docKey, overrides: typed, newAgreement: !card, signedBy } }),
     enabled: Boolean(tpl?.hasFile) && pdfDoc.data?.ok === false,
     placeholderData: (prev) => prev,
   });
@@ -484,23 +489,13 @@ function DocumentPackPage() {
               {card ? null : (
                 <label className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                   Prepared by
-                  <Dropdown
-                    value={preparedBy}
-                    onChange={(e) => setPreparedBy(e.target.value)}
-                    className={`h-8 rounded-md border bg-background px-2 text-xs text-foreground ${preparedBy ? "border-border" : "border-amber-400"}`}
-                  >
-                    <option value="">Choose…</option>
-                    {STAFF.map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </Dropdown>
+                  <StaffPicker value={preparedBy} onChange={setPreparedBy} className="h-8 min-w-36 text-xs" />
                 </label>
               )}
+              {card ? null : <NoSignatureNote name={preparedBy} />}
               <Button
                 className="w-full"
-                disabled={generating || !pack.data || noFile.length > 0 || unseen.length > 0 || (!card && !preparedBy)}
+                disabled={generating || !pack.data || noFile.length > 0 || unseen.length > 0 || (!card && (!preparedBy || staff.unsigned(preparedBy)))}
                 onClick={() => void generate()}
               >
                 {generating ? "Generating…" : "Confirm and proceed"}

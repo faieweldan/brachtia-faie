@@ -9,7 +9,6 @@ import { getProfileReview, isPendingReview } from "@/lib/profile-link.functions"
 import { ExternalLink, Check, ChevronDown, ChevronRight, FileStack, Plus, RefreshCw, Stamp, Undo2, Upload } from "lucide-react";
 import { MIGRATED, MIGRATED_MEANING } from "@/lib/migration/import-plan";
 import { SigningMessageCard } from "@/components/admin/SigningMessageCard";
-import { STAFF } from "@/data/form-options";
 import { StaffTag } from "@/components/admin/RecordPaymentDialog";
 import { InventoryActions, InventoryPill } from "@/components/admin/InventoryReview";
 import { toast } from "sonner";
@@ -1029,18 +1028,7 @@ function UploadExisting({ resident, tenancy, onDone }: { resident: Resident; ten
             </Button>
             <label className="mr-auto flex items-center gap-2 text-xs text-muted-foreground">
               Uploaded by
-              <Dropdown
-                value={preparedBy}
-                onChange={(e) => setPreparedBy(e.target.value)}
-                className={`h-8 rounded-md border bg-background px-2 text-xs text-foreground ${preparedBy ? "border-border" : "border-amber-400"}`}
-              >
-                <option value="">Choose…</option>
-                {STAFF.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </Dropdown>
+              <StaffPicker value={preparedBy} onChange={setPreparedBy} className="h-8 min-w-36 text-xs" />
             </label>
             <Button size="sm" disabled={busy || !files.agreement || !preparedBy} onClick={() => void save()}>
               {busy ? "Uploading…" : "Upload"}

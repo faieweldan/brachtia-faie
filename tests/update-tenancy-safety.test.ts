@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { STAFF } from "../src/data/form-options";
+import { FIRST_STAFF } from "../src/lib/staff";
 import {
   applyTenancyChangeWith,
   type TenancyChangeRequest,
@@ -21,7 +21,7 @@ import {
 import { beforeTenancyStart } from "../src/lib/room-change";
 import { documentsFor, changeFlags, planEvents, eventName } from "../src/lib/tenancy-change";
 import { testMappingFor, type MappingContext } from "../src/lib/template-fields";
-import { fakeDb, type Row } from "./fake-db";
+import { fakeDb, signingStaff, type Row } from "./fake-db";
 
 /*
  * Update Tenancy safety (14 Oct 2026):
@@ -135,7 +135,7 @@ function extension(
     moveOn: "",
     moveTo: null,
     // who approved it - required (Dani, 14 Oct 2026)
-    approvedBy: STAFF[0]!,
+    approvedBy: FIRST_STAFF[0]!,
     events: [
       {
         date: "2027-07-01",
@@ -324,7 +324,9 @@ describe("1-4. the document preflight", () => {
 describe("4. a refused request writes nothing - no invoice, credit, event, room or tenancy", () => {
   test("a request with no approver, or one not on the staff list, is refused before anything is written", async () => {
     await expect(applyTenancyChangeWith({} as any, { ...extension(), approvedBy: "" })).rejects.toThrow("Choose who approved the change.");
-    await expect(applyTenancyChangeWith({} as any, { ...extension(), approvedBy: "Somebody" })).rejects.toThrow("Choose who approved the change.");
+    // the staff list read from Settings → Staff: nothing saved, so the first list
+    const noFiles = { storage: { from: () => ({ download: async () => ({ data: null }) }) } } as any;
+    await expect(applyTenancyChangeWith(noFiles, { ...extension(), approvedBy: "Somebody" })).rejects.toThrow("Choose who approved the change.");
   });
 
   const nothingWritten = (db: ReturnType<typeof fakeDb>) => {
@@ -368,7 +370,7 @@ describe("4. a refused request writes nothing - no invoice, credit, event, room 
   });
 
   test("an accepted request reads everything - the documents included - before its first write", async () => {
-    const db = fakeDb(world(), {}, { place_stay: () => ({ ok: true }) });
+    const db = fakeDb(world(), signingStaff(), { place_stay: () => ({ ok: true }) });
     // a security deposit to top up: the event gets an IP, so nothing settles in the test
     const out = await applyTenancyChangeWith(db.sb, extension({}, 100));
     expect(out.events).toMatchObject([

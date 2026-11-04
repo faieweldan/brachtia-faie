@@ -231,8 +231,10 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const db = await admin();
-    const { STAFF } = await import("@/data/form-options");
-    if (!STAFF.includes(String(data.preparedBy ?? ""))) throw new Error("Choose who is preparing this pack");
+    const { requireSigner, requireStaff } = await import("@/lib/staff.server");
+    await requireStaff(db, data.preparedBy, "Choose who is preparing this pack");
+    // the one who prepares it signs it for Brachtia (Dani, 4 Nov 2026)
+    await requireSigner(db, data.preparedBy);
 
     const { data: existing } = await db
       .from("tenancy_agreements")
@@ -267,8 +269,10 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
     const today = new Date().toISOString().slice(0, 10);
     const tv = await versions(db, data.residentId);
     // the number this pack got, in every place its documents print it (agreementNoValues)
-    const { agreementNoValues } = await import("@/lib/templates.functions");
+    const { agreementNoValues, signerValues } = await import("@/lib/templates.functions");
     const numbered = await agreementNoValues(db, data.residentId, docTypes.map((t) => tv[t] ?? ""));
+    // and Prepared by's name, title and signature wherever the templates ask for the signatory's
+    const signed = await signerValues(db, data.residentId, docTypes.map((t) => tv[t] ?? ""), data.preparedBy);
     const { error: dErr } = !docTypes.length ? { error: null } : await db.from("agreement_documents").insert(
       docTypes.map((t) => ({
         agreement_id: agreement.id,
@@ -279,7 +283,7 @@ export const generateDocumentPack = createServerFn({ method: "POST" })
         period_start: data.periodStart || null,
         period_end: data.periodEnd || null,
         // who made it, and when - the audit trail, beside the values it was made from
-        merge_values: { ...data.mergeValues, ...numbered, prepared_by: data.preparedBy, prepared_at: new Date().toISOString() },
+        merge_values: { ...data.mergeValues, ...numbered, ...signed, prepared_by: data.preparedBy, prepared_at: new Date().toISOString() },
         template_version_id: tv[t] || null,
       })),
     );

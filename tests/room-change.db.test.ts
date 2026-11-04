@@ -172,7 +172,7 @@ async function change(enquiryId: string, bedId: string, newRent: number, expecte
     bedId,
     newRent,
     ...(expectedKey ? { expectedKey } : {}),
-    approvedBy: (await import("../src/data/form-options")).STAFF[0]!,
+    approvedBy: (await import("../src/lib/staff")).FIRST_STAFF[0]!,
     reason: "Resident requested another room",
     fromLabel: "old",
     toLabel: "new",
@@ -209,7 +209,7 @@ d("change room before the tenancy starts (test-bratchia)", () => {
       sb.from("enquiries").select("quote_snapshot").not("quote_snapshot", "is", null).limit(1),
     );
     property = e.quote_snapshot.property;
-    STAFF0 = (await import("../src/data/form-options")).STAFF[0]!;
+    STAFF0 = (await import("../src/lib/staff")).FIRST_STAFF[0]!;
     const res = await one(sb.from("residences").select("id").limit(1));
     const u = await one(
       sb

@@ -321,8 +321,7 @@ export const activateAccessCard = createServerFn({ method: "POST" })
     if (!/^[0-9a-f-]{36}$/.test(cardId)) throw new Error("No access card form");
     if (!serial) throw new Error("Type the card's serial number");
     const by = String(data.get("by") ?? "");
-    const { STAFF } = await import("@/data/form-options");
-    if (!STAFF.includes(by)) throw new Error("Choose who is uploading the receipt");
+    await (await import("@/lib/staff.server")).requireStaff(sb, by, "Choose who is uploading the receipt");
     if (!(file instanceof File) || !file.size) throw new Error("Upload ARC's receipt");
     if (file.size > 8 * 1024 * 1024) throw new Error("The receipt is larger than 8MB");
     const ext = /\.([a-z0-9]{1,5})$/i.exec(file.name)?.[1]?.toLowerCase() ?? "pdf";

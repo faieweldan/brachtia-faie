@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { StaffPicker } from "@/components/admin/Dropdown";
+import { NoSignatureNote, StaffPicker } from "@/components/admin/Dropdown";
 import { StatusPill } from "@/components/admin/ops-ui";
 import { COMING_DUE_DAYS_BEFORE_END } from "@/lib/placement";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PdfPreviewDialog } from "@/components/admin/PdfPreview";
 import { PdfPageViewer } from "@/components/admin/PdfPageViewer";
-import { STAFF } from "@/data/form-options";
 import { StaffTag } from "@/components/admin/RecordPaymentDialog";
 import { confirmInventory, getInventoryReview, inventoryPdfUrl, openMoveOutCheck, returnInventory } from "@/lib/inventory.functions";
 import {
@@ -525,6 +524,8 @@ function InventoryReviewDialog({
             <div className="space-y-1.5">
               <p className="text-xs text-muted-foreground">{file?.status === "submitted" ? "Approved by" : "Reviewed by"}</p>
               <StaffPicker value={by} onChange={setBy} />
+              {/* approving signs it for Brachtia */}
+              {file?.status === "submitted" ? <NoSignatureNote name={by} /> : null}
             </div>
           ) : null}
           <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">

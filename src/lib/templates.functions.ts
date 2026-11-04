@@ -277,7 +277,16 @@ export const searchResidents = createServerFn({ method: "GET" })
     return (rows ?? []).map((r: any) => ({ id: r.id as string, name: r.full_name as string, code: (r.resident_code ?? "") as string }));
   });
 
-async function buildContext(db: any, residentId: string, opts: { newAgreement?: boolean | undefined } = {}) {
+/**
+ * signedBy: the staff member who signs for Brachtia (Settings → Staff) - the
+ * pack's Prepared by, a change's Approved by (Dani, 4 Nov 2026). Nobody named:
+ * no signature, so a preview shows the gap instead of someone else's name.
+ */
+async function buildContext(
+  db: any,
+  residentId: string,
+  opts: { newAgreement?: boolean | undefined; signedBy?: string | undefined } = {},
+) {
   const data = { residentId };
   const { data: resident } = await db
     .from("residents")
@@ -328,11 +337,11 @@ async function buildContext(db: any, residentId: string, opts: { newAgreement?: 
     const next = await nextAgreementNo(db, data.residentId).catch(() => "");
     agreement = next ? { agreement_no: next, created_at: new Date().toISOString() } : null;
   }
-  const { loadSignatory } = await import("@/lib/signatory.server");
+  const { signerFor } = await import("@/lib/staff.server");
   const { billedInitialLines } = await import("@/lib/tenancy-events.server");
   const { readRentSteps } = await import("@/lib/rent-schedule.server");
   const [signatory, initialPayment, rentSteps, frequency] = await Promise.all([
-    loadSignatory(db),
+    signerFor(db, opts.signedBy),
     billedInitialLines(db, data.residentId),
     stay.tenancyId ? readRentSteps(db, data.residentId, stay.tenancyId).then((r) => r.steps) : Promise.resolve([]),
     // the frequency the rent is billed with - Payments → Rent schedule, as the profile shows it
@@ -369,19 +378,39 @@ async function buildContext(db: any, residentId: string, opts: { newAgreement?: 
  * the number the pack actually got, whatever the page last saw.
  */
 export async function agreementNoValues(db: any, residentId: string, versionIds: string[]): Promise<Record<string, string>> {
+  return valuesUsing(db, residentId, versionIds, ["agreement_no"]);
+}
+
+/**
+ * The signer's name, title and signature, in every placeholder mapped to them -
+ * from the staff member named, whatever the pack page last showed (Dani, 4 Nov
+ * 2026): Generate is sent Prepared by and puts that person's signature on.
+ */
+export async function signerValues(db: any, residentId: string, versionIds: string[], signedBy: string): Promise<Record<string, string>> {
+  return valuesUsing(db, residentId, versionIds, ["signatory_signature", "signatory_name", "signatory_title"], { signedBy });
+}
+
+/** every placeholder of these versions mapped to one of `keys` (a field, or a formula that uses it), read from the records now */
+async function valuesUsing(
+  db: any,
+  residentId: string,
+  versionIds: string[],
+  keys: string[],
+  opts: { signedBy?: string } = {},
+): Promise<Record<string, string>> {
   const ids = versionIds.filter(Boolean);
   if (!ids.length) return {};
   const { mappingFor } = await import("@/lib/template-fields");
-  const { ctx } = await buildContext(db, residentId);
+  const { ctx } = await buildContext(db, residentId, opts);
   const { data: rows } = await db.from("template_versions").select("id, content_html, file_path, boxes, mappings").in("id", ids);
   const out: Record<string, string> = {};
   for (const row of (rows ?? []) as any[]) {
     const placeholders = await placeholdersOf(db, row);
-    const usesNo = placeholders.filter((ph) => {
+    const uses = placeholders.filter((ph) => {
       const m = mappingFor(ph, row.mappings ?? {});
-      return (m?.kind === "field" && m.key === "agreement_no") || (m?.kind === "formula" && /\[agreement_no\]/.test(m.expr));
+      return (m?.kind === "field" && keys.includes(m.key)) || (m?.kind === "formula" && keys.some((k) => m.expr.includes(`[${k}]`)));
     });
-    for (const r of testMappingFor(usesNo, ctx, row.mappings ?? {})) if (r.value) out[r.key] = r.value;
+    for (const r of testMappingFor(uses, ctx, row.mappings ?? {})) if (r.value) out[r.key] = r.value;
   }
   return out;
 }
@@ -398,44 +427,6 @@ export const testMapping = createServerFn({ method: "POST" })
     };
   });
 
-
-/* ---------------- signatory (Settings → Signatory) ---------------- */
-
-/** Who signs for Brachtia, and their signature as a picture, for the Settings page. */
-export const getSignatory = createServerFn({ method: "GET" }).handler(async () => {
-  const db = await admin();
-  const { loadSignatory, loadSignatureImage } = await import("@/lib/signatory.server");
-  const s = await loadSignatory(db);
-  const png = s?.token ? await loadSignatureImage(db, s.token) : null;
-  return { name: s?.name ?? "", title: s?.title ?? "", image: png ? `data:image/png;base64,${toBase64(png)}` : "" };
-});
-
-/**
- * Save the signatory. A new signature is kept beside the old ones, never over
- * them: documents already generated keep the signature they were made with.
- */
-export const saveSignatory = createServerFn({ method: "POST" })
-  .inputValidator((d) =>
-    z.object({
-      name: z.string().trim().max(120),
-      title: z.string().trim().max(120),
-      // a PNG, base64, under ~700 KB
-      png: z.string().max(1_000_000).optional(),
-    }).parse(d),
-  )
-  .handler(async ({ data }) => {
-    const db = await admin();
-    const { loadSignatory, saveSignatoryFile, saveSignatureImage } = await import("@/lib/signatory.server");
-    const current = await loadSignatory(db);
-    let token = current?.token ?? "";
-    if (data.png) {
-      const bytes = Uint8Array.from(atob(data.png), (c) => c.charCodeAt(0));
-      if (bytes[0] !== 0x89 || bytes[1] !== 0x50) throw new Error("The signature must be a PNG picture.");
-      token = await saveSignatureImage(db, bytes);
-    }
-    await saveSignatoryFile(db, { name: data.name, title: data.title, token });
-    return { ok: true as const };
-  });
 
 const PACK_KEYS = ["tenancy_agreement", "schedule_a", "schedule_b", "schedule_c", "access_card_form"] as const;
 
@@ -459,12 +450,20 @@ export function pickForResidence<T extends { document_templates: { doc_key: stri
 /** The Active template per document in the pack, filled with this resident's details. Read-only. */
 export const getPackTemplates = createServerFn({ method: "GET" })
   .inputValidator((d) =>
-    z.object({ residentId: z.string().uuid(), cardReason: z.string().max(40).optional(), newAgreement: z.boolean().optional() }).parse(d),
+    z
+      .object({
+        residentId: z.string().uuid(),
+        cardReason: z.string().max(40).optional(),
+        newAgreement: z.boolean().optional(),
+        /** Prepared by - whose signature the pack shows */
+        signedBy: z.string().max(80).optional(),
+      })
+      .parse(d),
   )
   .handler(async ({ data }) => {
     const db = await admin();
     // a new pack: the agreement number it will get - as the preview shows it, so what is saved is what was seen
-    const { ctx } = await buildContext(db, data.residentId, { newAgreement: data.newAgreement });
+    const { ctx } = await buildContext(db, data.residentId, { newAgreement: data.newAgreement, signedBy: data.signedBy });
     // a replacement access card form: its ticks follow the reason
     if (data.cardReason) ctx.cardReason = data.cardReason;
     const { data: rows } = await db
@@ -512,8 +511,9 @@ async function filledPackBytes(
   docKey: (typeof PACK_KEYS)[number],
   overrides?: Record<string, string>,
   newAgreement?: boolean,
+  signedBy?: string,
 ): Promise<{ kind: "pdf" | "docx"; bytes: Uint8Array } | null> {
-  const { ctx } = await buildContext(db, residentId, { newAgreement });
+  const { ctx } = await buildContext(db, residentId, { newAgreement, signedBy });
   const { data: rows } = await db
     .from("template_versions")
     .select("content_html, file_path, mappings, boxes, document_templates!inner(doc_key, residence_id, deactivated_at)")
@@ -553,6 +553,8 @@ const packInput = z.object({
   overrides: z.record(z.string().max(80), z.string().max(2000)).optional(),
   /** a new pack: show the agreement number it will get (not for a replacement card) */
   newAgreement: z.boolean().optional(),
+  /** Prepared by - whose signature the preview shows */
+  signedBy: z.string().max(80).optional(),
 });
 
 /** The filled Word file, for the quick on-page view. Read-only. */
@@ -560,7 +562,7 @@ export const fillPackDocx = createServerFn({ method: "POST" })
   .inputValidator((d) => packInput.parse(d))
   .handler(async ({ data }) => {
     const db = await admin();
-    const doc = await filledPackBytes(db, data.residentId, data.docKey, data.overrides, data.newAgreement);
+    const doc = await filledPackBytes(db, data.residentId, data.docKey, data.overrides, data.newAgreement, data.signedBy);
     // a PDF form has no Word file to show; its exact pages come from the preview
     return doc?.kind === "docx" ? { base64: toBase64(doc.bytes) } : null;
   });
@@ -573,7 +575,7 @@ export const previewPackPdf = createServerFn({ method: "POST" })
   .inputValidator((d) => packInput.parse(d))
   .handler(async ({ data }) => {
     const db = await admin();
-    const doc = await filledPackBytes(db, data.residentId, data.docKey, data.overrides, data.newAgreement);
+    const doc = await filledPackBytes(db, data.residentId, data.docKey, data.overrides, data.newAgreement, data.signedBy);
     if (!doc) return { ok: false as const, error: "This document has no file to preview." };
     if (doc.kind === "pdf") return { ok: true as const, base64: toBase64(doc.bytes) };
     return pdfResult(doc.bytes);
@@ -771,7 +773,14 @@ async function fromRecords(db: any, docId: string, v: any, saved: Record<string,
   const { data: d } = await db.from("agreement_documents").select("tenancy_agreements!inner(resident_id)").eq("id", docId).maybeSingle();
   const residentId = d?.tenancy_agreements?.resident_id as string | undefined;
   const keys = (await placeholdersOf(db, v)).filter((k) => !/^resident_signature/i.test(k.trim()));
-  const results = residentId ? testMappingFor(keys, (await buildContext(db, residentId)).ctx, v.mappings ?? {}) : [];
+  /*
+   * Signed for Brachtia by whoever made this document (prepared_by), with their
+   * signature as saved now. Someone with no signature yet: the document keeps
+   * the name and signature it was made with, so the two never disagree.
+   */
+  const signer = await (await import("@/lib/staff.server")).signerFor(db, saved["prepared_by"] || undefined);
+  const signedBy = signer?.token ? signer.name : undefined;
+  const results = residentId ? testMappingFor(keys, (await buildContext(db, residentId, { signedBy })).ctx, v.mappings ?? {}) : [];
   const values = { ...saved };
   const gaps: string[] = [];
   for (const k of keys) {
@@ -994,10 +1003,12 @@ export async function eventDocumentValues(
     start?: string | undefined;
     end?: string | undefined;
     rent?: number | undefined;
+    /** who approved the change - they sign its documents for Brachtia (Dani, 4 Nov 2026) */
+    signedBy?: string | undefined;
   },
   previous: Record<string, string> = {},
 ): Promise<Record<string, string>> {
-  const { ctx } = await buildContext(db, residentId);
+  const { ctx } = await buildContext(db, residentId, { signedBy: change.signedBy });
   if (change.bedId) {
     const { data: bed } = await db.from("beds").select("*").eq("id", change.bedId).maybeSingle();
     // the same reader as the first pack's - the room comes with its beds (placement.server)
