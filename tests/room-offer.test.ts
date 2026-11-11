@@ -21,6 +21,15 @@ const takenSingle = room("single", [bed("s1", { status: "active", residentId: "r
 const unitSlot = room("single", [bed("u1")], "Unit");
 
 describe("roomOffer", () => {
+  test("single wanted: a twin let whole to someone leaving before the stay is sold whole again (C-10-11)", () => {
+    // Arthur has Room A to 31 Dec; Gagan asks from 1 Jan - the picker says the room is free then
+    const arthurWhole = room("twin", [bed("t1", { status: "active", residentId: "r1" }), bed("t2", { status: "held" })], "A");
+    expect(roomOffer(arthurWhole, "single", true, true)).toEqual({ as: "whole" });
+    // the dates overlap: still blocked
+    expect(roomOffer(arthurWhole, "single", true, false)).toEqual({ blocked: "Twin room" });
+    // no dates given (Homes): empty today, as before
+    expect(roomOffer(arthurWhole, "single", true)).toEqual({ blocked: "Twin room" });
+  });
   test("single wanted: an empty twin room is sold whole as one single (A-07-03)", () => {
     expect(roomOffer(emptyTwin, "single", true)).toEqual({ as: "whole" });
   });

@@ -1106,7 +1106,10 @@ function BookingDetail() {
       if (!bedFree) continue;
       // how this room can be sold to this request - the one rule Homes uses too
       // (placement.ts roomOffer, 11 Oct 2026)
-      const offer = roomOffer(b.room, wantedOcc as Sharing, sellsSingle(b.room, siteRooms));
+      // the whole room free for this stay's dates - not merely empty today, the
+      // same dates the database checks when it lets the room whole (11 Nov 2026)
+      const roomFreeForStay = !placementConflict(b.unit, b.room, b.bed, { ...asking, whole: true }, ops.residents);
+      const offer = roomOffer(b.room, wantedOcc as Sharing, sellsSingle(b.room, siteRooms), roomFreeForStay);
       const as = "as" in offer ? offer.as : null;
       // a room sold as one (a single, or a twin let whole) is one row: its first bed
       if ((b.room.occupancy === "single" || as === "whole") && roomBeds[0]?.id !== b.bed.id) continue;

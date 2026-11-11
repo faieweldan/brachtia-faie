@@ -28,15 +28,21 @@ export type Sharing = "single" | "twin" | "unit";
  *
  * `wanted` undefined is Homes, which lists every way a room can be sold.
  * `sellsSingle`: the room type has a single rate in Website.
+ * `freeForStay`: nobody has the room during the stay asked for. A screen that
+ * knows the stay's dates passes it, so a twin let whole to someone leaving
+ * before the stay starts can be sold whole again - C-10-11 Room A, Arthur to
+ * 31 Dec 2026, Gagan from 1 Jan 2027 (Dani, 11 Nov 2026). Left out, the room
+ * must be empty today.
  */
 export function roomOffer(
   room: { letter: string; occupancy: string; beds: { status: string; upcoming?: unknown[] | undefined }[] },
   wanted: Sharing | undefined,
   sellsSingle: boolean,
+  freeForStay?: boolean,
 ): { as: "bed" | "whole" } | { blocked: string } {
   const unitSlot = room.letter.toLowerCase() === "unit";
   const twin = room.occupancy === "twin" && room.beds.length > 1;
-  const untouched = roomUntouched(room);
+  const untouched = freeForStay ?? roomUntouched(room);
   if (unitSlot) return !wanted || wanted === "unit" ? { as: "bed" } : { blocked: "Whole unit" };
   if (wanted === "unit") return { blocked: "Not a whole unit" };
   if (wanted === "twin") {
