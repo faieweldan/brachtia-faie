@@ -163,7 +163,7 @@ export function collapseSingles(
     }
 
     // the same rule as the booking's room picker (placement.ts roomOffer)
-    const offer = roomOffer(room, undefined, sellsSingle(room, roomTypes));
+    const offer = roomOffer(room, undefined, sellsSingle(room, roomTypes), "today");
     if ("as" in offer && offer.as === "whole") {
       out.push({ ...group[0]!, asSingle: true });
     } else {

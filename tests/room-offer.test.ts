@@ -27,38 +27,38 @@ describe("roomOffer", () => {
     expect(roomOffer(arthurWhole, "single", true, true)).toEqual({ as: "whole" });
     // the dates overlap: still blocked
     expect(roomOffer(arthurWhole, "single", true, false)).toEqual({ blocked: "Twin room" });
-    // no dates given (Homes): empty today, as before
-    expect(roomOffer(arthurWhole, "single", true)).toEqual({ blocked: "Twin room" });
+    // no dates (Homes): empty today, as before
+    expect(roomOffer(arthurWhole, "single", true, "today")).toEqual({ blocked: "Twin room" });
   });
   test("single wanted: an empty twin room is sold whole as one single (A-07-03)", () => {
-    expect(roomOffer(emptyTwin, "single", true)).toEqual({ as: "whole" });
+    expect(roomOffer(emptyTwin, "single", true, "today")).toEqual({ as: "whole" });
   });
   test("single wanted: a twin room with someone in it, or booked later, is not", () => {
-    expect(roomOffer(halfTwin, "single", true)).toHaveProperty("blocked");
-    expect(roomOffer(laterTwin, "single", true)).toHaveProperty("blocked");
+    expect(roomOffer(halfTwin, "single", true, "today")).toHaveProperty("blocked");
+    expect(roomOffer(laterTwin, "single", true, "today")).toHaveProperty("blocked");
   });
   test("single wanted: a twin room type with no single rate is not", () => {
-    expect(roomOffer(emptyTwin, "single", false)).toEqual({ blocked: "Twin room" });
+    expect(roomOffer(emptyTwin, "single", false, "today")).toEqual({ blocked: "Twin room" });
   });
   test("single wanted: a single room is itself", () => {
-    expect(roomOffer(emptySingle, "single", true)).toEqual({ as: "bed" });
-    expect(roomOffer(takenSingle, "single", true)).toEqual({ as: "bed" });
+    expect(roomOffer(emptySingle, "single", true, "today")).toEqual({ as: "bed" });
+    expect(roomOffer(takenSingle, "single", true, "today")).toEqual({ as: "bed" });
   });
   test("twin wanted: twin beds as they are, never a single room", () => {
-    expect(roomOffer(halfTwin, "twin", true)).toEqual({ as: "bed" });
+    expect(roomOffer(halfTwin, "twin", true, "today")).toEqual({ as: "bed" });
     // a single room stays single: its shape is Website's (11 Oct 2026)
-    expect(roomOffer(emptySingle, "twin", true)).toEqual({ blocked: "Single room" });
-    expect(roomOffer(takenSingle, "twin", true)).toEqual({ blocked: "Single room" });
+    expect(roomOffer(emptySingle, "twin", true, "today")).toEqual({ blocked: "Single room" });
+    expect(roomOffer(takenSingle, "twin", true, "today")).toEqual({ blocked: "Single room" });
   });
   test("whole unit: only the Unit slot, and the Unit slot only for it", () => {
-    expect(roomOffer(unitSlot, "unit", true)).toEqual({ as: "bed" });
-    expect(roomOffer(unitSlot, "single", true)).toEqual({ blocked: "Whole unit" });
-    expect(roomOffer(emptyTwin, "unit", true)).toEqual({ blocked: "Not a whole unit" });
+    expect(roomOffer(unitSlot, "unit", true, "today")).toEqual({ as: "bed" });
+    expect(roomOffer(unitSlot, "single", true, "today")).toEqual({ blocked: "Whole unit" });
+    expect(roomOffer(emptyTwin, "unit", true, "today")).toEqual({ blocked: "Not a whole unit" });
   });
   test("Homes (nothing wanted): an empty twin is one single row, a half-full one its beds", () => {
-    expect(roomOffer(emptyTwin, undefined, true)).toEqual({ as: "whole" });
-    expect(roomOffer(halfTwin, undefined, true)).toEqual({ as: "bed" });
-    expect(roomOffer(laterTwin, undefined, true)).toEqual({ as: "bed" });
+    expect(roomOffer(emptyTwin, undefined, true, "today")).toEqual({ as: "whole" });
+    expect(roomOffer(halfTwin, undefined, true, "today")).toEqual({ as: "bed" });
+    expect(roomOffer(laterTwin, undefined, true, "today")).toEqual({ as: "bed" });
   });
 });
 

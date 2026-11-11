@@ -176,13 +176,6 @@ export function UpdateTenancyDialog({
       // vacant now, or someone else's whose tenancy ends before ours does - the move then waits for it (Dani, 7 Oct 2026)
       // a room held for another resident's change is in its upcoming stays, with its dates - placementConflict below (14 Oct 2026)
       if (!(bed.status === "vacant" || (!!bed.residentId && !!bed.tenancyEnd && bed.tenancyEnd.slice(0, 10) < (tenancy.end || "9999")))) return false;
-      const offer = roomOffer(room, occ as Sharing, sellsSingle(room, roomTypes));
-      if (!("as" in offer)) return false;
-      if (offer.as === "whole") {
-        // a room sold as one is one row: its first bed
-        if (room.beds[0]?.id !== bed.id) return false;
-        whole.add(bed.id);
-      } else if (bedOccupancy(bed.label) !== occ) return false;
       /*
        * Free for the dates this stay would have it - from when the bed is free
        * (or today) to the new end - by the same rule as the booking's room list
@@ -190,18 +183,22 @@ export function UpdateTenancyDialog({
        * a whole room or unit let, or the other gender in the unit then, rules
        * it out. It used to be offered and then refused on Next.
        */
-      return !placementConflict(
-        unit,
-        room,
-        bed,
-        {
-          start: bed.residentId && bed.tenancyEnd ? nextDay(bed.tenancyEnd.slice(0, 10)) : klToday(),
-          end: newEnd || tenancy.end || undefined,
-          gender,
-          residentId,
-        },
-        residents,
-      );
+      const asking = {
+        start: bed.residentId && bed.tenancyEnd ? nextDay(bed.tenancyEnd.slice(0, 10)) : klToday(),
+        end: newEnd || tenancy.end || undefined,
+        gender,
+        residentId,
+      };
+      // the whole room free for those dates, not merely empty today (11 Nov 2026)
+      const roomFree = !placementConflict(unit, room, bed, { ...asking, whole: true }, residents);
+      const offer = roomOffer(room, occ as Sharing, sellsSingle(room, roomTypes), roomFree);
+      if (!("as" in offer)) return false;
+      if (offer.as === "whole") {
+        // a room sold as one is one row: its first bed
+        if (room.beds[0]?.id !== bed.id) return false;
+        whole.add(bed.id);
+      } else if (bedOccupancy(bed.label) !== occ) return false;
+      return !placementConflict(unit, room, bed, asking, residents);
     });
     return { free: rows, wholeIds: whole };
     // eslint-disable-next-line react-hooks/exhaustive-deps
