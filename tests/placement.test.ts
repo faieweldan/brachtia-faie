@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { Bed, Resident, Unit, UnitRoom } from "../src/lib/ops-store";
 import { findBedForResident } from "../src/lib/ops-store";
-import { soldBedLabel, soldOccupancy, soldOccupancyLabel } from "../src/lib/placement";
+import { SOLD_AS_SINGLE_MARK, soldBedLabel, soldOccupancy, soldOccupancyLabel } from "../src/lib/placement";
 import {
   PERSON_LABEL,
   dayBefore,
@@ -205,6 +205,138 @@ describe("13. twin, sold-as-single and whole-unit capacity", () => {
         end: "2027-06-30",
       }),
     ).toBe("");
+  });
+});
+
+/*
+ * One rule for every shape (Dani, 14 Nov 2026): two stays clash only when their
+ * dates overlap AND their space overlaps. Twin = one bed, single = the whole
+ * room, whole unit = every room. Not overlapping in dates -> never a clash.
+ * B-09-01 Room A: Shadab has it as a single to 21 Nov 2026, Anas has Twin 2
+ * from 23 Nov, Ahmed asked for Twin 1 from 23 Nov and was refused.
+ */
+describe("14. a room let whole is whole only for that stay's dates", () => {
+  const male = (id: string, name: string, start: string, end: string, b: Partial<Bed> = {}) =>
+    bed(id, b.label ?? "Twin 1", {
+      status: "booked",
+      residentId: id,
+      residentName: name,
+      gender: "Male",
+      tenancyStart: start,
+      tenancyEnd: end,
+      ...b,
+    });
+  const next = (name: string, start: string, end: string, letWhole = false) => ({
+    enquiryId: `e-${name}`,
+    name,
+    gender: "Male",
+    start,
+    end,
+    letWhole,
+  });
+  const ask = (start: string, end: string, extra: object = {}) => ({
+    start,
+    end,
+    gender: "Male",
+    enquiryId: "e-asking",
+    ...extra,
+  });
+  // B-09-01 Room A as it is today
+  const b0901 = () =>
+    room("ra", "A", "twin", [
+      male("shadab", "Shadab", "2026-10-29", "2026-11-21", { letWhole: true }),
+      bed("t2", "Twin 2", {
+        status: "held",
+        holdFor: SOLD_AS_SINGLE_MARK,
+        upcoming: [next("Anas", "2026-11-23", "2027-11-30")],
+      }),
+    ]);
+
+  test("Ahmed gets Twin 1 from 23 Nov: Shadab's single has ended, Anas is twin", () => {
+    const ra = b0901();
+    expect(placementConflict(unit([ra]), ra, ra.beds[0]!, ask("2026-11-23", "2027-11-30"))).toBe("");
+  });
+  test("while Shadab has the room as a single, the other bed is still taken", () => {
+    const ra = b0901();
+    expect(placementConflict(unit([ra]), ra, ra.beds[1]!, ask("2026-11-15", "2026-11-20"))).toContain(
+      "Taken by Shadab",
+    );
+  });
+  test("the same bed is taken for overlapping dates, whatever the shape", () => {
+    const ra = b0901();
+    expect(placementConflict(unit([ra]), ra, ra.beds[0]!, ask("2026-11-20", "2027-01-31"))).toContain(
+      "Taken by Shadab",
+    );
+  });
+  test("a single booked for later: whole for its dates, free either side of them", () => {
+    const rb = room("rb", "B", "twin", [
+      bed("b1", "Twin 1", { upcoming: [next("Faris", "2027-01-01", "2027-06-30", true)] }),
+      bed("b2", "Twin 2", { status: "held", holdFor: SOLD_AS_SINGLE_MARK }),
+    ]);
+    const u = unit([rb]);
+    expect(placementConflict(u, rb, rb.beds[1]!, ask("2027-03-01", "2027-08-31"))).toContain(
+      "Reserved for Faris",
+    );
+    expect(placementConflict(u, rb, rb.beds[1]!, ask("2027-07-01", "2027-12-31"))).toBe("");
+    expect(placementConflict(u, rb, rb.beds[1]!, ask("2026-07-01", "2026-12-31"))).toBe("");
+  });
+  test("a twin stay does not make the room whole: the other bed stays free", () => {
+    const rb = room("rb", "B", "twin", [
+      bed("b1", "Twin 1", { upcoming: [next("Faris", "2027-01-01", "2027-06-30")] }),
+      bed("b2", "Twin 2"),
+    ]);
+    expect(placementConflict(unit([rb]), rb, rb.beds[1]!, ask("2027-01-01", "2027-06-30"))).toBe("");
+  });
+  test("an old mark with nobody single behind it blocks nothing", () => {
+    const rb = room("rb", "B", "twin", [
+      male("ali", "Ali", "2027-01-01", "2027-06-30", { letWhole: false }),
+      bed("b2", "Twin 2", { status: "held", holdFor: SOLD_AS_SINGLE_MARK }),
+    ]);
+    expect(placementConflict(unit([rb]), rb, rb.beds[1]!, ask("2027-01-01", "2027-06-30"))).toBe("");
+  });
+  test("a resident with no tenancy on the bed: the mark still makes the room whole", () => {
+    const rb = room("rb", "B", "twin", [
+      male("ali", "Ali", "2027-01-01", "2027-06-30"),
+      bed("b2", "Twin 2", { status: "held", holdFor: SOLD_AS_SINGLE_MARK }),
+    ]);
+    expect(placementConflict(unit([rb]), rb, rb.beds[1]!, ask("2027-01-01", "2027-06-30"))).toContain(
+      "Taken by Ali",
+    );
+    expect(placementConflict(unit([rb]), rb, rb.beds[1]!, ask("2027-07-01", "2027-12-31"))).toBe("");
+  });
+  test("taking a room whole: blocked by a twin stay that overlaps, free after it", () => {
+    const rb = room("rb", "B", "twin", [
+      bed("b1", "Twin 1", { upcoming: [next("Faris", "2026-12-01", "2027-01-31")] }),
+      bed("b2", "Twin 2"),
+    ]);
+    const u = unit([rb]);
+    expect(placementConflict(u, rb, rb.beds[1]!, ask("2027-01-02", "2027-06-30", { whole: true }))).toContain(
+      "Reserved for Faris",
+    );
+    expect(placementConflict(u, rb, rb.beds[1]!, ask("2027-02-01", "2027-06-30", { whole: true }))).toBe("");
+  });
+  test("whole unit after a room's stay to January: 2 Jan clashes, 1 Feb does not", () => {
+    const ra = room("ra", "A", "single", [
+      bed("a1", "Single", { upcoming: [next("Faris", "2026-12-01", "2027-01-31")] }),
+    ]);
+    const wu = room("rw", "Unit", "unit", [bed("w", "Unit")]);
+    const u = unit([ra, wu]);
+    expect(placementConflict(u, wu, wu.beds[0]!, ask("2027-01-02", "2027-06-30"))).toContain(
+      "Reserved for Faris",
+    );
+    expect(placementConflict(u, wu, wu.beds[0]!, ask("2027-02-01", "2027-06-30"))).toBe("");
+  });
+  test("a room or twin bed after a whole-unit stay to January: 2 Jan clashes, 1 Feb does not", () => {
+    const rt = room("rt", "B", "twin", [bed("t1", "Twin 1"), bed("t2", "Twin 2")]);
+    const wu = room("rw", "Unit", "unit", [
+      bed("w", "Unit", { upcoming: [next("Faris", "2026-12-01", "2027-01-31")] }),
+    ]);
+    const u = unit([rt, wu]);
+    expect(placementConflict(u, rt, rt.beds[0]!, ask("2027-01-02", "2027-06-30"))).toContain(
+      "Reserved for Faris",
+    );
+    expect(placementConflict(u, rt, rt.beds[0]!, ask("2027-02-01", "2027-06-30"))).toBe("");
+    expect(placementConflict(u, rt, rt.beds[0]!, ask("2027-02-01", "2027-06-30", { whole: true }))).toBe("");
   });
 });
 

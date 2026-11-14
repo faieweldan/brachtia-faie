@@ -45,6 +45,7 @@ function toBed(row: any): Bed {
     holdFor: row.hold_for ?? undefined,
     holdUntil: row.hold_until ?? undefined,
     enquiryId: row.enquiry_id ?? undefined,
+    letWhole: typeof row.seated_let_whole === "boolean" ? row.seated_let_whole : undefined,
     upcoming: row.upcoming?.length ? row.upcoming : undefined,
   };
 }
@@ -91,7 +92,8 @@ async function attachUpcoming(supabase: any, beds: any[], unitIds: string[]) {
   const enquiryIds = [...new Set(claims.map((c) => c.enquiry_id).filter(Boolean))] as string[];
   const residentIds = [...new Set(claims.map((c) => c.resident_id).filter(Boolean))] as string[];
   const claimBeds = [...new Set(claims.map((c) => String(c.bed_id)))];
-  const [{ data: enquiries }, { data: residents }, { data: invoices }, { data: holdRows }, { data: tenancyRows }] = await Promise.all([
+  const seatedBeds = beds.filter((b) => b.resident_id && b.status !== "vacant").map((b) => String(b.id));
+  const [{ data: enquiries }, { data: residents }, { data: invoices }, { data: holdRows }, { data: tenancyRows }, { data: seatedRows }] = await Promise.all([
     enquiryIds.length
       ? supabase.from("enquiries").select("id, reference, status, full_name, gender, university, move_in, move_out, monthly_rent, resident_id").in("id", enquiryIds)
       : { data: [] },
@@ -108,7 +110,24 @@ async function attachUpcoming(supabase: any, beds: any[], unitIds: string[]) {
     claimBeds.length
       ? supabase.from("tenancies").select("bed_id, enquiry_id, resident_id, let_whole").in("bed_id", claimBeds)
       : { data: [] },
+    // the bed's own resident: was their room let whole? Their latest tenancy on
+    // the bed, the same one placement_claims takes their dates from
+    seatedBeds.length
+      ? supabase
+          .from("tenancies")
+          .select("bed_id, resident_id, let_whole, start_date, created_at")
+          .in("bed_id", seatedBeds)
+          .order("start_date", { ascending: false, nullsFirst: false })
+          .order("created_at", { ascending: false })
+      : { data: [] },
   ]);
+  const seatedLetWhole = (b: any): boolean | undefined => {
+    if (!b.resident_id || b.status === "vacant") return undefined;
+    const row = ((seatedRows ?? []) as any[]).find(
+      (t) => String(t.bed_id) === String(b.id) && t.resident_id === b.resident_id,
+    );
+    return typeof row?.let_whole === "boolean" ? (row.let_whole as boolean) : undefined;
+  };
   const letWholeOf = (c: { bed_id: string; enquiry_id: string | null; resident_id: string | null; source: string }) => {
     const rows = ((c.source === "tenancy" ? tenancyRows : holdRows) ?? []) as any[];
     const row = rows.find(
@@ -176,7 +195,8 @@ async function attachUpcoming(supabase: any, beds: any[], unitIds: string[]) {
       });
     }
     list.sort((x, y) => String(x.start ?? "").localeCompare(String(y.start ?? "")));
-    return list.length ? { ...b, upcoming: list } : b;
+    const lw = seatedLetWhole(b);
+    return { ...b, ...(list.length ? { upcoming: list } : {}), ...(lw === undefined ? {} : { seated_let_whole: lw }) };
   });
 }
 

@@ -70,7 +70,26 @@ export type Claim = {
   end?: string | undefined;
   /** the person in the bed now, or the booking that has it next */
   kind: "current" | "next";
+  /**
+   * This stay has the room let whole, as one single - so, for ITS dates only,
+   * the other bed in the room is taken too (Dani, 14 Nov 2026). The room's
+   * Sold as single mark has no dates: read as "the room is whole", it blocked
+   * Ahmed from B-09-01 Room A Twin 1 from 23 Nov because Shadab had the room
+   * as a single to 21 Nov and Anas had Twin 2 from 23 Nov. Same rule as
+   * claim_let_whole in the database.
+   */
+  letWhole: boolean;
 };
+
+/**
+ * Whether the bed's own resident has the room let whole: their tenancy's
+ * let_whole (bed.letWhole). Only a resident with no tenancy on the bed falls
+ * back to the mark on the room's other bed - the old way, kept for them.
+ */
+function residentLetWhole(room: UnitRoom, bed: Bed) {
+  if (!bed.residentId) return false;
+  return bed.letWhole ?? room.beds.some((o) => o.id !== bed.id && o.holdFor === SOLD_AS_SINGLE_MARK);
+}
 
 export type Period = { start?: string | null | undefined; end?: string | null | undefined };
 
@@ -109,6 +128,7 @@ export function unitClaims(unit: Unit, residents: Resident[] = []): Claim[] {
           start: bed.tenancyStart,
           end: bed.tenancyEnd,
           kind: "current",
+          letWhole: residentLetWhole(room, bed),
         });
       }
       for (const u of bed.upcoming ?? []) {
@@ -122,6 +142,7 @@ export function unitClaims(unit: Unit, residents: Resident[] = []): Claim[] {
           start: u.start,
           end: u.end,
           kind: "next",
+          letWhole: !!u.letWhole,
         });
       }
     }
@@ -158,7 +179,9 @@ function fmt(iso: string) {
  * Never overridden by "Show all rooms": that relaxes what the student would
  * prefer, not what is physically or safely possible.
  *   - somebody else's dates overlap on this bed
- *   - the room is let whole (or is being taken whole) and the other bed is taken then
+ *   - the room is let whole then (a stay that overlaps has it whole, or this
+ *     asks for it whole) and the other bed is taken then. Whole is the stay's
+ *     own record, so it ends when that stay ends - never the undated mark.
  *   - the whole unit is let then, or this asks for the whole unit and any room is
  *   - somebody of the other gender is in the unit then
  */
@@ -174,7 +197,6 @@ export function placementConflict(
   const kept = g1(unit.gender);
   if (g && kept && kept !== g) return `Kept for ${unit.gender} residents`;
 
-  const soldWhole = room.beds.some((b) => b.holdFor === SOLD_AS_SINGLE_MARK);
   const isUnit = (letter: string) => letter.toLowerCase() === "unit";
   const letterOf = new Map(unit.rooms.map((r) => [r.id, r.letter]));
 
@@ -189,7 +211,7 @@ export function placementConflict(
       c.bedId === bed.id ||
       isUnit(room.letter) ||
       isUnit(letterOf.get(c.roomId) ?? "") ||
-      (c.roomId === room.id && (asking.whole || soldWhole))
+      (c.roomId === room.id && (asking.whole || c.letWhole))
     ) {
       return `${c.kind === "next" ? "Reserved for" : "Taken by"} ${c.who} ${range(c)}`;
     }

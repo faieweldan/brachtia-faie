@@ -35,6 +35,13 @@ export type Bed = {
   holdUntil?: string | undefined;
   enquiryId?: string | undefined;
   /**
+   * The bed's own resident has the room let whole, as one single - their
+   * tenancy's let_whole on this bed. Undefined when they have no tenancy on it
+   * (the room's Sold as single mark then answers instead). Read by
+   * placementConflict: the room is whole only for this resident's dates.
+   */
+  letWhole?: boolean | undefined;
+  /**
    * Stays to come on this bed while somebody else is its resident (9 Oct
    * 2026), earliest first: an unpaid hold (beds.enquiry_id on an occupied
    * bed) is Reserved, a paid tenancy (tenancies.bed_id) is Booked. Worked out
