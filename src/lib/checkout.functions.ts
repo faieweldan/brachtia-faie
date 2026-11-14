@@ -45,7 +45,7 @@ type CheckoutType = z.infer<typeof typeSchema>;
  * still owing, and what the kind of checkout keeps - the same figures as their
  * Payments tab.
  */
-async function moneyNow(residentId: string, type?: CheckoutType) {
+async function moneyNow(residentId: string, type?: CheckoutType, leavingOn?: string) {
   const { getResidentBilling } = await import("@/lib/resident-billing.functions");
   const { CANCELLATION_FEE, checkoutTypeFor } = await import("@/lib/checkout.server");
   const b = await getResidentBilling({ data: { residentId } });
@@ -62,7 +62,9 @@ async function moneyNow(residentId: string, type?: CheckoutType) {
   const { checkInFor } = await import("@/lib/checkin.server");
   const booked = await checkInFor(supabaseAdmin as any, residentId);
   const moveIn = booked.on.slice(0, 10) || String(first?.tenancy_start ?? "").slice(0, 10);
-  const suggested = checkoutTypeFor(moveIn, String(first?.tenancy_end ?? "").slice(0, 10));
+  const tenancyEnd = String(first?.tenancy_end ?? "").slice(0, 10);
+  // judged on the day they leave, not the day staff open it (Dani, 14 Nov 2026) - today until a leaving date is saved
+  const suggested = checkoutTypeFor(moveIn, tenancyEnd, leavingOn);
   const kind = type ?? suggested;
   // the initial payment, paid in full
   const initialPaid = b.groups.initial.length > 0 && b.groups.initial.every((i) => i.outstanding <= 0.005);
@@ -127,7 +129,7 @@ async function moneyNow(residentId: string, type?: CheckoutType) {
             )
             .filter((f) => f.amount > 0)
         : [];
-  return { deposits, outstanding, forfeits, initialPaid, suggested, type: kind };
+  return { deposits, outstanding, forfeits, initialPaid, suggested, type: kind, moveIn, tenancyEnd };
 }
 
 /** Everything the admin card shows. */
@@ -154,7 +156,7 @@ export const getCheckout = createServerFn({ method: "GET" })
     const sb = await admin();
     const { readStatement, totals } = await import("@/lib/checkout.server");
     let s = await readStatement(sb, data.residentId);
-    const now = await moneyNow(data.residentId, s?.draft.type);
+    const now = await moneyNow(data.residentId, s?.draft.type, s?.draft.leavingOn);
     /*
      * What is owed changes as payments come in (Dani, 2 Oct 2026): the draft's
      * "Outstanding on ..." lines follow the invoices as they are now - a paid
@@ -193,6 +195,10 @@ export const getCheckout = createServerFn({ method: "GET" })
       /** the kind the dates say, and the kind in use */
       suggested: now.suggested,
       type: now.type,
+      /** the start card works the suggestion out again from these as the leaving date is typed */
+      moveIn: now.moveIn,
+      tenancyEnd: now.tenancyEnd,
+      leavingOn: s?.draft.leavingOn ?? null,
       // the draft or the deposits differ from what was issued last: it can be issued again
       changed:
         !!s &&
@@ -207,7 +213,7 @@ export const getCheckout = createServerFn({ method: "GET" })
 
 /** Start the statement: a number of its own, and every unpaid invoice already in it. */
 export const startCheckout = createServerFn({ method: "POST" })
-  .inputValidator((d) => rid.extend({ type: typeSchema }).parse(d))
+  .inputValidator((d) => rid.extend({ type: typeSchema, leavingOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).parse(d))
   .handler(async ({ data }) => {
     const sb = await admin();
     const { nextNumber, readStatement, writeStatement } = await import("@/lib/checkout.server");
@@ -221,7 +227,7 @@ export const startCheckout = createServerFn({ method: "POST" })
       number,
       createdAt: new Date().toISOString(),
       issuedTo: { name: String(who?.full_name ?? ""), code: String(who?.resident_code || who?.quickbooks_id || "") },
-      draft: { lines: [...now.outstanding, ...now.forfeits], notes: "", type: data.type },
+      draft: { lines: [...now.outstanding, ...now.forfeits], notes: "", type: data.type, ...(data.leavingOn ? { leavingOn: data.leavingOn } : {}) },
       versions: [],
     });
     return { number };
@@ -271,7 +277,7 @@ export const saveCheckoutDraft = createServerFn({ method: "POST" })
     ];
     await writeStatement(sb, data.residentId, {
       ...s,
-      draft: { lines: lines as import("@/lib/checkout.server").CheckoutLine[], notes: data.notes, ...(type ? { type } : {}) },
+      draft: { ...s.draft, lines: lines as import("@/lib/checkout.server").CheckoutLine[], notes: data.notes, ...(type ? { type } : {}) },
     });
     return { ok: true as const };
   });

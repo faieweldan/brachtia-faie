@@ -30,7 +30,7 @@ import {
   uploadCheckoutPhoto,
 } from "@/lib/checkout.functions";
 import type { CheckoutLine } from "@/lib/checkout.server";
-import { CHECKOUT_TYPES, CHECKOUT_TYPE_LABEL, checkoutDocKind, checkoutTotals, type CheckoutType } from "@/lib/checkout-types";
+import { CHECKOUT_TYPES, CHECKOUT_TYPE_LABEL, checkoutDocKind, checkoutTotals, checkoutTypeFor, type CheckoutType } from "@/lib/checkout-types";
 import { compressImage } from "@/lib/compress";
 import { METHOD_RULES, ruleFor } from "@/lib/payment-methods";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -115,6 +115,8 @@ export function CheckoutStatement({
   const [urls, setUrls] = useState<Record<string, string>>({});
   // the kind picked before starting - the dates' suggestion until changed
   const [startType, setStartType] = useState<CheckoutType | null>(null);
+  // the day they say they leave - the kind is suggested from it, not from today (Dani, 14 Nov 2026)
+  const [leavingOn, setLeavingOn] = useState(klToday());
 
   // the draft as saved, each time it is loaded
   useEffect(() => {
@@ -186,13 +188,19 @@ export function CheckoutStatement({
   }
 
   if (!s) {
-    const pick = startType ?? q.data.suggested;
+    // the same rule as the server, on the leaving date as it is typed
+    const suggested = checkoutTypeFor(q.data.moveIn, q.data.tenancyEnd, leavingOn || undefined);
+    const pick = startType ?? suggested;
     const blocked = pick !== "cancellation" && !q.data.initialPaid;
     return (
       <div className="space-y-3 rounded-xl border border-dashed border-border p-4">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="space-y-1">
+            <span className="block text-xs text-muted-foreground">Leaving on</span>
+            <DateInput value={leavingOn} onChange={(e) => setLeavingOn(e.target.value)} className="h-9 w-40" />
+          </label>
           <TypePicker value={pick} onChange={setStartType} />
-          {pick === q.data.suggested ? <span className="text-xs text-muted-foreground">From the tenancy dates</span> : null}
+          {pick === suggested ? <span className="pb-2 text-xs text-muted-foreground">From the leaving date</span> : null}
         </div>
         <p className="text-xs text-muted-foreground">{TYPE_HINT[pick]}</p>
         {blocked ? (
@@ -203,7 +211,7 @@ export function CheckoutStatement({
         <Button
           size="sm"
           disabled={!!busy || blocked}
-          onClick={() => void run("start", () => startCheckout({ data: { residentId, type: pick } }), "Checkout statement started")}
+          onClick={() => void run("start", () => startCheckout({ data: { residentId, type: pick, ...(leavingOn ? { leavingOn } : {}) } }), "Checkout statement started")}
         >
           <Plus className="size-4" /> Start checkout statement
         </Button>
@@ -248,7 +256,8 @@ export function CheckoutStatement({
       <div className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <TypePicker value={type} onChange={changeType} disabled={closed || !!busy} />
-          {type === q.data.suggested ? <span className="text-xs text-muted-foreground">From the tenancy dates</span> : null}
+          {q.data.leavingOn ? <span className="text-xs text-muted-foreground">Leaving on {fmtDate(q.data.leavingOn)}</span> : null}
+          {type === q.data.suggested ? <span className="text-xs text-muted-foreground">· From the {q.data.leavingOn ? "leaving date" : "tenancy dates"}</span> : null}
         </div>
         <p className="text-xs text-muted-foreground">{TYPE_HINT[type]}</p>
       </div>
@@ -257,6 +266,7 @@ export function CheckoutStatement({
         residentId={residentId}
         cancellation={paidIn}
         handedBackOn={q.data.handedBackOn}
+        leavingOn={q.data.leavingOn}
         closedAt={s.inactiveAt ?? null}
         onDone={async () => {
           await Promise.all([refresh(), qc.invalidateQueries({ queryKey: ["tenancy-dates"] })]);
@@ -537,16 +547,19 @@ function RoomStep({
   residentId,
   cancellation,
   handedBackOn,
+  leavingOn,
   closedAt,
   onDone,
 }: {
   residentId: string;
   cancellation: boolean;
   handedBackOn: string | null;
+  /** the leaving date from the start: the day to confirm, once it has come */
+  leavingOn: string | null;
   closedAt: string | null;
   onDone: () => Promise<void>;
 }) {
-  const [on, setOn] = useState(klToday());
+  const [on, setOn] = useState(leavingOn && leavingOn <= klToday() ? leavingOn : klToday());
   const [busy, setBusy] = useState(false);
   const done = !!handedBackOn || (cancellation && !!closedAt);
 

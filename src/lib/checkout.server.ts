@@ -80,7 +80,8 @@ export type CheckoutStatement = {
   createdAt: string;
   /** who it was made for, as it says - Payables shows it if the resident is later removed */
   issuedTo?: { name: string; code: string };
-  draft: { lines: CheckoutLine[]; notes: string; type?: CheckoutType };
+  /** leavingOn: the day they say they leave - the type is suggested from it, the Room step starts on it */
+  draft: { lines: CheckoutLine[]; notes: string; type?: CheckoutType; leavingOn?: string };
   /** admin made the resident inactive after it was settled */
   inactiveAt?: string;
   versions: CheckoutVersion[];
