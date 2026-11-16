@@ -2697,6 +2697,8 @@ async function afterPaymentSaved(
   supabase: any,
   saved: import("@/lib/payments.server").RecordedPayment,
   log: { kind: "payment_recorded" | "payment_amended"; prefix: string },
+  /** staff said yes to "Create resident now?" on a payment below the fee (Lav, 16 Nov 2026) */
+  createResident = false,
 ) {
   const invoice = saved.invoice;
   const payment = saved.payment;
@@ -2767,10 +2769,11 @@ async function afterPaymentSaved(
       .maybeSingle();
 
     /*
-     * The booking fee is RM500, and it is the fee in full that confirms the
-     * room - part of it confirms nothing. So the booking's payments are added
-     * up, and only once they reach the fee does the booking become Booked and
-     * the student become a resident. Below it the booking waits where it is.
+     * The booking fee is RM500, and the fee in full confirms the room. So the
+     * booking's payments are added up, and once they reach the fee the booking
+     * becomes Booked and the student a resident. Below it the booking waits
+     * where it is - unless staff confirmed "Create resident now?" for this
+     * payment (Wani asked, Lav agreed with a pop-up, 16 Nov 2026).
      *
      * The money is not finished either way: the invoice stays part paid, and
      * its balance is chased on the resident's Payments tab and Collections.
@@ -2784,9 +2787,10 @@ async function afterPaymentSaved(
       0,
     );
     const feeIn = paidOnBooking + 0.005 >= BOOKING_FEE;
+    const makeResident = feeIn || createResident;
     const current = String((enq as any)?.status ?? "");
 
-    if (feeIn) {
+    if (makeResident) {
       if (enq && !(enq as any).fee_received_at) patch["fee_received_at"] = now;
       if (enq && current !== "closed" && current !== "booked") {
         patch["status"] = "booked";
@@ -2804,7 +2808,7 @@ async function afterPaymentSaved(
      * a resident simply keeps them. If this fails the payment still stands -
      * the booking page offers Create resident to put it right.
      */
-    if (feeIn && current !== "closed") {
+    if (makeResident && current !== "closed") {
       try {
         const { residentFromBooking } = await import("@/lib/booking-lifecycle");
         const made = await residentFromBooking(supabase, enquiryId);
@@ -2829,7 +2833,7 @@ async function afterPaymentSaved(
  * the money runs after it (afterPaymentSaved).
  */
 export const recordPayment = createServerFn({ method: "POST" })
-  .inputValidator((data: PaymentForm & { invoiceId: string }) => data)
+  .inputValidator((data: PaymentForm & { invoiceId: string; createResident?: boolean }) => data)
   .handler(async ({ data }) => {
     const supabase = await admin();
     await checkPaymentForm(supabase, data);
@@ -2846,7 +2850,12 @@ export const recordPayment = createServerFn({ method: "POST" })
       recordedBy: data.recordedBy ?? "",
       requestKey: data.requestKey ?? null,
     });
-    return afterPaymentSaved(supabase, saved, { kind: "payment_recorded", prefix: "" });
+    return afterPaymentSaved(
+      supabase,
+      saved,
+      { kind: "payment_recorded", prefix: "" },
+      data.createResident === true,
+    );
   });
 
 /**
@@ -2918,8 +2927,11 @@ export const createResidentFromBooking = createServerFn({ method: "POST" })
       .eq("enquiry_id", data.enquiryId);
     if (error) throw new Error(error.message);
     if (!count) throw new Error("Record the booking fee first");
-    const { residentFromBooking } = await import("@/lib/booking-lifecycle");
-    return residentFromBooking(supabase, data.enquiryId);
+    const { residentFromBooking, syncBookingStage } = await import("@/lib/booking-lifecycle");
+    const made = await residentFromBooking(supabase, data.enquiryId);
+    // a booking paid below the fee waited at Awaiting balance: with its resident it is Booked
+    await syncBookingStage(supabase, data.enquiryId);
+    return made;
   });
 
 /* ---------------- arrival check-in ---------------- */

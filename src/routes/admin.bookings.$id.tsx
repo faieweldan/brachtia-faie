@@ -105,7 +105,11 @@ import {
   listResidences,
 } from "@/lib/admin.functions";
 import { proofOwner, refreshMoney, releaseBookingFor } from "@/lib/billing-client";
-import { RecordPaymentDialog, type PayableInvoice } from "@/components/admin/RecordPaymentDialog";
+import {
+  BelowFeeConfirm,
+  RecordPaymentDialog,
+  type PayableInvoice,
+} from "@/components/admin/RecordPaymentDialog";
 import {
   Dialog,
   DialogContent,
@@ -530,6 +534,8 @@ function BookingDetail() {
    * same Record payment box opens here, and admin then creates the resident.
    */
   const [paying, setPaying] = useState<PayableInvoice | null>(null);
+  // Create resident on a booking paid below the fee: asks first (16 Nov 2026)
+  const [askResident, setAskResident] = useState(false);
 
   // every step on a booking is done by someone - its assigned staff member - so
   // nothing happens until one is picked. The server refuses it too.
@@ -612,6 +618,8 @@ function BookingDetail() {
       title: "Record booking fee",
       description: "Booking fee",
       staff: row.assigned_staff ?? "",
+      // below this, the box asks before making the resident
+      feeShort: row.resident_id ? 0 : Math.max(BOOKING_FEE - feeIn, 0),
     });
   }
 
@@ -2308,7 +2316,8 @@ function BookingDetail() {
                     <Check className="size-3.5" /> Fully paid
                   </p>
                 ) : null}
-                {row.resident_id || feeIn + 0.005 >= BOOKING_FEE ? (
+                {/* any payment in: the resident can be made, below the fee once staff confirm (16 Nov 2026) */}
+                {row.resident_id || feeIn > 0 ? (
                   <div className="mt-2 flex">
                     {row.resident_id ? (
                       <Button
@@ -2324,12 +2333,16 @@ function BookingDetail() {
                         View resident
                       </Button>
                     ) : (
-                      // the fee is in, so the resident is made with the payment - this is
-                      // here for the booking where that did not go through
+                      // the fee in full makes the resident with the payment - this is for
+                      // the booking where that did not go through, or one paid below it
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => !needStaff() && void createResident(r)}
+                        onClick={() => {
+                          if (needStaff()) return;
+                          if (feeIn + 0.005 < BOOKING_FEE) setAskResident(true);
+                          else void createResident(r);
+                        }}
                       >
                         Create resident
                       </Button>
@@ -2368,6 +2381,13 @@ function BookingDetail() {
               </div>
             </div>
           </Card>
+
+          <BelowFeeConfirm
+            open={askResident}
+            onOpenChange={setAskResident}
+            otherLabel="Cancel"
+            onCreate={() => void createResident(r)}
+          />
 
           <RecordPaymentDialog
             key={paying?.id ?? "none"}

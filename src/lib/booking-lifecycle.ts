@@ -253,7 +253,8 @@ export async function releaseBooking(supabase: any, enquiryId: string) {
  * and only some could move it back: a released room left a booking at Viewing
  * with no room, and a cancelled viewing never moved it at all.
  *
- *   the booking fee paid in full       Booked
+ *   the booking fee paid in full,
+ *   or a resident made from less       Booked
  *   part of the booking fee paid       Awaiting balance
  *   a live invoice, nothing paid yet   Awaiting payment
  *   the student asked for an invoice   Invoice requested
@@ -267,7 +268,7 @@ export async function releaseBooking(supabase: any, enquiryId: string) {
 export async function syncBookingStage(supabase: any, enquiryId: string) {
   const { data: enquiry, error } = await supabase
     .from("enquiries")
-    .select("status, viewing_completed_at, viewing_skipped_at, assigned_staff")
+    .select("status, viewing_completed_at, viewing_skipped_at, assigned_staff, resident_id")
     .eq("id", enquiryId)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -301,7 +302,8 @@ export async function syncBookingStage(supabase: any, enquiryId: string) {
     : 0;
   // the same test admin.functions makes before it creates the resident,
   // tolerance and all, so the stage and the resident cannot disagree
-  const feeIn = paidTotal + 0.005 >= BOOKING_FEE;
+  // a resident made below the fee, as staff confirmed (16 Nov 2026), is Booked too
+  const booked = paidTotal + 0.005 >= BOOKING_FEE || !!enquiry.resident_id;
 
   /*
    * Asking for the invoice comes above any viewing on purpose. It is the last
@@ -310,7 +312,7 @@ export async function syncBookingStage(supabase: any, enquiryId: string) {
    * this, every recompute quietly put them back to Viewing and the request
    * disappeared.
    */
-  const next = feeIn
+  const next = booked
     ? "booked"
     : paidTotal > 0
       ? "awaiting_payment"

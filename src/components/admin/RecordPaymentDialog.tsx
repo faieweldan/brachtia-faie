@@ -12,12 +12,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Text } from "@/components/admin/ops-ui";
 import { Choice } from "@/components/admin/Choice";
 import { canAmend, paymentMissing, ruleFor } from "@/lib/payment-methods";
 import { amendPayment, recordPayment } from "@/lib/admin.functions";
 import { afterPaymentRecorded, uploadProof } from "@/lib/billing-client";
 import { formatRM } from "@/data/properties";
+import { BOOKING_FEE } from "@/lib/invoices";
 import { PAY_METHODS } from "@/lib/ops-store";
 import {
   paymentHistory,
@@ -42,6 +52,11 @@ export type PayableInvoice = {
   title?: string;
   /** who is already known to be working - the booking's picked staff */
   staff?: string;
+  /**
+   * A booking with no resident yet: how much of the booking fee is still to
+   * come. A payment below it asks "Create resident now?" (Lav, 16 Nov 2026).
+   */
+  feeShort?: number;
 };
 
 /** A payment as it was saved - what Amend payment opens the form with. */
@@ -144,6 +159,8 @@ export function RecordPaymentDialog({
    * key only once this payment is saved.
    */
   const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
+  // the pop-up for a booking fee paid in part: open while staff choose
+  const [askResident, setAskResident] = useState(false);
 
   async function upload(file: File) {
     if (!invoice) return;
@@ -169,7 +186,20 @@ export function RecordPaymentDialog({
   const complete =
     Number(amount) > 0 && !!paidOn && !missing && !!recordedBy && (!amending || reasonGiven);
 
-  async function save() {
+  /**
+   * The booking fee in full makes the resident by itself. Less than that, and
+   * staff are asked whether to make them now anyway (Wani asked; Lav agreed,
+   * with a pop-up, 16 Nov 2026) - "Just record" keeps the booking waiting for
+   * the rest, as before.
+   */
+  function trySave() {
+    const value = Number(amount);
+    const short = invoice?.feeShort ?? 0;
+    if (!amending && short > 0 && value > 0 && value + 0.005 < short) setAskResident(true);
+    else void save();
+  }
+
+  async function save(createResident = false) {
     if (!invoice) return;
     const value = Number(amount);
     if (!(value > 0)) return void toast.error("Enter the amount received");
@@ -193,7 +223,7 @@ export function RecordPaymentDialog({
       };
       const res = amending
         ? await amendPayment({ data: { ...form, paymentId: amending.id, reason: reason.trim() } })
-        : await recordPayment({ data: { ...form, invoiceId: invoice.id } });
+        : await recordPayment({ data: { ...form, invoiceId: invoice.id, createResident } });
       setRequestKey(crypto.randomUUID());
       if (amending)
         toast.success("Payment amended", {
@@ -325,13 +355,58 @@ export function RecordPaymentDialog({
           </div>
         </div>
 
-        <Button onClick={() => void save()} disabled={saving || uploading || !complete}>
+        <Button onClick={trySave} disabled={saving || uploading || !complete}>
           {saving ? "Saving…" : amending ? "Save & issue new receipt" : "Save & issue receipt"}
         </Button>
+
+        {/* Escape goes back to the form, nothing saved */}
+        <BelowFeeConfirm
+          open={askResident}
+          onOpenChange={setAskResident}
+          otherLabel="Just record"
+          onOther={() => void save(false)}
+          onCreate={() => void save(true)}
+        />
 
         {history?.length ? <PaymentHistoryList changes={history} /> : null}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * "Below the RM500 booking fee. Create resident now?" (Lav, 16 Nov 2026) - one
+ * question, asked when a payment below the fee is recorded and when a booking
+ * paid in part before then gets Create resident. Escape answers neither.
+ */
+export function BelowFeeConfirm({
+  open,
+  onOpenChange,
+  otherLabel,
+  onOther,
+  onCreate,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** the button that does not make the resident - "Just record", "Cancel" */
+  otherLabel: string;
+  onOther?: () => void;
+  onCreate: () => void;
+}) {
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent className="admin-ui">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="text-base">
+            Below the {formatRM(BOOKING_FEE)} booking fee. Create resident now?
+          </AlertDialogTitle>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onOther}>{otherLabel}</AlertDialogCancel>
+          <AlertDialogAction onClick={onCreate}>Create resident</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 

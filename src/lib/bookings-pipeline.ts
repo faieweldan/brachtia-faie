@@ -195,8 +195,8 @@ export function nextActionFor(
     }
     case "awaiting_payment": {
       // part of the fee is in and the rest is not. The room is not confirmed
-      // until it is, so the step is the remainder - not the resident, who is
-      // not made until the fee is complete
+      // until it is, so the step is the remainder - unless staff chose to make
+      // the resident with less (then the booking is Booked, not here)
       const from = ts(row.invoice_issued_at) ?? stageAt;
       return {
         action: "record_payment",

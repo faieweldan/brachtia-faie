@@ -81,7 +81,7 @@ describe("13. one payment form, one payment step", () => {
     // the key goes with the form, to whichever save it is, and is renewed once saved
     expect(dialog).toMatch(/recordedBy,\n\s+requestKey,\n\s+\};/);
     expect(dialog).toMatch(
-      /: await recordPayment\(\{ data: \{ \.\.\.form, invoiceId: invoice\.id \} \}\);\n\s+setRequestKey\(crypto\.randomUUID\(\)\)/,
+      /: await recordPayment\(\{ data: \{ \.\.\.form, invoiceId: invoice\.id, createResident \} \}\);\n\s+setRequestKey\(crypto\.randomUUID\(\)\)/,
     );
   });
 

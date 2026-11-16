@@ -42,7 +42,7 @@ export async function afterPaymentRecorded(
   queryClient: QueryClient,
   res: {
     receipt?: { number?: unknown } | null;
-    /** the booking fee in full makes the resident - see recordPayment */
+    /** the booking fee in full, or staff saying yes below it, makes the resident - see recordPayment */
     residentCreated?: boolean | undefined;
     residentCode?: string | undefined;
   },
@@ -51,7 +51,7 @@ export async function afterPaymentRecorded(
   if (res.residentCreated) {
     toast.success(
       res.residentCode ? `Resident created · ${res.residentCode}` : "Resident created",
-      { description: "The booking fee is in, so their record and bed are set up." },
+      { description: "Their record and bed are set up." },
     );
     // they now hold a bed and appear in Residents
     await Promise.all([refreshResidents(), refreshUnits()]);
