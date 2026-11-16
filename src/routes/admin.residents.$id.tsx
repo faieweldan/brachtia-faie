@@ -471,7 +471,9 @@ function ResidentProfilePage() {
     },
   };  // Change room before the move-in date; on or after it, Update Tenancy - checked
   // in or not. The same rule as the booking page (beforeTenancyStart, 10 Oct 2026)
-  const when = timingLine(person, stay.start, stay.end, klToday(), checkInDays.data?.[form.id]);
+  const when = timingLine(person, stay.start, stay.end, klToday(), checkInDays.data?.[form.id], tenancy?.leavingOn || undefined);
+  // leaving early is about the end: said under the end date, not the start (16 Nov 2026)
+  const leavingLine = when.startsWith("Leaving") ? when : "";
   const notArrived = beforeTenancyStart(stay.start, !(person === "held" || person === "booked"), klToday());
 
 
@@ -789,7 +791,7 @@ function ResidentProfilePage() {
                 <>
                   {fmtDate(stay.start)}
                   {/* the timing, quietly, under the date it is about */}
-                  {when ? (
+                  {when && !leavingLine ? (
                     <span className={`block whitespace-normal text-xs font-normal ${timingTone(when) || "text-muted-foreground"}`}>
                       {when}
                     </span>
@@ -805,6 +807,8 @@ function ResidentProfilePage() {
                   {/* left early: the day they handed the room back, under the end it cut short */}
                   {tenancy?.movedOut ? (
                     <span className="block text-xs font-normal text-orange-700">Moved out {fmtDate(tenancy.movedOut)}</span>
+                  ) : leavingLine ? (
+                    <span className={`block whitespace-normal text-xs ${timingTone(leavingLine)}`}>{leavingLine}</span>
                   ) : null}
                 </>
               ) : undefined,

@@ -37,7 +37,7 @@ import {
 } from "@/lib/tenancy-change";
 import { klToday } from "@/lib/kl-date";
 import { stayLength } from "@/lib/stay-length";
-import { dayBefore, placementConflict, soldBedLabel, soldOccupancy } from "@/lib/placement";
+import { dayBefore, occupiedUntil as lastDayOf, placementConflict, soldBedLabel, soldOccupancy } from "@/lib/placement";
 import { rentForDays, shiftDate } from "@/lib/rental-schedule";
 import { applyTenancyChange, getTenancyChangeBasis, previewTenancyChange } from "@/lib/tenancy-change.functions";
 import { CreditOutcome, EventMoney } from "@/components/admin/TenancyChangeMoney";
@@ -175,7 +175,8 @@ export function UpdateTenancyDialog({
       if (bed.id === placed?.bed.id) return false;
       // vacant now, or someone else's whose tenancy ends before ours does - the move then waits for it (Dani, 7 Oct 2026)
       // a room held for another resident's change is in its upcoming stays, with its dates - placementConflict below (14 Oct 2026)
-      if (!(bed.status === "vacant" || (!!bed.residentId && !!bed.tenancyEnd && bed.tenancyEnd.slice(0, 10) < (tenancy.end || "9999")))) return false;
+      // their last day is the day they leave, when earlier (lastDayOf, 16 Nov 2026)
+      if (!(bed.status === "vacant" || (!!bed.residentId && !!lastDayOf(bed) && lastDayOf(bed)! < (tenancy.end || "9999")))) return false;
       /*
        * Free for the dates this stay would have it - from when the bed is free
        * (or today) to the new end - by the same rule as the booking's room list
@@ -184,7 +185,7 @@ export function UpdateTenancyDialog({
        * it out. It used to be offered and then refused on Next.
        */
       const asking = {
-        start: bed.residentId && bed.tenancyEnd ? nextDay(bed.tenancyEnd.slice(0, 10)) : klToday(),
+        start: bed.residentId && lastDayOf(bed) ? nextDay(lastDayOf(bed)!) : klToday(),
         end: newEnd || tenancy.end || undefined,
         gender,
         residentId,
@@ -210,7 +211,7 @@ export function UpdateTenancyDialog({
   const together = wantRoom && wantDate && end > oldEnd && !ownDate;
   const effectiveMove = together ? dateStart : moveOn;
   // the bed is someone else's until their tenancy ends: the move can only be after it
-  const occupiedUntil = target?.bed.residentId ? (target.bed.tenancyEnd ?? "").slice(0, 10) : "";
+  const occupiedUntil = target?.bed.residentId ? (lastDayOf(target.bed) ?? "") : "";
 
   const flags = changeFlags({
     oldUnitId: placed?.unit.id ?? "",
@@ -693,7 +694,7 @@ export function UpdateTenancyDialog({
           setBedId(b.bed.id);
           resetMoney();
           // someone else's bed: the move starts the day after their tenancy ends
-          const until = b.bed.residentId ? (b.bed.tenancyEnd ?? "").slice(0, 10) : "";
+          const until = b.bed.residentId ? (lastDayOf(b.bed) ?? "") : "";
           if (!together) setMoveOn(until ? shiftDate(until, { days: 1 }) : today);
           setPicking(false);
         }}
@@ -1083,8 +1084,8 @@ function RoomList({
               <span className="text-muted-foreground">
                 {nameOf(b)}
                 {/* someone else's now - free the day after their tenancy ends */}
-                {b.bed.residentId && b.bed.id !== current && b.bed.tenancyEnd ? (
-                  <span className="block text-[11px] text-amber-700">free from {fmtDate(shiftDate(b.bed.tenancyEnd.slice(0, 10), { days: 1 }))}</span>
+                {b.bed.residentId && b.bed.id !== current && lastDayOf(b.bed) ? (
+                  <span className="block text-[11px] text-amber-700">free from {fmtDate(shiftDate(lastDayOf(b.bed)!, { days: 1 }))}</span>
                 ) : null}
               </span>
               <span className="text-right tabular-nums">{money(rateOf(b))}</span>

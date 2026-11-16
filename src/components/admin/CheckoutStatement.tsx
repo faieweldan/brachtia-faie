@@ -26,16 +26,21 @@ import {
   recordCreditNoteRefundFn,
   refundProofUrl,
   saveCheckoutDraft,
+  setLeavingDate,
   startCheckout,
   uploadCheckoutPhoto,
 } from "@/lib/checkout.functions";
 import type { CheckoutLine } from "@/lib/checkout.server";
-import { CHECKOUT_TYPES, CHECKOUT_TYPE_LABEL, checkoutDocKind, checkoutTotals, checkoutTypeFor, type CheckoutType } from "@/lib/checkout-types";
+import { CHECKOUT_TYPES, CHECKOUT_TYPE_LABEL, checkoutDocKind, checkoutTotals, checkoutTypeFor, isCredit, type CheckoutType } from "@/lib/checkout-types";
 import { compressImage } from "@/lib/compress";
 import { METHOD_RULES, ruleFor } from "@/lib/payment-methods";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { klToday } from "@/lib/kl-date";
 import { fmtDate } from "@/lib/ops-store";
+import { shiftDate } from "@/lib/rental-schedule";
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+const shiftDay = (d: string) => shiftDate(d, { days: 1 });
 
 /**
  * The checkout statement on the resident's Payments tab (Dani, 2 Oct 2026) -
@@ -126,7 +131,9 @@ export function CheckoutStatement({
     setUrls(q.data?.photos ?? {});
   }, [s, q.data?.photos]);
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ["checkout", residentId] });
+  // the leaving date lives on the tenancy: its dates (the profile's "Leaving ...") are read again too
+  const refresh = () =>
+    Promise.all([qc.invalidateQueries({ queryKey: ["checkout", residentId] }), qc.invalidateQueries({ queryKey: ["tenancy-dates"] })]);
   const run = async (what: string, fn: () => Promise<unknown>, ok: string) => {
     setBusy(what);
     try {
@@ -144,7 +151,10 @@ export function CheckoutStatement({
   if (!q.data) return null;
 
   const deposits = q.data.deposits;
-  const { held, net } = checkoutTotals(deposits, lines);
+  const { net } = checkoutTotals(deposits, lines);
+  // staff's "also due to resident" lines, and everything taken off
+  const credits = lines.filter(isCredit);
+  const deductions = lines.filter((l) => !isCredit(l));
   const latest = s?.versions.at(-1) ?? null;
   // signed and settled: nothing on it changes any more
   const closed = !!s?.refund || !!s?.settled;
@@ -256,8 +266,7 @@ export function CheckoutStatement({
       <div className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <TypePicker value={type} onChange={changeType} disabled={closed || !!busy} />
-          {q.data.leavingOn ? <span className="text-xs text-muted-foreground">Leaving on {fmtDate(q.data.leavingOn)}</span> : null}
-          {type === q.data.suggested ? <span className="text-xs text-muted-foreground">· From the {q.data.leavingOn ? "leaving date" : "tenancy dates"}</span> : null}
+          {type === q.data.suggested ? <span className="text-xs text-muted-foreground">From the {q.data.leavingOn ? "leaving date" : "tenancy dates"}</span> : null}
         </div>
         <p className="text-xs text-muted-foreground">{TYPE_HINT[type]}</p>
       </div>
@@ -267,6 +276,10 @@ export function CheckoutStatement({
         cancellation={paidIn}
         handedBackOn={q.data.handedBackOn}
         leavingOn={q.data.leavingOn}
+        tenancyEnd={q.data.tenancyEnd}
+        moveIn={q.data.moveIn}
+        type={type}
+        onSwitchType={closed ? undefined : changeType}
         closedAt={s.inactiveAt ?? null}
         onDone={async () => {
           await Promise.all([refresh(), qc.invalidateQueries({ queryKey: ["tenancy-dates"] })]);
@@ -291,15 +304,27 @@ export function CheckoutStatement({
         )}
         <div className="flex items-center justify-between border-t border-border bg-muted px-3 py-2 text-sm font-medium">
           <span>{paidIn ? "Total paid" : "Total held"}</span>
-          <span className="tabular-nums">{money(held)}</span>
+          <span className="tabular-nums">{money(round2(deposits.reduce((n, d) => n + d.amount, 0)))}</span>
         </div>
       </div>
+
+      {/* money due back to them that staff type in - rent paid for days after they left (Dani, 16 Nov 2026) */}
+      <LineItemsEditor
+        title="Also due to resident"
+        lines={credits}
+        onChange={(next) => setLines([...next, ...deductions])}
+        newLine={(): CheckoutLine => ({ id: crypto.randomUUID().slice(0, 8), label: "", amount: 0, source: "credit", photos: [] })}
+        readOnly={closed}
+        totalLabel="Total also due"
+        empty="Nothing else."
+        placeholder="e.g. Rent paid for 18 – 31 Dec 2026"
+      />
 
       {/* deductions: unpaid invoices first, then what admin adds - the invoices' own line editor */}
       <LineItemsEditor
         title="Deductions"
-        lines={lines}
-        onChange={setLines}
+        lines={deductions}
+        onChange={(next) => setLines([...credits, ...next])}
         newLine={(): CheckoutLine => ({ id: crypto.randomUUID().slice(0, 8), label: "", amount: 0, source: "deduction", photos: [] })}
         readOnly={closed}
         negative
@@ -548,36 +573,65 @@ function RoomStep({
   cancellation,
   handedBackOn,
   leavingOn,
+  tenancyEnd,
+  moveIn,
+  type,
+  onSwitchType,
   closedAt,
   onDone,
 }: {
   residentId: string;
   cancellation: boolean;
   handedBackOn: string | null;
-  /** the leaving date from the start: the day to confirm, once it has come */
+  /** the day they say they leave (their tenancy's leaving_on) - the room is bookable from the day after */
   leavingOn: string | null;
+  tenancyEnd: string;
+  moveIn: string;
+  /** the statement's kind, and how to change it - for the warning when the date says another kind */
+  type: CheckoutType;
+  onSwitchType?: ((t: CheckoutType) => void) | undefined;
   closedAt: string | null;
   onDone: () => Promise<void>;
 }) {
-  const [on, setOn] = useState(leavingOn && leavingOn <= klToday() ? leavingOn : klToday());
+  const today = klToday();
+  // one date (Dani, 16 Nov 2026): planned until the day comes, then the keys are confirmed on it
+  const saved = leavingOn ?? tenancyEnd;
+  const [date, setDate] = useState(saved);
+  useEffect(() => setDate(saved), [saved]);
   const [busy, setBusy] = useState(false);
   const done = !!handedBackOn || (cancellation && !!closedAt);
+  const edited = !!date && date !== saved;
+  // the date has come (or is moved to a day that has): the keys can be confirmed on it
+  const due = !!date && date <= today;
+  // the agreement's 2-week line, by the same rule as the start card
+  const dateSays = date ? checkoutTypeFor(moveIn, tenancyEnd, date) : type;
+  const mismatch = !cancellation && dateSays !== "cancellation" && dateSays !== type;
 
-  async function handBack() {
+  async function run(what: string, fn: () => Promise<unknown>, ok: string, description?: string) {
     setBusy(true);
     try {
-      const { moveOut } = await import("@/lib/homes.functions");
-      const { promoted } = await moveOut({ data: { residentId, on } });
+      await fn();
       await onDone();
-      toast.success("Room handed back", {
-        description: promoted.length ? `Room handed to ${promoted.join(", ")} - Booked until they check in.` : "The room is free. Rent stops on that day.",
-      });
+      toast.success(ok, description ? { description } : undefined);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not hand the room back");
+      toast.error(e instanceof Error ? e.message : `Could not ${what}`);
     } finally {
       setBusy(false);
     }
   }
+  const saveDate = () =>
+    run("save the leaving date", () => setLeavingDate({ data: { residentId, leavingOn: date } }), "Leaving date saved", `The room can be booked from ${fmtDate(shiftDay(date))}.`);
+  const keysBack = () =>
+    run(
+      "hand the room back",
+      async () => {
+        const { moveOut } = await import("@/lib/homes.functions");
+        const { promoted } = await moveOut({ data: { residentId, on: date } });
+        if (promoted.length) toast.message(`Room handed to ${promoted.join(", ")} - Booked until they check in.`);
+      },
+      "Room handed back",
+      `Rent stops on ${fmtDate(date)}.`,
+    );
 
   return (
     <div className="overflow-hidden rounded-xl border border-border">
@@ -597,16 +651,37 @@ function RoomStep({
             {closedAt ? "Reserved room released." : "They never moved in. The reserved room is released when this checkout is closed."}
           </p>
         ) : (
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="space-y-1">
-              <span className="text-xs text-muted-foreground">Handed back on</span>
-              <DateInput value={on} max={klToday()} onChange={(e) => setOn(e.target.value)} className="h-9 w-40" />
-            </label>
-            <Button size="sm" variant="outline" disabled={!on || busy} onClick={() => void handBack()}>
-              {busy ? <Loader2 className="size-4 animate-spin" /> : null} Room handed back
-            </Button>
-            <p className="w-full text-xs text-muted-foreground">
-              The room goes to the next resident now. The deposit stays held until the money below is settled.
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="space-y-1">
+                <span className="text-xs text-muted-foreground">Leaving on</span>
+                <DateInput value={date} max={tenancyEnd || undefined} onChange={(e) => setDate(e.target.value)} className="h-9 w-40" />
+              </label>
+              {/* the state decides the one action: a date still to come is saved; a day that has come is confirmed */}
+              {due ? (
+                <Button size="sm" variant="outline" disabled={busy} onClick={() => void keysBack()}>
+                  {busy ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />} Keys returned
+                </Button>
+              ) : edited ? (
+                <Button size="sm" variant="outline" disabled={busy} onClick={() => void saveDate()}>
+                  {busy ? <Loader2 className="size-4 animate-spin" /> : null} Save date
+                </Button>
+              ) : null}
+            </div>
+            {mismatch ? (
+              <p className="text-xs text-amber-800">
+                {fmtDate(date)} is {dateSays === "early_termination" ? "more than 2 weeks before the end" : "within 2 weeks of the end"}.{" "}
+                {onSwitchType ? (
+                  <button type="button" className="font-medium underline underline-offset-2" onClick={() => onSwitchType(dateSays)}>
+                    Switch to {CHECKOUT_TYPE_LABEL[dateSays]}
+                  </button>
+                ) : null}
+              </p>
+            ) : null}
+            <p className="text-xs text-muted-foreground">
+              {due
+                ? "The room goes to the next resident now. The deposit stays held until the money below is settled."
+                : `The room can be booked for the next resident from ${fmtDate(shiftDay(date))}. Confirm the keys on the day.`}
             </p>
           </div>
         )}

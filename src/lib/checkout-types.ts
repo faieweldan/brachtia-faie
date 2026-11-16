@@ -39,9 +39,16 @@ export function checkoutTypeFor(start: string, end: string, today = klToday()): 
  * itself, beside the server's copy.
  */
 const round = (n: number) => Math.round(n * 100) / 100;
-export const checkoutTotals = (deposits: { amount: number }[], lines: { amount: number }[]) => {
-  const held = round(deposits.reduce((n, d) => n + (Number(d.amount) || 0), 0));
-  const deducted = round(lines.reduce((n, l) => n + (Number(l.amount) || 0), 0));
+/**
+ * A "credit" line is money due back to the resident that staff type in - rent
+ * paid for days after they left (Dani, 16 Nov 2026). It sits with the deposits:
+ * held = deposits + credits, everything else is a deduction.
+ */
+export const isCredit = (l: { source?: string }) => l.source === "credit";
+export const checkoutTotals = (deposits: { amount: number }[], lines: { amount: number; source?: string }[]) => {
+  const sum = (xs: { amount: number }[]) => xs.reduce((n, x) => n + (Number(x.amount) || 0), 0);
+  const held = round(sum(deposits) + sum(lines.filter(isCredit)));
+  const deducted = round(sum(lines.filter((l) => !isCredit(l))));
   return { held, deducted, net: round(held - deducted) };
 };
 /** a refund (or nothing either way) is a credit note; a balance owed is an invoice (Dani, 5 Oct 2026) */

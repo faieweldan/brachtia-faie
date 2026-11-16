@@ -39,7 +39,7 @@ import {
 } from "@/lib/ops-store";
 import { DateInput } from "@/components/ui/date-input";
 import { klToday } from "@/lib/kl-date";
-import { PERSON_LABEL, bedStays, personStatus, roomStatusOf, timingLine, timingTone, type BedStay, type PersonStatus } from "@/lib/placement";
+import { PERSON_LABEL, bedStays, occupiedUntil, personStatus, roomStatusOf, timingLine, timingTone, type BedStay, type PersonStatus } from "@/lib/placement";
 import { universityAbbr } from "@/data/form-options";
 
 /**
@@ -215,7 +215,7 @@ function InventoryPage() {
       // a line the whole-unit letting (or a let room) holds is not for sale
       if (wantStatus === "vacant" && bedBlockedBy(unit, room, bed)) return false;
       if (wantOccupancy && room.occupancy !== wantOccupancy) return false;
-      if (from && bed.tenancyEnd && bed.tenancyEnd < from) return false;
+      if (from && occupiedUntil(bed) && occupiedUntil(bed)! < from) return false;
       if (to && bed.tenancyStart && bed.tenancyStart > to) return false;
       if (q) {
         // the people still to come are searched too - typing Aisha finds her room
@@ -691,7 +691,7 @@ function BedLine({
       <td className="px-4 py-2 text-muted-foreground">{col((st) => st.sponsor || "—")}</td>
       <td className="px-4 py-2 text-muted-foreground">
         {col((st) => {
-          const when = timingLine(st.status, st.start, st.end, today, st.residentId ? checkInDays?.[st.residentId] : undefined);
+          const when = timingLine(st.status, st.start, st.end, today, st.residentId ? checkInDays?.[st.residentId] : undefined, st.leavingOn);
           return (
             <>
               <span className="whitespace-nowrap">

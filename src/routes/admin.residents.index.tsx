@@ -611,6 +611,7 @@ function ResidentsListPage() {
                                   stay.end,
                                   today,
                                   checkInDays.data?.[r.id],
+                                  savedDates.data?.[r.id]?.leavingOn || undefined,
                                 );
                                 return when ? (
                                   <span

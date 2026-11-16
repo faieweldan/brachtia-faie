@@ -31,7 +31,7 @@ const lineSchema = z.object({
   id: z.string().max(40),
   label: z.string().max(200),
   amount: z.number().min(0).max(1_000_000),
-  source: z.enum(["outstanding", "forfeit", "deduction"]),
+  source: z.enum(["outstanding", "forfeit", "deduction", "credit"]),
   invoiceNumber: z.string().max(40).optional(),
   photos: z.array(z.string().max(300)).max(6),
 });
@@ -133,21 +133,35 @@ async function moneyNow(residentId: string, type?: CheckoutType, leavingOn?: str
 }
 
 /** Everything the admin card shows. */
+const latestStay = async (sb: any, residentId: string) => (await import("@/lib/checkout.server")).latestTenancy(sb, residentId);
+const day10 = (v: unknown) => (v ? String(v).slice(0, 10) : null);
+
+/**
+ * The day they say they leave, on their tenancy (leaving_on, Dani, 16 Nov
+ * 2026). Their claim on the room ends that day, so the next resident can be
+ * booked from the day after; the bed itself moves only when the room is
+ * handed back. null clears it - the room is theirs to the end date again.
+ *
+ * Giving days back (a later date, or none) is refused when someone is already
+ * booked into them, by the same check every placement uses.
+ */
+async function saveLeavingOn(sb: any, residentId: string, on: string | null) {
+  // the check and the write in one locked step - set_leaving_on, 20261116100000_leaving_on.sql
+  const { data, error } = await sb.rpc("set_leaving_on", { p_resident: residentId, p_on: on });
+  if (error && /set_leaving_on|schema cache|does not exist/i.test(error.message))
+    throw new Error("The database needs the leaving-date update (20261116100000_leaving_on.sql) first.");
+  if (error) throw new Error(error.message);
+  const out = data as { ok: boolean; error?: string };
+  if (!out?.ok) throw new Error(out?.error ?? "Could not save the leaving date.");
+}
+
 /**
  * The day the room was handed back - the latest tenancy's moved_out_on, the
  * stay move_out writes to (Dani, 28 Oct 2026). One reader for the statement's
- * Room step and for the Close check. "*": read when the database has the column.
+ * Room step and for the Close check.
  */
 async function handedBackOn(sb: any, residentId: string): Promise<string | null> {
-  const { data } = await sb
-    .from("tenancies")
-    .select("*")
-    .eq("resident_id", residentId)
-    .order("start_date", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return data?.moved_out_on ? String(data.moved_out_on).slice(0, 10) : null;
+  return day10((await latestStay(sb, residentId))?.moved_out_on);
 }
 
 export const getCheckout = createServerFn({ method: "GET" })
@@ -156,7 +170,14 @@ export const getCheckout = createServerFn({ method: "GET" })
     const sb = await admin();
     const { readStatement, totals } = await import("@/lib/checkout.server");
     let s = await readStatement(sb, data.residentId);
-    const now = await moneyNow(data.residentId, s?.draft.type, s?.draft.leavingOn);
+    let stay = await latestStay(sb, data.residentId);
+    // started 14-16 Nov 2026, the date was kept on the statement: it moves onto the tenancy, once
+    if (s?.draft.leavingOn && stay && "leaving_on" in stay && !stay.leaving_on && !stay.moved_out_on) {
+      await saveLeavingOn(sb, data.residentId, s.draft.leavingOn).catch(() => {});
+      stay = await latestStay(sb, data.residentId);
+    }
+    const leavingOn = day10(stay?.leaving_on) ?? (stay && "leaving_on" in stay ? null : (s?.draft.leavingOn ?? null));
+    const now = await moneyNow(data.residentId, s?.draft.type, leavingOn ?? undefined);
     /*
      * What is owed changes as payments come in (Dani, 2 Oct 2026): the draft's
      * "Outstanding on ..." lines follow the invoices as they are now - a paid
@@ -191,14 +212,14 @@ export const getCheckout = createServerFn({ method: "GET" })
       photos: await photoUrls(sb, [...new Set(paths)]),
       initialPaid: now.initialPaid,
       /** the Room step: the day they handed the room back, or null */
-      handedBackOn: await handedBackOn(sb, data.residentId),
+      handedBackOn: day10(stay?.moved_out_on),
       /** the kind the dates say, and the kind in use */
       suggested: now.suggested,
       type: now.type,
       /** the start card works the suggestion out again from these as the leaving date is typed */
       moveIn: now.moveIn,
       tenancyEnd: now.tenancyEnd,
-      leavingOn: s?.draft.leavingOn ?? null,
+      leavingOn,
       // the draft or the deposits differ from what was issued last: it can be issued again
       changed:
         !!s &&
@@ -219,6 +240,8 @@ export const startCheckout = createServerFn({ method: "POST" })
     const { nextNumber, readStatement, writeStatement } = await import("@/lib/checkout.server");
     if (await readStatement(sb, data.residentId)) throw new Error("This resident already has a checkout statement.");
     const now = await moneyNow(data.residentId, data.type);
+    // a cancellation never moved in: there is no room to leave
+    if (data.leavingOn && data.type !== "cancellation") await saveLeavingOn(sb, data.residentId, data.leavingOn);
     // moved in: the move-in money first - only a cancellation settles an unpaid initial invoice (Dani, 2 Oct 2026)
     if (data.type !== "cancellation" && !now.initialPaid) throw new Error("The initial payment has to be paid in full first - or choose Cancellation.");
     const number = await nextNumber(sb);
@@ -227,7 +250,7 @@ export const startCheckout = createServerFn({ method: "POST" })
       number,
       createdAt: new Date().toISOString(),
       issuedTo: { name: String(who?.full_name ?? ""), code: String(who?.resident_code || who?.quickbooks_id || "") },
-      draft: { lines: [...now.outstanding, ...now.forfeits], notes: "", type: data.type, ...(data.leavingOn ? { leavingOn: data.leavingOn } : {}) },
+      draft: { lines: [...now.outstanding, ...now.forfeits], notes: "", type: data.type },
       versions: [],
     });
     return { number };
@@ -247,6 +270,8 @@ export const discardCheckout = createServerFn({ method: "POST" })
     const s = await readStatement(sb, data.residentId);
     if (!s) return { ok: true as const };
     if (s.settled || s.refund || s.versions.some((v) => v.signed)) throw new Error("Signed already - it can no longer be discarded.");
+    const stay = await latestStay(sb, data.residentId);
+    if (stay?.leaving_on && !stay.moved_out_on) await saveLeavingOn(sb, data.residentId, null);
     const bucket = sb.storage.from("resident-documents");
     const list = async (folder: string) =>
       (((await bucket.list(folder, { limit: 1000 })).data ?? []) as { name: string; id: string | null }[])
@@ -254,6 +279,15 @@ export const discardCheckout = createServerFn({ method: "POST" })
         .map((f) => `${folder}/${f.name}`);
     const files = [...(await list(`checkout/${data.residentId}`)), ...(await list(`checkout/${data.residentId}/photos`))];
     if (files.length) await bucket.remove(files);
+    return { ok: true as const };
+  });
+
+/** Change (or clear) the leaving date on the statement's Room step, until the room is handed back. */
+export const setLeavingDate = createServerFn({ method: "POST" })
+  .inputValidator((d) => rid.extend({ leavingOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable() }).parse(d))
+  .handler(async ({ data }) => {
+    const sb = await admin();
+    await saveLeavingOn(sb, data.residentId, data.leavingOn);
     return { ok: true as const };
   });
 
@@ -269,10 +303,12 @@ export const saveCheckoutDraft = createServerFn({ method: "POST" })
     const type = data.type ?? s.draft.type;
     // a new kind of checkout keeps different things: its lines come again from the money
     const typed = type !== s.draft.type ? await moneyNow(data.residentId, type) : null;
+    // what admin typed - deductions and amounts also due to them - stays when the kind changes
+    const typedByAdmin = (l: { source: string }) => l.source === "deduction" || l.source === "credit";
     const lines = [
-      ...(typed ? [...typed.outstanding, ...typed.forfeits] : data.lines.filter((l) => l.source !== "deduction")),
+      ...(typed ? [...typed.outstanding, ...typed.forfeits] : data.lines.filter((l) => !typedByAdmin(l))),
       ...data.lines
-        .filter((l) => l.source === "deduction" && (l.label.trim() || l.amount))
+        .filter((l) => typedByAdmin(l) && (l.label.trim() || l.amount))
         .map((l) => ({ ...l, label: l.label.trim(), photos: l.photos.filter((p) => p.startsWith(folder)) })),
     ];
     await writeStatement(sb, data.residentId, {
@@ -616,7 +652,8 @@ async function settle(sb: any, residentId: string, s: import("@/lib/checkout.ser
     left = round2(left - done);
   }
   // what admin added, and what the kind of checkout keeps
-  const deductions = v.lines.filter((x) => x.source !== "outstanding");
+  // (credit lines are already in v.held, with the deposits)
+  const deductions = v.lines.filter((x) => x.source !== "outstanding" && x.source !== "credit");
   const manual = round2(deductions.reduce((n, x) => n + x.amount, 0));
   const refund = round2(Math.max(0, left - manual));
   const owed = round2(Math.max(0, manual - left));
@@ -732,8 +769,9 @@ async function payableRows(sb: any, only?: string) {
       // for View, the way Collections opens an invoice: its lines, then the payment
       held: v.held,
       deducted: v.deducted,
-      deposits: v.deposits.map((d) => ({ label: d.label, amount: d.amount })),
-      lines: v.lines.map((l) => ({ label: l.label, amount: l.amount })),
+      // what is also due to them shows with the deposits it is added to (held)
+      deposits: [...v.deposits, ...v.lines.filter((l) => l.source === "credit")].map((d) => ({ label: d.label, amount: d.amount })),
+      lines: v.lines.filter((l) => l.source !== "credit").map((l) => ({ label: l.label, amount: l.amount })),
       issuedBy: "",
       refund: s.refund
         ? { amount: s.refund.amount, paidOn: s.refund.paidOn, method: s.refund.method, reference: s.refund.reference, recordedBy: s.refund.recordedBy ?? "", hasProof: !!s.refund.proofPath }

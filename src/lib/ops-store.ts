@@ -42,6 +42,12 @@ export type Bed = {
    */
   letWhole?: boolean | undefined;
   /**
+   * The day the bed's own resident says they leave - their tenancy's
+   * leaving_on, set on their checkout (16 Nov 2026). Their claim on the room
+   * ends then (occupiedUntil); the tenancy end date stays as agreed.
+   */
+  leavingOn?: string | undefined;
+  /**
    * Stays to come on this bed while somebody else is its resident (9 Oct
    * 2026), earliest first: an unpaid hold (beds.enquiry_id on an occupied
    * bed) is Reserved, a paid tenancy (tenancies.bed_id) is Booked. Worked out

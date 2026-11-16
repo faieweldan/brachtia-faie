@@ -556,3 +556,44 @@ describe("bedStays - who is on a bed, and when", () => {
     expect(bedStays({ id: "b3", label: "Twin 2", status: "vacant" }, [])).toEqual([]);
   });
 });
+
+/*
+ * Louis, B-06-02 Room A, tenancy to 31 Dec 2026, leaves on 17 Dec (Dani, 16
+ * Nov 2026): the room can be booked from 18 Dec while he still lives there.
+ * The same rule as placement_claims in 20261116100000_leaving_on.sql.
+ */
+describe("a planned leaving date ends the claim on the room", () => {
+  const louis = person("l", "Louis", "Male");
+  const roomA = (leavingOn?: string) =>
+    room("ra", "A", "single", [
+      bed("ba", "Single", {
+        status: "active",
+        residentId: "l",
+        residentName: "Louis",
+        gender: "Male",
+        tenancyStart: "2026-08-23",
+        tenancyEnd: "2026-12-31",
+        ...(leavingOn ? { leavingOn } : {}),
+      }),
+    ]);
+  const next = { start: "2026-12-18", end: "2027-06-30", gender: "Male", enquiryId: "en" };
+
+  test("his last day: the leaving date when earlier, else the end", async () => {
+    const { occupiedUntil } = await import("../src/lib/placement");
+    expect(occupiedUntil({ tenancyEnd: "2026-12-31", leavingOn: "2026-12-17" })).toBe("2026-12-17");
+    expect(occupiedUntil({ tenancyEnd: "2026-12-31" })).toBe("2026-12-31");
+    expect(occupiedUntil({ tenancyEnd: "2026-12-31", leavingOn: "2027-01-05" })).toBe("2026-12-31");
+  });
+
+  test("no leaving date: 18 Dec is still his", () => {
+    const r = roomA();
+    expect(placementConflict(unit([r]), r, r.beds[0]!, next, [louis])).toContain("Louis");
+  });
+
+  test("leaving 17 Dec: free from 18 Dec, not a day earlier", () => {
+    const r = roomA("2026-12-17");
+    expect(placementConflict(unit([r]), r, r.beds[0]!, next, [louis])).toBe("");
+    expect(placementConflict(unit([r]), r, r.beds[0]!, { ...next, start: "2026-12-17" }, [louis])).toContain("Louis");
+    expect(occupiedNote(r.beds[0]!, "2026-11-16")).toContain("until 17 Dec 2026");
+  });
+});

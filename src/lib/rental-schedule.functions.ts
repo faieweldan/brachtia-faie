@@ -178,6 +178,8 @@ export type ServerTenancy = {
   rent: number;
   /** the day they handed the room back, before the checkout settled - empty while they live there */
   movedOut: string;
+  /** the day they say they leave, set on their checkout (leaving_on) - empty when not leaving early */
+  leavingOn: string;
 };
 
 /**
@@ -244,7 +246,7 @@ export const tenancyDatesByResident = createServerFn({ method: "GET" }).handler(
   for (const [residentId, t] of latest) {
     const invoiceRent = t.enquiry_id ? byEnquiry.get(String(t.enquiry_id)) : byResident.get(residentId);
     const rent = scheduleRent.get(String(t.id)) || invoiceRent || 0;
-    out[residentId] = { id: String(t.id), start: day(t.start_date), end: day(t.end_date), rent, movedOut: day(t.moved_out_on) };
+    out[residentId] = { id: String(t.id), start: day(t.start_date), end: day(t.end_date), rent, movedOut: day(t.moved_out_on), leavingOn: day(t.leaving_on) };
   }
   return out;
 });

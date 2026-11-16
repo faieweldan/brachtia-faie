@@ -126,7 +126,7 @@ export function unitClaims(unit: Unit, residents: Resident[] = []): Claim[] {
           who: bed.residentName || person?.fullName || bed.holdFor || "someone",
           gender: person?.gender || bed.gender || "",
           start: bed.tenancyStart,
-          end: bed.tenancyEnd,
+          end: occupiedUntil(bed),
           kind: "current",
           letWhole: residentLetWhole(room, bed),
         });
@@ -220,18 +220,32 @@ export function placementConflict(
 }
 
 /**
+ * The last day the bed's own resident has the room: their tenancy end, or the
+ * day they leave when that is earlier (16 Nov 2026). The same as
+ * placement_claims' "resident" row - every "free from" reads this, never
+ * tenancyEnd alone.
+ */
+export function occupiedUntil(bed: Pick<Bed, "tenancyEnd" | "leavingOn">): string | undefined {
+  const end = bed.tenancyEnd?.slice(0, 10);
+  const leaving = bed.leavingOn?.slice(0, 10);
+  if (!end) return leaving;
+  return leaving && leaving < end ? leaving : end;
+}
+
+/**
  * What the picker says about a bed that is free for the dates asked but has
  * somebody in it now: "Currently occupied by Muhammad until 30 Sep 2026 ·
  * Checkout pending". Empty when nobody is in it.
  */
 export function occupiedNote(bed: Bed, today: string, short = false) {
   if (bed.status === "vacant" || !bed.residentId || bed.holdFor === SOLD_AS_SINGLE_MARK) return "";
-  const until = bed.tenancyEnd ? ` until ${fmt(bed.tenancyEnd)}` : "";
+  const last = occupiedUntil(bed);
+  const until = last ? ` until ${fmt(last)}` : "";
   // the room picker's list: who it is is one click away, in the unit's details
   if (short) return `Currently occupied${until}`;
   const who = bed.residentName || "a resident";
   const pending =
-    bed.tenancyEnd && bed.tenancyEnd < today && bed.status !== "booked"
+    last && last < today && bed.status !== "booked"
       ? " · Checkout pending"
       : "";
   return `Currently occupied by ${who}${until}${pending}`;
@@ -313,6 +327,8 @@ export function timingLine(
   today: string,
   /** the day their check-in appointment is booked for - arriving then is not overdue */
   checkInOn?: string | undefined,
+  /** the day they say they leave, set on their checkout (16 Nov 2026) - said in place of Coming due */
+  leavingOn?: string | undefined,
 ) {
   if (status === "inactive") return "Former";
   if (status === "moved_out") return "Settlement open";
@@ -326,6 +342,7 @@ export function timingLine(
     return day === start ? `Upcoming · ${when}` : `Upcoming · check-in ${when}`;
   }
   if (status === "active") {
+    if (leavingOn) return leavingOn < today ? `Leaving ${fmt(leavingOn)} · keys overdue` : `Leaving ${fmt(leavingOn)} · checkout open`;
     if (end && end < today) return "Checkout overdue";
     if (end) {
       const n = days(today, end);
@@ -340,7 +357,7 @@ export function timingLine(
 /** The timing line's colour, the same on every list: red when late, orange when coming due. */
 export function timingTone(line: string) {
   if (line.endsWith("overdue")) return "font-medium text-rose-700";
-  if (line.startsWith("Coming due") || line === "Settlement open") return "font-medium text-orange-700";
+  if (line.startsWith("Coming due") || line.startsWith("Leaving") || line === "Settlement open") return "font-medium text-orange-700";
   return "";
 }
 
@@ -381,6 +398,8 @@ export type BedStay = {
   sponsor?: string | undefined;
   start?: string | undefined;
   end?: string | undefined;
+  /** the day they say they leave, set on their checkout - timingLine says it */
+  leavingOn?: string | undefined;
   /** their rent, when known - Homes falls back to the room's */
   rent?: number | undefined;
   status: PersonStatus;
@@ -413,6 +432,7 @@ export function bedStays(bed: Bed, residents: Resident[]): BedStay[] {
       // an older hold kept only the move-in date, in hold_until
       start: bed.tenancyStart || (bed.status === "held" ? bed.holdUntil?.slice(0, 10) : undefined),
       end: bed.tenancyEnd,
+      ...(bed.leavingOn ? { leavingOn: bed.leavingOn } : {}),
       rent: bed.rent,
       status: personStatus({ bedStatus: bed.status }),
       later: false,

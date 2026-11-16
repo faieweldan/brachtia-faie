@@ -32,3 +32,18 @@ describe("the statement's sums - one rule for the card, the server and the PDF",
     expect(checkoutDocKind(-0.01)).toBe("Invoice");
   });
 });
+
+describe("amounts also due to the resident (Dani, 16 Nov 2026)", () => {
+  test("a credit line is added to what is held, never taken off", async () => {
+    const { checkoutTotals } = await import("@/lib/checkout-types");
+    // Louis: RM650 deposits, rent paid for 18-31 Dec typed in, a water bill taken off
+    const t = checkoutTotals(
+      [{ amount: 600 }, { amount: 50 }],
+      [
+        { amount: 541.94, source: "credit" },
+        { amount: 40, source: "deduction" },
+      ],
+    );
+    expect(t).toEqual({ held: 1191.94, deducted: 40, net: 1151.94 });
+  });
+});

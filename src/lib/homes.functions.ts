@@ -46,6 +46,7 @@ function toBed(row: any): Bed {
     holdUntil: row.hold_until ?? undefined,
     enquiryId: row.enquiry_id ?? undefined,
     letWhole: typeof row.seated_let_whole === "boolean" ? row.seated_let_whole : undefined,
+    leavingOn: row.seated_leaving_on ?? undefined,
     upcoming: row.upcoming?.length ? row.upcoming : undefined,
   };
 }
@@ -115,17 +116,21 @@ async function attachUpcoming(supabase: any, beds: any[], unitIds: string[]) {
     seatedBeds.length
       ? supabase
           .from("tenancies")
-          .select("bed_id, resident_id, let_whole, start_date, created_at")
+          // "*": leaving_on is read when the database has it (20261116100000_leaving_on.sql)
+          .select("*")
           .in("bed_id", seatedBeds)
           .order("start_date", { ascending: false, nullsFirst: false })
           .order("created_at", { ascending: false })
       : { data: [] },
   ]);
-  const seatedLetWhole = (b: any): boolean | undefined => {
+  const seatedRow = (b: any): any => {
     if (!b.resident_id || b.status === "vacant") return undefined;
-    const row = ((seatedRows ?? []) as any[]).find(
+    return ((seatedRows ?? []) as any[]).find(
       (t) => String(t.bed_id) === String(b.id) && t.resident_id === b.resident_id,
     );
+  };
+  const seatedLetWhole = (b: any): boolean | undefined => {
+    const row = seatedRow(b);
     return typeof row?.let_whole === "boolean" ? (row.let_whole as boolean) : undefined;
   };
   const letWholeOf = (c: { bed_id: string; enquiry_id: string | null; resident_id: string | null; source: string }) => {
@@ -196,7 +201,13 @@ async function attachUpcoming(supabase: any, beds: any[], unitIds: string[]) {
     }
     list.sort((x, y) => String(x.start ?? "").localeCompare(String(y.start ?? "")));
     const lw = seatedLetWhole(b);
-    return { ...b, ...(list.length ? { upcoming: list } : {}), ...(lw === undefined ? {} : { seated_let_whole: lw }) };
+    const leaving = seatedRow(b)?.leaving_on ? String(seatedRow(b).leaving_on).slice(0, 10) : undefined;
+    return {
+      ...b,
+      ...(list.length ? { upcoming: list } : {}),
+      ...(lw === undefined ? {} : { seated_let_whole: lw }),
+      ...(leaving ? { seated_leaving_on: leaving } : {}),
+    };
   });
 }
 

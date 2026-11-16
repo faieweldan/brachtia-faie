@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { isWholeUnitLetter, roomName } from "@/lib/room-name";
-import { CHECKOUT_TYPE_LABEL, checkoutDocKind, checkoutTotals, type CheckoutType } from "@/lib/checkout-types";
+import { CHECKOUT_TYPE_LABEL, checkoutDocKind, checkoutTotals, isCredit, type CheckoutType } from "@/lib/checkout-types";
 import type { Signatory } from "@/lib/signatory";
 
 export * from "@/lib/checkout-types";
@@ -33,9 +33,10 @@ export type CheckoutLine = {
   amount: number;
   /**
    * outstanding: an unpaid invoice, put in by itself; forfeit: what the kind of
-   * checkout keeps, put in by itself; deduction: added by admin
+   * checkout keeps, put in by itself; deduction: added by admin; credit: due
+   * back to the resident, added by admin ("Also due to resident" - isCredit)
    */
-  source: "outstanding" | "forfeit" | "deduction";
+  source: "outstanding" | "forfeit" | "deduction" | "credit";
   invoiceNumber?: string;
   photos: string[];
 };
@@ -49,6 +50,7 @@ export type CheckoutVersion = {
   deposits: CheckoutDeposit[];
   lines: CheckoutLine[];
   notes: string;
+  /** the deposits held plus what is also due to the resident (credit lines) */
   held: number;
   deducted: number;
   /** held - deducted: above 0 is refunded, below 0 is still owed by the resident */
@@ -80,7 +82,7 @@ export type CheckoutStatement = {
   createdAt: string;
   /** who it was made for, as it says - Payables shows it if the resident is later removed */
   issuedTo?: { name: string; code: string };
-  /** leavingOn: the day they say they leave - the type is suggested from it, the Room step starts on it */
+  /** leavingOn: only on statements started 14-16 Nov 2026 - the date now lives on the tenancy (leaving_on) and is moved there when read */
   draft: { lines: CheckoutLine[]; notes: string; type?: CheckoutType; leavingOn?: string };
   /** admin made the resident inactive after it was settled */
   inactiveAt?: string;
@@ -159,7 +161,17 @@ export const totals = (deposits: CheckoutDeposit[], lines: CheckoutLine[]) => ch
 export type StatementPdfInput = {
   number: string;
   version: CheckoutVersion;
-  resident: { name: string; code: string; residence: string; unit: string; room: string; tenancyStart: string; tenancyEnd: string };
+  resident: {
+    name: string;
+    code: string;
+    residence: string;
+    unit: string;
+    room: string;
+    tenancyStart: string;
+    tenancyEnd: string;
+    /** the day the room was handed back (moved_out_on) - missing until then, and for a cancellation */
+    movedOut?: string | undefined;
+  };
   brachtia: { name: string; signature: Uint8Array | null };
   /** once the resident has signed */
   residentSigned?: { name: string; date: string; signature: Uint8Array } | undefined;
@@ -183,7 +195,9 @@ export async function statementPdf(input: StatementPdfInput): Promise<Uint8Array
       ["Resident", `${r.name}${r.code ? ` (${r.code})` : ""}`],
       ["Residence", [r.residence, r.unit].filter(Boolean).join(" · ")],
       ["Room", r.room],
-      ["Tenancy", r.tenancyStart && r.tenancyEnd ? `${day(r.tenancyStart)} – ${day(r.tenancyEnd)}` : "—"],
+      // the term they agreed - and, apart, the day they actually left (Dani, 16 Nov 2026)
+      ["Tenancy term", r.tenancyStart && r.tenancyEnd ? `${day(r.tenancyStart)} – ${day(r.tenancyEnd)}` : "—"],
+      ...(r.movedOut && v.type !== "cancellation" ? [["Moved out", `${day(r.movedOut)} (room handed back)`] as [string, string]] : []),
     ],
   });
   const { font, bold, W } = f;
@@ -194,12 +208,22 @@ export async function statementPdf(input: StatementPdfInput): Promise<Uint8Array
   if (!v.deposits.length) f.row(paidIn ? "Nothing paid" : "No refundable deposits on record", rm(0), { color: MUTED });
   // no sub-lines under the lines - invoice numbers and notes left off (Dani, 6 Oct 2026)
   for (const d of v.deposits) f.row(d.label, rm(d.amount));
-  f.row(paidIn ? "Total paid" : "Total deposits held", rm(v.held), { f: bold });
+  f.row(paidIn ? "Total paid" : "Total deposits held", rm(v.deposits.reduce((n, d) => n + d.amount, 0)), { f: bold });
   f.y -= 6;
 
+  // typed by staff: money due back to them, e.g. rent paid for days after they left
+  const credits = v.lines.filter(isCredit);
+  if (credits.length) {
+    f.section("ALSO DUE TO RESIDENT");
+    for (const l of credits) f.row(l.label, rm(l.amount));
+    f.row("Total also due", rm(credits.reduce((n, l) => n + l.amount, 0)), { f: bold });
+    f.y -= 6;
+  }
+
+  const taken = v.lines.filter((l) => !isCredit(l));
   f.section("DEDUCTIONS");
-  if (!v.lines.length) f.row("No deductions", rm(0), { color: MUTED });
-  for (const l of v.lines) f.row(l.label, `- ${rm(l.amount)}`);
+  if (!taken.length) f.row("No deductions", rm(0), { color: MUTED });
+  for (const l of taken) f.row(l.label, `- ${rm(l.amount)}`);
   f.row("Total deductions", `- ${rm(v.deducted)}`, { f: bold });
   f.y -= 8;
 
@@ -218,7 +242,7 @@ export async function statementPdf(input: StatementPdfInput): Promise<Uint8Array
   // agreement and signatures
   f.room(130);
   for (const l of wrap(
-    "The Resident has reviewed this statement and agrees to the deposits held, every deduction and the final amount above, in full settlement of the tenancy.",
+    "The Resident has reviewed this statement and agrees to the date the room was handed back, the deposits held, any amount also due to them, every deduction and the final amount above, in full settlement of the tenancy.",
     font,
     7.5,
     W,
@@ -299,7 +323,26 @@ export async function residentParticulars(sb: any, residentId: string) {
     room: isWholeUnitLetter(rm2?.letter) ? roomName(rm2?.letter) : [roomName(rm2?.letter), bed ? (await import("@/lib/placement")).soldBedLabel(rm2, bed, placed?.letWhole) : ""].filter(Boolean).join(", "),
     tenancyStart: String(doc?.[0]?.period_start ?? ""),
     tenancyEnd: String(doc?.[0]?.period_end ?? ""),
+    movedOut: (await latestTenancy(sb, residentId))?.moved_out_on?.slice(0, 10) || undefined,
   };
+}
+
+/**
+ * The resident's latest tenancy - the stay move_out writes to, and the one
+ * placement_claims takes their dates from. One reader for the checkout's
+ * Room step, its leaving date and the PDF. "*": moved_out_on and leaving_on
+ * are read when the database has them.
+ */
+export async function latestTenancy(sb: any, residentId: string): Promise<any | null> {
+  const { data } = await sb
+    .from("tenancies")
+    .select("*")
+    .eq("resident_id", residentId)
+    .order("start_date", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ?? null;
 }
 
 /** Build a version's PDF from the record - unsigned, signed, or with the refund. */
