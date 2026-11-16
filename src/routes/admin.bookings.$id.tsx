@@ -1403,6 +1403,7 @@ function BookingDetail() {
             residences={((site as any)?.residences ?? []) as any[]}
             rooms={((site as any)?.rooms ?? []) as any[]}
             assignedBed={assignedBed}
+            assignedLetWhole={assignedLetWhole}
             canEdit={Boolean(row.assigned_staff)}
             onBlocked={() => void needStaff()}
             invoice={

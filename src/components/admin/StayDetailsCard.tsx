@@ -126,6 +126,7 @@ export function StayDetailsCard({
   residences,
   rooms,
   assignedBed,
+  assignedLetWhole,
   canEdit,
   onBlocked,
   onSave,
@@ -138,8 +139,10 @@ export function StayDetailsCard({
   /** residence rows and room type rows - listResidences */
   residences: any[];
   rooms: any[];
-  /** the bed reserved for this booking, if any - its rent wins */
+  /** the bed reserved for this booking, if any - its room's rate prices the stay */
   assignedBed?: BedRow | undefined;
+  /** this booking's own record of how the room was sold: true = a twin room let whole as a single */
+  assignedLetWhole?: boolean | undefined;
   /** a booking is only edited by its staff member */
   canEdit: boolean;
   /** says why, and points at the staff field */
@@ -262,18 +265,16 @@ export function StayDetailsCard({
     let blocked: PriceBlock = null;
     // a room that no longer fits the stay is released on save - it prices nothing
     if (bedFits && assignedBed) {
-      const soldWhole = assignedBed.room.beds.some(
-        (b) => b.id !== assignedBed.bed.id && isSoldAsSingle(b),
-      );
+      /*
+       * The room's own rate, as the room picker priced it - never the rent of
+       * whoever is on the bed now, and single or twin from this booking's own
+       * record (Dani, 16 Nov 2026): Ahmed, B-09-01 Room A twin (RM550) showed
+       * RM1,200 here while the picker priced it right.
+       */
+      const soldWhole =
+        assignedLetWhole ?? assignedBed.room.beds.some((b) => b.id !== assignedBed.bed.id && isSoldAsSingle(b));
       // short and long term are priced differently, so the term goes in with the room
-      rent = bedRent(
-        rooms as SiteRoomType[],
-        assignedBed.unit,
-        assignedBed.room,
-        assignedBed.bed,
-        soldWhole,
-        term ?? "long",
-      );
+      rent = bedRent(rooms as SiteRoomType[], assignedBed.unit, assignedBed.room, {}, soldWhole, term ?? "long");
       rentFrom = `From the assigned room · Unit ${assignedBed.unit.unitNo} ${roomName(assignedBed.room.letter)}`;
       if (!(rent > 0)) blocked = "no-rate";
     } else if (!term) {

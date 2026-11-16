@@ -561,8 +561,9 @@ function InventoryPage() {
           residents={residents}
           units={units}
           asSingle={reserving.asSingle}
-          singleRent={bedRent(roomTypes, reserving.unit, reserving.room, reserving.bed, true)}
-          twinRent={bedRent(roomTypes, reserving.unit, reserving.room, reserving.bed, false)}
+          // a new stay is priced from Settings -> Website, never the rent of whoever is on the bed (16 Nov 2026)
+          singleRent={bedRent(roomTypes, reserving.unit, reserving.room, {}, true)}
+          twinRent={bedRent(roomTypes, reserving.unit, reserving.room, {}, false)}
         />
       ) : null}
     </div>
