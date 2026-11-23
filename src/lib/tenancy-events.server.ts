@@ -83,6 +83,8 @@ export type TenancyEvent = {
   /** settling, step by step - a failure part-way is picked up where it stopped, never done twice */
   rentApplied?: boolean;
   docsMade?: boolean;
+  /** when a request started settling it - another request leaves it alone meanwhile */
+  settlingAt?: string;
   /** the rent schedule's end before and after settling - lengthened or shortened */
   scheduleEnd?: { from: string; to: string };
   /** what settling did to rent already billed */
@@ -147,6 +149,8 @@ export async function settled(sb: any, invoiceId: string) {
 
 // one resident at a time: settling rebuilds rent, which reads billing, which runs this again
 const running = new Set<string>();
+/** how long a request's claim on settling an event stands - longer than the slowest pack */
+const SETTLING_HOLD_MS = 10 * 60 * 1000;
 
 /** what moving the events on did - said to admin after a payment (Dani, 7 Oct 2026) */
 export type EventOutcome = {
@@ -201,6 +205,11 @@ export async function processResident(sb: any, residentId: string): Promise<Even
           }
           continue;
         }
+        // another request is settling it right now (the lock above is per server, and a slow
+        // pack let three requests make three agreements - Diamon 00830, 23 Nov 2026)
+        if (ev.settlingAt && Date.now() - Date.parse(ev.settlingAt) < SETTLING_HOLD_MS) continue;
+        ev.settlingAt = new Date().toISOString();
+        await writeEvents(sb, residentId, list);
         try {
           await settle(sb, residentId, ev);
         } finally {
@@ -292,6 +301,11 @@ async function applyRent(sb: any, residentId: string, ev: TenancyEvent) {
   const moves = (saved.moves ?? []).filter((m) => m.id !== ev.eventId);
   if (ev.moveTo) moves.push({ id: ev.eventId, from: ev.date, bedId: ev.moveTo.bedId, letWhole: !!ev.moveTo.letWhole });
   await rs.writeRentSteps(sb, residentId, ev.tenancyId, { steps, moves });
+  // no terms yet (a migrated tenancy paid to its end): the renewal's rent starts on its own day,
+  // never from the tenancy's start (Diamon 00830, 23 Nov 2026)
+  if (ev.flags.date !== "none" && ev.rent > 0) {
+    await rs.ensureRentSchedule(sb, ev.tenancyId, { start: ev.date, end: ev.periodEnd, rent: ev.rent });
+  }
   // the rent terms run to the new end, at the latest rent; the scheduled RPs follow
   const { data: s } = await sb.from("rental_schedules").select("tenancy_end").eq("tenancy_id", ev.tenancyId).maybeSingle();
   if (s) {
@@ -336,7 +350,22 @@ export async function billedRentDifference(sb: any, tenancyId: string, step: imp
 async function makeDocuments(sb: any, residentId: string, ev0: TenancyEvent) {
   const { renewAgreementWith, reviseScheduleWith } = await import("@/lib/tenancy-docs.functions");
   const ev = { ...ev0, mergeValues: await eventMergeValues(sb, residentId, ev0) };
-  if (ev.plan.newAgreement) {
+  // the agreement this event already made (a request that stopped part-way, or ran beside another): used, never made twice
+  const { data: already } = ev.plan.newAgreement && !ev0.madeAgreementId
+    ? await sb
+        .from("tenancy_agreements")
+        .select("id")
+        .eq("resident_id", residentId)
+        .eq("kind", "renewal")
+        .gte("created_at", ev0.at)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle()
+    : { data: null };
+  const claimed = already && (await readEvents(sb, residentId)).some((e) => e.eventId !== ev0.eventId && e.madeAgreementId === already.id);
+  if (ev.plan.newAgreement && (ev0.madeAgreementId || (already && !claimed))) {
+    ev0.madeAgreementId ||= already!.id;
+  } else if (ev.plan.newAgreement) {
     const made = await renewAgreementWith(sb, { residentId, tenancyId: ev.tenancyId, mergeValues: ev.mergeValues, periodStart: ev.date, periodEnd: ev.periodEnd });
     ev0.madeAgreementId = made.agreementId;
   } else if (ev.plan.scheduleA || ev.plan.scheduleC) {

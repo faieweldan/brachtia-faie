@@ -1,5 +1,5 @@
 import { billDueInvoices, liveInvoices } from "@/lib/invoices";
-import { migratedOriginal } from "@/lib/migration/import-plan";
+import { MIGRATED, migratedOriginal } from "@/lib/migration/import-plan";
 import { IP_DIFFERENCE_NOTE } from "@/lib/invoice-category";
 import {
   billOnFor,
@@ -142,8 +142,19 @@ async function tenancyById(supabase: any, tenancyId: string): Promise<Tenancy | 
  * payment schedule when the invoice has none) and the tenancy's dates. When any
  * of them is missing nothing is saved, and the Payments tab says setup is needed.
  * Returns whether the tenancy has terms.
+ *
+ * A migrated tenancy is never set up from its start: Brachtia billed it before
+ * the system, and the import left no terms because it was paid to its end. Its
+ * rent starts only where something new begins - a renewal or extension passes
+ * `from` (its first day), `end` and `rent`. Diamon 00830, 23 Nov 2026: imported
+ * paid to 31 Oct 2026, renewed from 1 Nov, and every period from Jan 2026 was
+ * billed again.
  */
-export async function ensureRentSchedule(supabase: any, tenancyId: string) {
+export async function ensureRentSchedule(
+  supabase: any,
+  tenancyId: string,
+  from?: { start: string; end: string; rent: number },
+) {
   const { data: saved } = await supabase
     .from("rental_schedules")
     .select("id")
@@ -158,16 +169,20 @@ export async function ensureRentSchedule(supabase: any, tenancyId: string) {
     supabase.from("residents").select("pay_schedule").eq("id", tenancy.resident_id).maybeSingle(),
   ]);
 
-  const rent = initial?.rent ?? 0;
+  const migrated = String(initial?.invoice.notes ?? "").startsWith(MIGRATED);
+  if (migrated && !from) return false;
+
+  const rent = from?.rent ?? initial?.rent ?? 0;
   const invoiceFrequency = String(initial?.invoice.payment_frequency ?? "");
   const frequency = RENT_FREQUENCIES.has(invoiceFrequency)
     ? invoiceFrequency
     : String((resident as any)?.pay_schedule ?? "");
-  const start = day(tenancy.start_date);
-  const end = day(tenancy.end_date);
+  const start = from ? from.start : day(tenancy.start_date);
+  const end = from ? from.end : day(tenancy.end_date);
   if (!(rent > 0) || !RENT_FREQUENCIES.has(frequency) || !start || !end) return false;
 
-  const first = firstRentPeriod(start, end, frequency, initial?.advance ?? 0, rent);
+  // from a renewal's day: the old initial payment's advance rent covered the old term, not this one
+  const first = firstRentPeriod(start, end, frequency, from ? 0 : (initial?.advance ?? 0), rent);
   if (!first.start) return false;
 
   const { error } = await supabase.from("rental_schedules").insert({
