@@ -152,6 +152,18 @@ const running = new Set<string>();
 /** how long a request's claim on settling an event stands - longer than the slowest pack */
 const SETTLING_HOLD_MS = 10 * 60 * 1000;
 
+/**
+ * Claim an event for settling, in its saved file - the lock above is one server's
+ * only, and a slow pack let three requests settle the same event (Diamon 00830,
+ * 23 Nov 2026). False while another request's claim stands.
+ */
+async function claimSettling(sb: any, residentId: string, list: TenancyEvent[], ev: TenancyEvent) {
+  if (ev.settlingAt && Date.now() - Date.parse(ev.settlingAt) < SETTLING_HOLD_MS) return false;
+  ev.settlingAt = new Date().toISOString();
+  await writeEvents(sb, residentId, list);
+  return true;
+}
+
 /** what moving the events on did - said to admin after a payment (Dani, 7 Oct 2026) */
 export type EventOutcome = {
   name: string;
@@ -205,11 +217,7 @@ export async function processResident(sb: any, residentId: string): Promise<Even
           }
           continue;
         }
-        // another request is settling it right now (the lock above is per server, and a slow
-        // pack let three requests make three agreements - Diamon 00830, 23 Nov 2026)
-        if (ev.settlingAt && Date.now() - Date.parse(ev.settlingAt) < SETTLING_HOLD_MS) continue;
-        ev.settlingAt = new Date().toISOString();
-        await writeEvents(sb, residentId, list);
+        if (!(await claimSettling(sb, residentId, list, ev))) continue;
         try {
           await settle(sb, residentId, ev);
         } finally {
@@ -346,28 +354,34 @@ export async function billedRentDifference(sb: any, tenancyId: string, step: imp
   return { diff, lastEnd };
 }
 
+/**
+ * The renewal agreement this event already made, when a request that ran beside
+ * this one, or stopped part-way, made it: used, never made twice (Diamon 00830,
+ * 23 Nov 2026 - one slow confirm made TA-25IM0858-02 three times).
+ */
+async function agreementMadeFor(sb: any, residentId: string, ev: TenancyEvent): Promise<string | null> {
+  const { data: found } = await sb
+    .from("tenancy_agreements")
+    .select("id")
+    .eq("resident_id", residentId)
+    .eq("kind", "renewal")
+    .gte("created_at", ev.at)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (!found) return null;
+  const otherEvents = (await readEvents(sb, residentId)).filter((e) => e.eventId !== ev.eventId);
+  return otherEvents.some((e) => e.madeAgreementId === found.id) ? null : found.id;
+}
+
 /** each document once: a new agreement, or a revised Schedule A / C; and the access card form */
 async function makeDocuments(sb: any, residentId: string, ev0: TenancyEvent) {
   const { renewAgreementWith, reviseScheduleWith } = await import("@/lib/tenancy-docs.functions");
   const ev = { ...ev0, mergeValues: await eventMergeValues(sb, residentId, ev0) };
-  // the agreement this event already made (a request that stopped part-way, or ran beside another): used, never made twice
-  const { data: already } = ev.plan.newAgreement && !ev0.madeAgreementId
-    ? await sb
-        .from("tenancy_agreements")
-        .select("id")
-        .eq("resident_id", residentId)
-        .eq("kind", "renewal")
-        .gte("created_at", ev0.at)
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle()
-    : { data: null };
-  const claimed = already && (await readEvents(sb, residentId)).some((e) => e.eventId !== ev0.eventId && e.madeAgreementId === already.id);
-  if (ev.plan.newAgreement && (ev0.madeAgreementId || (already && !claimed))) {
-    ev0.madeAgreementId ||= already!.id;
-  } else if (ev.plan.newAgreement) {
-    const made = await renewAgreementWith(sb, { residentId, tenancyId: ev.tenancyId, mergeValues: ev.mergeValues, periodStart: ev.date, periodEnd: ev.periodEnd });
-    ev0.madeAgreementId = made.agreementId;
+  if (ev.plan.newAgreement) {
+    ev0.madeAgreementId ||=
+      (await agreementMadeFor(sb, residentId, ev0)) ??
+      (await renewAgreementWith(sb, { residentId, tenancyId: ev.tenancyId, mergeValues: ev.mergeValues, periodStart: ev.date, periodEnd: ev.periodEnd })).agreementId;
   } else if (ev.plan.scheduleA || ev.plan.scheduleC) {
     // fixed on confirm - a renewal earlier in the request leaves its own agreement as the latest
     const { data: latest } = ev.agreementId
