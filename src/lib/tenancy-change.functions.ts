@@ -103,20 +103,24 @@ async function initialOwed(sb: any, residentId: string, tenancyId: string | null
   return Math.max(0, r2(Number(ip.invoice.total || 0) - paid));
 }
 
-/** The earliest day a room change can be dated, from the rent period billed for today (earliestMoveOn). */
+/**
+ * The earliest day a room change can be dated (earliestMoveOn): the first day of
+ * the oldest rent period still open - not fully paid, or running today. A paid
+ * period is closed.
+ */
 async function moveFloor(sb: any, tenancyId: string, tenancyStart: string): Promise<string> {
   const today = klToday();
   const { liveInvoices } = await import("@/lib/invoices");
-  const { data: running } = await liveInvoices(sb, "period_start")
+  const { data: oldestOpen } = await liveInvoices(sb, "period_start")
     .eq("tenancy_id", tenancyId)
     .eq("invoice_type", "rental")
     .lte("period_start", today)
-    .gte("period_end", today)
-    .order("period_start", { ascending: false })
+    .or(`status.neq.paid,period_end.gte.${today}`)
+    .order("period_start", { ascending: true })
     .limit(1)
     .maybeSingle();
   const { earliestMoveOn } = await import("@/lib/tenancy-change");
-  return earliestMoveOn(today, tenancyStart, String(running?.period_start ?? "").slice(0, 10));
+  return earliestMoveOn(today, tenancyStart, String(oldestOpen?.period_start ?? "").slice(0, 10));
 }
 
 export const getTenancyChangeBasis = createServerFn({ method: "GET" })
@@ -135,7 +139,7 @@ export const getTenancyChangeBasis = createServerFn({ method: "GET" })
     const { data: types } = await sb.from("room_types").select("code, residence_id, unit_type, occupancies, rent");
     return {
       tenancy: t ? { id: String(t.tenancyId), start: t.start, end: t.end } : null,
-      // a room change can go back to the start of the rent period running today
+      // a room change can go back to the start of the oldest rent period still open
       earliestMoveOn: t ? await moveFloor(sb, String(t.tenancyId), t.start) : klToday(),
       rent: now.rent,
       // no rent terms: the scheduled invoices cannot be made again

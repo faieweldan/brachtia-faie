@@ -149,7 +149,10 @@ describe("earliestMoveOn - a room change recorded late (23 Nov 2026)", () => {
   test("never before the tenancy began", () => {
     expect(earliestMoveOn("2026-11-21", "2026-11-10", "2026-11-01")).toBe("2026-11-10");
   });
-  test("no period running today: from today, as before", () => {
+  test("an older bill not yet paid keeps its period open (moved 5 Nov, recorded in January, Nov-Dec unpaid)", () => {
+    expect(earliestMoveOn("2027-01-10", "2026-09-01", "2026-11-01")).toBe("2026-11-01");
+  });
+  test("no period open: from today, as before", () => {
     expect(earliestMoveOn("2026-11-21", "2026-09-01", "")).toBe("2026-11-21");
   });
   test("a period that has not started yet does not open the past", () => {
