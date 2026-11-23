@@ -139,6 +139,13 @@ export async function addEvents(sb: any, residentId: string, events: TenancyEven
 
 export const isOpen = (e: TenancyEvent) => !e.effectiveAt && !e.cancelled;
 
+/**
+ * The day an unpaid IP counts as late from: the event's date - or, for a room
+ * change recorded late and dated back (earliestMoveOn, 23 Nov 2026), the day
+ * it was confirmed, so it is not overdue the moment it is made.
+ */
+const lateFrom = (ev: TenancyEvent) => (ev.date > ev.at.slice(0, 10) ? ev.date : ev.at.slice(0, 10));
+
 export async function settled(sb: any, invoiceId: string) {
   const { data: inv } = await sb.from("invoices").select("total, status").eq("id", invoiceId).maybeSingle();
   if (!inv || inv.status === "void") return false;
@@ -203,7 +210,7 @@ export async function processResident(sb: any, residentId: string): Promise<Even
         // Paid on the day itself is on time (Dani, 27 Oct 2026: a change dated today was
         // overdue from the moment it was made, so paying it that day asked for a new date)
         if (!paid) {
-          if (ev.date < today && !ev.overdue) {
+          if (lateFrom(ev) < today && !ev.overdue) {
             ev.overdue = true;
             changed = true;
           }

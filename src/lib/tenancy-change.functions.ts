@@ -103,6 +103,22 @@ async function initialOwed(sb: any, residentId: string, tenancyId: string | null
   return Math.max(0, r2(Number(ip.invoice.total || 0) - paid));
 }
 
+/** The earliest day a room change can be dated, from the rent period billed for today (earliestMoveOn). */
+async function moveFloor(sb: any, tenancyId: string, tenancyStart: string): Promise<string> {
+  const today = klToday();
+  const { liveInvoices } = await import("@/lib/invoices");
+  const { data: running } = await liveInvoices(sb, "period_start")
+    .eq("tenancy_id", tenancyId)
+    .eq("invoice_type", "rental")
+    .lte("period_start", today)
+    .gte("period_end", today)
+    .order("period_start", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const { earliestMoveOn } = await import("@/lib/tenancy-change");
+  return earliestMoveOn(today, tenancyStart, String(running?.period_start ?? "").slice(0, 10));
+}
+
 export const getTenancyChangeBasis = createServerFn({ method: "GET" })
   .inputValidator((d) => z.object({ residentId: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
@@ -119,6 +135,8 @@ export const getTenancyChangeBasis = createServerFn({ method: "GET" })
     const { data: types } = await sb.from("room_types").select("code, residence_id, unit_type, occupancies, rent");
     return {
       tenancy: t ? { id: String(t.tenancyId), start: t.start, end: t.end } : null,
+      // a room change can go back to the start of the rent period running today
+      earliestMoveOn: t ? await moveFloor(sb, String(t.tenancyId), t.start) : klToday(),
       rent: now.rent,
       // no rent terms: the scheduled invoices cannot be made again
       hasSchedule: now.hasSchedule,
@@ -241,8 +259,10 @@ async function planChangeWith(sb: any, data: PlanRequest) {
   if (stay.end !== data.change.oldEnd)
     throw new Error("The change was read differently - close the window and start again.");
   const today = klToday();
-  if (T.isMove(flags) && (!data.moveOn || data.moveOn < today))
-    throw new Error("Choose an effective date from today on.");
+  if (T.isMove(flags)) {
+    const floor = await moveFloor(sb, String(stay.tenancyId), stay.start);
+    if (!data.moveOn || data.moveOn < floor) throw new Error(`Choose an effective date from ${floor} on.`);
+  }
   if (T.isMove(flags) && !data.moveTo) throw new Error("Choose the new bed.");
   const finalEnd =
     data.change.newEnd > data.change.oldEnd ? data.change.newEnd : data.change.oldEnd;

@@ -505,7 +505,7 @@ export function UpdateTenancyDialog({
                     <label className="flex flex-wrap items-center gap-3">
                       <span className="w-24 text-xs text-muted-foreground">Effective date</span>
                       <DateInput
-                        min={occupiedUntil ? shiftDate(occupiedUntil, { days: 1 }) : today}
+                        min={occupiedUntil ? shiftDate(occupiedUntil, { days: 1 }) : (basis.data?.earliestMoveOn ?? today)}
                         max={end}
                         value={moveOn}
                         onChange={(e) => setMoveOn(e.target.value)}

@@ -148,6 +148,17 @@ export function planEvents(f: ChangeFlags, moveOn: string, oldEnd: string): Plan
 
 export const isMove = (f: ChangeFlags) => f.room || f.occupancy;
 
+/**
+ * The earliest day a room change can take effect (Dani, 23 Nov 2026): a move
+ * already made and recorded late goes back to the day it happened - Yaswhita
+ * moved on 1 Nov, recorded on 21 Nov - but only inside the rent period running
+ * today, and never before the tenancy began. No period running today: today.
+ */
+export function earliestMoveOn(today: string, tenancyStart: string, periodStart: string): string {
+  const from = periodStart && periodStart <= today ? periodStart : today;
+  return tenancyStart > from ? tenancyStart : from;
+}
+
 /** "Room change", "Renewal", "Room change + Renewal" */
 export function eventName(f: ChangeFlags): string {
   const room = f.unit ? "Unit change" : f.room ? "Room change" : f.occupancy ? "Occupancy change" : "";

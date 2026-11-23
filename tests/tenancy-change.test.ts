@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { changeFlags, dateChange, depositsOf, documentsFor, eventDeposits, eventInvoice, fixedCharges, ipBillOn, moneyOf, planEvents, sixMonthsAfter } from "@/lib/tenancy-change";
+import { changeFlags, dateChange, earliestMoveOn, depositsOf, documentsFor, eventDeposits, eventInvoice, fixedCharges, ipBillOn, moneyOf, planEvents, sixMonthsAfter } from "@/lib/tenancy-change";
 
 const ARC = [
   { label: "Resident-requested room/unit change", amount: 100 },
@@ -139,5 +139,20 @@ describe("the money", () => {
     expect(d.waived).toEqual([{ key: "security", amount: 200 }]);
     // the renewal after it: RM1,100 required against RM1,000 - RM100, not RM300
     expect(eventDeposits(d.heldAfter, depositsOf({ security: 1100 })).ipLines.map((l) => l.amount)).toEqual([100]);
+  });
+});
+
+describe("earliestMoveOn - a room change recorded late (23 Nov 2026)", () => {
+  test("goes back to the start of the rent period running today (Yaswhita: moved 1 Nov, recorded 21 Nov)", () => {
+    expect(earliestMoveOn("2026-11-21", "2026-09-01", "2026-11-01")).toBe("2026-11-01");
+  });
+  test("never before the tenancy began", () => {
+    expect(earliestMoveOn("2026-11-21", "2026-11-10", "2026-11-01")).toBe("2026-11-10");
+  });
+  test("no period running today: from today, as before", () => {
+    expect(earliestMoveOn("2026-11-21", "2026-09-01", "")).toBe("2026-11-21");
+  });
+  test("a period that has not started yet does not open the past", () => {
+    expect(earliestMoveOn("2026-11-21", "2026-09-01", "2027-01-01")).toBe("2026-11-21");
   });
 });
