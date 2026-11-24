@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { ArrowRight, CalendarRange, ChevronDown, RotateCcw, Search } from "lucide-react";
+import { ArrowRight, CalendarRange, RotateCcw, Search } from "lucide-react";
 
+import { Dropdown } from "@/components/admin/Dropdown";
 import { Button } from "@/components/ui/button";
 import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
@@ -36,22 +37,20 @@ export function LabelSwitch<K extends string>({
   onChange: (k: K) => void;
   label: string;
 }) {
+  // the app's own Dropdown, drawn as label text - never the computer's grey list
   return (
-    <span className="relative inline-flex items-center gap-0.5">
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as K)}
-        aria-label={label}
-        className="cursor-pointer appearance-none bg-transparent pr-3.5 text-xs font-medium text-muted-foreground underline decoration-dashed underline-offset-2 outline-none hover:text-foreground focus-visible:text-foreground"
-      >
-        {options.map((o) => (
-          <option key={o.key} value={o.key}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-0 size-3 text-muted-foreground" aria-hidden />
-    </span>
+    <Dropdown
+      value={value}
+      onChange={(e) => onChange(e.target.value as K)}
+      aria-label={label}
+      className="h-auto gap-1 border-0 bg-transparent p-0 text-xs font-medium text-muted-foreground shadow-none hover:text-foreground focus:ring-0 [&>svg]:size-3"
+    >
+      {options.map((o) => (
+        <option key={o.key} value={o.key}>
+          {o.label}
+        </option>
+      ))}
+    </Dropdown>
   );
 }
 
