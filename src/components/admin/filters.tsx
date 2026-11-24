@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ArrowRight, RotateCcw, Search } from "lucide-react";
+import { ArrowRight, CalendarRange, ChevronDown, RotateCcw, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { DateInput } from "@/components/ui/date-input";
@@ -12,12 +12,46 @@ import { Input } from "@/components/ui/input";
  * and Reset only while something is narrowed.
  */
 
-export function FilterField({ label, children }: { label: string; children: ReactNode }) {
+export function FilterField({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
     <div className="space-y-1">
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <div className="text-xs font-medium text-muted-foreground">{label}</div>
       {children}
     </div>
+  );
+}
+
+/**
+ * A filter's label that is also its switch - "Due date ▾" over a date box picks
+ * which date the box filters by, without a second control (Dani, 24 Nov 2026).
+ */
+export function LabelSwitch<K extends string>({
+  value,
+  options,
+  onChange,
+  label,
+}: {
+  value: K;
+  options: readonly { key: K; label: string }[];
+  onChange: (k: K) => void;
+  label: string;
+}) {
+  return (
+    <span className="relative inline-flex items-center gap-0.5">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as K)}
+        aria-label={label}
+        className="cursor-pointer appearance-none bg-transparent pr-3.5 text-xs font-medium text-muted-foreground underline decoration-dashed underline-offset-2 outline-none hover:text-foreground focus-visible:text-foreground"
+      >
+        {options.map((o) => (
+          <option key={o.key} value={o.key}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-0 size-3 text-muted-foreground" aria-hidden />
+    </span>
   );
 }
 
@@ -52,7 +86,35 @@ export function DateRangeFilter({
         aria-label="To date"
         className="h-full w-[8.25rem] bg-transparent px-2.5 text-sm outline-none"
       />
+      <MonthPick from={from} onPick={(f, t) => (onFrom(f), onTo(t))} />
     </div>
+  );
+}
+
+/**
+ * A whole month in one click (Dani, 24 Nov 2026): the icon opens the browser's
+ * month picker and fills the box with its first and last day. The box still
+ * takes any range typed by hand. Take this out and the box works as before.
+ */
+function MonthPick({ from, onPick }: { from: string; onPick: (from: string, to: string) => void }) {
+  return (
+    <label className="relative mr-1 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground">
+      <CalendarRange className="size-4" aria-hidden />
+      <input
+        type="month"
+        aria-label="Pick a whole month"
+        value={from.slice(0, 7)}
+        onClick={(e) => e.currentTarget.showPicker?.()}
+        onChange={(e) => {
+          const [y, m] = e.target.value.split("-").map(Number);
+          if (!y || !m) return;
+          const last = new Date(y, m, 0).getDate();
+          const mm = String(m).padStart(2, "0");
+          onPick(`${y}-${mm}-01`, `${y}-${mm}-${String(last).padStart(2, "0")}`);
+        }}
+        className="absolute inset-0 cursor-pointer opacity-0"
+      />
+    </label>
   );
 }
 

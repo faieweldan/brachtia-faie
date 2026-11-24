@@ -1,6 +1,6 @@
 import { roomText } from "@/lib/room-name";
 import { loadProofFile } from "@/lib/payment-proof";
-import { DateRangeFilter, FilterField, ResetFilters, SearchFilter, StatusTabs } from "@/components/admin/filters";
+import { DateRangeFilter, FilterField, LabelSwitch, ResetFilters, SearchFilter, StatusTabs } from "@/components/admin/filters";
 import { Dropdown } from "@/components/admin/Dropdown";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -124,6 +124,17 @@ const TABS: {
 
 /* ---------------- sorting ---------------- */
 
+/**
+ * Which of an invoice's three dates the Date box filters, the Date column shows
+ * and sorts by (Dani, 24 Nov 2026): issued, due, or the last payment in.
+ */
+const DATE_KINDS = [
+  { key: "date", label: "Invoice date" },
+  { key: "dueDate", label: "Due date" },
+  { key: "lastPaidOn", label: "Paid on" },
+] as const;
+type DateKind = (typeof DATE_KINDS)[number]["key"];
+
 type SortKey = "number" | "date" | "resident" | "amount" | "outstanding";
 type Sort = { key: SortKey; dir: "asc" | "desc" };
 
@@ -173,6 +184,7 @@ function CollectionsPage() {
   const [q, setQ] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [dateBy, setDateBy] = useState<DateKind>("date");
   const [payer, setPayer] = useState("all");
   const [category, setCategory] = useState<InvoiceCategory | "all">("all");
   const [sort, setSort] = useState<Sort>({ key: "date", dir: "desc" });
@@ -205,14 +217,14 @@ function CollectionsPage() {
     const keep = (r: LedgerRow) =>
       (category === "all" || categoryOf(r.type) === category) &&
       (payer === "all" || payerKey(r) === payer) &&
-      (!from || r.date >= from) &&
-      (!to || r.date <= to) &&
+      (!from || (r[dateBy] !== "" && r[dateBy] >= from)) &&
+      (!to || (r[dateBy] !== "" && r[dateBy] <= to)) &&
       (!needle ||
         `${invoiceRef(r.number, r.type)} ${r.purpose} ${r.residentName} ${r.residentCode} ${r.quickbooksId}`
           .toLowerCase()
           .includes(needle));
     return { billed: rows.filter(keep), scheduled: scheduled.filter(keep) };
-  }, [rows, scheduled, category, payer, from, to, q]);
+  }, [rows, scheduled, category, payer, from, to, dateBy, q]);
 
   const counts = useMemo(
     () =>
@@ -233,20 +245,22 @@ function CollectionsPage() {
       tab === "scheduled"
         ? filtered.scheduled
         : filtered.billed.filter((r) => current.test(r, today));
-    const by = SORTERS[sort.key];
+    const by: (a: LedgerRow, b: LedgerRow) => number =
+      sort.key === "date" ? (a, b) => a[dateBy].localeCompare(b[dateBy]) : SORTERS[sort.key];
     return [...list].sort((a, b) => (sort.dir === "asc" ? by(a, b) : by(b, a)));
-  }, [filtered, tab, sort, today]);
+  }, [filtered, tab, sort, dateBy, today]);
 
   // a new view starts on its first page
-  useEffect(() => setPage(1), [tab, q, from, to, payer, category, pageSize]);
+  useEffect(() => setPage(1), [tab, q, from, to, dateBy, payer, category, pageSize]);
 
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
   const current = Math.min(page, pageCount);
   const shown = sorted.slice((current - 1) * pageSize, current * pageSize);
 
-  const filtering = Boolean(q || from || to || payer !== "all" || category !== "all");
+  const filtering = Boolean(q || from || to || dateBy !== "date" || payer !== "all" || category !== "all");
   const resetFilters = () => {
     setQ("");
+    setDateBy("date");
     setFrom("");
     setTo("");
     setPayer("all");
@@ -422,7 +436,9 @@ function CollectionsPage() {
 
         {/* narrowing it down */}
         <div className="flex flex-wrap items-end gap-x-3 gap-y-3 px-5 py-4">
-          <FilterField label="Date">
+          <FilterField
+            label={<LabelSwitch label="Filter by which date" value={dateBy} options={DATE_KINDS} onChange={setDateBy} />}
+          >
             <DateRangeFilter from={from} to={to} onFrom={setFrom} onTo={setTo} />
           </FilterField>
           <FilterField label="Search">
@@ -534,7 +550,7 @@ function CollectionsPage() {
               <thead className="text-left text-xs text-muted-foreground">
                 <tr className="border-b border-border">
                   <SortHead label="Invoice no." k="number" sort={sort} onSort={toggleSort} first />
-                  <SortHead label="Date" k="date" sort={sort} onSort={toggleSort} />
+                  <SortHead label={DATE_KINDS.find((d) => d.key === dateBy)!.label} k="date" sort={sort} onSort={toggleSort} />
                   <SortHead label="Resident" k="resident" sort={sort} onSort={toggleSort} />
                   <th className="px-3 py-2.5 font-medium">Category</th>
                   <SortHead label="Amount" k="amount" sort={sort} onSort={toggleSort} right />
@@ -576,7 +592,7 @@ function CollectionsPage() {
                           </span>
                         </td>
                         <td className="whitespace-nowrap px-3 py-3 tabular-nums text-muted-foreground">
-                          {fmtDate(r.date)}
+                          {r[dateBy] ? fmtDate(r[dateBy]) : "—"}
                         </td>
                         <td className="px-3 py-3">
                           <Who row={r} />
@@ -601,11 +617,13 @@ function CollectionsPage() {
                           <p className="mt-1 whitespace-nowrap text-[11px] text-muted-foreground">
                             {r.scheduled
                               ? `Bills ${fmtDate(r.billOn)}`
-                              : r.outstanding > 0 && r.dueDate
+                              : r.outstanding > 0 && r.dueDate && dateBy !== "dueDate"
                                 ? `Due ${fmtDate(r.dueDate)}`
-                                : r.lastPaidOn
+                                : r.lastPaidOn && dateBy !== "lastPaidOn"
                                   ? `Paid ${fmtDate(r.lastPaidOn)}`
-                                  : ""}
+                                  : dateBy !== "date"
+                                    ? `Issued ${fmtDate(r.date)}`
+                                    : ""}
                           </p>
                         </td>
                         <td className="px-5 py-3">
