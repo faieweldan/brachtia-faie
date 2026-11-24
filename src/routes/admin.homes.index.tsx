@@ -11,6 +11,7 @@ import {
   NO_ROOM_TYPES,
   bedRent,
   collapseSingles,
+  listedAsSingle,
   unitTypeNames,
   type SiteRoomType,
 } from "@/lib/room-types";
@@ -214,7 +215,10 @@ function InventoryPage() {
       if (wantStatus && roomStatusOf(bed) !== wantStatus) return false;
       // a line the whole-unit letting (or a let room) holds is not for sale
       if (wantStatus === "vacant" && bedBlockedBy(unit, room, bed)) return false;
-      if (wantOccupancy && room.occupancy !== wantOccupancy) return false;
+      // Vacant single lists every Single row, empty twin rooms offered whole too (24 Nov 2026)
+      if (wantOccupancy === "single") {
+        if (!listedAsSingle(room, roomTypes)) return false;
+      } else if (wantOccupancy && room.occupancy !== wantOccupancy) return false;
       if (from && occupiedUntil(bed) && occupiedUntil(bed)! < from) return false;
       if (to && bed.tenancyStart && bed.tenancyStart > to) return false;
       if (q) {
@@ -280,15 +284,18 @@ function InventoryPage() {
       // an empty bed with a stay coming counts as Reserved or Booked, not Vacant
       const s = roomStatusOf(bed);
       c[s] = (c[s] ?? 0) + 1;
-      // every vacant bed falls in one split, whatever its room is sold as, so
-      // the splits add up to Vacant
-      if (s === "vacant" && room.occupancy) {
-        const key = `vacant:${room.occupancy}`;
-        c[key] = (c[key] ?? 0) + 1;
+      // Vacant twin counts free twin beds; Vacant single counts Single rows - a
+      // single room, or an empty twin room offered whole, once (its first bed).
+      // An empty twin room is in both, as it can be sold either way (24 Nov 2026)
+      if (s !== "vacant") continue;
+      const key = `vacant:${room.occupancy}`;
+      if (key === "vacant:twin") c[key] = (c[key] ?? 0) + 1;
+      if (listedAsSingle(room, roomTypes) && bed.id === room.beds[0]?.id) {
+        c["vacant:single"] = (c["vacant:single"] ?? 0) + 1;
       }
     }
     return c;
-  }, [units, residence]);
+  }, [units, residence, roomTypes]);
 
   /**
    * One card per residence, with what is in it.

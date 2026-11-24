@@ -140,6 +140,22 @@ export function sellsSingle(room: Pick<UnitRoom, "roomTypeCode">, roomTypes: Sit
   return (rt?.occupancies ?? []).includes("single");
 }
 
+/** An empty twin room Homes offers whole, as one single - the same rule as the booking's room picker (roomOffer). */
+export function offeredWhole(room: UnitRoom, roomTypes: SiteRoomType[]) {
+  const offer = roomOffer(room, undefined, sellsSingle(room, roomTypes), "today");
+  return "as" in offer && offer.as === "whole";
+}
+
+/**
+ * The room is a "Single" row in Homes: a single room, or an empty twin room
+ * offered whole. "Vacant single" counts and lists exactly these, so it tallies
+ * with the Single rows seen under every other pill (Dani, 24 Nov 2026).
+ */
+export function listedAsSingle(room: UnitRoom, roomTypes: SiteRoomType[]) {
+  if (isUnitSlot(room)) return false;
+  return room.occupancy !== "twin" || offeredWhole(room, roomTypes);
+}
+
 export function collapseSingles(
   rows: BedRow[],
   roomTypes: SiteRoomType[],
@@ -162,9 +178,7 @@ export function collapseSingles(
       continue;
     }
 
-    // the same rule as the booking's room picker (placement.ts roomOffer)
-    const offer = roomOffer(room, undefined, sellsSingle(room, roomTypes), "today");
-    if ("as" in offer && offer.as === "whole") {
+    if (offeredWhole(room, roomTypes)) {
       out.push({ ...group[0]!, asSingle: true });
     } else {
       for (const g of group) out.push({ ...g, asSingle: false });
