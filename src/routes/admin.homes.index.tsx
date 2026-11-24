@@ -12,6 +12,7 @@ import {
   bedRent,
   collapseSingles,
   listedAsSingle,
+  ownRow,
   unitTypeNames,
   type SiteRoomType,
 } from "@/lib/room-types";
@@ -203,6 +204,7 @@ function InventoryPage() {
 
   const rows = useMemo(() => {
     return allBeds(units).filter(({ unit, room, bed }) => {
+      if (!ownRow(bed)) return false;
       if (residence && unit.residenceName !== residence) return false;
       if (block && unit.block !== block) return false;
       // an imported "3-bedroom" and a configured "3-Bedroom Apartment" are the
@@ -279,6 +281,8 @@ function InventoryPage() {
         else if (roomStatusOf(bed) !== "vacant") c[roomStatusOf(bed)] = (c[roomStatusOf(bed)] ?? 0) + 1;
         continue;
       }
+      // a Sold as single bed is part of its room-mate's row, so it is not counted again
+      if (!ownRow(bed)) continue;
       c["all"] = (c["all"] ?? 0) + 1;
       if (blocked) continue;
       // an empty bed with a stay coming counts as Reserved or Booked, not Vacant

@@ -1,4 +1,4 @@
-import { isSoldAsSingle, isUnitSlot, type BedRow, type Unit, type UnitRoom } from "@/lib/ops-store";
+import { isSoldAsSingle, isUnitSlot, type Bed, type BedRow, type Unit, type UnitRoom } from "@/lib/ops-store";
 import { roomOffer } from "@/lib/room-offer";
 
 /**
@@ -156,6 +156,16 @@ export function listedAsSingle(room: UnitRoom, roomTypes: SiteRoomType[]) {
   return room.occupancy !== "twin" || offeredWhole(room, roomTypes);
 }
 
+/**
+ * The bed is a row of its own in Homes. A "Sold as single" bed is not: it is
+ * the other half of its room-mate's single, so it is listed, filtered and
+ * counted with that person's row - never alone as "Reserved" with no name and
+ * a Release button (The Arc: 60 of "Reserved · 66"; Dani, 24 Nov 2026).
+ */
+export function ownRow(bed: Bed) {
+  return !isSoldAsSingle(bed);
+}
+
 export function collapseSingles(
   rows: BedRow[],
   roomTypes: SiteRoomType[],
@@ -170,8 +180,10 @@ export function collapseSingles(
     // already let to one person: that is one let, so it is one row. The bed
     // held to keep the room empty is not a thing anybody can act on, and
     // listing it only invites someone to release it by mistake.
-    const taken = group.some((g) => isSoldAsSingle(g.bed))
-      ? group.find((g) => !isSoldAsSingle(g.bed))
+    // the room's own beds, not the filtered rows: under "Occupied" the marked
+    // bed is filtered out, and the person is still a Single
+    const taken = room.beds.some((b) => !ownRow(b))
+      ? group.find((g) => ownRow(g.bed) && (g.bed.status !== "vacant" || g.bed.upcoming?.length))
       : undefined;
     if (taken) {
       out.push({ ...taken, asSingle: true });
