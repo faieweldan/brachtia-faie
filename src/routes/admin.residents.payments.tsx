@@ -259,11 +259,15 @@ function CollectionsPage() {
    * is read for - and the percentage collected against it would quietly drop
    * every time an invoice was voided.
    */
-  const live = rows.filter((r) => !r.cancelled);
+  // the figures add up what the table lists - the tab and every filter - so they
+  // change with it (Dani, 24 Nov 2026); scheduled rent is not billed, so that tab
+  // keeps the billed figures for the same filters
+  const inView = tab === "scheduled" ? filtered.billed : sorted;
+  const live = inView.filter((r) => !r.cancelled);
   const billed = sumBy(live, "total");
   const collected = sumBy(live, "paid");
-  const outstanding = sumBy(rows, "outstanding");
-  const overdueCount = rows.filter((r) => paymentStateOf(r, today).status === "Past Due").length;
+  const outstanding = sumBy(inView, "outstanding");
+  const overdueCount = inView.filter((r) => paymentStateOf(r, today).status === "Past Due").length;
 
   const toggleSort = (key: SortKey) =>
     setSort((s) =>
@@ -391,7 +395,7 @@ function CollectionsPage() {
           />
         </div>
         <CollectedBar billed={billed} collected={collected}>
-          {rows.length ? `${rows.length} invoice${rows.length === 1 ? "" : "s"}` : "No billing yet"}
+          {inView.length ? `${inView.length} invoice${inView.length === 1 ? "" : "s"}` : rows.length ? "No invoices in this view" : "No billing yet"}
         </CollectedBar>
       </Panel>
 
