@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { DateInput } from "@/components/ui/date-input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { costBreakdown, formatRM, getProperty } from "@/data/properties";
-import { allBeds, fmtDate, money, unitAccepts, unitGender, type BedRow, type Resident, type Unit } from "@/lib/ops-store";
+import { allBeds, fmtDate, money, unitAccepts, unitGender, type Bed, type BedRow, type Resident, type Unit } from "@/lib/ops-store";
 import { GenderMark } from "@/components/admin/GenderMark";
 import { bedRent, sellsSingle, type SiteRoomType } from "@/lib/room-types";
 import { roomOffer, type Sharing } from "@/lib/room-offer";
@@ -294,9 +294,14 @@ export function UpdateTenancyDialog({
    * tried again. The server checks the same before it saves.
    */
   const stayUntil = moved && effectiveMove ? dayBefore(effectiveMove) : end;
-  const nextHere = placed?.bed.upcoming?.find((u) => u.start && u.start <= stayUntil) ?? null;
-  const nextThere = moved
-    ? (target?.bed.upcoming?.find((u) => u.start && u.start <= end && (u.end || "9999-12-31") >= effectiveMove) ?? null)
+  // someone ELSE coming: the resident's own stay on the bed is skipped, as the
+  // server skips it - Ahmed (B-09-01, not checked in yet) was refused by his own
+  // booking (Dani, 25 Nov 2026)
+  const others = (bed: Bed) =>
+    bed.upcoming?.filter((u) => u.residentId !== residentId) ?? [];
+  const nextHere = (placed && others(placed.bed).find((u) => u.start && u.start <= stayUntil)) || null;
+  const nextThere = moved && target
+    ? (others(target.bed).find((u) => u.start && u.start <= end && (u.end || "9999-12-31") >= effectiveMove) ?? null)
     : null;
   const clash = nextHere ?? nextThere;
   const who = residents.find((r) => r.id === residentId)?.fullName || "This resident";
@@ -393,7 +398,6 @@ export function UpdateTenancyDialog({
       toast.success(res.events.length > 1 ? "2 events scheduled" : "Tenancy change scheduled", {
         description: "Follow it on the Tenancy tab. The IP is on Payments.",
       });
-      onOpenChange(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not update the tenancy");
     } finally {
